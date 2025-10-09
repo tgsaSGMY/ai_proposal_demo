@@ -1,11 +1,5 @@
-import asyncio
-import json
-import httpx
-from typing import List, Dict, Any, Optional
-
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
@@ -16,8 +10,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 
 @app.on_event("startup")
 async def startup_event():
