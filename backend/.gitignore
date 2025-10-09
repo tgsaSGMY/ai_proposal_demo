@@ -1,2 +1,16 @@
 app/__pycache__
-app/services/__pycache__
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Other common ignores
+.vscode/
+.idea/
+
+*.DS_Store
