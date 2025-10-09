@@ -6,7 +6,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://ai-proposal-platform-v1-0.pages.dev/"],
+    allow_origins=["http://localhost:3000","https://ai-proposal-platform-v1-0.pages.dev"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
