@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # The command to run your application (Railway will override this with its Start Command or Procfile)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "$PORT"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
