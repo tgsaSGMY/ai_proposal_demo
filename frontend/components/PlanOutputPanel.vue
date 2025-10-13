@@ -1,0 +1,216 @@
+<template>
+  <div class="bg-white shadow-xl rounded-2xl p-8 h-full flex flex-col">
+    <h2 class="text-2xl font-bold text-gray-800">生成結果 (可編輯)</h2>
+    <div class="flex justify-left gap-x-2 items-center mb-4 flex-shrink-0">
+      <button
+        @click="handleFileLoadClick"
+        :disabled="isLoading"
+        v-if="mode === 'golden'"
+        class="bg-blue-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-wait"
+      >
+        {{ isLoading ? "處理中..." : "從文件載入" }}
+      </button>
+      <button
+        v-if="mode === 'golden'"
+        @click="$emit('generateUserInput')"
+        class="bg-green-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-green-700"
+      >
+        反推 User Input
+      </button>
+      <input
+        type="file"
+        ref="fileInput"
+        @change="handleFileSelected"
+        style="display: none"
+        accept=".docx,.pdf"
+      />
+      <button
+        @click="handleExportToWord"
+        class="bg-purple-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-purple-700"
+      >
+        導出為 Word
+      </button>
+    </div>
+
+    <div
+      v-if="!sections || sections.length === 0"
+      class="flex-grow flex items-center justify-center text-gray-500"
+    >
+      請在左側選擇模板以查看章節。
+    </div>
+    <div v-else class="flex-grow space-y-8 overflow-y-auto pr-2">
+      <div v-for="section in sections" :key="section.id">
+        <div class="p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg">
+          <h3 class="text-lg font-semibold text-gray-800">
+            {{ section.name }}
+          </h3>
+        </div>
+
+        <div class="mt-4 pl-2">
+          <!-- 錯誤狀態顯示 -->
+          <div
+            v-if="getSectionError(section.id)"
+            class="text-red-600 bg-red-50 p-3 rounded-lg"
+          >
+            <strong>錯誤:</strong> {{ getSectionError(section.id) }}
+          </div>
+          <!-- 成功狀態，渲染動態表單 -->
+          <JsonSchemaForm
+            v-else-if="section.json_schema && getSectionContent(section.id)"
+            :schema="section.json_schema"
+            :modelValue="getSectionContent(section.id)"
+            @update:modelValue="updateSectionContent(section.id, $event)"
+          />
+          <!-- 等待生成狀態 -->
+          <div v-else class="text-gray-400 italic p-3">
+            等待生成或內容無效...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import JsonSchemaForm from "./JsonSchemaForm.vue";
+import mammoth from "mammoth";
+import { exportPlanToWord } from "@/utils/exportToWord";
+
+const props = defineProps({
+  planContent: { type: Object, required: true },
+  sections: { type: Array, default: () => [] },
+  mode: { type: String, required: true },
+});
+
+const fileInput = ref(null);
+const isLoading = ref(false);
+
+const API_BASE_URL = "http://127.0.0.1:8000/api";
+
+let pdfjsLib = null;
+onMounted(async () => {
+  try {
+    // 動態導入模塊
+    const pdfjsModule = await import("pdfjs-dist/build/pdf");
+    pdfjsLib = pdfjsModule;
+    // 設置 worker 路徑
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  } catch (e) {
+    console.error("Failed to load pdf.js library:", e);
+  }
+});
+
+const emit = defineEmits([
+  "update:content",
+  "generateUserInput",
+  "autoFillComplete",
+]);
+
+// 這個函數現在直接返回對象
+function getSectionContent(sectionId) {
+  const content = props.planContent[sectionId]?.content;
+  // 確保返回的是一個對象，如果不是，返回一個空對象以避免表單渲染錯誤
+  return typeof content === "object" && content !== null ? content : {};
+}
+
+function getSectionError(sectionId) {
+  return props.planContent[sectionId]?.error;
+}
+
+async function handleExportToWord() {
+  if (!props.sections.length) {
+    alert("請先選擇模板");
+    return;
+  }
+  await exportPlanToWord(props.sections, props.planContent);
+}
+
+// 這個函數現在接收對象
+function updateSectionContent(sectionId, newContentObject) {
+  emit("update:content", { sectionId, content: newContentObject });
+}
+
+function handleFileLoadClick() {
+  if (props.sections.length === 0) {
+    alert("請先在左側選擇一個模板，以便我們知道要填充哪些欄位。");
+    return;
+  }
+  fileInput.value.click();
+}
+
+// 處理選擇的檔案
+async function handleFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  isLoading.value = true;
+  try {
+    const extractedText = await extractTextFromFile(file);
+
+    // 準備傳送給後端的資料
+    const payload = {
+      document_text: extractedText,
+      sections: props.sections.map((s) => ({
+        section_id: s.id,
+        section_name: s.name,
+        json_schema: s.json_schema,
+      })),
+    };
+
+    const filledContent = await callAutoFillApi(payload);
+
+    // 觸發事件，讓父元件更新整個 planContent
+    emit("autoFillComplete", filledContent);
+  } catch (error) {
+    console.error("處理檔案時發生錯誤:", error);
+    alert(`處理檔案失敗: ${error.message}`);
+  } finally {
+    isLoading.value = false;
+    event.target.value = null; // 重設 input，以便能再次選擇同一個檔案
+  }
+}
+
+// 調用後端自動填充 API
+async function callAutoFillApi(payload) {
+  const response = await fetch(`${API_BASE_URL}/autofill_from_document`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "後端處理失敗");
+  }
+  return await response.json();
+}
+
+// 從 Word 或 PDF 檔案中提取文字的輔助函數
+async function extractTextFromFile(file) {
+  if (file.type === "application/pdf" && !pdfjsLib) {
+    throw new Error(
+      "PDF library is not loaded yet. Please try again in a moment."
+    );
+  }
+  if (file.type === "application/pdf") {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+    let textContent = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const text = await page.getTextContent();
+      textContent += text.items.map((item) => item.str).join(" ") + "\n\n"; // 頁之間加換行
+    }
+    return textContent;
+  } else if (
+    file.type ===
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  } else {
+    throw new Error("不支援的檔案格式，請選擇 Word (.docx) 或 PDF 檔案。");
+  }
+}
+</script>
