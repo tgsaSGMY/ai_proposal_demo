@@ -64,7 +64,7 @@ async def generate_synthetic_input(
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """根據模式生成用戶輸入，現在支持填充動態字段"""
-    model_info = request.app.state.model_registry.get("gpt-4-turbo")
+    model_info = request.app.state.model_registry.get("gpt-3.5-turbo-1106")
     if not model_info:
         raise HTTPException(status_code=500, detail="GPT-4 Turbo model not configured for synthetic generation.")
 

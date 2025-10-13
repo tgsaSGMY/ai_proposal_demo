@@ -83,6 +83,16 @@
     </div>
 
     <div
+      v-if="isLoading"
+      class="flex-grow space-y-8 overflow-y-auto pr-2 animate-pulse"
+    >
+      <div v-for="i in 3" :key="i" class="space-y-4">
+        <div class="h-6 bg-gray-200 rounded w-1/3"></div>
+        <div class="h-16 bg-gray-200 rounded w-full"></div>
+      </div>
+    </div>
+
+    <div
       v-if="!sections || sections.length === 0"
       class="flex-grow flex items-center justify-center text-gray-500"
     >
@@ -130,6 +140,7 @@ const props = defineProps({
   planContent: { type: Object, required: true },
   sections: { type: Array, default: () => [] },
   mode: { type: String, required: true },
+  isLoading: { type: Boolean, default: false },
 });
 
 const fileInput = ref(null);

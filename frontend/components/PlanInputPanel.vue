@@ -84,15 +84,18 @@
           class="space-y-4"
         >
           <div
-            @click="openSettingsModal(groupIndex)"
-            class="group flex items-center justify-between cursor-pointer border-b pb-2"
+            @click="mode !== 'generator' && openSettingsModal(groupIndex)"
+            :class="{ 'cursor-pointer': mode !== 'generator' }"
+            class="group flex items-center justify-between border-b pb-2"
           >
             <h4
-              class="text-md font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors"
+              class="text-md font-semibold text-gray-800 transition-colors"
+              :class="{ 'group-hover:text-indigo-600 ': mode !== 'generator' }"
             >
               {{ group.sectionName }}
             </h4>
             <span
+              v-if="mode !== 'generator'"
               class="text-xs text-gray-400 group-hover:text-indigo-500 transition-colors flex items-center gap-1"
             >
               <svg

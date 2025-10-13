@@ -1,186 +1,87 @@
 <template>
-  <div class="py-10 px-4 flex justify-center">
-    <div class="w-full max-w-3xl bg-white shadow-xl rounded-2xl p-8">
-      <h1 class="text-3xl font-bold text-gray-800 text-center mb-8">
-        AI 計劃書生成器 <span class="text-indigo-600">v1.0</span>
-      </h1>
+  <div class="p-4 md:p-8 h-full flex flex-col bg-gray-50">
+    <div class="flex-shrink-0 mb-6 bg-white p-4 rounded-lg shadow text-center">
+      <h1 class="text-2xl font-bold text-gray-800">AI 計畫書生成器</h1>
+      <p class="text-sm text-gray-500 mt-1">專為高效產出專業計劃書而設計</p>
+    </div>
 
-      <!-- 第一层：主题 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2"
-            >1. 選擇主題</label
-          >
-          <select
-            v-model="selectedGrantId"
-            @change="onGrantChange"
-            class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition"
-          >
-            <option disabled value="">請選擇</option>
-            <option
-              v-for="grant in allConfigs"
-              :key="grant.id"
-              :value="grant.id"
-            >
-              {{ grant.name }}
-            </option>
-          </select>
-        </div>
-        <div>
-          <!-- 第二层：模板 -->
-          <label class="block text-sm font-medium text-gray-700 mb-2"
-            >2. 选择模板</label
-          >
-          <select
-            v-model="selectedTemplateId"
-            :disabled="!selectedGrantId"
-            class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition disabled:bg-gray-100"
-          >
-            <option disabled value="">请选择</option>
-            <option
-              v-for="template in availableTemplates"
-              :key="template.id"
-              :value="template.id"
-            >
-              {{ template.name }}
-            </option>
-          </select>
-        </div>
+    <!-- 主工作區：左右佈局 -->
+    <div class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+      <!-- 左側：輸入面板 -->
+      <PlanInputPanel
+        :all-configs="allConfigs"
+        v-model:userInput="userInput"
+        :dynamic-inputs="dynamicInputs"
+        @update:dynamic-inputs="(newVal) => (dynamicInputs = newVal)"
+        :is-generating="isLoading"
+        :mode="'generator'"
+        @selectionChange="onSelectionChange"
+        @generatePlan="handleGeneratePlan"
+      />
+
+      <!-- 右側：輸出面板 -->
+      <!-- 使用 v-if 確保在生成前不顯示空的輸出面板 -->
+      <div v-if="Object.keys(planContent).length > 0 || isLoading">
+        <PlanOutputPanel
+          :plan-content="planContent"
+          :sections="currentSections"
+          :mode="'generator'"
+          :is-loading="isLoading"
+        />
       </div>
-
-      <!-- 第三层： 用户输入 + 辅助输入框 -->
-      <div class="mb-6 space-y-6">
-        <!-- 主想法输入框 -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2"
-            >3. 描述你的核心項目／想法</label
-          >
-          <textarea
-            v-model="userInput"
-            placeholder="例如：一個利用 AI 分析使用者評論，自動生成產品優化建議的 SaaS 平台..."
-            rows="5"
-            class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y"
-          ></textarea>
-        </div>
-
-        <!-- 根据grants & template 动态生成的辅助输入框区域 -->
-        <div
-          v-if="dynamicInputs.length > 0"
-          class="space-y-4 border-t border-gray-200 pt-6"
-        >
-          <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-            <p class="text-sm text-indigo-700">
-              <span class="font-semibold">專業提示：</span> 填寫以下細節能讓 AI
-              生成更精準、更出色的內容！
-            </p>
-          </div>
-          <div v-for="(input, index) in dynamicInputs" :key="index">
-            <label
-              :for="input.id"
-              class="block text-sm font-medium text-gray-600 mb-2"
-            >
-              {{ input.label }}
-            </label>
-            <textarea
-              :id="input.id"
-              v-model="input.value"
-              :placeholder="`關於「${input.label}」的更多細節...`"
-              rows="3"
-              class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y"
-            ></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- 生成机会按钮 + loading state -->
-      <button
-        @click="handleGeneratePlan"
-        :disabled="isLoading || !selectedTemplateId || !userInput.trim()"
-        class="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-all duration-300"
+      <!-- 初始狀態下的提示信息 -->
+      <div
+        v-else
+        class="bg-white shadow-xl rounded-2xl p-8 h-full flex flex-col items-center justify-center text-center"
       >
         <svg
-          v-if="isLoading"
-          class="animate-spin h-5 w-5 text-white"
-          xmlns="http://www.w3.org/2000/svg"
+          class="h-16 w-16 text-indigo-200"
           fill="none"
           viewBox="0 0 24 24"
+          stroke="currentColor"
         >
-          <circle
-            class="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            stroke-width="4"
-          ></circle>
           <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-          ></path>
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          />
         </svg>
-        {{ isLoading ? "正在生成完整計劃書..." : "生成完整計劃書" }}
-      </button>
-
-      <!-- 生成结果 -->
-      <div v-if="Object.keys(planContent).length > 0" class="mt-10 space-y-8">
-        <h2
-          class="text-2xl font-bold text-gray-800 border-b border-gray-300 pb-3"
-        >
-          計劃書草稿
-        </h2>
-        <div v-for="section in currentSections" :key="section.id">
-          <h3 class="text-xl font-semibold text-gray-700 mb-4">
-            {{ section.name }}
-          </h3>
-          <div
-            class="bg-gray-50 border border-gray-200 rounded-lg p-6 text-gray-800 leading-relaxed shadow-inner"
-          >
-            <div
-              v-if="planContent[section.id]?.content"
-              class="prose max-w-none whitespace-pre-wrap"
-              v-html="formatContent(planContent[section.id].content)"
-            ></div>
-            <div
-              v-else-if="planContent[section.id]?.error"
-              class="text-red-600 font-medium"
-            >
-              <p><strong>生成失敗：</strong></p>
-              <p class="mt-2 text-sm">{{ planContent[section.id].error }}</p>
-            </div>
-            <div v-else class="text-gray-400 italic">等待生成...</div>
-          </div>
-        </div>
+        <h3 class="mt-4 text-lg font-medium text-gray-700">準備開始創作</h3>
+        <p class="mt-1 text-sm text-gray-500">
+          請在左側面板填寫您的專案想法，點擊生成後，結果將會顯示於此。
+        </p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
-
-// 状态
-const allConfigs = ref([]); // 所有 grants, template, section
-const selectedGrantId = ref(""); // 当前grant
-const selectedTemplateId = ref(""); //当前template
-const userInput = ref(""); //当前主想法
+import { ref, onMounted, computed, watchEffect } from "vue";
+import PlanInputPanel from "~/components/PlanInputPanel.vue";
+import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
-const { success, error: errorNotification } = useNotifications();
-const { isLoading } = useLoading();
-const planContent = ref({}); //生成结果
-const dynamicInputs = ref([]); //根据section动态输入
 
-// 根据Config和Grant生成模板
+// --- 全局狀態 ---
+const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
+const { success, error: errorNotification } = useNotifications();
+
+// --- 本地狀態 ---
+const allConfigs = ref([]);
+const userInput = ref("");
+const planContent = ref({}); // { section_id: { content: "...", error: "..." } }
+const selectedGrantId = ref("");
+const selectedTemplateId = ref("");
+const dynamicInputs = ref([]);
+
+// --- Computed Properties ---
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
-  const selectedGrant = allConfigs.value.find(
-    (g) => g.id === selectedGrantId.value
-  );
-  return selectedGrant ? selectedGrant.templates : [];
+  const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
+  return grant ? grant.templates : [];
 });
 
-// 根据Config和Template生成模板
 const currentSections = computed(() => {
   if (!selectedTemplateId.value) return [];
   const template = availableTemplates.value.find(
@@ -189,36 +90,7 @@ const currentSections = computed(() => {
   return template ? template.sections : [];
 });
 
-// 监听选择
-watch(
-  currentSections,
-  (newSections) => {
-    dynamicInputs.value = []; // 当模板改变时，重置动态输入框
-    if (newSections && newSections.length > 0) {
-      const inputs = [];
-      newSections.forEach((section) => {
-        if (section.json_schema && section.json_schema.properties) {
-          Object.entries(section.json_schema.properties).forEach(
-            ([key, prop]) => {
-              // 避免重复添加相同的问题
-              if (!inputs.some((input) => input.label === prop.description)) {
-                inputs.push({
-                  id: `${section.id}-${key}`,
-                  label: prop.description || key.replace("_", " "), // 使用 description 作为 label
-                  value: "", // 用户输入的值
-                });
-              }
-            }
-          );
-        }
-      });
-      dynamicInputs.value = inputs;
-    }
-  },
-  { deep: true }
-);
-
-// --- Mounted的时候拿完整Config （grants, template, section） ---
+// --- Lifecycle & Data Fetching ---
 onMounted(async () => {
   try {
     const response = await fetch("http://127.0.0.1:8000/api/config");
@@ -226,82 +98,98 @@ onMounted(async () => {
     allConfigs.value = await response.json();
   } catch (error) {
     console.error("Failed to load config:", error);
-    errorNotification("无法加载应用配置，请检查后端服务是否运行。");
+    errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
   }
 });
 
-// 当主题改变时，重置模板选项
-const onGrantChange = () => {
-  selectedTemplateId.value = ""; // 当主题改变时，重置模板选项
-  planContent.value = {}; // 清空旧生成计划书内容
-};
+// 使用 watchEffect 自動處理動態輸入框的生成
+watchEffect(() => {
+  const sections = currentSections.value;
+  if (!sections || sections.length === 0) {
+    dynamicInputs.value = [];
+    return;
+  }
+  const groupedInputs = [];
+  sections.forEach((section) => {
+    const sectionInputs = [];
+    if (section.json_schema && section.json_schema.properties) {
+      Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
+        sectionInputs.push({
+          id: `${section.id}-${key}`,
+          label: prop.description || key.replace("_", " "),
+          value: "",
+        });
+      });
+    }
+    if (sectionInputs.length > 0) {
+      groupedInputs.push({
+        sectionId: section.id,
+        sectionName: section.name,
+        inputs: sectionInputs,
+        custom_prompt_list: section.custom_prompt_list || [],
+        system_prompt: section.system_prompt || "",
+      });
+    }
+  });
+  dynamicInputs.value = groupedInputs;
+});
 
-// 替换 **text** 为 <strong>text</strong>，并处理换行
-const formatContent = (text) => {
-  if (!text) return "";
-  return text
-    .replace(
-      /\*\*(.*?)\*\*/g,
-      '<strong class="font-semibold text-gray-900">$1</strong>'
-    )
-    .replace(/\n/g, "<br>");
-};
+// --- Event Handlers ---
+function onSelectionChange(selection) {
+  selectedGrantId.value = selection.grantId;
+  selectedTemplateId.value = selection.templateId;
+  planContent.value = {}; // 重置輸出
+}
 
-// final user input 就是所有user input concat在一起
-const buildFinalUserInput = () => {
+function buildFinalUserInput() {
   let finalInput = `核心想法: ${userInput.value}\n\n`;
   const additionalDetails = dynamicInputs.value
-    .filter((input) => input.value.trim() !== "")
-    .map((input) => `关于“${input.label}”的补充信息:\n${input.value}`)
+    .flatMap((group) => group.inputs)
+    .filter((input) => input.value && input.value.trim() !== "")
+    .map((input) => `關於“${input.label}”的補充信息:\n${input.value}`)
     .join("\n\n");
 
   if (additionalDetails) {
-    finalInput += `--- 详细补充信息 ---\n${additionalDetails}`;
+    finalInput += `--- 詳細補充信息 ---\n${additionalDetails}`;
   }
   return finalInput;
-};
+}
 
-// 生成企划
-const handleGeneratePlan = async () => {
+async function handleGeneratePlan() {
   if (!selectedTemplateId.value || !userInput.value.trim()) {
-    errorNotification("请选择完整的主题、模板，并输入您的核心项目描述");
+    errorNotification("請選擇主題、模板，並描述您的核心想法。");
     return;
   }
-
-  isLoading.value = true;
+  showLoading();
   planContent.value = {};
-
   const finalUserInput = buildFinalUserInput();
 
   try {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
-
     const response = await fetch("http://127.0.0.1:8000/api/generate_plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "31847807-e04f-4a41-947b-60c5c60034ad", // Dummy User ID
+        user_id: "user_for_generation_only",
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         sections: sectionsToGenerate,
-        user_input: finalUserInput, // 发送拼接后的详细输入
+        user_input: finalUserInput,
       }),
     });
-
     if (!response.ok) {
       const errorDetail = await response.text();
-      throw new Error(`服务器错误 (${response.status}): ${errorDetail}`);
+      throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
     }
-
-    const data = await response.json();
-    planContent.value = data;
+    planContent.value = await response.json();
+    success("計劃書草稿已生成！");
   } catch (error) {
-    console.error("Error:", error);
-    errorNotification(`生成失败: ${error.message}`);
+    console.error("生成計劃書時發生錯誤:", error);
+    errorNotification(`生成失敗: ${error.message}`);
   } finally {
-    isLoading.value = false;
+    hideLoading();
   }
-};
+}
 </script>
