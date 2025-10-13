@@ -2,9 +2,10 @@
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import PointStruct, PayloadSchemaType
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from typing import List, Dict, Any
-import uuid
+import uuid 
 from app.config import QDRANT_URL, QDRANT_KEY, QDRANT_COLLECTION_NAME, QDRANT_EMBEDDING_MODEL_NAME
 
 class QdrantService:
@@ -30,7 +31,7 @@ class QdrantService:
                 raise RuntimeError(f"Qdrant collection '{self.collection_name}' does not exist on the cloud. Please run the seed script first.")
             
             # 嵌入模型
-            self.embedding_model = SentenceTransformer(QDRANT_EMBEDDING_MODEL_NAME)
+            self.embedding_model = TextEmbedding(QDRANT_EMBEDDING_MODEL_NAME)
             
             print(f"Qdrant client initialized and connected to existing collection '{self.collection_name}'.")
         

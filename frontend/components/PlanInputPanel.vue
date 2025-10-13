@@ -83,84 +83,39 @@
           :key="group.sectionId"
           class="space-y-4"
         >
-          <!-- 顯示 Section 標題 -->
-          <h4 class="text-md font-semibold text-gray-800 border-b pb-2">
-            {{ group.sectionName }}
-          </h4>
-
           <div
-            class="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3"
+            @click="openSettingsModal(groupIndex)"
+            class="group flex items-center justify-between cursor-pointer border-b pb-2"
           >
-            <label class="block text-sm font-medium text-gray-700"
-              >客製化指令 (Custom Prompts)</label
+            <h4
+              class="text-md font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors"
             >
-
-            <!-- 列表顯示現有指令 -->
-            <div
-              v-if="
-                group.custom_prompt_list && group.custom_prompt_list.length > 0
-              "
-              class="space-y-2"
-            >
-              <div
-                v-for="(prompt, promptIndex) in group.custom_prompt_list"
-                :key="promptIndex"
-                class="flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  :value="prompt"
-                  @input="
-                    handlePromptInput(
-                      groupIndex,
-                      promptIndex,
-                      $event.target.value
-                    )
-                  "
-                  placeholder="輸入指令..."
-                  class="flex-grow w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2"
-                />
-                <button
-                  @click="deletePrompt(groupIndex, promptIndex)"
-                  class="p-1.5 text-red-500 hover:bg-red-100 rounded-full"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- 新增按鈕 -->
-            <button
-              @click="addPrompt(groupIndex)"
-              class="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              {{ group.sectionName }}
+            </h4>
+            <span
+              class="text-xs text-gray-400 group-hover:text-indigo-500 transition-colors flex items-center gap-1"
             >
               <svg
-                xmlns="http://www.w3.org/2000/svg"
                 class="h-4 w-4"
-                viewBox="0 0 20 20"
-                fill="currentColor"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
                 <path
-                  fill-rule="evenodd"
-                  d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                  clip-rule="evenodd"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
-              新增指令
-            </button>
+              編輯設定
+            </span>
           </div>
 
           <!-- 內層 v-for 遍歷該分組內的 inputs -->
@@ -218,13 +173,20 @@
         >(在 Golden Sample 模式下禁用)</span
       >
     </button>
+    <SectionSettingsModal
+      :show="isModalVisible"
+      :sectionData="currentEditingSection"
+      :is-saving="isSaving"
+      @close="closeSettingsModal"
+      @save="handleSaveSettings"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch, computed, onMounted } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
-const { error: errorNotification } = useNotifications();
+const { success, error: errorNotification } = useNotifications();
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
@@ -243,12 +205,14 @@ const emit = defineEmits([
 ]);
 
 // 內部狀態（僅用於選擇器）
+const isModalVisible = ref(false);
+const isSaving = ref(false);
+const currentEditingSection = ref(null);
+const currentEditingIndex = ref(-1);
+
 const selectedGrantId = ref("");
 const selectedTemplateId = ref("");
 const API_BASE_URL = "http://127.0.0.1:8000/api";
-const debounceTimers = ref({});
-const isSavingPrompts = ref({});
-const { confirm } = useConfirm();
 
 // 計算屬性（模板和章節）
 const availableTemplates = computed(() => {
@@ -286,17 +250,23 @@ const emitGeneratePlan = () => {
   emit("generatePlan");
 };
 
-async function savePrompts(sectionId, promptsToSave) {
-  // 檢查是否已在保存中，如果是，則忽略此次調用
-  if (isSavingPrompts.value[sectionId]) {
-    return;
-  }
+function openSettingsModal(index) {
+  currentEditingIndex.value = index;
+  currentEditingSection.value = props.dynamicInputs[index];
+  isModalVisible.value = true;
+}
 
-  // 設置鎖定
-  isSavingPrompts.value[sectionId] = true;
+function closeSettingsModal() {
+  isModalVisible.value = false;
+  currentEditingSection.value = null;
+  currentEditingIndex.value = -1;
+}
 
-  // 過濾掉所有空的指令
-  const filteredPrompts = promptsToSave.filter((p) => p && p.trim() !== "");
+async function handleSaveSettings(updatedSettings) {
+  if (currentEditingIndex.value === -1 || !currentEditingSection.value) return;
+
+  isSaving.value = true;
+  const sectionId = currentEditingSection.value.sectionId;
 
   try {
     const response = await fetch(
@@ -304,88 +274,27 @@ async function savePrompts(sectionId, promptsToSave) {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompts: filteredPrompts }),
+        body: JSON.stringify(updatedSettings),
       }
     );
     if (!response.ok) {
-      throw new Error("Failed to save prompts");
+      throw new Error("保存設定失敗");
     }
 
-    // 保存成功後，將最終的、經過過濾的數據同步回父組件
+    // 更新本地狀態並通知父組件
     const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
-    const groupIndex = newInputs.findIndex((g) => g.sectionId === sectionId);
-    if (groupIndex !== -1) {
-      newInputs[groupIndex].custom_prompt_list = filteredPrompts;
-      emit("update:dynamicInputs", newInputs);
-    }
-  } catch (error) {
-    console.error("Error saving prompts:", error);
-    errorNotification("保存自定義指令失敗！");
-    // 可選：在這裡可以做數據回滾
+    newInputs[currentEditingIndex.value].system_prompt =
+      updatedSettings.system_prompt;
+    newInputs[currentEditingIndex.value].custom_prompt_list =
+      updatedSettings.prompts;
+    emit("update:dynamicInputs", newInputs);
+
+    success("章節設定已成功保存！");
+    closeSettingsModal();
+  } catch (err) {
+    showError(err.message);
   } finally {
-    // 解除鎖定
-    isSavingPrompts.value[sectionId] = false;
+    isSaving.value = false;
   }
-}
-// --- 新增: 處理 @input 事件的函數 ---
-function handlePromptInput(groupIndex, promptIndex, value) {
-  // 1. 立即更新本地 UI 狀態
-  const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
-  const sectionId = newInputs[groupIndex].sectionId;
-  newInputs[groupIndex].custom_prompt_list[promptIndex] = value;
-  emit("update:dynamicInputs", newInputs);
-
-  // 2. 設置防抖計時器
-  if (debounceTimers.value[sectionId]) {
-    clearTimeout(debounceTimers.value[sectionId]);
-  }
-
-  // 延遲調用時，傳遞當前最新的 prompt 列表
-  const promptsToSaveOnDebounce = newInputs[groupIndex].custom_prompt_list;
-  debounceTimers.value[sectionId] = setTimeout(() => {
-    savePrompts(sectionId, promptsToSaveOnDebounce);
-  }, 800);
-}
-
-async function deletePrompt(groupIndex, promptIndex) {
-  const isConfirmed = await confirm({
-    title: "確認刪除",
-    message: `確定要刪除這條指令嗎？`,
-    confirmText: "確認刪除",
-    cancelText: "取消",
-    confirmColor: "danger", // 設置按鈕顏色為危險/紅色
-  });
-
-  if (!isConfirmed) {
-    return; // 如果用戶點擊取消，則直接返回
-  }
-
-  const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
-  const group = newInputs[groupIndex];
-  const sectionId = group.sectionId;
-
-  // 1. 清除任何待處理的保存操作，這是最關鍵的一步
-  if (debounceTimers.value[sectionId]) {
-    clearTimeout(debounceTimers.value[sectionId]);
-    debounceTimers.value[sectionId] = null; // 清空 timer id
-  }
-
-  // 2. 從本地數組中移除 prompt
-  group.custom_prompt_list.splice(promptIndex, 1);
-
-  // 3. 立即更新 UI，讓用戶看到刪除效果
-  emit("update:dynamicInputs", newInputs);
-
-  // 4. 直接調用 savePrompts，傳遞刪除後的新數組
-  savePrompts(sectionId, group.custom_prompt_list);
-}
-
-function addPrompt(groupIndex) {
-  const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
-  if (!newInputs[groupIndex].custom_prompt_list) {
-    newInputs[groupIndex].custom_prompt_list = [];
-  }
-  newInputs[groupIndex].custom_prompt_list.push("");
-  emit("update:dynamicInputs", newInputs);
 }
 </script>

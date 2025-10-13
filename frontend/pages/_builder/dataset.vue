@@ -173,6 +173,7 @@ watch(
             sectionName: section.name,
             inputs: sectionInputs,
             custom_prompt_list: prompts,
+            system_prompt: section.system_prompt || "",
           });
         }
       });
@@ -204,11 +205,11 @@ function onContentUpdate({ sectionId, content }) {
 }
 
 async function handleGenerateUserInput() {
-  isLoading.value = true;
   if (!currentGrant.value || !currentTemplate.value) {
     errorNotification("請先選擇主題和模板！");
     return;
   }
+  isLoading.value = true;
 
   isGenerating.value = true;
 
@@ -299,76 +300,6 @@ function buildFinalUserInput() {
   return finalInput;
 }
 
-function formatJsonToString(jsonData, sectionSchema) {
-  if (
-    !jsonData ||
-    typeof jsonData !== "object" ||
-    !sectionSchema ||
-    !sectionSchema.properties
-  ) {
-    return typeof jsonData === "object"
-      ? JSON.stringify(jsonData, null, 2)
-      : String(jsonData || "");
-  }
-
-  const formattedParts = [];
-  const schemaProps = sectionSchema.properties;
-
-  for (const key in schemaProps) {
-    if (Object.hasOwnProperty.call(jsonData, key)) {
-      const value = jsonData[key];
-      const propInfo = schemaProps[key];
-      const title = propInfo.description || propInfo.title || key;
-      let valueString = "";
-
-      if (Array.isArray(value) && value.length > 0) {
-        // --- 核心修正部分 ---
-        const itemSchema =
-          propInfo.items && propInfo.items.properties
-            ? propInfo.items.properties
-            : null;
-
-        const listItems = value.map((item, index) => {
-          if (typeof item === "object" && item !== null && itemSchema) {
-            // 如果數組元素是對象，並且我們有它的 schema
-            const objectParts = [];
-            // 遍歷 itemSchema 來保持順序
-            for (const itemKey in itemSchema) {
-              if (Object.hasOwnProperty.call(item, itemKey)) {
-                const itemPropInfo = itemSchema[itemKey];
-                const itemTitle =
-                  itemPropInfo.description || itemPropInfo.title || itemKey;
-                // 在列表項中，我們用 "標題: 值" 的格式
-                objectParts.push(`  - ${itemTitle}: ${item[itemKey]}`);
-              }
-            }
-            // 每個對象前加一個編號
-            return `${index + 1}.\n${objectParts.join("\n")}`;
-          } else {
-            // 如果是簡單類型的數組（如字符串）
-            return `- ${item}`;
-          }
-        });
-        valueString = listItems.join("\n");
-      } else if (typeof value === "object" && value !== null) {
-        // 處理非數組的對象（如果有的話）
-        valueString = Object.entries(value)
-          .map(([k, v]) => `  - ${k}: ${v}`)
-          .join("\n");
-      } else {
-        // 處理簡單的字符串、數字等
-        valueString = String(value);
-      }
-
-      // 只有當 valueString 非空時才添加到結果中
-      if (valueString) {
-        formattedParts.push(`**${title}**\n${valueString}`);
-      }
-    }
-  }
-
-  return formattedParts.join("\n\n");
-}
 async function handleGeneratePlan() {
   const fullUserInput = buildFinalUserInput();
 

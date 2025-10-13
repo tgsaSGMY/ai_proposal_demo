@@ -348,15 +348,24 @@ class SupabaseService:
         response = self.client.from_("datasets").delete().eq("id", dataset_id).execute()
         return len(response.data) > 0
 
-    async def update_section_prompts(self, section_id: str, prompts: List[str]) -> bool:
-        """更新指定 section 的 custom_prompt_list"""
+    async def update_section_settings(
+        self, 
+        section_id: str, 
+        prompts: List[str], 
+        system_prompt: Optional[str] = None
+    ) -> bool:
+        """更新指定 section 的 system_prompt 和 custom_prompt_list"""
         try:
-            response = self.client.from_("sections").update({
+            update_data = {
                 "custom_prompt_list": prompts
-            }).eq("id", section_id).execute()
+            }
+            # 只有當 system_prompt 不是 None 時才更新它
+            if system_prompt is not None:
+                update_data["system_prompt"] = system_prompt
+
+            response = self.client.from_("sections").update(update_data).eq("id", section_id).execute()
             
-            # 檢查是否有行被更新
             return len(response.data) > 0
         except Exception as e:
-            print(f"Failed to update prompts for section {section_id}: {e}")
+            logger.error(f"Failed to update settings for section {section_id}: {e}")
             return False

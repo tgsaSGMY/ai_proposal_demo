@@ -1,33 +1,83 @@
 <template>
   <div class="bg-white shadow-xl rounded-2xl p-8 h-full flex flex-col">
     <h2 class="text-2xl font-bold text-gray-800">生成結果 (可編輯)</h2>
-    <div class="flex justify-left gap-x-2 items-center mb-4 flex-shrink-0">
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <!-- 從文件載入 -->
       <button
+        v-if="mode === 'golden'"
         @click="handleFileLoadClick"
         :disabled="isLoading"
-        v-if="mode === 'golden'"
-        class="bg-blue-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-wait"
+        class="flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-blue-700 active:scale-[0.98] transition-all duration-200 disabled:bg-blue-300 disabled:cursor-not-allowed disabled:shadow-none"
       >
+        <svg
+          v-if="!isLoading"
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
         {{ isLoading ? "處理中..." : "從文件載入" }}
       </button>
+
+      <!-- 反推 User Input -->
       <button
         v-if="mode === 'golden'"
         @click="$emit('generateUserInput')"
-        class="bg-green-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-green-700"
+        class="flex items-center justify-center gap-2 bg-emerald-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all duration-200"
       >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 4v6h6M20 20v-6h-6"
+          />
+        </svg>
         反推 User Input
       </button>
+
+      <!-- 隱藏文件輸入 -->
       <input
         type="file"
         ref="fileInput"
         @change="handleFileSelected"
-        style="display: none"
+        class="hidden"
         accept=".docx,.pdf"
       />
+
+      <!-- 導出 Word -->
       <button
         @click="handleExportToWord"
-        class="bg-purple-600 text-white font-semibold py-2 px-1 rounded-lg hover:bg-purple-700"
+        class="flex items-center justify-center gap-2 bg-purple-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-purple-700 active:scale-[0.98] transition-all duration-200"
       >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
         導出為 Word
       </button>
     </div>

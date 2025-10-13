@@ -23,7 +23,8 @@ OLLAMA_BASE_URL = "http://localhost:11434/v1" # Ollama 的預設 API endpoint
 QDRANT_URL = os.getenv("QDRANT_URL", "")
 QDRANT_KEY = os.getenv("QDRANT_KEY", '')
 QDRANT_COLLECTION_NAME = "exemplars"
-QDRANT_EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+# QDRANT_EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+QDRANT_EMBEDDING_MODEL_NAME = "BAAI/bge-small-en"
 
 # 預設模型 ID
 DEFAULT_MODEL_ID = "gpt-3.5-turbo-1106"

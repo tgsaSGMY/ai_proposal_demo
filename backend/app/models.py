@@ -100,9 +100,9 @@ class RoutingRule(BaseModel):
     priority: int = Field(20, description="規則優先級，數字越小優先級越高。")
     description: Optional[str] = None
 
-class UpdatePromptsRequest(BaseModel):
-    """更新指定章節的自定義提示詞列表。"""
+class UpdateSectionSettingsRequest(BaseModel):
     prompts: List[str]
+    system_prompt: Optional[str] = None
 
 
 # --- 6. 其他特定 API 模型 (Other Specific API Models) ---

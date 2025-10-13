@@ -4,7 +4,7 @@ import logging
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.models import RoutingRule, UpdatePromptsRequest
+from app.models import RoutingRule, UpdateSectionSettingsRequest
 from app.services.supabase_service import SupabaseService
 from .dependencies import get_supabase_service
 
@@ -51,19 +51,15 @@ async def set_routing_rule(
 @router.put("/sections/{section_id}/prompts", status_code=200, summary="更新章節的自定義指令列表")
 async def update_section_prompts_endpoint(
     section_id: str, 
-    request_data: UpdatePromptsRequest,
+    request_data: UpdateSectionSettingsRequest,
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
     """更新指定章節的自定義提示詞列表。"""
-    try:
-        success = await supabase_service.update_section_prompts(section_id, request_data.prompts)
-        if not success:
-            raise HTTPException(status_code=404, detail="Section not found or update failed.")
-        
-        logger.info(f"Custom prompts updated for section_id: {section_id}")
-        return {"message": "Custom prompts updated successfully."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating prompts for section {section_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal error occurred.")
+    success = await supabase_service.update_section_settings(
+        section_id, 
+        request_data.prompts, 
+        request_data.system_prompt
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Section not found or update failed.")
+    return {"message": "Section settings updated successfully."}
