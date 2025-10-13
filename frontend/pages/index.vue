@@ -164,7 +164,10 @@ const allConfigs = ref([]); // 所有 grants, template, section
 const selectedGrantId = ref(""); // 当前grant
 const selectedTemplateId = ref(""); //当前template
 const userInput = ref(""); //当前主想法
-const isLoading = ref(false); //loading state
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+const { success, error: errorNotification } = useNotifications();
+const { isLoading } = useLoading();
 const planContent = ref({}); //生成结果
 const dynamicInputs = ref([]); //根据section动态输入
 
@@ -223,7 +226,7 @@ onMounted(async () => {
     allConfigs.value = await response.json();
   } catch (error) {
     console.error("Failed to load config:", error);
-    alert("无法加载应用配置，请检查后端服务是否运行。");
+    errorNotification("无法加载应用配置，请检查后端服务是否运行。");
   }
 });
 
@@ -261,7 +264,7 @@ const buildFinalUserInput = () => {
 // 生成企划
 const handleGeneratePlan = async () => {
   if (!selectedTemplateId.value || !userInput.value.trim()) {
-    alert("请选择完整的主题、模板，并输入您的核心项目描述");
+    errorNotification("请选择完整的主题、模板，并输入您的核心项目描述");
     return;
   }
 
@@ -296,7 +299,7 @@ const handleGeneratePlan = async () => {
     planContent.value = data;
   } catch (error) {
     console.error("Error:", error);
-    alert(`生成失败: ${error.message}`);
+    errorNotification(`生成失败: ${error.message}`);
   } finally {
     isLoading.value = false;
   }

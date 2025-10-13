@@ -6,10 +6,11 @@ from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
+import asyncio 
+from collections import defaultdict
 import logging
 
 logger = logging.getLogger(__name__)
-
 from app.config import (
     SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET_NAME, DATABASE_URL
 )
@@ -29,140 +30,136 @@ class SupabaseService:
 
     @contextmanager # 很方便地创建可以配合 with 语法的上下文管理器。
     def get_db_session(self):
+        """提供一個 SQLAlchemy session 上下文管理器。"""
         session = self.Session()
         try:
             yield session
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 
-    async def _fetch_all(self, table_name: str) -> List[Dict[str, Any]]:
-        response = self.client.from_(table_name).select("*").execute()
-        if response.data:
-            return response.data
-        return []
-
-    async def get_all_grants_config(self) -> List[GrantConfig]:
-        grants_data = await self._fetch_all("grants")
-        templates_data = await self._fetch_all("plan_templates")
-        sections_data = await self._fetch_all("sections")
-
-        grants_map = {g['id']: GrantConfig(id=g['id'], name=g['name'], templates=[]) for g in grants_data}
-        templates_map = {(t['id'], t['grant_id']): TemplateConfig(id=t['id'], grant_id=t['grant_id'], name=t['name'], sections=[]) for t in templates_data}
-
-        sections_data.sort(key=lambda s: s.get("order", 0))
+    def _execute_sql(self, statement: str, params: Dict[str, Any]):
+        """執行一個帶參數的原生 SQL 語句。"""
+        try:
+            with self.get_db_session() as session:
+                session.execute(text(statement), params)
+                session.commit()
+        except Exception as e:
+            logger.error(f"SQL execution failed. Error: {e}", exc_info=True)
+    
+    async def _fetch_all(self, table_name: str, order_by: Optional[str] = None, ascending: bool = True) -> List[Dict[str, Any]]:
+        """從指定表中獲取所有數據的通用輔助函數。"""
+        query = self.client.from_(table_name).select("*")
+        if order_by:
+            query = query.order(order_by, desc=not ascending)
         
-        for s in sections_data:       
-            section_config = SectionConfig(
-                id=s['id'],
-                template_id=s['template_id'],
-                grant_id=s['grant_id'],
-                name=s['name'],
-                json_schema=s.get('json_schema'),
-                system_prompt=s.get('system_prompt'),
-                critic_prompt=s.get('critic_prompt'), 
-                rewrite_prompt=s.get('rewrite_prompt'),
-                custom_prompt_list=s.get('custom_prompt_list') or []
-            )
-            if (s['template_id'], s['grant_id']) in templates_map:
-                templates_map[(s['template_id'], s['grant_id'])].sections.append(section_config)
+        response = await asyncio.to_thread(query.execute) 
+        return response.data or []
+    
+    async def get_all_grants_config(self) -> List[GrantConfig]:
+        """
+        併發獲取所有 grants, templates, 和 sections 的配置，並將它們組合成嵌套結構。
+        """
+        grants_data, templates_data, sections_data = await asyncio.gather(
+            self._fetch_all("grants"),
+            self._fetch_all("plan_templates"),
+            self._fetch_all("sections", order_by="order") 
+        )
 
-        for t in templates_map.values():
-            if t.grant_id in grants_map:
-                grants_map[t.grant_id].templates.append(t)
+        sections_by_template = defaultdict(list)
+        for s_data in sections_data:
+            sections_by_template[(s_data['template_id'], s_data['grant_id'])].append(SectionConfig(**s_data))
 
-        return list(grants_map.values())
+        templates_by_grant = defaultdict(list)
+        for t_data in templates_data:
+            template_id_tuple = (t_data['id'], t_data['grant_id'])
+            t_data['sections'] = sections_by_template[template_id_tuple]
+            templates_by_grant[t_data['grant_id']].append(TemplateConfig(**t_data))
+
+        # 3. 組裝最終結果
+        all_grants = []
+        for g_data in grants_data:
+            g_data['templates'] = templates_by_grant[g_data['id']]
+            all_grants.append(GrantConfig(**g_data))
+            
+        return all_grants
 
     async def get_section_details(self, grant_id: str, template_id: str, section_id: str) -> Optional[SectionConfig]:
-        response = self.client.from_("sections").select("*").eq("grant_id", grant_id).eq("template_id", template_id).eq("id", section_id).single().execute()
+        """獲取單個 section 的詳細信息。"""
+        response = await asyncio.to_thread(
+            self.client.from_("sections")
+            .select("*")
+            .eq("grant_id", grant_id)
+            .eq("template_id", template_id)
+            .eq("id", section_id)
+            .single()
+            .execute
+        )
         if response.data:
-            return SectionConfig(
-                id=response.data['id'],
-                template_id=response.data['template_id'],
-                grant_id=response.data['grant_id'],
-                name=response.data['name'],
-                json_schema=response.data.get('json_schema'),
-                system_prompt=response.data.get('system_prompt'),
-                critic_prompt=response.data.get('critic_prompt'), 
-                rewrite_prompt=response.data.get('rewrite_prompt'),
-                custom_prompt_list=response.data.get('custom_prompt_list') or []
-            )
+            return SectionConfig(**response.data)
         return None
 
     async def log_sft_data_point(self, grant_id: str, template_id: str,section_id: str, prompt: str, final_answer: dict, source_type: str):
         """记录一个可用于 SFT 的数据点"""
-        try:
-            with self.get_db_session() as session:
-                stmt = text("""
-                    INSERT INTO datasets (source_type, grant_id, template_id, section_id,prompt, final_answer)
-                    VALUES (:source_type,  :grant_id, :template_id, :section_id, :prompt, :final_answer);
-                """)
-                session.execute(stmt, {
-                    "grant_id": grant_id,
-                    "template_id": template_id,
-                    "section_id": section_id,
-                    "source_type": source_type,
-                    "prompt": prompt,
-                    "final_answer": json.dumps(final_answer)
-                })
-                session.commit() 
-            print(f"SFT data point from '{source_type}' logged to datasets table.")
-        except Exception as e:
-             pass
+        stmt = text("""
+            INSERT INTO datasets (source_type, grant_id, template_id, section_id,prompt, final_answer)
+            VALUES (:source_type,  :grant_id, :template_id, :section_id, :prompt, :final_answer);
+        """)
+        params = {
+            "source_type": source_type,
+            "grant_id": grant_id,
+            "template_id": template_id,
+            "section_id": section_id,
+            "prompt": prompt,
+            "final_answer": json.dumps(final_answer)
+        }
+        await asyncio.to_thread(self._execute_sql, stmt, params)
+        print(f"SFT data point from '{source_type}' logged to datasets table.")
     
-    async def log_actor_critic_run(self, prompt: str, grant_id: str, template_id: str,section_id: str,initial_answer: dict, critic_json: dict, final_answer: dict):
-        """记录一次完整的 Actor-Critic 流程数据"""
-        try:
-            with self.get_db_session() as session:
-                stmt = text("""
-                    INSERT INTO datasets (
-                        source_type, grant_id, template_id, section_id,
-                        prompt, initial_answer, critic_json, final_answer
-                    )
-                    VALUES (
-                        'actor_critic', :grant_id, :template_id, :section_id,
-                        :prompt, :initial_answer, :critic_json, :final_answer
-                    );
-                """)
-
-                session.execute(stmt, {
-                    "grant_id": grant_id,
-                    "template_id": template_id,
-                    "section_id": section_id,
-                    "prompt": prompt,
-                    "initial_answer": json.dumps(initial_answer),
-                    "critic_json": json.dumps(critic_json),
-                    "final_answer": json.dumps(final_answer)
-                })
-                session.commit()
-            print("Actor-Critic run logged to datasets table.")
-        except Exception as e:
-            print(f"Error logging Actor-Critic run: {e}")
+    async def log_actor_critic_run(self, prompt: str, grant_id: str, template_id: str, section_id: str, initial_answer: dict, critic_json: dict, final_answer: dict):
+        """記錄一次完整的 Actor-Critic 流程數據。"""
+        stmt = """
+            INSERT INTO datasets (
+                source_type, grant_id, template_id, section_id,
+                prompt, initial_answer, critic_json, final_answer
+            )
+            VALUES (
+                'actor_critic', :grant_id, :template_id, :section_id,
+                :prompt, :initial_answer, :critic_json, :final_answer
+            );
+        """
+        params = {
+            "grant_id": grant_id, "template_id": template_id, "section_id": section_id,
+            "prompt": prompt,
+            "initial_answer": json.dumps(initial_answer),
+            "critic_json": json.dumps(critic_json),
+            "final_answer": json.dumps(final_answer)
+        }
+        await asyncio.to_thread(self._execute_sql, stmt, params)
+        print("Actor-Critic run logged to datasets table.")
             
     def register_new_model(self, model_id: str, display_name: str, base_model_id: str, adapter_path: str, tags: list = None):
         """将新训练的模型注册到数据库"""
-
         print(f"Registering new model '{model_id}' to database...")
-        try:
-            with self.get_db_session() as session:
-                stmt = text("""
-                    INSERT INTO models (id, display_name, provider, type, base_model_id, adapter_path, tags, description,updated_at)
-                    VALUES (:id, :display_name, 'internal_lora', 'internal', :base_model_id, :adapter_path, :tags, :description,NOW())
-                    ON CONFLICT (id) DO UPDATE SET
-                        adapter_path = EXCLUDED.adapter_path,
-                        updated_at = NOW(); 
-                """)
-                session.execute(stmt, {
-                    "id": model_id,
-                    "display_name": display_name,
-                    "base_model_id": base_model_id,
-                    "adapter_path": adapter_path,
-                    "tags": tags if tags else [],
-                    "description": f"Fine-tuned model based on {base_model_id}"
-                })
-                session.commit()
-            print("Model registration successful.")
-        except Exception as e:
-            print(f"Failed to register model: {e}")
+        stmt = text("""
+            INSERT INTO models (id, display_name, provider, type, base_model_id, adapter_path, tags, description,updated_at)
+            VALUES (:id, :display_name, 'internal_lora', 'internal', :base_model_id, :adapter_path, :tags, :description,NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                adapter_path = EXCLUDED.adapter_path,
+                updated_at = NOW(); 
+        """)
+        session.execute(stmt, {
+            "id": model_id,
+            "display_name": display_name,
+            "base_model_id": base_model_id,
+            "adapter_path": adapter_path,
+            "tags": tags if tags else [],
+            "description": f"Fine-tuned model based on {base_model_id}"
+        })
+        session.commit()
+        print("Model registration successful.")
 
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
@@ -189,10 +186,8 @@ class SupabaseService:
     #         .execute() 
         
     #     if response.data:
-    #         logger.info(f"Found a fine-tuned LoRA model for section '{section_id}': {response.data[0]['id']}")
     #         return response.data[0]
         
-    #     logger.info(f"No specific fine-tuned LoRA model found for section '{section_id}'.")
     #     return None
 
 
@@ -363,5 +358,5 @@ class SupabaseService:
             # 檢查是否有行被更新
             return len(response.data) > 0
         except Exception as e:
-            logger.error(f"Failed to update prompts for section {section_id}: {e}")
+            print(f"Failed to update prompts for section {section_id}: {e}")
             return False

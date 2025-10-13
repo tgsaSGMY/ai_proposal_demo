@@ -223,6 +223,8 @@
 
 <script setup>
 import { ref, watch, computed, onMounted } from "vue";
+import { useNotifications } from "~/composables/useNotifications";
+const { error: errorNotification } = useNotifications();
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
@@ -246,6 +248,7 @@ const selectedTemplateId = ref("");
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 const debounceTimers = ref({});
 const isSavingPrompts = ref({});
+const { confirm } = useConfirm();
 
 // 計算屬性（模板和章節）
 const availableTemplates = computed(() => {
@@ -317,7 +320,7 @@ async function savePrompts(sectionId, promptsToSave) {
     }
   } catch (error) {
     console.error("Error saving prompts:", error);
-    alert("保存自定義指令失敗！");
+    errorNotification("保存自定義指令失敗！");
     // 可選：在這裡可以做數據回滾
   } finally {
     // 解除鎖定
@@ -344,8 +347,18 @@ function handlePromptInput(groupIndex, promptIndex, value) {
   }, 800);
 }
 
-function deletePrompt(groupIndex, promptIndex) {
-  if (!confirm("確定要刪除這條指令嗎？")) return;
+async function deletePrompt(groupIndex, promptIndex) {
+  const isConfirmed = await confirm({
+    title: "確認刪除",
+    message: `確定要刪除這條指令嗎？`,
+    confirmText: "確認刪除",
+    cancelText: "取消",
+    confirmColor: "danger", // 設置按鈕顏色為危險/紅色
+  });
+
+  if (!isConfirmed) {
+    return; // 如果用戶點擊取消，則直接返回
+  }
 
   const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
   const group = newInputs[groupIndex];

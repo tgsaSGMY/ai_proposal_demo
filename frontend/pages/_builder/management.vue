@@ -207,7 +207,12 @@ import { ref, onMounted, reactive, watch, computed } from "vue";
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
 
 const datasets = ref([]);
-const isLoading = ref(true);
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+const { isLoading } = useLoading();
+const { success, error: errorNotification } = useNotifications();
+import { useConfirm } from "~/composables/useConfirm";
+const { confirm } = useConfirm();
 const isSaving = ref(false);
 const error = ref(null);
 
@@ -275,7 +280,6 @@ async function fetchConfig() {
     allConfigs.value = await response.json();
   } catch (e) {
     console.error(e.message);
-    // You might want to show an alert here
   }
 }
 
@@ -345,24 +349,29 @@ async function handleSave(updatedData) {
       const errData = await response.json();
       throw new Error(errData.detail || "保存失敗");
     }
-    alert("保存成功！");
+    success("保存成功！");
     closeEditModal();
     await fetchDatasets();
   } catch (e) {
-    alert(`保存失敗: ${e.message}`);
+    errorNotification(`保存失敗: ${e.message}`);
   } finally {
     isSaving.value = false;
   }
 }
 
 async function handleDelete(id) {
-  if (
-    !confirm(
-      `確定要刪除數據點 #${id} 嗎？此操作將同時從 Supabase 和 Qdrant 中移除，無法復原。`
-    )
-  ) {
-    return;
+  const isConfirmed = await confirm({
+    title: "確認刪除",
+    message: `您確定要刪除數據點 #${id} 嗎？\n此操作無法復原。`,
+    confirmText: "確認刪除",
+    cancelText: "取消",
+    confirmColor: "danger", // 設置按鈕顏色為危險/紅色
+  });
+
+  if (!isConfirmed) {
+    return; // 如果用戶點擊取消，則直接返回
   }
+
   try {
     const response = await fetch(`${API_BASE_URL}/datasets/${id}`, {
       method: "DELETE",
@@ -371,10 +380,10 @@ async function handleDelete(id) {
       const errData = await response.json();
       throw new Error(errData.detail || "刪除失敗");
     }
-    alert("刪除成功！");
+    success("刪除成功！");
     await fetchDatasets();
   } catch (e) {
-    alert(`刪除失敗: ${e.message}`);
+    errorNotification(`刪除失敗: ${e.message}`);
   }
 }
 

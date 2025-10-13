@@ -83,7 +83,10 @@ const props = defineProps({
 });
 
 const fileInput = ref(null);
-const isLoading = ref(false);
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+const { error: errorNotification } = useNotifications();
+const { isLoading } = useLoading();
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
@@ -119,7 +122,7 @@ function getSectionError(sectionId) {
 
 async function handleExportToWord() {
   if (!props.sections.length) {
-    alert("請先選擇模板");
+    errorNotification("請先選擇模板");
     return;
   }
   await exportPlanToWord(props.sections, props.planContent);
@@ -132,7 +135,7 @@ function updateSectionContent(sectionId, newContentObject) {
 
 function handleFileLoadClick() {
   if (props.sections.length === 0) {
-    alert("請先在左側選擇一個模板，以便我們知道要填充哪些欄位。");
+    errorNotification("請先在左側選擇一個模板，以便我們知道要填充哪些欄位。");
     return;
   }
   fileInput.value.click();
@@ -163,7 +166,7 @@ async function handleFileSelected(event) {
     emit("autoFillComplete", filledContent);
   } catch (error) {
     console.error("處理檔案時發生錯誤:", error);
-    alert(`處理檔案失敗: ${error.message}`);
+    errorNotification(`處理檔案失敗: ${error.message}`);
   } finally {
     isLoading.value = false;
     event.target.value = null; // 重設 input，以便能再次選擇同一個檔案

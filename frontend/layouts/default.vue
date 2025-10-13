@@ -1,7 +1,9 @@
 <template>
   <div class="flex min-h-screen bg-gray-100 font-sans">
     <!-- Sidebar / Navigation Panel -->
-    <aside class="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col p-4">
+    <aside
+      class="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col p-4 sticky top-0 h-screen overflow-y-auto"
+    >
       <div class="text-center py-4 mb-6">
         <h2 class="text-xl font-semibold">AI 計畫書平台</h2>
         <span class="text-xs text-gray-400">v0.1</span>
@@ -92,7 +94,7 @@
     </aside>
 
     <!-- Main Content Area -->
-    <main class="flex-1 overflow-y-auto">
+    <main class="flex-1 overflow-y-auto h-screen">
       <slot />
     </main>
   </div>

@@ -104,6 +104,8 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
+import { useNotifications } from "~/composables/useNotifications";
+const { success, error: errorNotification } = useNotifications();
 
 const allConfigs = ref([]);
 const allModels = ref([]);
@@ -148,7 +150,7 @@ async function fetchData() {
     routingRules.value = await rulesRes.json();
   } catch (error) {
     console.error("Data fetching error:", error);
-    alert("無法加載配置數據，請檢查後端服務。");
+    errorNotification("無法加載配置數據，請檢查後端服務。");
   }
 }
 
@@ -210,10 +212,10 @@ async function handleSaveRule(rulePayload) {
     routingRules.value = await rulesRes.json();
 
     closeModal();
-    alert("規則已成功儲存！");
+    success("規則已成功儲存！");
   } catch (error) {
     console.error("Failed to save routing rule:", error);
-    alert(`儲存失敗: ${error.message}`);
+    errorNotification(`儲存失敗: ${error.message}`);
   }
 }
 </script>

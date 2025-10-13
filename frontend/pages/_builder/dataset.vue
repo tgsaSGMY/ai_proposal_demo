@@ -93,6 +93,10 @@
 import { ref, onMounted, computed, watch } from "vue";
 import PlanInputPanel from "~/components/PlanInputPanel.vue"; // 假設您的組件路徑
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue"; // 假設您的組件路徑
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+const { success, error: errorNotification } = useNotifications();
+const { isLoading } = useLoading();
 
 // 狀態
 const mode = ref("synthetic"); // 'synthetic' or 'golden'
@@ -137,7 +141,7 @@ onMounted(async () => {
     allConfigs.value = await response.json();
   } catch (error) {
     console.error("Failed to load config:", error);
-    alert("無法加載應用配置。");
+    errorNotification("無法加載應用配置。");
   }
 });
 
@@ -200,8 +204,9 @@ function onContentUpdate({ sectionId, content }) {
 }
 
 async function handleGenerateUserInput() {
+  isLoading.value = true;
   if (!currentGrant.value || !currentTemplate.value) {
-    alert("請先選擇主題和模板！");
+    errorNotification("請先選擇主題和模板！");
     return;
   }
 
@@ -273,8 +278,9 @@ async function handleGenerateUserInput() {
     }
   } catch (error) {
     console.error("Error generating user input:", error);
-    alert(`生成失敗: ${error.message}`);
+    errorNotification(`生成失敗: ${error.message}`);
   } finally {
+    isLoading.value = false;
     isGenerating.value = false;
   }
 }
@@ -367,7 +373,7 @@ async function handleGeneratePlan() {
   const fullUserInput = buildFinalUserInput();
 
   if (!selectedTemplateId.value || !fullUserInput.trim()) {
-    alert("請選擇完整的主題、模板，並輸入您的核心項目描述。");
+    errorNotification("請選擇完整的主題、模板，並輸入您的核心項目描述。");
     return;
   }
 
@@ -416,7 +422,7 @@ async function handleGeneratePlan() {
     planContent.value = processedContent;
   } catch (error) {
     console.error("生成計劃書時發生錯誤:", error);
-    alert(`生成失敗: ${error.message}`);
+    errorNotification(`生成失敗: ${error.message}`);
     // 可以選擇在特定 section 顯示錯誤信息
     const firstSectionId = currentSections.value[0]?.id;
     if (firstSectionId) {
@@ -430,7 +436,7 @@ async function handleGeneratePlan() {
 }
 async function handleSave() {
   if (Object.keys(planContent.value).length === 0) {
-    alert("沒有可保存的數據。");
+    errorNotification("沒有可保存的數據。");
     return;
   }
   isSaving.value = true;
@@ -458,7 +464,9 @@ async function handleSave() {
       .filter(Boolean);
 
     if (entries.length === 0) {
-      alert("沒有有效的數據可以保存，請確保所有章節都有正確的 JSON 內容。");
+      errorNotification(
+        "沒有有效的數據可以保存，請確保所有章節都有正確的 JSON 內容。"
+      );
       isSaving.value = false;
       return;
     }
@@ -474,27 +482,17 @@ async function handleSave() {
       throw new Error(error.detail || "Failed to save dataset.");
     }
 
-    alert("數據集已成功提交保存！");
+    success("數據集已成功提交保存！");
     // 可選：清空表單
     userInput.value = "";
     planContent.value = {};
   } catch (error) {
     console.error("Save error:", error);
-    alert(`保存失敗: ${error.message}`);
+    errorNotification(`保存失敗: ${error.message}`);
   } finally {
     isSaving.value = false;
   }
 }
-
-// 監聽選擇變化，將狀態同步到 PlanInputPanel
-watch([selectedGrantId, selectedTemplateId], () => {
-  const panel = document.querySelector(
-    ".plan-input-panel-internal-select-grant"
-  ); // 假設 PlanInputPanel 有這樣的 class
-  if (panel) {
-    // 這部分比較 tricky，更好的方式是 PlanInputPanel 自己處理內部狀態或通過 props
-  }
-});
 
 function handleAutoFill(filledContent) {
   // 這裡我們不直接賦值，而是合併，以防萬一 API 沒有返回所有 section
@@ -507,6 +505,5 @@ function handleAutoFill(filledContent) {
   }
 
   planContent.value = newPlanContent;
-  alert("文件內容已自動填充！請檢查並進行必要的修改。");
 }
 </script>
