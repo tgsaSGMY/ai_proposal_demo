@@ -187,7 +187,6 @@ async function handleGeneratePlan() {
       throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
     }
     const rawData = await response.json();
-    console.log(rawData);
 
     const processedContent = {};
     for (const sectionId in rawData) {
@@ -203,8 +202,6 @@ async function handleGeneratePlan() {
     planContent.value = processedContent;
 
     try {
-      console.log("開始將生成結果異步保存到數據集...");
-
       // 準備要保存的數據條目
       const entriesToSave = currentSections.value
         .map((section) => {
@@ -233,7 +230,6 @@ async function handleGeneratePlan() {
         })
           .then((saveResponse) => {
             if (saveResponse.status === 202) {
-              console.log("數據集保存請求已成功提交到後台。");
             } else {
               // 即使保存失敗，也只在控制台記錄錯誤，不打擾用戶
               saveResponse

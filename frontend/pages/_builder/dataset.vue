@@ -337,7 +337,6 @@ async function handleGeneratePlan() {
     }
 
     const rawData = await response.json();
-    console.log(rawData);
 
     const processedContent = {};
     for (const sectionId in rawData) {
@@ -430,7 +429,6 @@ watch(availableTemplates, (newTemplates) => {
   if (newTemplates && newTemplates.length === 1 && !selectedTemplateId.value) {
     // 自动选中这唯一的一个模板
     selectedTemplateId.value = newTemplates[0].id;
-    console.log(`自动选中了唯一的模板: ${newTemplates[0].name}`);
   }
 });
 

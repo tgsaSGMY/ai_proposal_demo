@@ -234,12 +234,8 @@ watch(
   (newVal) => {
     // 检查内部状态是否与 prop 不同步，如果是，则更新它
     if (selectedTemplateId.value !== newVal) {
-      console.log(
-        `子组件检测到 templateId prop 变化，从 '${selectedTemplateId.value}' 更新为 '${newVal}'`
-      );
       selectedTemplateId.value = newVal;
     }
-    console.log(selectedTemplateId.value);
   }
 );
 
@@ -255,14 +251,10 @@ const isReadyToGenerate = computed(() => {
 });
 
 watch([selectedGrantId, selectedTemplateId], () => {
-  // 检查是否是由于 props 更新导致的 watch 触发，避免无限循环
-  // 只有当内部状态与 props 不同时，才认为是用户操作
-  console.log(selectedTemplateId.value, props.initialTemplateId);
   if (
     selectedGrantId.value !== props.initialGrantId ||
     selectedTemplateId.value !== props.initialTemplateId
   ) {
-    console.log("trigger");
     emit("selectionChange", {
       grantId: selectedGrantId.value,
       templateId: selectedTemplateId.value,

@@ -175,7 +175,6 @@ async def generate_synthetic_input(
             # 如果 AI 返回的 dynamic_fields 不是一個字典，說明它沒有遵循指令
             raise HTTPException(status_code=500, detail="LLM failed to return a valid dictionary for 'dynamic_fields'.")
 
-        print(response_json)
         return response_json
       
 @router.post("/autofill_from_document", summary="從文檔自動填充計劃書內容")
