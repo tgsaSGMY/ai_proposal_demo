@@ -26,7 +26,6 @@ router = APIRouter(
 @router.post("/generate_plan")
 async def generate_plan( 
     request_data: GenerateRequest,
-    # 修正：添加了 Request 參數以獲取 app.state
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
@@ -45,9 +44,9 @@ async def generate_plan(
                 template_id=request_data.template,
                 section_id=s.section_id,
                 user_input=request_data.user_input,
-                user_id=request_data.user_id,
                 app_state=app_state,
-                supabase_service=supabase_service
+                user_id=request_data.user_id,
+                supabase_service=supabase_service,
             )
             for s in request_data.sections
         ]

@@ -81,6 +81,7 @@
             <option value="">全部</option>
             <option value="golden_samples">Golden Samples</option>
             <option value="synthetic_data">Synthetic Data</option>
+            <option value="external_direct">External Direct</option>
             <option value="actor_critic">Actor-Critic</option>
           </select>
         </div>
@@ -317,7 +318,6 @@ onMounted(() => {
   fetchDatasets(); // Load initial table data
 });
 
-// --- Your existing functions (openEditModal, closeEditModal, handleSave, handleDelete, getSourceTypeClass) remain unchanged ---
 function openEditModal(dataset) {
   currentDataset.value = dataset;
   isModalVisible.value = true;
@@ -332,14 +332,14 @@ async function handleSave(updatedData) {
   isSaving.value = true;
   try {
     const entry = {
-      source_type: currentDataset.value.source_type,
+      source_type: updatedData.source_type,
       grant_id: currentDataset.value.grant_id,
       template_id: currentDataset.value.template_id,
       section_id: currentDataset.value.section_id,
       prompt: updatedData.prompt,
       final_answer: updatedData.final_answer,
     };
-    console.log(entry);
+
     const response = await fetch(`${API_BASE_URL}/datasets/${updatedData.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -391,7 +391,7 @@ function getSourceTypeClass(sourceType) {
   const classes = {
     golden_samples: "bg-yellow-100 text-yellow-800",
     synthetic_data: "bg-blue-100 text-blue-800",
-    actor_critic: "bg-green-100 text-green-800",
+    external_direct: "bg-green-100 text-green-800",
   };
   return classes[sourceType] || "bg-gray-100 text-gray-800";
 }

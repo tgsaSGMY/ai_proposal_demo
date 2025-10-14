@@ -1,10 +1,9 @@
 # Pydantic 模型用於 FastAPI 的請求和響應驗證。
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal 
 
 # --- 1. 核心配置模型 (Core Configuration Models) ---
 # 這些模型定義了應用程式最核心的數據結構，如計畫書、模板和章節。
-
 class SectionConfig(BaseModel):
     """代表一個章節（Section）的完整配置信息。"""
     id: str
@@ -100,9 +99,13 @@ class RoutingRule(BaseModel):
     priority: int = Field(20, description="規則優先級，數字越小優先級越高。")
     description: Optional[str] = None
 
+# --- 定義 source_type 的可用選項 ---
+SourceType = Literal["actor_critic", "external_direct", "golden_samples", "synthetic_data"]
+
 class UpdateSectionSettingsRequest(BaseModel):
     prompts: List[str]
-    system_prompt: Optional[str] = None
+    system_prompt: Optional[str] = None,
+    source_type: SourceType
 
 
 # --- 6. 其他特定 API 模型 (Other Specific API Models) ---

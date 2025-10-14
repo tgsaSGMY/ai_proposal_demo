@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 from app.config import (
     SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET_NAME, DATABASE_URL
 )
-from app.models import GrantConfig, TemplateConfig, SectionConfig, RoutingRule 
+from app.models import GrantConfig, TemplateConfig, SectionConfig, RoutingRule, SourceType 
 
 class SupabaseService:
     def __init__(self):
@@ -352,12 +352,14 @@ class SupabaseService:
         self, 
         section_id: str, 
         prompts: List[str], 
-        system_prompt: Optional[str] = None
+        source_type: SourceType,
+        system_prompt: Optional[str] = None,
     ) -> bool:
-        """更新指定 section 的 system_prompt 和 custom_prompt_list"""
+        """更新指定 section 的 system_prompt, source_type 和 custom_prompt_list"""
         try:
             update_data = {
-                "custom_prompt_list": prompts
+                "custom_prompt_list": prompts,
+                "source_type":source_type
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:

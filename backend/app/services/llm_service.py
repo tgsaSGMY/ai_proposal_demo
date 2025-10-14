@@ -294,17 +294,7 @@ class LLMService:
                 else:
                     asyncio.create_task(supabase_service.log_usage(user_id, model_to_use, len(raw_output) // 2))
                     full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
-                    # asyncio.create_task(
-                    #     supabase_service.log_sft_data_point(
-                    #         grant_id=grant_id,
-                    #         template_id=template_id,
-                    #         section_id=section_id,
-                    #         prompt=full_prompt,
-                    #         final_answer=final_content_json,
-                    #         source_type='external_direct' 
-                    #     )
-                    # )
-
+                  
         elif model_type == 'internal': 
             critic_model_info = app_state.model_registry.get("gpt-4-turbo")
             if not critic_model_info:

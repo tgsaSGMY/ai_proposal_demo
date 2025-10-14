@@ -199,6 +199,54 @@ async function handleGeneratePlan() {
     }
     planContent.value = processedContent;
 
+    try {
+      console.log("開始將生成結果異步保存到數據集...");
+
+      // 準備要保存的數據條目
+      const entriesToSave = currentSections.value
+        .map((section) => {
+          const sectionResult = rawData[section.id];
+
+          // 確保該章節成功生成且有內容
+          if (sectionResult && sectionResult.content && !sectionResult.error) {
+            return {
+              source_type: "external_direct",
+              grant_id: selectedGrantId.value,
+              template_id: selectedTemplateId.value,
+              section_id: section.id,
+              prompt: finalUserInput,
+              final_answer: sectionResult.raw_json_content,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (entriesToSave.length > 0) {
+        fetch("http://127.0.0.1:8000/api/datasets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: entriesToSave }),
+        })
+          .then((saveResponse) => {
+            if (saveResponse.status === 202) {
+              console.log("數據集保存請求已成功提交到後台。");
+            } else {
+              // 即使保存失敗，也只在控制台記錄錯誤，不打擾用戶
+              saveResponse
+                .json()
+                .then((err) => console.error("後台保存數據集失敗:", err));
+            }
+          })
+          .catch((saveError) => {
+            console.error("發送保存數據集請求時出錯:", saveError);
+          });
+      }
+    } catch (saveError) {
+      // 捕獲準備數據時的錯誤，同樣只在控制台記錄
+      console.error("準備保存數據集時出錯:", saveError);
+    }
+
     success("計劃書草稿已生成！");
   } catch (error) {
     console.error("生成計劃書時發生錯誤:", error);
