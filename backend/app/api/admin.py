@@ -1,4 +1,4 @@
-# app/api/admin.py
+# 内部人員/系統獨有操作的api
 
 import logging
 from typing import List, Dict, Any

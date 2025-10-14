@@ -5,7 +5,6 @@ from app.services.supabase_service import SupabaseService
 from app.services.qdrant_service import QdrantService
 from app.services.llm_service import LLMService
 
-# 依賴注入的函數現在集中管理
 def get_supabase_service(request: Request) -> SupabaseService:
     return request.app.state.supabase_service
 

@@ -1,4 +1,4 @@
-# app/api/datasets.py
+# 連接數據庫，CRUD數據
 
 import logging
 from typing import List, Optional, Dict, Any
@@ -101,8 +101,7 @@ async def update_dataset_entry(
     qdrant_service: QdrantService = Depends(get_qdrant_service),
 ):
     """
-    同步更新 Supabase 和 Qdrant 中的一筆數據集條目。
-    注意：Qdrant 的更新策略是「刪除舊的，再插入新的」。
+    同步更新 Supabase 和 Qdrant 中的一筆數據集條目（Qdrant 的更新策略是「刪除舊的，再插入新的」）。
     """
     try:
         # 更新 Supabase
@@ -166,7 +165,6 @@ async def delete_dataset_entry(
         deleted_from_supabase = await supabase.delete_dataset_by_id(dataset_id)
         if not deleted_from_supabase:
             logger.warning(f"Dataset ID {dataset_id} not found in Supabase, but deletion was attempted (Qdrant vector may have been removed).")
-            # 即使 Supabase 沒找到，也應回傳成功，因為目標狀態（數據不存在）已達成
         
         logger.info(f"Deleted dataset ID {dataset_id} from Supabase.")
         return {"message": "Dataset entry deleted successfully from both Supabase and Qdrant."}

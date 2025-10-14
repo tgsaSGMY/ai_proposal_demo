@@ -1,5 +1,3 @@
-# app/utils/routing.py
-
 from typing import Dict, Any, Optional
 from app.config import DEFAULT_MODEL_ID
 import logging

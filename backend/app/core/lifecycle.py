@@ -1,4 +1,4 @@
-# app/core/lifecycle.py
+# 初始化和關閉服務
 
 import logging
 from fastapi import FastAPI
@@ -7,13 +7,10 @@ from app.services.qdrant_service import QdrantService
 from app.services.llm_service import LLMService
 import asyncio
 
-# 獲取日誌記錄器
 logger = logging.getLogger(__name__)
 
 async def startup_event_handler(app: FastAPI):
     """
-    FastAPI 應用程式啟動時執行的異步事件處理程序。
-    
     主要任務:
     1. 初始化所有核心服務 (Supabase, Qdrant, LLM)。
     2. 將服務實例附加到 app.state，以便在整個應用程式中共享。
@@ -55,18 +52,10 @@ async def startup_event_handler(app: FastAPI):
         
     except Exception as e:
         logger.critical(f"A critical error occurred during application startup: {e}", exc_info=True)
-        # 在生產環境中，你可能希望這裡直接引發異常，導致應用程式啟動失敗，而不是帶著錯誤狀態運行。
         raise RuntimeError("Failed to initialize application state during startup.") from e
 
     logger.info("Application startup process completed successfully.")
 
 async def shutdown_event_handler(app: FastAPI):
-    """
-    FastAPI 應用程式關閉時執行的異步事件處理程序。
-    
-    主要任務:
-    - 優雅地關閉任何需要清理的資源，例如數據庫連接池、後台任務等。
-    """
-    logger.info("Application shutdown process initiated...")
-
+    """關閉任何需要清理的資源，例如數據庫連接池、後台任務等。 """
     logger.info("Application shutdown process completed.")

@@ -1,4 +1,4 @@
-# app/api/config.py
+# 調取完整主題、模板和分項
 
 import logging
 from typing import List
@@ -16,8 +16,7 @@ router = APIRouter(
 @router.get("/config", response_model=List[GrantConfig])
 async def get_all_configs(request: Request):
     """
-    從應用程式狀態中獲取已加載的所有 Grant、Template 和 Section 配置。
-    這是一個高效的唯讀操作，直接返回內存中的數據。
+    從應用程式狀態中獲取已加載的所有 Grant、Template 和 Section 配置，直接返回內存中的數據。
     """
     try:
         if not hasattr(request.app.state, 'all_grants_config'):

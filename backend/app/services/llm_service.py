@@ -1,4 +1,5 @@
 # 封裝所有 LLM API 的呼叫邏輯
+
 import httpx
 import json
 import re
@@ -15,12 +16,12 @@ from app.utils.formatting import format_section_output
 
 logger = logging.getLogger(__name__)
 
-# 定義一個可呼叫的類型別名，讓程式碼更清晰， 這個類型代表一個能生成文字的異步函數
+# 一個能生成文字的異步函數
 GenerationFunc = Callable[..., Awaitable[Tuple[Optional[str], Optional[Dict]]]]
 
 class LLMService:
     def __init__(self, qdrant_service: QdrantService):
-        self.qdrant_service = qdrant_service # 注入 QdrantService
+        self.qdrant_service = qdrant_service 
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
 
@@ -124,7 +125,7 @@ class LLMService:
             logger.error(f"Error during local model generation: {repr(e)}", exc_info=True)
             return None, {"error": "Failed to generate text with the local model."}
 
-    # --- 3. Workflow Unification: 統一 Actor-Critic 流程 --- 
+    # --- 3. 統一 Actor-Critic 流程 --- 
     async def _execute_generation_step(self, *, generation_func: GenerationFunc, messages: List[Dict], error_context: str, section_id_for_parsing: str) -> Tuple[Optional[Dict], Optional[str]]:
         """'呼叫->解析->回報錯誤' 的步驟"""
         raw_output, error = await generation_func(messages=messages)
@@ -145,9 +146,7 @@ class LLMService:
         section_details: SectionConfig,
         user_input: str
     ) -> Tuple[Optional[Dict], Optional[str]]:
-        """
-        actor_func 是一個可呼叫的對象，可以是本地生成函數，也可以是 API 呼叫函數。
-        """
+        """actor_func 是一個可呼叫的對象，可以是本地生成函數，也可以是 API 呼叫函數。 """
         # --- Step 1: Actor generates initial answer ---
         logger.info("-> [Workflow] Step 1: Actor generating initial answer...")
         initial_messages = self._build_initial_actor_messages(user_input, section_details)
@@ -188,11 +187,9 @@ class LLMService:
             "final_answer": final_answer
         }, None
 
-    # --- 4. Public-Facing Methods: 簡潔的公開接口 ---
+    # --- 4. 公開接口 ---
     async def run_actor_critic_flow(self, http_session: httpx.AsyncClient, actor_model_bundle: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str) -> Tuple[Optional[Dict], Optional[str]]:
-        """
-        執行 Actor-Critic 流程，Actor 使用加載的本地模型。
-        """
+        """執行 Actor-Critic 流程，Actor 使用加載的本地模型。"""
         # 使用 functools.partial 來固定 actor_func 的 model 和 tokenizer 參數
         actor_func = partial(self.generate_with_loaded_model, actor_model_bundle["model"], actor_model_bundle["tokenizer"])
         return await self._run_actor_critic_workflow(
@@ -307,51 +304,6 @@ class LLMService:
                 section_details=section_details,
                 user_input=user_input
             )
-            # --- 流程 B: 所有 INTERNAL 模型都走 Actor-Critic (DPO 数据收集) ---
-            # provider = model_to_use.get("provider")
-            # logger.info(f"-> Starting Actor-Critic flow for INTERNAL model: {model_to_use['id']} (Provider: {provider})")
-
-            # critic_model_info = app_state.model_registry.get("gpt-4-turbo")
-            # if not critic_model_info:
-            #     return SectionGenerateResponse(section_id=section_id, error="Critic model 'gpt-4-turbo' not found.")
-
-            # finetuned_lora_info = await supabase_service.find_latest_finetuned_model_for_section(section_id)
-            # if finetuned_lora_info:
-            #     logger.info(f"   -> Upgrading to fine-tuned LoRA model: {finetuned_lora_info['id']}")
-            #     model_to_use = finetuned_lora_info
-            #     provider = 'internal_lora'
-            # else:
-            #     logger.info(f"   -> Using base internal model as fallback: {model_to_use['id']}")
-
-            # # Actor 的执行方式根据 provider 决定
-            # if provider == 'internal_lora':
-            #     # --- 分支 B1: Actor 是已加载的 LoRA 模型 ---
-            #     actor_model_bundle = model_manager.get_lora_model(model_to_use)
-            #     if not actor_model_bundle:
-            #         return SectionGenerateResponse(section_id=section_id, error=f"Failed to load LoRA model '{model_to_use['id']}'.")
-                
-            #     # 使用加载的模型执行 A-C 流程
-            #     ac_data, ac_error = await self.run_actor_critic_flow(
-            #         http_session=http_session,
-            #         actor_model_bundle=actor_model_bundle, 
-            #         critic_model_info=critic_model_info,
-            #         section_details=section_details,
-            #         user_input=user_input
-            #     )
-            #     print("already done actor critic flow")
-
-            # elif provider == 'ollama':
-            #     # --- 分支 B2: Actor 是通过 Ollama API 调用的基础模型 ---
-            #     ac_data, ac_error = await self.run_actor_critic_flow_via_api(
-            #         http_session=http_session,
-            #         actor_model_info=model_to_use, 
-            #         critic_model_info=critic_model_info,
-            #         section_details=section_details,
-            #         user_input=user_input
-            #     )
-            
-            # else:
-            #     return SectionGenerateResponse(section_id=section_id, error=f"Unsupported provider for internal model: {provider}")
             
             if ac_error:
                 error_message = ac_error

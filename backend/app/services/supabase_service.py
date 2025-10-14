@@ -1,4 +1,5 @@
 # 處理所有與 Supabase 數據庫和 Storage 的交互。
+
 import os
 import json
 from typing import List, Dict, Any, Optional
@@ -23,8 +24,6 @@ class SupabaseService:
         
         self.client: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         self.bucket_name = SUPABASE_BUCKET_NAME
-        
-        # for SQLAlchemy direct SQL access (e.g., for seed script or complex queries)
         self.engine = create_engine(DATABASE_URL)
         self.Session = sessionmaker(bind=self.engine)
 
@@ -177,7 +176,6 @@ class SupabaseService:
 
     async def get_user_usage(self, user_id: str) -> Dict[str, int]:
         """获取用户的 internal 和 external 总用量"""
-        # PostgREST v10+ 支持 .rpc() 调用存储过程，更高效, 但这里简化
         query = self.client.from_("usage_logs").select("model_type, tokens_used").eq("user_id", user_id)
         response = query.execute()
         
@@ -244,8 +242,7 @@ class SupabaseService:
             "description": rule.description or f"Rule for {rule.section_id or rule.grant_id or 'all sections'}"
         }
 
-        # PostgREST 的 upsert 語法，on_conflict 指定了衝突的列
-        # preference=resolution=merge-duplicates 會合併衝突並更新
+        # on_conflict 指定衝突的列,會合併衝突並更新
         response = self.client.from_("routing_rules").upsert(
             data_to_upsert, 
             on_conflict="grant_id,template_id, section_id" 

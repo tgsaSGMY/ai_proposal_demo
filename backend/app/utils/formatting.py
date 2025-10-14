@@ -1,8 +1,8 @@
-# app/utils/formatting.py
 
 from typing import Dict, Any
 
 def format_section_output(data: Dict[str, Any], json_schema: Dict[str, Any]) -> str:
+    """將JSON 对象轉換爲可讀string"""
     formatted_content = []
     
     # 使用 schema 的 properties 字段进行格式化

@@ -1,3 +1,4 @@
+# 定義模型，確保類型是正確的
 # Pydantic 模型用於 FastAPI 的請求和響應驗證。
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal 
@@ -35,7 +36,6 @@ TemplateConfig.model_rebuild()
 
 # --- 2. 主要生成流程模型 (Main Generation Flow Models) ---
 # 這些模型用於核心的「內容生成」API 端點。
-
 class SectionGenerateRequest(BaseModel):
     """在一次生成請求中，指定要生成的單個章節。"""
     section_id: str
@@ -58,7 +58,6 @@ class SectionGenerateResponse(BaseModel):
 
 # --- 3. 數據集管理模型 (Dataset Management Models) ---
 # 用於創建、讀取、更新和刪除（CRUD）數據集條目。
-
 class DatasetEntry(BaseModel):
     """代表一條標準的數據集記錄。"""
     source_type: str = Field(..., description="數據來源，如 'synthetic_data', 'golden_samples', 'actor_critic'。")
@@ -74,7 +73,6 @@ class SaveDatasetRequest(BaseModel):
 
 # --- 4. 合成數據與提示生成 (Synthetic Data & Prompt Generation) ---
 # 用於自動生成訓練數據或用戶輸入的相關模型。
-
 class DynamicFieldSchema(BaseModel):
     """描述一個動態生成的輸入字段，用於合成數據。"""
     label: str = Field(..., description="給用戶看的問題或標籤，例如 '我們的目標客戶是誰？'")
@@ -89,7 +87,6 @@ class SyntheticInputRequest(BaseModel):
     dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構。")
 
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
-
 class RoutingRule(BaseModel):
     """定義一個模型路由規則，用於決定哪個請求應該由哪個模型處理。"""
     grant_id: Optional[str] = None

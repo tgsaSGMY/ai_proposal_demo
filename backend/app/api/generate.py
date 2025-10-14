@@ -1,4 +1,4 @@
-# app/api/generate.py
+# 使用ai生成内容功能的api
 
 import asyncio
 import httpx
@@ -156,20 +156,15 @@ async def generate_synthetic_input(
         if parse_error:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
 
-        # --- 關鍵檢查 ---
         # 確保返回的 dynamic_fields 是個對象，而不是字符串
         if req.mode == 'reverse' and isinstance(response_json.get("dynamic_fields"), dict):
             # 遍歷原始 json_output 的結構，確保返回的結構與之匹配
-            # 這是為了防止 AI 返回扁平化的 dynamic_fields
             original_structure = req.json_output
             returned_structure = response_json["dynamic_fields"]
             
             # 我們期望 returned_structure 的 key 集合是 original_structure 的 key 集合的子集或相等
             if not set(returned_structure.keys()).issubset(set(original_structure.keys())):
-                # 如果 AI 創造了新的 sectionId，這可能是一個問題
                 logger.warning("AI may have returned an incorrect structure for dynamic_fields in reverse mode.")
-                # 這裡可以選擇拋出錯誤，或者繼續（取決於您想要的嚴格程度）
-
             return response_json
         elif req.mode == 'reverse':
             # 如果 AI 返回的 dynamic_fields 不是一個字典，說明它沒有遵循指令
@@ -188,8 +183,6 @@ async def autofill_from_document(
     調用強大的 LLM 來解析文本並填充成結構化的 JSON。
     """
     # 組合所有 schema，方便 LLM 一次性處理
-
-
     all_schemas_info = "\n\n".join(
         f"--- 章節 ID: {s.section_id} | 章節名稱: {s.section_name} ---\n"
         f"JSON Schema:\n{json.dumps(s.json_schema, ensure_ascii=False, indent=2)}"

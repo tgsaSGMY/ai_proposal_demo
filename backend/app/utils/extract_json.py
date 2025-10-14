@@ -2,8 +2,7 @@ from typing import Dict, Any, Tuple, Optional
 import json
 
 def extract_json_block(raw_content: str, section_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """从模型返回的字符串中，提取出合法的 JSON 对象"""
-
+    """嘗試从模型返回的字符串中，提取出合法的 JSON 对象"""
     if not raw_content:
         return None, {"section_id": section_id, "error": "LLM returned empty content."}
     

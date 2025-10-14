@@ -1,8 +1,9 @@
+# main page, 主接口
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-# 從新模組導入路由器和生命週期事件
+# 導入路由器和生命週期事件
 from app.api import generate, datasets, admin, config as api_config
 from app.core.lifecycle import startup_event_handler, shutdown_event_handler
 

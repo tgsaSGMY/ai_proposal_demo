@@ -2,7 +2,6 @@
 
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import PointStruct, PayloadSchemaType
-# from sentence_transformers import SentenceTransformer
 from fastembed import TextEmbedding
 from typing import List, Dict, Any
 import uuid 
@@ -136,8 +135,7 @@ class QdrantService:
 
     async def update_exemplar_by_db_id(self, db_id: int, new_text: str, new_payload: Dict[str, Any]):
         """
-        通過先刪除後新增的方式更新 Qdrant 中的向量。
-        這是最可靠的更新方式，因為文本變了，向量也必須重新計算。
+        通過先刪除後新增的方式更新 Qdrant 中的向量，因為文本變了，向量也必須重新計算。
         """
         # 1. 刪除舊的向量
         await self.delete_exemplar_by_db_id(db_id)

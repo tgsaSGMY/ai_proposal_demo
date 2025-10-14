@@ -1,5 +1,4 @@
 # 存放環境變數和常數。
-
 import os
 from dotenv import load_dotenv
 from pathlib import Path
