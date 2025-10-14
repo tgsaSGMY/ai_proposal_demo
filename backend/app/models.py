@@ -47,6 +47,7 @@ class GenerateRequest(BaseModel):
     template: str = Field(..., description="目標模板的 ID。")
     user_input: str = Field(..., description="用戶提供的核心需求或主題。")
     sections: List[SectionGenerateRequest] = Field(..., description="需要生成的章節列表。")
+    num_candidates: int = Field(2, ge=1, le=3)
 
 class SectionGenerateResponse(BaseModel):
     """單個章節生成的響應結果。"""

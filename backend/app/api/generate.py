@@ -30,13 +30,15 @@ async def generate_plan(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
 ):
-    """主功能->生成完整计划书"""
+    """主功能 -> 生成完整计划书，可生成多候选版本"""
     if not request_data.sections:
         raise HTTPException(status_code=400, detail="No sections provided to generate.")
 
     app_state = request.app.state
+    num_candidates = getattr(request_data, "num_candidates", 1)
 
     async with httpx.AsyncClient() as client:
+        # 每個 section 生成 num_candidates 個候選版本
         tasks = [
             llm_service.generate_section_content(
                 http_session=client,
@@ -49,11 +51,20 @@ async def generate_plan(
                 supabase_service=supabase_service,
             )
             for s in request_data.sections
+            for _ in range(num_candidates)
         ]
-        results = await asyncio.gather(*tasks) 
-    
-    plan_content = {res.section_id: res.dict() for res in results}
+        results = await asyncio.gather(*tasks)
+
+    # 組織輸出：每個 section_id -> [候選內容...]
+    plan_content = {}
+    for res in results:
+        section_id = res.section_id
+        if section_id not in plan_content:
+            plan_content[section_id] = []
+        plan_content[section_id].append(res.dict())
+
     return plan_content
+
 
 
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
@@ -63,9 +74,9 @@ async def generate_synthetic_input(
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """根據模式生成用戶輸入，現在支持填充動態字段"""
-    model_info = request.app.state.model_registry.get("gpt-3.5-turbo-1106")
+    model_info = request.app.state.model_registry.get("gpt-4.1")
     if not model_info:
-        raise HTTPException(status_code=500, detail="GPT-4 Turbo model not configured for synthetic generation.")
+        raise HTTPException(status_code=500, detail="GPT-3.5 Turbo model not configured for synthetic generation.")
 
     prompt = ""
     if req.mode == 'random' and req.dynamic_fields_schema:
@@ -73,34 +84,59 @@ async def generate_synthetic_input(
         field_labels = "\n".join([f"- {field.label}" for field in req.dynamic_fields_schema])
         
         prompt = f"""
-        你是一位具有創意且注重細節的商業策略專家，負責生成高品質的訓練數據。
+        你是一位嚴謹的商業策略專家，負責生成高品質的 AI 訓練資料。
 
-        **你的目標：**
-        首先，構思一個與「{req.grant_name}」相關的新穎且具吸引力的商業或專案構想。
-        其次，僅根據你剛構思的點子，詳細回答以下特定問題。
+        ---
 
-        **輸出格式：**
-        你必須回傳一個單一且有效的 JSON 物件。請勿在 JSON 區塊前後加入任何額外文字。
-        JSON 物件的結構必須完全符合以下格式：
+        ### 任務說明
+        1. 你需要**先構思一個與「{req.grant_name}」相關的新穎且具吸引力的商業／專案構想**。
+        2. 然後，**僅根據你構思的這個點子**，依序回答下列所有問題。
+        3. **所有問題都必須回答，不得遺漏、不得省略任何一題。**
+        4. **問題的鍵名（key）必須與以下提供的文字完全相同，不得改寫、增刪、重新編號或重新命名。**
+
+        ---
+
+        ### 關於「鍵名」的嚴格規則
+        - 鍵名必須**完全一致**（包含標點符號、括號、數字、中文序號、空格）。
+        - 不可自行添加或刪除任何編號（例如「（一）」「（二）」）。
+        - 不可更改任何鍵名（例如「創新性說明」→「創新說明」會視為錯誤）。
+        - 如果有 N 個問題，你的輸出中 **dynamic_fields 物件也必須包含 N 個鍵**，一題都不能少。
+
+        ---
+
+        ### 輸出格式（請嚴格遵守 JSON 結構）
+        你必須回傳**單一有效 JSON 物件**，且前後不能有任何額外文字或註解。  
+        結構如下（請完全照抄鍵名與層級）：
+
+        ```json
         {{
         "main_idea": "<在此輸入你生成的核心專案構想（單段文字）>",
         "dynamic_fields": {{
-            "<question_label_1>": "<針對問題 1 的詳細string回答>",
-            "<question_label_2>": "<針對問題 2 的詳細string回答>",
+            "<question_label_1>": "<針對問題 1 的詳細文字回答>",
+            "<question_label_2>": "<針對問題 2 的詳細文字回答>",
             ...
         }}
         }}
+        
+        📚 背景資訊
+        補助主題：{req.grant_name}
 
-        ---
-        **背景資訊：**
-        - 補助主題：{req.grant_name}
-        - 計劃書模板：{req.template_name}
+        計畫書模板：{req.template_name}
 
-        **需要回答的問題（請使用以下字串作為 dynamic_fields 物件的鍵名）：**
+        📝 問題清單（這些是 dynamic_fields 的鍵名，請逐一完整回答）：
         {field_labels}
-        ---
 
-        現在，請生成完整的 JSON 回應。
+        ⚠️ 請再次確認：
+
+        你的回答必須包含所有上述問題的鍵名。
+
+        鍵名不可被改動、不可新增或刪除。
+
+        JSON 需可被標準 JSON parser 正確解析。
+
+        若任一問題遺漏、鍵名變動或格式錯誤，任務即視為失敗。
+
+        現在，請直接生成最終的 JSON。
         """
     elif req.mode == 'reverse' and req.json_output:
         # --- 核心修改：重寫 'reverse' 模式的 Prompt ---
@@ -151,7 +187,7 @@ async def generate_synthetic_input(
 
         if error:
             raise HTTPException(status_code=500, detail=error.get("error", "Failed to generate input."))
-        
+         
         response_json, parse_error = extract_json_block(raw_output, "synthetic_input")
         if parse_error:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")

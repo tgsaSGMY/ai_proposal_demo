@@ -89,6 +89,13 @@
       />
     </div>
   </div>
+  <PlanCandidateSelector
+    :visible="showCandidateModal"
+    :candidate-plan="candidatePlan"
+    :sections="currentSections"
+    @close="showCandidateModal = false"
+    @confirm="onCandidateConfirm"
+  />
 </template>
 
 <script setup>
@@ -115,6 +122,10 @@ const isGenerating = ref(false);
 const isSaving = ref(false);
 const dynamicInputs = ref([]); // [{ id, label, value }]
 
+// --- 控制選擇器 Modal ---
+const showCandidateModal = ref(false);
+const candidatePlan = ref([]);
+
 // --- Computed Properties ---
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
@@ -130,9 +141,8 @@ const currentSections = computed(() => {
   return template ? template.sections : [];
 });
 
-const currentGrant = computed(() => {
-  allConfigs.value.find((g) => g.id === selectedGrantId.value);
-});
+const currentGrant = ref();
+
 const currentTemplate = computed(() =>
   availableTemplates.value.find((t) => t.id === selectedTemplateId.value)
 );
@@ -148,6 +158,21 @@ onMounted(async () => {
     errorNotification("無法加載應用配置。");
   }
 });
+
+function onCandidateConfirm(selected) {
+  // selected: { sectionId: candidateObject }
+  // 把選好的結果轉成 planContent 的格式
+  for (const [sectionId, candidate] of Object.entries(selected)) {
+    if (candidate && candidate.content) {
+      planContent.value[sectionId] = { content: candidate.content };
+    } else {
+      planContent.value[sectionId] = {
+        error: candidate?.error || "No content",
+      };
+    }
+  }
+  showCandidateModal.value = false;
+}
 
 watch(
   currentSections,
@@ -207,6 +232,14 @@ function onContentUpdate({ sectionId, content }) {
   planContent.value[sectionId].content = content;
 }
 
+watch(
+  () => selectedGrantId.value,
+  () => {
+    currentGrant.value = allConfigs.value.find(
+      (g) => g.id === selectedGrantId.value
+    );
+  }
+);
 async function handleGenerateUserInput() {
   if (!currentGrant.value || !currentTemplate.value) {
     errorNotification("請先選擇主題和模板！");
@@ -307,10 +340,11 @@ async function handleGeneratePlan() {
   }
 
   isGenerating.value = true;
-  planContent.value = {}; // 清空舊的生成結果
+  isLoading.value = true;
+  candidatePlan.value = {};
+  planContent.value = {};
 
   try {
-    // 準備請求體
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
@@ -321,6 +355,7 @@ async function handleGeneratePlan() {
       template: selectedTemplateId.value,
       sections: sectionsToGenerate,
       user_input: fullUserInput,
+      num_candidates: 2,
     };
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
@@ -336,32 +371,32 @@ async function handleGeneratePlan() {
 
     const rawData = await response.json();
 
-    const processedContent = {};
+    const processedCandidates = {};
     for (const sectionId in rawData) {
-      const sectionResult = rawData[sectionId];
-      if (sectionResult.content && !sectionResult.error) {
-        processedContent[sectionId] = {
-          content: sectionResult.raw_json_content,
-        };
-      } else {
-        processedContent[sectionId] = { error: sectionResult.error };
-      }
+      const candidates = rawData[sectionId];
+      processedCandidates[sectionId] = candidates.map((candidate) => ({
+        content: candidate.raw_json_content,
+        error: candidate.error || null,
+      }));
     }
-    planContent.value = processedContent;
+
+    candidatePlan.value = processedCandidates;
+    showCandidateModal.value = true;
   } catch (error) {
     console.error("生成計劃書時發生錯誤:", error);
     errorNotification(`生成失敗: ${error.message}`);
-    // 可以選擇在特定 section 顯示錯誤信息
     const firstSectionId = currentSections.value[0]?.id;
     if (firstSectionId) {
-      planContent.value[firstSectionId] = {
-        error: `生成失敗: ${error.message}`,
-      };
+      candidatePlan.value[firstSectionId] = [
+        { error: `生成失敗: ${error.message}` },
+      ];
     }
   } finally {
     isGenerating.value = false;
+    isLoading.value = false;
   }
 }
+
 async function handleSave() {
   if (Object.keys(planContent.value).length === 0) {
     errorNotification("沒有可保存的數據。");
