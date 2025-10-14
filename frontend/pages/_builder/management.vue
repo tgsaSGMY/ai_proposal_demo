@@ -79,10 +79,9 @@
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">全部</option>
-            <option value="golden_samples">Golden Samples</option>
-            <option value="synthetic_data">Synthetic Data</option>
-            <option value="external_direct">External Direct</option>
-            <option value="actor_critic">Actor-Critic</option>
+            <option value="golden_samples">黃金樣本</option>
+            <option value="synthetic_data">生成資料</option>
+            <option value="external_direct">外部資料</option>
           </select>
         </div>
 
@@ -152,9 +151,9 @@
             <td class="px-6 py-4 whitespace-nowrap">
               <span
                 :class="getSourceTypeClass(item.source_type)"
-                class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                class="px-4 py-2 inline-flex text-xs leading-5 font-semibold rounded-full"
               >
-                {{ item.source_type }}
+                {{ getSourceTypeName(item.source_type) }}
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
@@ -395,5 +394,18 @@ function getSourceTypeClass(sourceType) {
     external_direct: "bg-green-100 text-green-800",
   };
   return classes[sourceType] || "bg-gray-100 text-gray-800";
+}
+
+function getSourceTypeName(type) {
+  switch (type) {
+    case "golden_samples":
+      return "黃金樣本";
+    case "synthetic_data":
+      return "生成資料";
+    case "external_direct":
+      return "外部資料";
+    default:
+      return type;
+  }
 }
 </script>

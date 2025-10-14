@@ -140,7 +140,7 @@ async function fetchData() {
     const [configsRes, modelsRes, rulesRes] = await Promise.all([
       fetch(`${API_BASE_URL}/config`),
       fetch(`${API_BASE_URL}/models`),
-      fetch(`${API_BASE_URL}/routing_rules`),
+      fetch(`${API_BASE_URL}/routing-rules`),
     ]);
 
     if (!configsRes.ok || !modelsRes.ok || !rulesRes.ok) {
