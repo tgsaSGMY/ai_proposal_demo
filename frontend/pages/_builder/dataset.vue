@@ -76,6 +76,8 @@
         @selectionChange="onSelectionChange"
         @generatePlan="handleGeneratePlan"
         @generateUserInput="handleGenerateUserInput"
+        :initial-grant-id="selectedGrantId"
+        :initial-template-id="selectedTemplateId"
       />
       <PlanOutputPanel
         :plan-content="planContent"
@@ -128,9 +130,9 @@ const currentSections = computed(() => {
   return template ? template.sections : [];
 });
 
-const currentGrant = computed(() =>
-  allConfigs.value.find((g) => g.id === selectedGrantId.value)
-);
+const currentGrant = computed(() => {
+  allConfigs.value.find((g) => g.id === selectedGrantId.value);
+});
 const currentTemplate = computed(() =>
   availableTemplates.value.find((t) => t.id === selectedTemplateId.value)
 );
@@ -188,8 +190,8 @@ watch(
 // --- Event Handlers ---
 function onSelectionChange(selection) {
   selectedGrantId.value = selection.grantId;
-  selectedTemplateId.value = selection.templateId;
-  planContent.value = {}; // Reset output on selection change
+  selectedTemplateId.value = selection.templateId; // 保持对用户手动选择的支持
+  planContent.value = {}; // 重置輸出
 }
 
 function setMode(newMode) {
@@ -422,6 +424,15 @@ async function handleSave() {
     isSaving.value = false;
   }
 }
+
+watch(availableTemplates, (newTemplates) => {
+  // 检查新模板列表是否只有一个选项，并且当前没有模板被选中
+  if (newTemplates && newTemplates.length === 1 && !selectedTemplateId.value) {
+    // 自动选中这唯一的一个模板
+    selectedTemplateId.value = newTemplates[0].id;
+    console.log(`自动选中了唯一的模板: ${newTemplates[0].name}`);
+  }
+});
 
 function handleAutoFill(filledContent) {
   // 這裡我們不直接賦值，而是合併，以防萬一 API 沒有返回所有 section

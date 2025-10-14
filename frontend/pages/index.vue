@@ -95,7 +95,6 @@ const currentSections = computed(() => {
 // --- Lifecycle & Data Fetching ---
 onMounted(async () => {
   try {
-    console.log(API_BASE_URL);
     const response = await fetch(`${API_BASE_URL}/config`);
 
     if (!response.ok) throw new Error("Network response was not ok");

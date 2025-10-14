@@ -197,6 +197,8 @@ const props = defineProps({
   isGenerating: { type: Boolean, default: false },
   dynamicInputs: { type: Array, required: true },
   mode: { type: String, required: true },
+  initialGrantId: { type: String, default: "" }, // 新 prop
+  initialTemplateId: { type: String, default: "" },
 });
 
 const emit = defineEmits([
@@ -213,10 +215,33 @@ const isSaving = ref(false);
 const currentEditingSection = ref(null);
 const currentEditingIndex = ref(-1);
 
-const selectedGrantId = ref("");
-const selectedTemplateId = ref("");
+const selectedGrantId = ref(props.initialGrantId);
+const selectedTemplateId = ref(props.initialTemplateId);
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+watch(
+  () => props.initialGrantId,
+  (newVal) => {
+    if (selectedGrantId.value !== newVal) {
+      selectedGrantId.value = newVal;
+    }
+  }
+);
+
+watch(
+  () => props.initialTemplateId,
+  (newVal) => {
+    // 检查内部状态是否与 prop 不同步，如果是，则更新它
+    if (selectedTemplateId.value !== newVal) {
+      console.log(
+        `子组件检测到 templateId prop 变化，从 '${selectedTemplateId.value}' 更新为 '${newVal}'`
+      );
+      selectedTemplateId.value = newVal;
+    }
+    console.log(selectedTemplateId.value);
+  }
+);
 
 // 計算屬性（模板和章節）
 const availableTemplates = computed(() => {
@@ -229,12 +254,20 @@ const isReadyToGenerate = computed(() => {
   return selectedTemplateId.value && props.userInput.trim();
 });
 
-// 當選擇變化時，通知父組件
 watch([selectedGrantId, selectedTemplateId], () => {
-  emit("selectionChange", {
-    grantId: selectedGrantId.value,
-    templateId: selectedTemplateId.value,
-  });
+  // 检查是否是由于 props 更新导致的 watch 触发，避免无限循环
+  // 只有当内部状态与 props 不同时，才认为是用户操作
+  console.log(selectedTemplateId.value, props.initialTemplateId);
+  if (
+    selectedGrantId.value !== props.initialGrantId ||
+    selectedTemplateId.value !== props.initialTemplateId
+  ) {
+    console.log("trigger");
+    emit("selectionChange", {
+      grantId: selectedGrantId.value,
+      templateId: selectedTemplateId.value,
+    });
+  }
 });
 
 // 當用戶在動態輸入框中輸入時，通知父組件更新
@@ -246,7 +279,13 @@ function updateDynamicInput(groupIndex, inputIndex, value) {
 
 // onGrantChange 和 emitGeneratePlan 保持不變
 const onGrantChange = () => {
-  selectedTemplateId.value = "";
+  const isIncluded = availableTemplates.value.some(
+    (t) => t.id === selectedTemplateId.value
+  );
+
+  if (!isIncluded) {
+    selectedTemplateId.value = "";
+  }
 };
 
 const emitGeneratePlan = () => {

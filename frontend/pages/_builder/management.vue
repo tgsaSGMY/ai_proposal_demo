@@ -9,9 +9,7 @@
       >
         <!-- Grant Filter -->
         <div>
-          <label class="block text-sm font-medium text-gray-700"
-            >主題 (Grant)</label
-          >
+          <label class="block text-sm font-medium text-gray-700">主題</label>
           <select
             v-model="filters.grantId"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -29,9 +27,7 @@
 
         <!-- Template Filter -->
         <div>
-          <label class="block text-sm font-medium text-gray-700"
-            >模板 (Template)</label
-          >
+          <label class="block text-sm font-medium text-gray-700">模板</label>
           <select
             v-model="filters.templateId"
             :disabled="!filters.grantId"
@@ -50,9 +46,7 @@
 
         <!-- Section Filter -->
         <div>
-          <label class="block text-sm font-medium text-gray-700"
-            >章節 (Section)</label
-          >
+          <label class="block text-sm font-medium text-gray-700">章節</label>
           <select
             v-model="filters.sectionId"
             :disabled="!filters.templateId"
@@ -71,9 +65,7 @@
 
         <!-- Source Type Filter -->
         <div>
-          <label class="block text-sm font-medium text-gray-700"
-            >來源 (Source)</label
-          >
+          <label class="block text-sm font-medium text-gray-700">來源</label>
           <select
             v-model="filters.sourceType"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
@@ -127,13 +119,13 @@
               scope="col"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              關聯 Section
+              關聯章節
             </th>
             <th
               scope="col"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              Prompt
+              輸入指令
             </th>
             <th
               scope="col"
@@ -157,14 +149,26 @@
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-              {{ item.section_id }}
+              <div class="flex flex-col">
+                <span class="font-semibold text-gray-900">{{
+                  nameMaps.sections.get(item.section_id) || item.section_id
+                }}</span>
+                <span class="text-xs text-gray-500 mt-1">
+                  {{ nameMaps.grants.get(item.grant_id) || item.grant_id }} >
+                  {{
+                    nameMaps.templates.get(item.template_id) || item.template_id
+                  }}
+                </span>
+              </div>
             </td>
+
             <td
-              class="px-6 py-4 text-sm text-gray-600 max-w-md truncate"
+              class="px-6 py-4 text-sm text-gray-600 max-w-sm truncate"
               :title="item.prompt"
             >
               {{ item.prompt }}
             </td>
+
             <td
               class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2"
             >
@@ -245,6 +249,46 @@ const availableSections = computed(() => {
   );
   return template ? template.sections : [];
 });
+
+const nameMaps = computed(() => {
+  const maps = {
+    grants: new Map(),
+    templates: new Map(),
+    sections: new Map(),
+  };
+
+  if (allConfigs.value.length === 0) {
+    return maps;
+  }
+
+  allConfigs.value.forEach((grant) => {
+    maps.grants.set(grant.id, grant.name);
+    if (grant.templates) {
+      grant.templates.forEach((template) => {
+        maps.templates.set(template.id, template.name);
+        if (template.sections) {
+          template.sections.forEach((section) => {
+            maps.sections.set(section.id, section.name);
+          });
+        }
+      });
+    }
+  });
+
+  return maps;
+});
+
+// --- NEW: 創建一個輔助函數來查找名稱 ---
+function getSectionDisplayName(item) {
+  const grantName = nameMaps.value.grants.get(item.grant_id) || item.grant_id;
+  const templateName =
+    nameMaps.value.templates.get(item.template_id) || item.template_id;
+  const sectionName =
+    nameMaps.value.sections.get(item.section_id) || item.section_id;
+
+  // 返回一個結構化的字符串，或者你可以返回一個對象在模板中分別渲染
+  return `${grantName} > ${templateName} > ${sectionName}`;
+}
 
 // --- UPDATED: Fetch datasets with filters ---
 async function fetchDatasets() {
