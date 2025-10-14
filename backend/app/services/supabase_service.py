@@ -170,27 +170,7 @@ class SupabaseService:
         if response.data:
             return response.data
         return []
-
-   
-    # async def find_latest_finetuned_model_for_section(self, section_id: str) -> Optional[Dict[str, Any]]:
-    #     """
-    #     为给定的 section 查找最新训练的、provider 为 'internal_lora' 的模型。
-    #     """
-    #     # 模型 ID 格式为 {section_id}-{task_type}-{timestamp}， 并且 provider 必须是 'internal_lora'
-    #     response = self.client.from_("models") \
-    #         .select("*") \
-    #         .eq("provider", "internal_lora") \
-    #         .like("id", f"{section_id}%") \
-    #         .order("updated_at", desc=True) \
-    #         .limit(1) \
-    #         .execute() 
         
-    #     if response.data:
-    #         return response.data[0]
-        
-    #     return None
-
-
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         response = self.client.from_("users").select("*").eq("id", user_id).single().execute()
         return response.data if response.data else None

@@ -9,11 +9,11 @@ from app.models import GrantConfig
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/api/config",
+    prefix="/api",
     tags=["Configuration"]
 )
 
-@router.get("/", response_model=List[GrantConfig])
+@router.get("/config", response_model=List[GrantConfig])
 async def get_all_configs(request: Request):
     """
     從應用程式狀態中獲取已加載的所有 Grant、Template 和 Section 配置。
