@@ -66,6 +66,8 @@ import { useNotifications } from "~/composables/useNotifications";
 // --- 全局狀態 ---
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // --- 本地狀態 ---
 const allConfigs = ref([]);
@@ -93,7 +95,7 @@ const currentSections = computed(() => {
 // --- Lifecycle & Data Fetching ---
 onMounted(async () => {
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/config");
+    const response = await fetch(`${API_BASE_URL}/config`);
     if (!response.ok) throw new Error("Network response was not ok");
     allConfigs.value = await response.json();
   } catch (error) {
