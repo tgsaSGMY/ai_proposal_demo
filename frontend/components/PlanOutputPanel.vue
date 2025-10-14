@@ -149,7 +149,8 @@ import { useNotifications } from "~/composables/useNotifications";
 const { error: errorNotification } = useNotifications();
 const { isLoading } = useLoading();
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 let pdfjsLib = null;
 onMounted(async () => {

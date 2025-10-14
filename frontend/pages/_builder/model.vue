@@ -106,6 +106,8 @@ import { ref, onMounted, computed } from "vue";
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
 import { useNotifications } from "~/composables/useNotifications";
 const { success, error: errorNotification } = useNotifications();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 const allConfigs = ref([]);
 const allModels = ref([]);
@@ -136,9 +138,9 @@ const currentSections = computed(() => {
 async function fetchData() {
   try {
     const [configsRes, modelsRes, rulesRes] = await Promise.all([
-      fetch("http://127.0.0.1:8000/api/config"),
-      fetch("http://127.0.0.1:8000/api/models"),
-      fetch("http://127.0.0.1:8000/api/routing-rules"),
+      fetch(`${API_BASE_URL}/config`),
+      fetch(`${API_BASE_URL}/models`),
+      fetch(`${API_BASE_URL}/routing_rules`),
     ]);
 
     if (!configsRes.ok || !modelsRes.ok || !rulesRes.ok) {
@@ -196,7 +198,7 @@ function closeModal() {
 
 async function handleSaveRule(rulePayload) {
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/routing-rules", {
+    const response = await fetch(`${API_BASE_URL}/routing-rules`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rulePayload),
@@ -208,7 +210,7 @@ async function handleSaveRule(rulePayload) {
     }
 
     // 成功後，重新獲取最新的路由規則以更新 UI
-    const rulesRes = await fetch("http://127.0.0.1:8000/api/routing-rules");
+    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
 
     closeModal();

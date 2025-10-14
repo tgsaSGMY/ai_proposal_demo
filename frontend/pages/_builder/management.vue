@@ -229,7 +229,8 @@ const filters = reactive({
   sourceType: "",
 });
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // --- NEW: Computed properties for dependent dropdowns ---
 const availableTemplates = computed(() => {

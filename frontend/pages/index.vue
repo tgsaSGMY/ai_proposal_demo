@@ -95,7 +95,9 @@ const currentSections = computed(() => {
 // --- Lifecycle & Data Fetching ---
 onMounted(async () => {
   try {
+    console.log(API_BASE_URL);
     const response = await fetch(`${API_BASE_URL}/config`);
+
     if (!response.ok) throw new Error("Network response was not ok");
     allConfigs.value = await response.json();
   } catch (error) {
@@ -170,7 +172,7 @@ async function handleGeneratePlan() {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
-    const response = await fetch("http://127.0.0.1:8000/api/generate_plan", {
+    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -225,7 +227,7 @@ async function handleGeneratePlan() {
         .filter(Boolean);
 
       if (entriesToSave.length > 0) {
-        fetch("http://127.0.0.1:8000/api/datasets", {
+        fetch(`${API_BASE_URL}/datasets`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ entries: entriesToSave }),

@@ -97,6 +97,8 @@ import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
 const { success, error: errorNotification } = useNotifications();
 const { isLoading } = useLoading();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // 狀態
 const mode = ref("synthetic"); // 'synthetic' or 'golden'
@@ -136,7 +138,7 @@ const currentTemplate = computed(() =>
 // --- Lifecycle & Data Fetching ---
 onMounted(async () => {
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/config");
+    const response = await fetch(`${API_BASE_URL}/config`);
     if (!response.ok) throw new Error("Network response was not ok");
     allConfigs.value = await response.json();
   } catch (error) {
@@ -235,15 +237,11 @@ async function handleGenerateUserInput() {
               .map((f) => ({ label: f.label }))
           : null,
     };
-
-    const response = await fetch(
-      "http://127.0.0.1:8000/api/generate_synthetic_input",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/generate_synthetic_input`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
     const data = await response.json();
 
@@ -325,7 +323,7 @@ async function handleGeneratePlan() {
       user_input: fullUserInput,
     };
 
-    const response = await fetch("http://127.0.0.1:8000/api/generate_plan", {
+    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -402,7 +400,7 @@ async function handleSave() {
       return;
     }
 
-    const response = await fetch("http://127.0.0.1:8000/api/datasets", {
+    const response = await fetch(`${API_BASE_URL}/datasets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entries }),

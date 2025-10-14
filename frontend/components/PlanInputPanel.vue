@@ -215,7 +215,8 @@ const currentEditingIndex = ref(-1);
 
 const selectedGrantId = ref("");
 const selectedTemplateId = ref("");
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // 計算屬性（模板和章節）
 const availableTemplates = computed(() => {
