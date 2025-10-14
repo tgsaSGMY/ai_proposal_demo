@@ -172,7 +172,7 @@ async function handleGeneratePlan() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "user_for_generation_only",
+        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         sections: sectionsToGenerate,
@@ -183,7 +183,22 @@ async function handleGeneratePlan() {
       const errorDetail = await response.text();
       throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
     }
-    planContent.value = await response.json();
+    const rawData = await response.json();
+    console.log(rawData);
+
+    const processedContent = {};
+    for (const sectionId in rawData) {
+      const sectionResult = rawData[sectionId];
+      if (sectionResult.content && !sectionResult.error) {
+        processedContent[sectionId] = {
+          content: sectionResult.raw_json_content,
+        };
+      } else {
+        processedContent[sectionId] = { error: sectionResult.error };
+      }
+    }
+    planContent.value = processedContent;
+
     success("計劃書草稿已生成！");
   } catch (error) {
     console.error("生成計劃書時發生錯誤:", error);
