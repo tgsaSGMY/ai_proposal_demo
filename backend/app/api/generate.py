@@ -85,8 +85,8 @@ async def generate_synthetic_input(
         {{
         "main_idea": "<在此輸入你生成的核心專案構想（單段文字）>",
         "dynamic_fields": {{
-            "<question_label_1>": "<針對問題 1 的詳細回答>",
-            "<question_label_2>": "<針對問題 2 的詳細回答>",
+            "<question_label_1>": "<針對問題 1 的詳細string回答>",
+            "<question_label_2>": "<針對問題 2 的詳細string回答>",
             ...
         }}
         }}
