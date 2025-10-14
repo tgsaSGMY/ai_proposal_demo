@@ -209,7 +209,7 @@ async function handleSaveRule(rulePayload) {
       throw new Error(errorData.detail || "Failed to save rule");
     }
 
-    // 成功後，重新獲取最新的路由規則以更新 UI
+    // 更新 UI
     const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
 

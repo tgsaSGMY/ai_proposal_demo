@@ -9,11 +9,11 @@ interface ConfirmOptions {
   confirmColor?: "primary" | "danger"; // 用於按鈕顏色
 }
 
-// 狀態將由 composable 內部管理，不使用 useState 以免跨頁面污染
+// 狀態由內部管理，不使用 useState 以免跨頁面污染
 const isVisible = ref(false);
 const options = ref<ConfirmOptions | null>(null);
 
-// 用於解決 Promise 的函數
+// 解決 Promise
 let resolvePromise: (value: boolean) => void;
 
 export const useConfirm = () => {

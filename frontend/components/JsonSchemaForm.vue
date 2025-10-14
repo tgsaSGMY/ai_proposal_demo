@@ -120,14 +120,11 @@
           </button>
         </div>
       </template>
-
-      <!-- 可以根據需要添加對其他類型的支持 (number, boolean, etc.) -->
     </div>
   </div>
 </template>
 
 <script setup>
-// 因為是遞歸組件，需要這樣定義 name
 defineOptions({
   name: "JsonSchemaForm",
 });
@@ -152,10 +149,9 @@ function updateArrayItem(key, index, itemValue) {
 
 function addArrayItem(key, itemSchemaProperties) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
-  // 創建一個帶有默認空字符串值的模板對象
   const newItem = {};
   for (const propKey in itemSchemaProperties) {
-    newItem[propKey] = ""; // 默認值
+    newItem[propKey] = "";
   }
   newArray.push(newItem);
   updateValue(key, newArray);
@@ -163,7 +159,7 @@ function addArrayItem(key, itemSchemaProperties) {
 
 function addArrayStringItem(key) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
-  newArray.push(""); // 新增空字串項
+  newArray.push("");
   updateValue(key, newArray);
 }
 

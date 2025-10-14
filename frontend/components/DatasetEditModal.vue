@@ -1,4 +1,3 @@
-<!-- components/DatasetEditModal.vue -->
 <template>
   <div
     v-if="show"

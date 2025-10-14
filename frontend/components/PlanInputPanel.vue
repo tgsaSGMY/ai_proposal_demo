@@ -197,7 +197,7 @@ const props = defineProps({
   isGenerating: { type: Boolean, default: false },
   dynamicInputs: { type: Array, required: true },
   mode: { type: String, required: true },
-  initialGrantId: { type: String, default: "" }, // 新 prop
+  initialGrantId: { type: String, default: "" },
   initialTemplateId: { type: String, default: "" },
 });
 
@@ -209,7 +209,7 @@ const emit = defineEmits([
   "update:dynamicInputs",
 ]);
 
-// 內部狀態（僅用於選擇器）
+// 內部狀態
 const isModalVisible = ref(false);
 const isSaving = ref(false);
 const currentEditingSection = ref(null);
@@ -269,7 +269,6 @@ function updateDynamicInput(groupIndex, inputIndex, value) {
   emit("update:dynamicInputs", newInputs);
 }
 
-// onGrantChange 和 emitGeneratePlan 保持不變
 const onGrantChange = () => {
   const isIncluded = availableTemplates.value.some(
     (t) => t.id === selectedTemplateId.value

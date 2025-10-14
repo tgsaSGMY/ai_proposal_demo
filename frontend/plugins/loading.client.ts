@@ -13,7 +13,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     hide();
   });
 
-  // 正確監聽路由錯誤
+  // 監聽路由錯誤
   nuxtApp.hook("app:error", () => {
     hide();
   });

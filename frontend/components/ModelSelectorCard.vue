@@ -202,13 +202,11 @@ onMounted(() => {
 function saveChanges() {
   if (!selectedModelId.value) return;
   const newRulePayload = {
-    // grant_id 設為 null 代表這條規則適用於所有 grant 下的同名 section
-    // 這樣更靈活，但也可以根據需求傳遞 grant_id
     grant_id: props.grantId || null,
     template_id: props.templateId || null,
     section_id: props.section.id,
     model_id: selectedModelId.value,
-    priority: 20, // 針對 section 的規則，優先級應高於全局規則
+    priority: 20,
     description: `Rule for section: ${props.section.name}`,
   };
   emit("save", newRulePayload);

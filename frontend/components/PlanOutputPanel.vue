@@ -171,10 +171,10 @@ const emit = defineEmits([
   "autoFillComplete",
 ]);
 
-// 這個函數現在直接返回對象
+// 直接返回對象
 function getSectionContent(sectionId) {
   const content = props.planContent[sectionId]?.content;
-  // 確保返回的是一個對象，如果不是，返回一個空對象以避免表單渲染錯誤
+  // 確保返回的是一個對象
   return typeof content === "object" && content !== null ? content : {};
 }
 
@@ -190,7 +190,7 @@ async function handleExportToWord() {
   await exportPlanToWord(props.sections, props.planContent);
 }
 
-// 這個函數現在接收對象
+// 接收對象
 function updateSectionContent(sectionId, newContentObject) {
   emit("update:content", { sectionId, content: newContentObject });
 }

@@ -20,7 +20,6 @@
       />
 
       <!-- 右側：輸出面板 -->
-      <!-- 使用 v-if 確保在生成前不顯示空的輸出面板 -->
       <div v-if="Object.keys(planContent).length > 0 || isLoading">
         <PlanOutputPanel
           :plan-content="planContent"
@@ -105,7 +104,7 @@ onMounted(async () => {
   }
 });
 
-// 使用 watchEffect 自動處理動態輸入框的生成
+// 生成動態輸入框
 watchEffect(() => {
   const sections = currentSections.value;
   if (!sections || sections.length === 0) {
@@ -231,7 +230,7 @@ async function handleGeneratePlan() {
           .then((saveResponse) => {
             if (saveResponse.status === 202) {
             } else {
-              // 即使保存失敗，也只在控制台記錄錯誤，不打擾用戶
+              // 在控制台記錄錯誤，不打擾用戶
               saveResponse
                 .json()
                 .then((err) => console.error("後台保存數據集失敗:", err));
@@ -242,7 +241,7 @@ async function handleGeneratePlan() {
           });
       }
     } catch (saveError) {
-      // 捕獲準備數據時的錯誤，同樣只在控制台記錄
+      // 只在控制台記錄
       console.error("準備保存數據集時出錯:", saveError);
     }
 

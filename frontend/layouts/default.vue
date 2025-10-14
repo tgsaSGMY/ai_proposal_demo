@@ -1,6 +1,6 @@
 <template>
   <div class="flex min-h-screen bg-gray-100 font-sans">
-    <!-- Sidebar / Navigation Panel -->
+    <!-- 側邊欄 -->
     <aside
       class="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col p-4 sticky top-0 h-screen overflow-y-auto"
     >
@@ -93,7 +93,7 @@
       </nav>
     </aside>
 
-    <!-- Main Content Area -->
+    <!-- 主内容區 -->
     <main class="flex-1 overflow-y-auto h-screen">
       <slot />
     </main>

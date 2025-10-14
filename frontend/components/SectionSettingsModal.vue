@@ -77,16 +77,13 @@
                   <button
                     @click="deletePrompt(index)"
                     class="p-1.5 text-red-500 hover:bg-red-100 rounded-full"
-                  >
-                    <!-- Delete Icon SVG -->
-                  </button>
+                  ></button>
                 </div>
               </div>
               <button
                 @click="addPrompt"
                 class="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
               >
-                <!-- Add Icon SVG -->
                 新增指令
               </button>
             </div>

@@ -1,3 +1,4 @@
+//用於切換頁面的時候顯示loading state
 import { useLoading } from "~/composables/useLoading";
 
 export default defineNuxtRouteMiddleware((to, from) => {

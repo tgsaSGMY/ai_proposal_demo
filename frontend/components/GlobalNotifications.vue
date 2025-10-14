@@ -9,20 +9,19 @@
         :class="notificationClasses(notification.type)"
         class="w-full rounded-lg shadow-lg p-4 flex items-start"
       >
-        <!-- Icon -->
         <div class="flex-shrink-0">
           <component
             :is="notificationIcon(notification.type)"
             class="h-6 w-6"
           />
         </div>
-        <!-- Message -->
+        <!--信息 -->
         <div class="ml-3 w-0 flex-1">
           <p class="text-sm font-medium">
             {{ notification.message }}
           </p>
         </div>
-        <!-- Close Button -->
+        <!-- 關閉按鈕 -->
         <div class="ml-4 flex-shrink-0 flex">
           <button
             @click="remove(notification.id)"

@@ -1,4 +1,3 @@
-<!-- pages/builder/management.vue -->
 <template>
   <div class="p-4 md:p-8">
     <h1 class="text-3xl font-bold text-gray-800 mb-6">數據庫管理</h1>
@@ -222,8 +221,6 @@ const error = ref(null);
 
 const isModalVisible = ref(false);
 const currentDataset = ref(null);
-
-// --- NEW: Config and Filter State ---
 const allConfigs = ref([]);
 const filters = reactive({
   grantId: "",
@@ -235,7 +232,7 @@ const filters = reactive({
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// --- NEW: Computed properties for dependent dropdowns ---
+// --- Computed properties for dependent dropdowns ---
 const availableTemplates = computed(() => {
   if (!filters.grantId) return [];
   const grant = allConfigs.value.find((g) => g.id === filters.grantId);
@@ -278,7 +275,7 @@ const nameMaps = computed(() => {
   return maps;
 });
 
-// --- NEW: 創建一個輔助函數來查找名稱 ---
+// --- 創建一個輔助函數來查找名稱 ---
 function getSectionDisplayName(item) {
   const grantName = nameMaps.value.grants.get(item.grant_id) || item.grant_id;
   const templateName =
@@ -290,7 +287,7 @@ function getSectionDisplayName(item) {
   return `${grantName} > ${templateName} > ${sectionName}`;
 }
 
-// --- UPDATED: Fetch datasets with filters ---
+// --- Fetch datasets with filters ---
 async function fetchDatasets() {
   isLoading.value = true;
   error.value = null;
@@ -317,7 +314,7 @@ async function fetchDatasets() {
   }
 }
 
-// --- NEW: Fetch config for dropdowns ---
+// --- Fetch config for dropdowns ---
 async function fetchConfig() {
   try {
     const response = await fetch(`${API_BASE_URL}/config`);
@@ -328,7 +325,7 @@ async function fetchConfig() {
   }
 }
 
-// --- NEW: Reset filters ---
+// --- Reset filters ---
 function resetFilters() {
   filters.grantId = "";
   filters.templateId = "";
@@ -336,7 +333,7 @@ function resetFilters() {
   filters.sourceType = "";
 }
 
-// --- NEW: Watchers to react to filter changes ---
+// --- Watchers to react to filter changes ---
 watch(
   () => filters.grantId,
   (newVal) => {

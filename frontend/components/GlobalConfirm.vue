@@ -1,3 +1,4 @@
+<!-- 雙重確認按鈕 -->
 <template>
   <Transition
     enter-active-class="transition-opacity duration-300 ease-out"
@@ -86,7 +87,6 @@ import {
 
 const { isVisible, options, handleConfirm, handleCancel } = useConfirm();
 
-// --- Computed properties for dynamic styling ---
 const confirmButtonClass = computed(() => {
   if (!options.value) return "";
   return (

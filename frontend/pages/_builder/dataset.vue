@@ -18,7 +18,7 @@
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300',
               ]"
             >
-              🤖 AI 生成 (Synthetic)
+              🤖 AI 生成
             </button>
             <button
               @click="setMode('golden')"
@@ -29,7 +29,7 @@
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300',
               ]"
             >
-              🏆 手動標註 (Golden)
+              🏆 手動標註
             </button>
           </div>
         </div>
@@ -93,8 +93,8 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from "vue";
-import PlanInputPanel from "~/components/PlanInputPanel.vue"; // 假設您的組件路徑
-import PlanOutputPanel from "~/components/PlanOutputPanel.vue"; // 假設您的組件路徑
+import PlanInputPanel from "~/components/PlanInputPanel.vue";
+import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
 const { success, error: errorNotification } = useNotifications();
@@ -152,19 +152,18 @@ onMounted(async () => {
 watch(
   currentSections,
   (newSections) => {
-    const groupedInputs = []; // 改用一個新的分組數組
+    const groupedInputs = [];
     if (newSections && newSections.length > 0) {
       newSections.forEach((section) => {
-        const sectionInputs = []; // 存放當前 section 的所有 input
+        const sectionInputs = [];
         const prompts = section.custom_prompt_list || [];
         if (section.json_schema && section.json_schema.properties) {
           Object.entries(section.json_schema.properties).forEach(
             ([key, prop]) => {
-              // 在分組模式下，我們不再需要跨 section 去重，因為問題是屬於特定 section 的
               sectionInputs.push({
                 id: `${section.id}-${key}`,
                 label: prop.description || key.replace("_", " "),
-                value: "", // 初始值為空
+                value: "",
               });
             }
           );
@@ -252,8 +251,7 @@ async function handleGenerateUserInput() {
       userInput.value = data.main_idea;
     }
     if (data.dynamic_fields && mode.value !== "golden") {
-      // 更新 dynamicInputs 的 value
-      // `${section.id}-${key}`
+      // 更新 dynamicInputs 的 value `${section.id}-${key}`
       dynamicInputs.value
         .flatMap((group) => group.inputs)
         .forEach((input) => {
@@ -413,7 +411,6 @@ async function handleSave() {
     }
 
     success("數據集已成功提交保存！");
-    // 可選：清空表單
     userInput.value = "";
     planContent.value = {};
   } catch (error) {
@@ -433,7 +430,7 @@ watch(availableTemplates, (newTemplates) => {
 });
 
 function handleAutoFill(filledContent) {
-  // 這裡我們不直接賦值，而是合併，以防萬一 API 沒有返回所有 section
+  // 不直接賦值，而是合併，以防萬一 API 沒有返回所有 section
   const newPlanContent = { ...planContent.value };
 
   for (const sectionId in filledContent) {

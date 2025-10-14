@@ -15,7 +15,7 @@ export const useNotifications = () => {
   // 使用 useState 創建一個全局共享的通知數組
   const notifications = useState<Notification[]>("notifications", () => []);
 
-  // 添加通知的方法
+  // 通知的方法
   const add = (
     type: NotificationType,
     message: string,
@@ -29,7 +29,7 @@ export const useNotifications = () => {
       duration,
     });
 
-    // 設置計時器，在持續時間後自動移除此通知
+    // 持續時間後自動移除通知
     setTimeout(() => {
       remove(id);
     }, duration);
