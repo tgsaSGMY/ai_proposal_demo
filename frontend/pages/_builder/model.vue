@@ -97,6 +97,7 @@
       :current-rule="getAppliedRuleForSection(selectedSection.id)"
       @close="closeModal"
       @save="handleSaveRule"
+      @settings-updated="handleSettingsUpdated"
     />
   </div>
 </template>
@@ -218,6 +219,23 @@ async function handleSaveRule(rulePayload) {
   } catch (error) {
     console.error("Failed to save routing rule:", error);
     errorNotification(`儲存失敗: ${error.message}`);
+  }
+}
+
+function handleSettingsUpdated(payload) {
+  // 在本地數據中找到並更新對應的 section
+  const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
+  if (grant) {
+    const template = grant.templates.find(
+      (t) => t.id === selectedTemplateId.value
+    );
+    if (template) {
+      const section = template.sections.find((s) => s.id === payload.sectionId);
+      if (section) {
+        section.system_prompt = payload.system_prompt;
+        section.custom_prompt_list = payload.prompts;
+      }
+    }
   }
 }
 </script>

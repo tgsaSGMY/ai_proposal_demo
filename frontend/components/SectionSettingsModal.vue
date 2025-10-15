@@ -5,7 +5,7 @@
   >
     <div
       v-if="show && sectionData"
-      class="fixed inset-0 z-40 flex justify-center items-center bg-gray-900 bg-opacity-60"
+      class="fixed inset-0 z-[60] flex justify-center items-center bg-gray-900 bg-opacity-60"
       @click.self="$emit('close')"
     >
       <div

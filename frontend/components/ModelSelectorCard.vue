@@ -19,8 +19,10 @@
         <!-- 內/外部模型切換 Bar -->
         <div class="mb-6 flex justify-center">
           <div class="bg-gray-100 p-1 rounded-lg flex space-x-1">
+            <!-- 注意：内部模型暫時關閉，等未來擁有足夠多的數據在訓練模型 -->
             <button
               @click="activeTab = 'internal'"
+              v-if="false"
               :class="[
                 'px-6 py-2 text-sm font-medium rounded-md transition',
                 activeTab === 'internal'
@@ -39,14 +41,15 @@
                   : 'text-gray-600 hover:bg-gray-200',
               ]"
             >
-              外部模型
+              模型選擇
             </button>
           </div>
         </div>
 
         <!-- 模型列表 -->
+        <!-- 注意：内部模型暫時關閉，等未來擁有足夠多的數據在訓練模型 -->
         <div class="max-h-80 overflow-y-auto pr-2 space-y-3">
-          <div v-if="activeTab === 'internal'">
+          <div v-if="false && activeTab === 'internal'">
             <div
               v-for="model in internalModels"
               :key="model.id"
@@ -137,6 +140,27 @@
       </div>
 
       <div class="p-6 bg-gray-50 rounded-b-2xl flex justify-end space-x-4">
+        <div>
+          <button
+            @click="isSettingsModalVisible = true"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          >
+            <svg
+              class="h-5 w-5 text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z"
+              />
+            </svg>
+            編輯章節 Prompt
+          </button>
+        </div>
         <button
           @click="$emit('close')"
           class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -153,6 +177,17 @@
       </div>
     </div>
   </div>
+  <SectionSettingsModal
+    :show="isSettingsModalVisible"
+    :sectionData="{
+      sectionName: section.name,
+      system_prompt: section.system_prompt,
+      custom_prompt_list: section.custom_prompt_list,
+    }"
+    :is-saving="isSavingSettings"
+    @close="isSettingsModalVisible = false"
+    @save="handleSaveSettings"
+  />
 </template>
 
 <script setup>
@@ -166,7 +201,14 @@ const props = defineProps({
   grantId: { type: String, default: null },
 });
 
-const emit = defineEmits(["close", "save"]);
+const emit = defineEmits(["close", "save", "settings-updated"]);
+
+// --- 控制 SectionSettingsModal 的新狀態 ---
+const isSettingsModalVisible = ref(false);
+const isSavingSettings = ref(false);
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const { success } = useNotifications();
 
 const activeTab = ref("internal");
 const selectedModelId = ref(null);
@@ -210,5 +252,37 @@ function saveChanges() {
     description: `Rule for section: ${props.section.name}`,
   };
   emit("save", newRulePayload);
+}
+
+// ---處理 Prompt 保存的新函數 ---
+async function handleSaveSettings(updatedSettings) {
+  isSavingSettings.value = true;
+  console.log(updatedSettings);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sections/${props.section.id}/prompts`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedSettings),
+      }
+    );
+    if (!response.ok) {
+      throw new Error("保存 Prompt 設定失敗");
+    }
+
+    // 通知父組件(model.vue)數據已更新，以便刷新列表
+    emit("settings-updated", {
+      sectionId: props.section.id,
+      ...updatedSettings,
+    });
+
+    success("Prompt 設定已成功保存！");
+    isSettingsModalVisible.value = false;
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    isSavingSettings.value = false;
+  }
 }
 </script>

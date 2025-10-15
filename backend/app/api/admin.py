@@ -58,8 +58,7 @@ async def update_section_prompts_endpoint(
     success = await supabase_service.update_section_settings(
         section_id, 
         request_data.prompts, 
-        request_data.system_prompt,
-        request_data.source_type
+        request_data.system_prompt, 
     )
     if not success:
         raise HTTPException(status_code=404, detail="Section not found or update failed.")

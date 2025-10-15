@@ -83,42 +83,10 @@
           :key="group.sectionId"
           class="space-y-4"
         >
-          <div
-            @click="mode !== 'generator' && openSettingsModal(groupIndex)"
-            :class="{ 'cursor-pointer': mode !== 'generator' }"
-            class="group flex items-center justify-between border-b pb-2"
-          >
-            <h4
-              class="text-md font-semibold text-gray-800 transition-colors"
-              :class="{ 'group-hover:text-indigo-600 ': mode !== 'generator' }"
-            >
+          <div class="group flex items-center justify-between border-b pb-2">
+            <h4 class="text-md font-semibold text-gray-800 transition-colors">
               {{ group.sectionName }}
             </h4>
-            <span
-              v-if="mode !== 'generator'"
-              class="text-xs text-gray-400 group-hover:text-indigo-500 transition-colors flex items-center gap-1"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              編輯設定
-            </span>
           </div>
 
           <!-- 內層 v-for 遍歷該分組內的 inputs -->
@@ -176,20 +144,12 @@
         >(在 Golden Sample 模式下禁用)</span
       >
     </button>
-    <SectionSettingsModal
-      :show="isModalVisible"
-      :sectionData="currentEditingSection"
-      :is-saving="isSaving"
-      @close="closeSettingsModal"
-      @save="handleSaveSettings"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch, computed, onMounted } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
-const { success, error: errorNotification } = useNotifications();
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
@@ -211,14 +171,11 @@ const emit = defineEmits([
 
 // 內部狀態
 const isModalVisible = ref(false);
-const isSaving = ref(false);
 const currentEditingSection = ref(null);
 const currentEditingIndex = ref(-1);
 
 const selectedGrantId = ref(props.initialGrantId);
 const selectedTemplateId = ref(props.initialTemplateId);
-const config = useRuntimeConfig();
-const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 watch(
   () => props.initialGrantId,
@@ -288,47 +245,5 @@ function openSettingsModal(index) {
   currentEditingIndex.value = index;
   currentEditingSection.value = props.dynamicInputs[index];
   isModalVisible.value = true;
-}
-
-function closeSettingsModal() {
-  isModalVisible.value = false;
-  currentEditingSection.value = null;
-  currentEditingIndex.value = -1;
-}
-
-async function handleSaveSettings(updatedSettings) {
-  if (currentEditingIndex.value === -1 || !currentEditingSection.value) return;
-
-  isSaving.value = true;
-  const sectionId = currentEditingSection.value.sectionId;
-
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/sections/${sectionId}/prompts`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedSettings),
-      }
-    );
-    if (!response.ok) {
-      throw new Error("保存設定失敗");
-    }
-
-    // 更新本地狀態並通知父組件
-    const newInputs = JSON.parse(JSON.stringify(props.dynamicInputs));
-    newInputs[currentEditingIndex.value].system_prompt =
-      updatedSettings.system_prompt;
-    newInputs[currentEditingIndex.value].custom_prompt_list =
-      updatedSettings.prompts;
-    emit("update:dynamicInputs", newInputs);
-
-    success("章節設定已成功保存！");
-    closeSettingsModal();
-  } catch (err) {
-    showError(err.message);
-  } finally {
-    isSaving.value = false;
-  }
 }
 </script>

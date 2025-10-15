@@ -29,7 +29,7 @@
           >
             <option value="golden_samples">黃金樣本</option>
             <option value="synthetic_data">合成資料</option>
-            <option value="external_direct">外部直接</option>
+            <option value="external_direct">外部資料</option>
           </select>
         </div>
 

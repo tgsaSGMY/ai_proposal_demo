@@ -59,9 +59,10 @@ class SectionGenerateResponse(BaseModel):
 
 # --- 3. 數據集管理模型 (Dataset Management Models) ---
 # 用於創建、讀取、更新和刪除（CRUD）數據集條目。
+SourceType = Literal["actor_critic", "external_direct", "golden_samples", "synthetic_data"]
 class DatasetEntry(BaseModel):
     """代表一條標準的數據集記錄。"""
-    source_type: str = Field(..., description="數據來源，如 'synthetic_data', 'golden_samples', 'actor_critic'。")
+    source_type: SourceType = Field(..., description="數據來源，如 'synthetic_data', 'golden_samples', 'actor_critic'。")
     grant_id: str
     template_id: str
     section_id: str
@@ -98,12 +99,10 @@ class RoutingRule(BaseModel):
     description: Optional[str] = None
 
 # --- 定義 source_type 的可用選項 ---
-SourceType = Literal["actor_critic", "external_direct", "golden_samples", "synthetic_data"]
 
 class UpdateSectionSettingsRequest(BaseModel):
     prompts: List[str]
-    system_prompt: Optional[str] = None,
-    source_type: SourceType
+    system_prompt: Optional[str] = None
 
 
 # --- 6. 其他特定 API 模型 (Other Specific API Models) ---
