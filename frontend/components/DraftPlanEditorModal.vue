@@ -38,6 +38,7 @@
           @generatePlan="handleGeneratePlanInModal"
           @generateUserInput="handleGenerateUserInput"
         />
+        {{ editableDraft.grant_id }} - {{ editableDraft.template_id }}
         <PlanOutputPanel
           :plan-content="planContent"
           :sections="currentSections"
@@ -75,10 +76,6 @@ const props = defineProps({
     type: Array,
     required: true,
   },
-  currentSections: {
-    type: Array,
-    required: true,
-  },
 });
 const emit = defineEmits(["close", "save-to-dataset"]);
 
@@ -94,34 +91,12 @@ const {
   planContent,
   currentGrant,
   currentTemplate,
+  currentSections,
   allConfigs,
 } = usePlanGenerator();
 
 const isGeneratingPlan = ref(false);
-// const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
 const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
-
-// const currentGrant = ref();
-// watch(
-//   () => selectedGrantId.value,
-//   () => {
-//     currentGrant.value = allConfigs.value.find(
-//       (g) => g.id === selectedGrantId.value
-//     );
-//   }
-// );
-
-// const allConfigs = ref([]);
-// onMounted(async () => {
-//   try {
-//     const response = await fetch(`${API_BASE_URL}/config`);
-//     if (!response.ok) throw new Error("Network response was not ok");
-//     allConfigs.value = await response.json();
-//   } catch (error) {
-//     console.error("Failed to load config:", error);
-//     errorNotification("無法加載應用配置。");
-//   }
-// });
 
 // --- State Initialization and Synchronization ---
 onMounted(async () => {
@@ -146,12 +121,14 @@ const mainIdea = computed({
 
 // This computed property merges the template structure (dynamicInputs) with actual values from the draft
 const dynamicInputsWithValues = computed(() => {
-  if (!props.currentSections || props.currentSections.length === 0) {
+  console.log("Recomputing dynamicInputsWithValues");
+  console.log(currentSections.value);
+  if (!currentSections.value || currentSections.value.length === 0) {
     return [];
   }
 
   const groupedInputs = [];
-  props.currentSections.forEach((section) => {
+  currentSections.value.forEach((section) => {
     const sectionInputs = [];
     if (section.json_schema && section.json_schema.properties) {
       Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
@@ -249,18 +226,6 @@ function onSelectionChangeInModal(selection) {
   selectedTemplateId.value = selection.templateId;
   editableDraft.grant_id = selection.grantId;
   editableDraft.template_id = selection.templateId;
-  debounceSave();
-}
-
-function onContentUpdateInModal({ sectionId, content }) {
-  if (!planContent.value) planContent.value = {};
-  planContent.value[sectionId] = { content };
-  debounceSave();
-}
-
-function handleAutoFillInModal(filledContent) {
-  if (!planContent.value) planContent.value = {};
-  Object.assign(planContent.value, filledContent);
   debounceSave();
 }
 
@@ -403,9 +368,6 @@ async function handleGenerateUserInput() {
     }
     if (data.dynamic_fields) {
       if (editableDraft.mode !== "golden") {
-        // 对应 'random' 模式
-        // AI 返回的 dynamic_fields 的 key 是 'label'
-        // 我们需要遍历我们的数据结构来找到匹配的 label 并更新 value
         dynamicInputsWithValues.value.forEach((group) => {
           group.inputs.forEach((input) => {
             if (data.dynamic_fields[input.label]) {
@@ -415,14 +377,10 @@ async function handleGenerateUserInput() {
         });
       } else {
         // 对应 'reverse' 模式
-        // AI 返回的 dynamic_fields 的 key 是 sectionId，值是包含 fieldKey 的对象
         dynamicInputsWithValues.value.forEach((group) => {
-          // 检查返回的数据中是否有当前 group 对应的 sectionId
           if (data.dynamic_fields[group.sectionId]) {
             const sectionData = data.dynamic_fields[group.sectionId];
             group.inputs.forEach((input) => {
-              // 检查返回的 section 数据中是否有当前 input 对应的 fieldKey
-              // 注意：您的数据结构中似乎没有 'key' 字段，我将使用从 id 中解析出的 fieldKey
               const [_, fieldKey] = input.id.split("-", 2);
               if (sectionData[fieldKey]) {
                 input.value = sectionData[fieldKey];

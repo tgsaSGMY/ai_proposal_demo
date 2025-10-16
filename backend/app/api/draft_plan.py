@@ -122,7 +122,7 @@ async def create_batch_synthetic_drafts(
 ):
     created_draft_ids = []
     for i in range(req.count):
-        draft_name = f"AI生成企划-{int(time.time())}-{i+1}"
+        draft_name = f"AI生成企劃-{int(time.time())}-{i+1}"
         new_draft = await supabase_service.create_draft_plan(
             name=draft_name, mode='synthetic', grant_id=req.grant_id, template_id=req.template_id
         )

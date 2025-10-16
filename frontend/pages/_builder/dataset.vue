@@ -3,7 +3,7 @@
     <header
       class="mb-6 flex justify-between items-center bg-white p-4 rounded-lg shadow-sm"
     >
-      <h1 class="text-2xl font-bold text-gray-800">数据生产工作室</h1>
+      <h1 class="text-2xl font-bold text-gray-800">數據生產工作室</h1>
       <div class="flex gap-2">
         <button @click="isBatchModalVisible = true" class="btn-primary">
           🤖 批量 AI 生成
@@ -35,7 +35,6 @@
       v-if="selectedDraft"
       :draft="selectedDraft"
       :all-configs="allConfigs"
-      :current-sections="sectionsForSelectedDraft"
       @close="selectedDraft = null"
       @save-to-dataset="handleSaveToFinalDataset"
     />

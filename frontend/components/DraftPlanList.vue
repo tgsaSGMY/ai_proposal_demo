@@ -6,14 +6,14 @@
       <input
         type="text"
         v-model="searchTerm"
-        placeholder="搜索企划名称..."
+        placeholder="搜索企劃名稱..."
         class="input-class w-full max-w-xs"
       />
       <select v-model="filterMode" class="select-class">
         <option value="">所有模式</option>
         <option value="synthetic">AI 生成</option>
-        <option value="golden">手动标注</option>
-        <option value="internal">生成企划书</option>
+        <option value="golden">手動標注</option>
+        <option value="internal">生成企劃書</option>
       </select>
     </div>
 
@@ -31,9 +31,6 @@
       >
         <div class="flex justify-left items-start cursor-pointer">
           <h3 class="font-bold truncate pr-3">{{ draft.name }}</h3>
-          <span class="text-xs font-mono text-gray-400 flex-shrink-0">{{
-            modeMap(draft.mode)
-          }}</span>
         </div>
 
         <!-- Menu Icon -->
@@ -81,13 +78,18 @@
 
         <div @click="openDraft(draft)" class="cursor-pointer">
           <div class="mt-2 text-sm flex items-center gap-2">
-            <span class="font-medium text-gray-600">状态:</span>
+            <span class="font-medium text-gray-600">狀態:</span>
             <span
               :class="getStatusTextColor(draft.status)"
               class="font-semibold"
               >{{ getStatusText(draft.status) }}</span
             >
           </div>
+          <span
+            class="text-sm font-mono text-gray-600 flex-shrink-0"
+            :class="getModeTypeClass(draft.mode)"
+            >類型:{{ modeMap(draft.mode) }}</span
+          >
           <div class="text-xs text-gray-400 mt-1">
             更新于: {{ new Date(draft.updated_at).toLocaleString() }}
           </div>
@@ -111,6 +113,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
+import {
+  modeMap,
+  getStatusTextColor,
+  getModeTypeClass,
+} from "~/utils/textMapping";
 
 const props = defineProps({ drafts: Array });
 const emit = defineEmits(["select", "rename", "delete"]);
@@ -172,27 +179,6 @@ function getStatusBorderColor(status) {
     error: "border-red-500",
   };
   return map[status] || "border-gray-300";
-}
-
-function modeMap(status) {
-  const map = {
-    golden: "黃金範例",
-    internal: "生成企劃",
-    synthetic: "AI生成",
-  };
-  return map[status] || "未知";
-}
-
-function getStatusTextColor(status) {
-  const map = {
-    completed: "text-emerald-600",
-    generating_idea: "text-sky-600",
-    generating_plan: "text-indigo-600",
-    completed_idea: "text-teal-600",
-    pending: "text-gray-500",
-    error: "text-rose-600",
-  };
-  return map[status] || "text-gray-500";
 }
 
 function getStatusText(status) {
