@@ -16,7 +16,7 @@ router = APIRouter(
     tags=["Datasets"]
 )
 
-@router.post("/", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def save_dataset_entries(
     req: SaveDatasetRequest,
     background_tasks: BackgroundTasks,
@@ -72,7 +72,7 @@ async def save_dataset_entries(
     background_tasks.add_task(background_task, req.entries)
     return {"message": "Dataset saving process has been initiated in the background."}
 
-@router.get("/", summary="獲取所有數據集條目", response_model=List[Dict[str, Any]])
+@router.get("", summary="獲取所有數據集條目", response_model=List[Dict[str, Any]])
 async def get_all_datasets_endpoint(
     grant_id: Optional[str] = None,
     template_id: Optional[str] = None,
