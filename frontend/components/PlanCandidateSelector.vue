@@ -208,18 +208,44 @@ function selectAllFirst() {
   }
 }
 
-// 將選擇的候選整理成 { sectionId: candidate } 並 emit
 function confirmSelection() {
-  if (!isAllSectionsSelected.value) return;
-  const result = {};
-  for (const sec of props.sections) {
-    const idx = selected[sec.id];
-    const list = props.candidatePlan[sec.id] || [];
-    result[sec.id] = list[idx] ?? null;
+  const finalSelected = {};
+  const finalRejected = {}; // 用不同的变量名以避免与 props.selected 冲突
+
+  // 我们应该遍历 sections prop 来确保覆盖所有显示的 section
+  for (const section of props.sections) {
+    const sectionId = section.id;
+    const candidates = props.candidatePlan[sectionId];
+
+    // 从 reactive 的 selected 对象中获取用户选择的索引
+    const selectedIndex = selected[sectionId];
+
+    // 确保该 section 有候选方案并且用户已做出选择
+    if (
+      candidates &&
+      Array.isArray(candidates) &&
+      selectedIndex !== undefined
+    ) {
+      // 检查索引是否有效
+      if (candidates[selectedIndex]) {
+        // 将选中的方案放入 finalSelected
+        finalSelected[sectionId] = candidates[selectedIndex];
+
+        // 找出被拒绝的方案，仅在有2个候选方案时有效
+        if (candidates.length === 2) {
+          const rejectedIndex = 1 - selectedIndex; // 0 -> 1, 1 -> 0
+          if (candidates[rejectedIndex]) {
+            finalRejected[sectionId] = candidates[rejectedIndex];
+          }
+        }
+      }
+    }
   }
-  emit("confirm", result);
-  // 可選擇同時關閉 modal
-  emit("close");
+
+  // 发出包含选中和被拒绝方案的事件
+  emit("confirm", { selected: finalSelected, rejected: finalRejected });
+
+  emit("close"); // 您可以决定是在确认后自动关闭，还是让父组件来控制
 }
 </script>
 

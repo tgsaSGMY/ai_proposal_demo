@@ -35,6 +35,7 @@ async def generate_plan(
         raise HTTPException(status_code=400, detail="No sections provided to generate.")
 
     app_state = request.app.state
+    print(request_data.user_input)
     num_candidates = getattr(request_data, "num_candidates", 1)
 
     async with httpx.AsyncClient() as client:
@@ -317,3 +318,5 @@ async def autofill_from_document(
     except Exception as e:
         logger.error(f"Error during document auto-fill: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+

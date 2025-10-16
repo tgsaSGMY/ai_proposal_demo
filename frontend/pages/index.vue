@@ -53,123 +53,117 @@
       </div>
     </div>
   </div>
+  <PlanCandidateSelector
+    :visible="showCandidateModal"
+    :candidate-plan="candidatePlan"
+    :sections="currentSections"
+    @close="showCandidateModal = false"
+    @confirm="onCandidateConfirm"
+  />
 </template>
-
 <script setup>
-import { ref, onMounted, computed, watchEffect } from "vue";
+import { usePlanGenerator } from "~/composables/usePlanGenerator"; // 引入 Composable
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
+import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
 
-// --- 全局狀態 ---
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// --- 本地狀態 ---
-const allConfigs = ref([]);
-const userInput = ref("");
-const planContent = ref({}); // { section_id: { content: "...", error: "..." } }
-const selectedGrantId = ref("");
-const selectedTemplateId = ref("");
-const dynamicInputs = ref([]);
+// --- 使用 Composable ---
+const {
+  allConfigs,
+  selectedGrantId,
+  selectedTemplateId,
+  userInput,
+  dynamicInputs,
+  planContent,
+  currentSections,
+  buildFinalUserInput,
+  onSelectionChange,
+} = usePlanGenerator();
 
-// --- Computed Properties ---
-const availableTemplates = computed(() => {
-  if (!selectedGrantId.value) return [];
-  const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
-  return grant ? grant.templates : [];
-});
+const showCandidateModal = ref(false);
+const candidatePlan = ref({});
 
-const currentSections = computed(() => {
-  if (!selectedTemplateId.value) return [];
-  const template = availableTemplates.value.find(
-    (t) => t.id === selectedTemplateId.value
-  );
-  return template ? template.sections : [];
-});
+function onCandidateConfirm({ selected, rejected }) {
+  const newPlanContent = {};
+  for (const [sectionId, candidate] of Object.entries(selected)) {
+    if (candidate && candidate.content) {
+      newPlanContent[sectionId] = { content: candidate.content };
+    } else {
+      newPlanContent[sectionId] = { error: candidate?.error || "No content" };
+    }
+  }
+  planContent.value = newPlanContent;
+  showCandidateModal.value = false;
+  success("已選擇方案並填充到結果中！");
+  savePreferenceData(selected, rejected);
+}
 
-// --- Lifecycle & Data Fetching ---
-onMounted(async () => {
+async function savePreferenceData(selectedData, rejectedData) {
   try {
-    const response = await fetch(`${API_BASE_URL}/config`);
+    const finalUserInput = buildFinalUserInput();
+    const entriesToSave = currentSections.value
+      .map((section) => {
+        const chosen = selectedData[section.id];
+        const rejected = rejectedData[section.id];
 
-    if (!response.ok) throw new Error("Network response was not ok");
-    allConfigs.value = await response.json();
-  } catch (error) {
-    console.error("Failed to load config:", error);
-    errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
-  }
-});
+        if (chosen && chosen.content) {
+          return {
+            source_type: "external_direct",
+            grant_id: selectedGrantId.value,
+            template_id: selectedTemplateId.value,
+            section_id: section.id,
+            prompt: finalUserInput,
+            final_answer: chosen.content,
+            rejected_answer: rejected?.content || null,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
 
-// 生成動態輸入框
-watchEffect(() => {
-  const sections = currentSections.value;
-  if (!sections || sections.length === 0) {
-    dynamicInputs.value = [];
-    return;
-  }
-  const groupedInputs = [];
-  sections.forEach((section) => {
-    const sectionInputs = [];
-    if (section.json_schema && section.json_schema.properties) {
-      Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
-        sectionInputs.push({
-          id: `${section.id}-${key}`,
-          label: prop.description || key.replace("_", " "),
-          value: "",
-        });
+    if (entriesToSave.length > 0) {
+      // 使用 fetch 發送到 /api/datasets，不阻塞用戶 UI
+      fetch(`${API_BASE_URL}/datasets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries: entriesToSave }),
+      }).then((response) => {
+        if (response.status !== 202) {
+          console.error("後台保存偏好數據失敗。");
+        } else {
+          console.log("偏好數據已在後台成功提交。");
+        }
       });
     }
-    if (sectionInputs.length > 0) {
-      groupedInputs.push({
-        sectionId: section.id,
-        sectionName: section.name,
-        inputs: sectionInputs,
-        custom_prompt_list: section.custom_prompt_list || [],
-        system_prompt: section.system_prompt || "",
-      });
-    }
-  });
-  dynamicInputs.value = groupedInputs;
-});
-
-// --- Event Handlers ---
-function onSelectionChange(selection) {
-  selectedGrantId.value = selection.grantId;
-  selectedTemplateId.value = selection.templateId;
-  planContent.value = {}; // 重置輸出
-}
-
-function buildFinalUserInput() {
-  let finalInput = `核心想法: ${userInput.value}\n\n`;
-  const additionalDetails = dynamicInputs.value
-    .flatMap((group) => group.inputs)
-    .filter((input) => input.value && input.value.trim() !== "")
-    .map((input) => `關於“${input.label}”的補充信息:\n${input.value}`)
-    .join("\n\n");
-
-  if (additionalDetails) {
-    finalInput += `--- 詳細補充信息 ---\n${additionalDetails}`;
+  } catch (e) {
+    console.error("準備保存偏好數據時出錯:", e);
   }
-  return finalInput;
 }
 
-async function handleGeneratePlan() {
+// --- 页面独有的方法 ---
+async function handleGeneratePlan(outerPayload) {
   if (!selectedTemplateId.value || !userInput.value.trim()) {
     errorNotification("請選擇主題、模板，並描述您的核心想法。");
     return;
   }
   showLoading();
   planContent.value = {};
-  const finalUserInput = buildFinalUserInput();
+  candidatePlan.value = {};
+
+  const finalUserInput = buildFinalUserInput(outerPayload?.summaries);
 
   try {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
+
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -179,72 +173,28 @@ async function handleGeneratePlan() {
         template: selectedTemplateId.value,
         sections: sectionsToGenerate,
         user_input: finalUserInput,
+        num_candidates: 2,
       }),
     });
+
     if (!response.ok) {
       const errorDetail = await response.text();
       throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
     }
+
     const rawData = await response.json();
 
-    const processedContent = {};
+    const processedCandidates = {};
     for (const sectionId in rawData) {
-      const sectionResult = rawData[sectionId];
-      if (sectionResult.content && !sectionResult.error) {
-        processedContent[sectionId] = {
-          content: sectionResult.raw_json_content,
-        };
-      } else {
-        processedContent[sectionId] = { error: sectionResult.error };
-      }
-    }
-    planContent.value = processedContent;
-
-    try {
-      // 準備要保存的數據條目
-      const entriesToSave = currentSections.value
-        .map((section) => {
-          const sectionResult = rawData[section.id];
-
-          // 確保該章節成功生成且有內容
-          if (sectionResult && sectionResult.content && !sectionResult.error) {
-            return {
-              source_type: "external_direct",
-              grant_id: selectedGrantId.value,
-              template_id: selectedTemplateId.value,
-              section_id: section.id,
-              prompt: finalUserInput,
-              final_answer: sectionResult.raw_json_content,
-            };
-          }
-          return null;
-        })
-        .filter(Boolean);
-
-      if (entriesToSave.length > 0) {
-        fetch(`${API_BASE_URL}/datasets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries: entriesToSave }),
-        })
-          .then((saveResponse) => {
-            if (saveResponse.status === 202) {
-            } else {
-              // 在控制台記錄錯誤，不打擾用戶
-              saveResponse
-                .json()
-                .then((err) => console.error("後台保存數據集失敗:", err));
-            }
-          })
-          .catch((saveError) => {
-            console.error("發送保存數據集請求時出錯:", saveError);
-          });
-      }
-    } catch (saveError) {
-      // 只在控制台記錄
-      console.error("準備保存數據集時出錯:", saveError);
+      const candidates = rawData[sectionId]; // candidates 现在是一个数组
+      processedCandidates[sectionId] = candidates.map((candidate) => ({
+        content: candidate.raw_json_content,
+        error: candidate.error || null,
+      }));
     }
 
+    candidatePlan.value = processedCandidates;
+    showCandidateModal.value = true; // 显示选择模态框
     success("計劃書草稿已生成！");
   } catch (error) {
     console.error("生成計劃書時發生錯誤:", error);

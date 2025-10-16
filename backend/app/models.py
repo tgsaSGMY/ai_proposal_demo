@@ -68,6 +68,7 @@ class DatasetEntry(BaseModel):
     section_id: str
     prompt: str
     final_answer: Dict[str, Any]
+    rejected_answer: Optional[Dict[str, Any]] = None
 
 class SaveDatasetRequest(BaseModel):
     """用於批量保存數據集條目的請求，每個條目可以有不同的來源。"""
@@ -88,6 +89,17 @@ class SyntheticInputRequest(BaseModel):
     json_output: Optional[Dict[str, Any]] = Field(None, description="在 'reverse' 模式下，提供已有的 JSON 輸出。")
     dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構。")
 
+class ScrapeRequest(BaseModel):
+    """"抓取網上資料請求"""
+    url: str
+    context_keywords: Optional[str] = ""
+
+class BatchSyntheticRequest(BaseModel):
+    '''批量生成請求'''
+    count: int = Field(..., gt=0, le=20) # 限制一次最多生成 20 个
+    grant_id: str
+    template_id: str
+
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
 class RoutingRule(BaseModel):
     """定義一個模型路由規則，用於決定哪個請求應該由哪個模型處理。"""
@@ -99,7 +111,6 @@ class RoutingRule(BaseModel):
     description: Optional[str] = None
 
 # --- 定義 source_type 的可用選項 ---
-
 class UpdateSectionSettingsRequest(BaseModel):
     prompts: List[str]
     system_prompt: Optional[str] = None

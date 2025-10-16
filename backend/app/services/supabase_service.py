@@ -10,6 +10,8 @@ from contextlib import contextmanager
 import asyncio 
 from collections import defaultdict
 import logging
+import time
+
 
 logger = logging.getLogger(__name__)
 from app.config import (
@@ -159,6 +161,115 @@ class SupabaseService:
         })
         session.commit()
         print("Model registration successful.")
+    
+    
+    async def get_grant_by_id(self, grant_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个 grant 的信息。"""
+        if not grant_id:
+            return None
+        try:
+            response = (
+                self.client
+                .from_("grants")
+                .select("*")
+                .eq("id", grant_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            print(f"Error fetching grant by id '{grant_id}': {e}")
+            return None
+
+
+    async def get_template_by_id(self, template_id: str, grant_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个 plan_template 的信息。"""
+        if not template_id:
+            return None
+        try:
+            response = (
+                self.client
+                .from_("plan_templates")
+                .select("*")
+                .eq("id", template_id)
+                .eq("grant_id", grant_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0] 
+            return None
+        except Exception as e:
+            print(f"Error fetching template by id '{template_id}': {e}")
+            return None
+
+
+    async def get_sections_by_template_id(self, template_id: str, grant_id: str) -> List[Dict[str, Any]]:
+        """根据 template_id 获取其下所有 sections，并按 order 排序。"""
+        if not template_id:
+            return []
+        try:
+            response = (
+                self.client
+                .from_("sections")
+                .select("*")
+                .eq("template_id", template_id)
+                .eq("grant_id", grant_id)
+                .order("order", desc=False)
+                .execute()
+            )
+            return response.data or []  
+        except Exception as e:
+            print(f"Error fetching sections by template_id '{template_id}': {e}")
+            return []
+
+
+    async def get_all_draft_plans(self) -> List[Dict[str, Any]]:
+        """获取所有企划草稿"""
+        response = self.client.from_("draft_plans").select("*").order("created_at", desc=True).execute()
+        return response.data if response.data else []
+
+    async def create_draft_plan(self, name: str, mode: str, grant_id: Optional[str] = None, template_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """创建一个新的企划草稿"""
+        
+        # 检查同名草稿
+        existing_response = self.client.from_("draft_plans").select("id").eq("name", name).execute()
+        if existing_response.data:
+            # 如果存在同名，添加一个时间戳后缀
+            name = f"{name}-{int(time.time())}"
+
+        insert_data = {
+            "name": name,
+            "mode": mode,
+            "status": "pending",
+            "grant_id": grant_id,
+            "template_id": template_id,
+            "user_input": {}, # 初始化为空对象
+            "plan_content": {}  # 初始化为空对象
+        }
+        response = self.client.from_("draft_plans").insert(insert_data).execute()
+        return response.data[0] if response.data else None
+
+    async def get_draft_plan_by_id(self, draft_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个草稿"""
+        response = self.client.from_("draft_plans").select("*").eq("id", draft_id).single().execute()
+        return response.data if response.data else None
+    
+    async def update_draft_plan(self, draft_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新一个企划草稿"""
+        if "updated_at" not in data:
+            # 手动更新 updated_at 时间戳
+            data["updated_at"] = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.gmtime())
+
+        response = self.client.from_("draft_plans").update(data).eq("id", draft_id).execute()
+        return response.data[0] if response.data else None
+
+    async def delete_draft_plan(self, draft_id: str) -> bool:
+        """删除一个企划草稿"""
+        response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
+        return len(response.data) > 0
 
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
@@ -261,7 +372,8 @@ class SupabaseService:
         template_id: str,
         section_id: str,
         prompt: str,
-        final_answer: dict
+        final_answer: dict,
+        rejected_answer: Optional[dict] = None
     ) -> Dict[str, Any]:
         """向 datasets 表中插入一条新的记录"""
         try:
@@ -271,8 +383,11 @@ class SupabaseService:
                 "template_id": template_id,
                 "section_id": section_id,
                 "prompt": prompt,
-                "final_answer": final_answer, # Supabase client 會自動處理 jsonb
+                "final_answer": final_answer,
+                "rejected_answer": rejected_answer
             }).execute()
+            insert_data = response.data  
+            insert_data_cleaned = {k: v for k, v in insert_data[0].items() if v is not None}  
             
             if response.data: 
                 print(f"Successfully inserted {source_type} entry for section {section_id}.")

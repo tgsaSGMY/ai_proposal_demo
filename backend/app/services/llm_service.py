@@ -25,6 +25,7 @@ class LLMService:
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
 
+
     def _format_few_shot_examples(self, exemplars: List[Dict[str, Any]]) -> str:
         if not exemplars:
             return ""

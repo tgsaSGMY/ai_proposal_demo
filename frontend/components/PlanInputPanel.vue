@@ -57,8 +57,8 @@
           </button>
         </div>
         <textarea
-          :value="userInput"
-          @input="$emit('update:userInput', $event.target.value)"
+          :value="modelValue"
+          @input="$emit('update:modelValue', $event.target.value)"
           placeholder="例如：一個利用 AI 分析使用者評論，自動生成產品優化建議的 SaaS 平台..."
           rows="8"
           class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y p-2"
@@ -76,6 +76,15 @@
             生成更精準、更出色的內容！
           </p>
         </div>
+        <ReferenceLinker
+          :links="referenceLinks"
+          @add="addReferenceLink"
+          @remove="removeReferenceLink"
+          @update="updateReferenceLink"
+          @analyze="handleAnalyzeLink"
+          @view-summary="viewLinkSummary"
+          class="mt-6"
+        />
 
         <!-- 外層 v-for 遍歷 section 分組 -->
         <div
@@ -107,6 +116,25 @@
               rows="3"
               class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y p-2"
             ></textarea>
+          </div>
+        </div>
+
+        <div
+          v-if="isSummaryModalVisible"
+          @click.self="isSummaryModalVisible = false"
+          class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center"
+        >
+          <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
+            <h3 class="text-lg font-bold mb-4">AI 分析重點</h3>
+            <p class="text-gray-700 whitespace-pre-wrap">
+              {{ currentSummary }}
+            </p>
+            <button
+              @click="isSummaryModalVisible = false"
+              class="mt-6 px-4 py-2 bg-gray-200 rounded-md"
+            >
+              關閉
+            </button>
           </div>
         </div>
       </div>
@@ -149,11 +177,14 @@
 
 <script setup>
 import { ref, watch, computed, onMounted } from "vue";
+const referenceLinks = ref([]);
 import { useNotifications } from "~/composables/useNotifications";
+
+const modelValue = defineModel();
+// modelValue: { type: String, required: true },
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
-  userInput: { type: String, required: true },
   isGenerating: { type: Boolean, default: false },
   dynamicInputs: { type: Array, required: true },
   mode: { type: String, required: true },
@@ -162,7 +193,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  "update:userInput",
+  "update:modelValue",
   "selectionChange",
   "generatePlan",
   "generateUserInput",
@@ -170,12 +201,10 @@ const emit = defineEmits([
 ]);
 
 // 內部狀態
-const isModalVisible = ref(false);
-const currentEditingSection = ref(null);
-const currentEditingIndex = ref(-1);
-
 const selectedGrantId = ref(props.initialGrantId);
 const selectedTemplateId = ref(props.initialTemplateId);
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 watch(
   () => props.initialGrantId,
@@ -204,7 +233,11 @@ const availableTemplates = computed(() => {
 });
 
 const isReadyToGenerate = computed(() => {
-  return selectedTemplateId.value && props.userInput.trim();
+  return (
+    selectedTemplateId.value &&
+    props.modelValue &&
+    props.modelValue.trim() !== ""
+  );
 });
 
 watch([selectedGrantId, selectedTemplateId], () => {
@@ -238,12 +271,77 @@ const onGrantChange = () => {
 
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
-  emit("generatePlan");
+
+  const completedSummaries = referenceLinks.value
+    .filter((link) => link.status === "completed" && link.summary)
+    .map((link) => link.summary);
+
+  // 將重點傳遞給父組件
+  emit("generatePlan", { summaries: completedSummaries });
 };
 
-function openSettingsModal(index) {
-  currentEditingIndex.value = index;
-  currentEditingSection.value = props.dynamicInputs[index];
-  isModalVisible.value = true;
+const isSummaryModalVisible = ref(false);
+const currentSummary = ref("");
+
+function addReferenceLink() {
+  referenceLinks.value.push({ url: "", status: "pending", summary: "" });
+}
+
+function removeReferenceLink(index) {
+  referenceLinks.value.splice(index, 1);
+}
+
+function updateReferenceLink({ index, field, value }) {
+  if (referenceLinks.value[index]) {
+    referenceLinks.value[index][field] = value;
+    // 如果 URL 改變了，重置狀態
+    if (field === "url") {
+      referenceLinks.value[index].status = "pending";
+      referenceLinks.value[index].summary = "";
+    }
+  }
+}
+
+function viewLinkSummary(index) {
+  if (referenceLinks.value[index]) {
+    currentSummary.value = referenceLinks.value[index].summary;
+    isSummaryModalVisible.value = true;
+  }
+}
+
+async function handleAnalyzeLink(index) {
+  const link = referenceLinks.value[index];
+  if (!link || !link.url) return;
+
+  link.status = "loading";
+
+  try {
+    // 收集 dynamicInputs 的 labels 作為分析上下文
+    const analysisContext = props.dynamicInputs
+      .flatMap((group) => group.inputs.map((input) => input.label))
+      .join(", ");
+
+    const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: link.url,
+        context_keywords: analysisContext,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "分析失敗");
+    }
+
+    const result = await response.json();
+    link.summary = result.summary;
+    link.status = "completed";
+  } catch (error) {
+    console.error(`Error analyzing URL ${link.url}:`, error);
+    link.status = "error";
+    link.summary = `分析失敗: ${error.message}`;
+  }
 }
 </script>
