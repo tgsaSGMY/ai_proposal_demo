@@ -48,7 +48,6 @@ class QdrantService:
             return []
         
         try:
-            # query_vector = self.embedding_model.encode(query_text).tolist()
             query_vector = list(self.embedding_model.embed([query_text]))[0]
             search_filter = models.Filter(
                 must=[
@@ -82,7 +81,6 @@ class QdrantService:
         try:
             points_to_upsert = []
             for item in points_data:
-                # vector = self.embedding_model.encode(item['text']).tolist()
                 vector = list(self.embedding_model.embed([item['text']]))[0]
                 payload = item.get('payload', {})
                 
