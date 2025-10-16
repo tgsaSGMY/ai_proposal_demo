@@ -17,7 +17,12 @@
       </div>
     </header>
 
-    <DraftPlanList :drafts="drafts" @select="openEditor" />
+    <DraftPlanList
+      :drafts="drafts"
+      @select="openEditor"
+      @rename="handleRenameDraft"
+      @delete="handleDeleteDraft"
+    />
 
     <BatchSyntheticModal
       :visible="isBatchModalVisible"
@@ -73,6 +78,43 @@ const sectionsForSelectedDraft = computed(() => {
   );
   return template?.sections || [];
 });
+
+async function handleRenameDraft(draft) {
+  const newName = prompt("请输入新的企划名称:", draft.name);
+  if (!newName || !newName.trim() || newName === draft.name) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/draft_plans/${draft.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (!response.ok) throw new Error("重命名失败: " + (await response.text()));
+    success(`企划已重命名为 "${newName}"`);
+    fetchDrafts();
+  } catch (e) {
+    errorNotification(e.message);
+  }
+}
+
+async function handleDeleteDraft(draft) {
+  if (!confirm(`您确定要删除企划 "${draft.name}" 吗？此操作无法撤销。`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/draft_plans/${draft.id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) throw new Error("删除失败: " + (await response.text()));
+    success(`企划 "${draft.name}" 已被删除。`);
+    fetchDrafts();
+  } catch (e) {
+    errorNotification(e.message);
+  }
+}
 
 async function fetchDrafts() {
   const { data, error } = await supabase

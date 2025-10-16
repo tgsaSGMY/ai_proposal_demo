@@ -241,6 +241,7 @@ const isReadyToGenerate = computed(() => {
 });
 
 watch([selectedGrantId, selectedTemplateId], () => {
+  console.log(selectedGrantId.value, selectedTemplateId.value);
   if (
     selectedGrantId.value !== props.initialGrantId ||
     selectedTemplateId.value !== props.initialTemplateId

@@ -14,6 +14,7 @@ export function usePlanGenerator() {
   const planContent = ref({});
 
   // --- Computed Properties ---
+
   const availableTemplates = computed(() => {
     if (!selectedGrantId.value) return [];
     const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
@@ -25,6 +26,7 @@ export function usePlanGenerator() {
     const template = availableTemplates.value.find(
       (t) => t.id === selectedTemplateId.value
     );
+    console.log(availableTemplates.value);
     return template ? template.sections : [];
   });
 
@@ -124,6 +126,18 @@ export function usePlanGenerator() {
       !selectedTemplateId.value
     ) {
       selectedTemplateId.value = newTemplates[0].id;
+    }
+  });
+
+  onMounted(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/config`);
+
+      if (!response.ok) throw new Error("Network response was not ok");
+      allConfigs.value = await response.json();
+    } catch (error) {
+      console.error("Failed to load config:", error);
+      errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
     }
   });
 

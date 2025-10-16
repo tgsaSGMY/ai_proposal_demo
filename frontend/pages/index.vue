@@ -76,7 +76,6 @@ const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // --- 使用 Composable ---
 const {
-  allConfigs,
   selectedGrantId,
   selectedTemplateId,
   userInput,
@@ -89,6 +88,52 @@ const {
 
 const showCandidateModal = ref(false);
 const candidatePlan = ref({});
+const allConfigs = ref([]);
+
+watchEffect(() => {
+  const sections = currentSections.value;
+  console.log("hi", sections);
+  if (!sections || sections.length === 0) {
+    dynamicInputs.value = [];
+    return;
+  }
+  const groupedInputs = [];
+  console.log("l;alaal");
+  sections.forEach((section) => {
+    const sectionInputs = [];
+    if (section.json_schema && section.json_schema.properties) {
+      Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
+        sectionInputs.push({
+          id: `${section.id}-${key}`,
+          label: prop.description || key.replace("_", " "),
+          value: "",
+        });
+      });
+    }
+    if (sectionInputs.length > 0) {
+      groupedInputs.push({
+        sectionId: section.id,
+        sectionName: section.name,
+        inputs: sectionInputs,
+        custom_prompt_list: section.custom_prompt_list || [],
+        system_prompt: section.system_prompt || "",
+      });
+    }
+  });
+  dynamicInputs.value = groupedInputs;
+});
+
+onMounted(async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/config`);
+
+    if (!response.ok) throw new Error("Network response was not ok");
+    allConfigs.value = await response.json();
+  } catch (error) {
+    console.error("Failed to load config:", error);
+    errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
+  }
+});
 
 function onCandidateConfirm({ selected, rejected }) {
   const newPlanContent = {};

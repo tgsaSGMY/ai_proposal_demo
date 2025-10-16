@@ -25,35 +25,81 @@
       <div
         v-for="draft in filteredDrafts"
         :key="draft.id"
-        @click="$emit('select', draft)"
-        class="bg-white shadow rounded-lg p-4 cursor-pointer hover:shadow-lg transition-shadow border-l-4"
+        class="bg-white shadow rounded-lg p-4 border-l-4 relative"
         :class="getStatusBorderColor(draft.status)"
+        @click="openDraft(draft)"
       >
-        <div class="flex justify-between items-start">
-          <h3 class="font-bold truncate pr-2">{{ draft.name }}</h3>
-          <span class="text-xs font-mono text-gray-400">{{
+        <div class="flex justify-left items-start cursor-pointer">
+          <h3 class="font-bold truncate pr-3">{{ draft.name }}</h3>
+          <span class="text-xs font-mono text-gray-400 flex-shrink-0">{{
             modeMap(draft.mode)
           }}</span>
         </div>
-        <div class="mt-2 text-sm flex items-center gap-2">
-          <span class="font-medium text-gray-600">状态:</span>
-          <span
-            :class="getStatusTextColor(draft.status)"
-            class="font-semibold"
-            >{{ getStatusText(draft.status) }}</span
+
+        <!-- Menu Icon -->
+        <div class="absolute top-3 right-3">
+          <button
+            @click.stop="toggleMenu(draft.id)"
+            class="text-gray-500 hover:text-gray-800 p-1 rounded-full"
           >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"
+              />
+            </svg>
+          </button>
+          <!-- Dropdown Menu -->
+          <div
+            v-if="activeMenu === draft.id"
+            class="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg z-10"
+          >
+            <ul class="py-1">
+              <li>
+                <a
+                  href="#"
+                  @click.stop.prevent="emitRename(draft)"
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >重命名</a
+                >
+              </li>
+              <li>
+                <a
+                  href="#"
+                  @click.stop.prevent="emitDelete(draft)"
+                  class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >刪除</a
+                >
+              </li>
+            </ul>
+          </div>
         </div>
-        <div class="text-xs text-gray-400 mt-1">
-          更新于: {{ new Date(draft.updated_at).toLocaleString() }}
-        </div>
-        <div
-          v-if="
-            draft.status === 'generating_idea' ||
-            draft.status === 'generating_plan'
-          "
-          class="w-full bg-gray-200 rounded-full h-1.5 mt-3"
-        >
-          <div class="bg-blue-600 h-1.5 rounded-full animate-pulse"></div>
+
+        <div @click="openDraft(draft)" class="cursor-pointer">
+          <div class="mt-2 text-sm flex items-center gap-2">
+            <span class="font-medium text-gray-600">状态:</span>
+            <span
+              :class="getStatusTextColor(draft.status)"
+              class="font-semibold"
+              >{{ getStatusText(draft.status) }}</span
+            >
+          </div>
+          <div class="text-xs text-gray-400 mt-1">
+            更新于: {{ new Date(draft.updated_at).toLocaleString() }}
+          </div>
+          <div
+            v-if="
+              draft.status === 'generating_idea' ||
+              draft.status === 'generating_plan'
+            "
+            class="w-full bg-gray-200 rounded-full h-1.5 mt-3"
+          >
+            <div class="bg-blue-600 h-1.5 rounded-full animate-pulse"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -64,13 +110,48 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 
 const props = defineProps({ drafts: Array });
-defineEmits(["select"]);
+const emit = defineEmits(["select", "rename", "delete"]);
 
 const searchTerm = ref("");
 const filterMode = ref("");
+const activeMenu = ref(null);
+
+function toggleMenu(draftId) {
+  activeMenu.value = activeMenu.value === draftId ? null : draftId;
+}
+
+function closeMenu() {
+  activeMenu.value = null;
+}
+
+function openDraft(draft) {
+  if (activeMenu.value) {
+    closeMenu();
+    return;
+  }
+  emit("select", draft);
+}
+
+function emitRename(draft) {
+  emit("rename", draft);
+  closeMenu();
+}
+
+function emitDelete(draft) {
+  emit("delete", draft);
+  closeMenu();
+}
+
+onMounted(() => {
+  window.addEventListener("click", closeMenu);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("click", closeMenu);
+});
 
 const filteredDrafts = computed(() => {
   return props.drafts.filter((draft) => {
@@ -99,16 +180,17 @@ function modeMap(status) {
     internal: "生成企劃",
     synthetic: "AI生成",
   };
-  return map[status] || "border-gray-300";
+  return map[status] || "未知";
 }
 
 function getStatusTextColor(status) {
   const map = {
-    completed: "text-green-600",
-    generating_idea: "text-blue-600",
-    generating_plan: "text-blue-600",
-    pending: "text-gray-600",
-    error: "text-red-600",
+    completed: "text-emerald-600",
+    generating_idea: "text-sky-600",
+    generating_plan: "text-indigo-600",
+    completed_idea: "text-teal-600",
+    pending: "text-gray-500",
+    error: "text-rose-600",
   };
   return map[status] || "text-gray-500";
 }
@@ -117,9 +199,10 @@ function getStatusText(status) {
   const map = {
     completed: "已完成",
     generating_idea: "生成想法中...",
-    generating_plan: "生成计划中...",
+    generating_plan: "生成計劃中...",
+    completed_idea: "已生成想法",
     pending: "待处理",
-    error: "失败",
+    error: "失敗",
   };
   return map[status] || status;
 }
