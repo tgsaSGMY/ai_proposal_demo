@@ -345,6 +345,7 @@ async function handleAnalyzeLink(index) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
         url: link.url,
         context_keywords: analysisContext,
       }),

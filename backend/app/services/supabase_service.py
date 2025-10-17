@@ -11,6 +11,7 @@ import asyncio
 from collections import defaultdict
 import logging
 import time
+from app.utils.token_calculator import calculate_openai_tokens
 
 
 logger = logging.getLogger(__name__)
@@ -286,13 +287,13 @@ class SupabaseService:
 
     async def get_user_usage(self, user_id: str) -> Dict[str, int]:
         """获取用户的 internal 和 external 总用量"""
-        query = self.client.from_("usage_logs").select("model_type, tokens_used").eq("user_id", user_id)
+        query = self.client.from_("usage_logs").select("model_type, cost").eq("user_id", user_id)
         response = query.execute()
         
-        usage = {"internal": 0, "external": 0}
+        usage = 0
         if response.data:
             for log in response.data:
-                usage[log['model_type']] += log['tokens_used']
+                usage += log['cost']
         return usage
 
     async def check_quota(self, user_id: str, model_type: str) -> tuple[bool, str]:
@@ -306,36 +307,32 @@ class SupabaseService:
 
         usage = await self.get_user_usage(user_id)
 
-        if model_type == 'external':
-            remaining = user['external_quota'] - usage['external']
-            if remaining <= 0:
-                return False, "External quota exhausted."
-        elif model_type == 'internal':
-            remaining = user['internal_quota'] - usage['internal']
-            if remaining <= 0:
-                return False, "Internal quota exhausted."
+        remaining = user['external_quota'] - usage
+        if remaining <= 0:
+            return False, "External quota exhausted."
         
-        return True, "Quota available."
+        return True, "Quota available." 
 
-    async def log_usage(self, user_id: str, model_info: Dict[str, Any], tokens_used: int):
+    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int,output_token: int):
         """记录一次模型使用"""
-        model_type = model_info.get('type', 'internal')
+        model_type = model_info.get('type', 'internal') 
         cost = 0.0
         # 简单估算成本，只用external modal 的 output token
         if model_type == 'external' and model_info.get('cost_info'):
             cost_per_million = model_info['cost_info'].get('output', 0)
-            cost = (tokens_used / 1_000_000) * cost_per_million
+            cost = (output_token / 1_000_000) * cost_per_million
 
         new_log = {
             "user_id": user_id,
             "model_id": model_info['id'],
             "model_type": model_type,
-            "tokens_used": tokens_used,
+            "input_token": input_token,
+            "output_token":  output_token,
             "cost": cost
         }
         
         self.client.from_("usage_logs").insert(new_log).execute()
-        print(f"Logged usage for user {user_id}: {tokens_used} tokens for {model_type} model.")
+        print(f"Logged usage for user {user_id}: ${cost} for {model_type} model.")
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
@@ -460,3 +457,15 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to update settings for section {section_id}: {e}")
             return False
+        
+    async def log_cost_usage(self, user_id: str, model_to_use: Dict, messages: List[Dict], raw_output: str):
+        token_counts = calculate_openai_tokens(
+            messages=messages, 
+            model_name=model_to_use['id'], 
+            raw_output_text=raw_output
+        )
+        input_token = token_counts["input_tokens"]
+        output_token = token_counts["output_tokens"]
+        logger.info(f"Calculated tokens -> Input: {input_token}, Output: {output_token}")
+        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token))
+

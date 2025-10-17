@@ -38,13 +38,15 @@ class BatchSyntheticRequest(BaseModel):
     count: int = Field(..., gt=0, le=20)
     grant_id: str
     template_id: str
+    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
 
 # --- 後台任务函数 ---
 async def run_synthetic_idea_generation_task(
     draft_id: str,
     request_for_llm: Request, # 傳入 Request 對象以訪問 app.state
     supabase_service: SupabaseService, 
-    llm_service: LLMService
+    llm_service: LLMService,
+    user_id: str
 ):
     """ 
     后台任务：只生成合成的用户输入 (想法)，不生成 plan content。
@@ -76,11 +78,13 @@ async def run_synthetic_idea_generation_task(
             mode='random',
             grant_name=grant['name'],
             template_name=template['name'],
-            dynamic_fields_schema=dynamic_fields_schema
+            dynamic_fields_schema=dynamic_fields_schema,
+            user_id=user_id
+
         )
         
         # 真正调用 LLM 生成想法
-        generated_user_input = await internal_generate_synthetic_input(synthetic_req, request_for_llm, llm_service)
+        generated_user_input = await internal_generate_synthetic_input(synthetic_req, request_for_llm, llm_service,supabase_service)
 
         # 更新数据库，状态为 'completed'，并只存入 user_input
         update_payload = {
@@ -135,7 +139,8 @@ async def create_batch_synthetic_drafts(
                 draft_id=draft_id,
                 request_for_llm=request,
                 supabase_service=supabase_service,
-                llm_service=llm_service
+                llm_service=llm_service,
+                user_id=req.user_id
             )
     return {"message": f"Started generating ideas for {len(created_draft_ids)} drafts.", "draft_ids": created_draft_ids}
 

@@ -68,57 +68,19 @@ async def update_section_prompts_endpoint(
         raise HTTPException(status_code=404, detail="Section not found or update failed.")
     return {"message": "Section settings updated successfully."}
 
-# @router.post("/scrape_and_analyze", summary="抓取網頁並由 AI 分析重點")
-# async def scrape_and_analyze(
-#     req: ScrapeRequest,
-#     request: Request,
-#     llm_service: LLMService = Depends(get_llm_service) 
-# ):
-    # try:
-    #     # 1. 抓取網頁內容
-    #     scraped_text = scrape_website_text(req.url)
-    #     print(scraped_text)
-    #     print(req.context_keywords)
-
-    #     # 2. 準備 Prompt 讓 AI 分析
-    #     system_prompt = f"""
-    #     你是一位高效的信息分析專家。你的任務是閱讀一份網頁內容，並根據用戶提供的「關注點」，提煉出最相關的核心要點。
-
-    #     用戶正在撰寫一份商業計劃書，他們提供的「關注點」是計劃書中需要填寫的欄位。
-    #     關注點: {req.context_keywords}
-
-    #     請你總結網頁內容中與這些關注點最相關的信息，並以一個清晰、簡潔的段落返回。總結的內容將作為額外參考資料，幫助用戶撰寫計劃書。
-    #     """
-        
-    #     user_prompt = f"網頁原文:\n---\n{scraped_text}\n---\n請根據以上原文和系統指令中的關注點，生成重點摘要。"
-
-    #     # 3. 調用 OpenAI
-    #     model_info = request.app.state.model_registry.get("gpt-3.5-turbo-1106") 
-    #     if not model_info:
-    #         raise HTTPException(status_code=500, detail="GPT-3.5 Turbo model not configured.")
-
-    #     async with httpx.AsyncClient(timeout=60.0) as client:
-    #         summary, error = await llm_service.call_external_api(client, model_info, [
-    #             {"role": "system", "content": system_prompt},
-    #             {"role": "user", "content": user_prompt}
-    #         ])
-    #         if error:
-    #             raise HTTPException(status_code=500, detail=error.get("error", "LLM API failed"))
-        
-    #     return {"summary": summary}
-        
-    # except HTTPException as e:
-    #     raise e
-    # except Exception as e:
-    #     logger.error(f"Unexpected error in scrape_and_analyze: {e}")
-    #     raise HTTPException(status_code=500, detail="伺服器內部錯誤")
-
+@router.get("/user-usage")
+async def user_usage(user_id: str, supabase_service: SupabaseService = Depends(get_supabase_service)):
+    """取得指定 user_id 的總用量 (cost)"""
+    usage = await supabase_service.get_user_usage(user_id)
+    return {"usage": usage} 
 
 @router.post("/scrape_and_analyze", summary="抓取網頁並由 AI 分析重點")
 async def scrape_and_analyze(
     req: ScrapeRequest,
     request: Request,
-    llm_service: LLMService = Depends(get_llm_service)
+    user_id: str = "admin_user",
+    llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
         # 1️⃣ 抓取網頁內容
@@ -168,6 +130,8 @@ async def scrape_and_analyze(
 
         if llm_error:
             raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
+
+        await supabase_service.log_cost_usage(user_id, model_to_use, messages, summary)
 
         # 6️⃣ 返回最終摘要結果
         return {"summary": summary.strip()}

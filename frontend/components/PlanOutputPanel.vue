@@ -234,6 +234,7 @@ async function handleFileSelected(event) {
         section_name: s.name,
         json_schema: s.json_schema,
       })),
+      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
     };
 
     const filledContent = await callAutoFillApi(payload);

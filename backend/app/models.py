@@ -88,8 +88,8 @@ class SyntheticInputRequest(BaseModel):
     section_name: str
     json_output: Optional[Dict[str, Any]] = Field(None, description="在 'reverse' 模式下，提供已有的 JSON 輸出。")
     dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構。")
-
-class ScrapeRequest(BaseModel):
+    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
+class ScrapeRequest(BaseModel): 
     """"抓取網上資料請求"""
     url: str
     context_keywords: Optional[str] = ""
@@ -99,6 +99,7 @@ class BatchSyntheticRequest(BaseModel):
     count: int = Field(..., gt=0, le=20) # 限制一次最多生成 20 个
     grant_id: str
     template_id: str
+    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
 
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
 class RoutingRule(BaseModel):

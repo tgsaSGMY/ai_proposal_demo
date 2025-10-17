@@ -41,7 +41,6 @@
       :all-configs="allConfigs"
       @close="isBatchModalVisible = false"
       @start="handleBatchStart"
-      class="z-50"
     />
 
     <DraftPlanEditorModal
@@ -50,7 +49,6 @@
       :all-configs="allConfigs"
       @close="selectedDraft = null"
       @save-to-dataset="handleSaveToFinalDataset"
-      class="z-50"
     />
     <InputPromptModal
       :visible="isInputModalVisible"
@@ -59,7 +57,6 @@
       :defaultValue="inputModalDefaultValue"
       @submit="handleInputModalSubmit"
       @cancel="handleInputModalCancel"
-      class="z-50"
     />
   </div>
 </template>

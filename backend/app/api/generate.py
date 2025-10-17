@@ -65,7 +65,7 @@ async def generate_plan(
         plan_content[section_id].append(res.dict())
 
     return plan_content
-
+ 
 
 
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
@@ -73,6 +73,7 @@ async def generate_synthetic_input(
     req: SyntheticInputRequest,
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     """根據模式生成用戶輸入，現在支持填充動態字段"""
     model_info = request.app.state.model_registry.get("gpt-4.1")
@@ -190,6 +191,8 @@ async def generate_synthetic_input(
             raise HTTPException(status_code=500, detail=error.get("error", "Failed to generate input."))
          
         response_json, parse_error = extract_json_block(raw_output, "synthetic_input")
+        await supabase_service.log_cost_usage(req.user_id, model_info, messages, raw_output)
+
         if parse_error:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
 
@@ -213,7 +216,9 @@ async def generate_synthetic_input(
 async def autofill_from_document(
     request_data: AutoFillRequest,
     request: Request,
-    llm_service: LLMService = Depends(get_llm_service) 
+    llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    user_id: str = "admin_user"
 ):
     """
     接收文檔純文字和多個章節的 schema，
@@ -310,6 +315,8 @@ async def autofill_from_document(
         formatted_result = {}
         for section_id, content in filled_data.items():
             formatted_result[section_id] = {"content": content}
+
+        await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
 
         return formatted_result
 

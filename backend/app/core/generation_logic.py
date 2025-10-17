@@ -2,19 +2,22 @@ import json
 import httpx
 import logging
 from typing import Dict, Any, List
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException,Depends
 
 from app.services.llm_service import LLMService
+from app.services.supabase_service import SupabaseService
 from app.utils.extract_json import extract_json_block 
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal 
+from app.services.supabase_service import SupabaseService
 
 logger = logging.getLogger(__name__)
-
+ 
 class SyntheticInputRequest(BaseModel): 
     mode: str
     grant_name: str
     template_name: str
+    user_id: str 
     section_name: Optional[str] = None
     json_output: Optional[Dict[str, Any]] = None
     dynamic_fields_schema: Optional[List[Dict[str, str]]] = None
@@ -22,7 +25,8 @@ class SyntheticInputRequest(BaseModel):
 async def internal_generate_synthetic_input(
     req: SyntheticInputRequest,
     request: Request,
-    llm_service: LLMService
+    llm_service: LLMService,
+    supabase_service: SupabaseService,
 ) -> Dict[str, Any]:
     """
     可重用的内部函数，用于生成合成的用户输入。
@@ -76,5 +80,7 @@ async def internal_generate_synthetic_input(
         response_json, parse_error = extract_json_block(raw_output, "synthetic_input")
         if parse_error:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
+
+        await supabase_service.log_cost_usage(req.user_id, model_info, messages, raw_output)
 
         return response_json

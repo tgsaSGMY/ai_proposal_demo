@@ -125,6 +125,7 @@ function startBatch() {
     count: count.value,
     grant_id: selectedGrantId.value,
     template_id: selectedTemplateId.value,
+    user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
   });
   close();
 }

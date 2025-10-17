@@ -111,6 +111,7 @@ const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
 onMounted(async () => {
   await fetchAllConfigs();
   // Force Composable state to match the draft's config
+  console.log("Initializing editor modal with draft:", props.draft);
   selectedGrantId.value = props.draft.grant_id;
   selectedTemplateId.value = props.draft.template_id;
   planContent.value = props.draft.plan_content;
@@ -363,6 +364,7 @@ async function handleGenerateUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       json_output: editableDraft.mode === "golden" ? flattened : null,
+      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
       // 傳遞動態字段的 schema
       dynamic_fields_schema:
         editableDraft.mode !== "golden"
