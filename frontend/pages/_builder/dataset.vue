@@ -3,11 +3,28 @@
     <header
       class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 sm:p-4 rounded-lg shadow-sm gap-3 sm:gap-0"
     >
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">數據生產工作室</h1>
-      <div class="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
-        <button @click="isBatchModalVisible = true" class="btn-primary w-full xs:w-auto">🤖 批量 AI 生成</button>
-        <button @click="handleCreateDraft('golden')" class="btn-secondary w-full xs:w-auto">🏆 新建手動標註</button>
-        <button @click="handleCreateDraft('internal')" class="btn-secondary w-full xs:w-auto">📝 新建生成企劃</button>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">
+        數據生產工作室
+      </h1>
+      <div class="flex flex-col sm:flex-row flex-wrap items-center gap-2">
+        <button
+          @click="isBatchModalVisible = true"
+          class="btn-primary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+        >
+          🤖 批量 AI 生成
+        </button>
+        <button
+          @click="handleCreateDraft('golden')"
+          class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+        >
+          🏆 新建手動標註
+        </button>
+        <button
+          @click="handleCreateDraft('internal')"
+          class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+        >
+          📝 新建生成企劃
+        </button>
       </div>
     </header>
 
