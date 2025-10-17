@@ -14,11 +14,10 @@
       <div class="grid grid-cols-1 gap-4 sm:gap-6 mb-8 sm:mb-10 md:grid-cols-2">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2"
-            >1. 選擇主題 (Grant)</label
+            >1. 選擇主題</label
           >
           <select
             v-model="selectedGrantId"
-            @change="selectedTemplateId = ''"
             class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition"
           >
             <option disabled value="">請選擇</option>
@@ -249,4 +248,11 @@ function handleSettingsUpdated(payload) {
     }
   }
 }
+
+watch(availableTemplates, (newTemplates) => {
+  if (newTemplates && newTemplates.length === 1 && !selectedTemplateId.value) {
+    selectedTemplateId.value = newTemplates[0].id;
+    console.log("hi", selectedTemplateId.value);
+  }
+});
 </script>

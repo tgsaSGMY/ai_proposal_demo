@@ -1,17 +1,26 @@
 <template>
   <div class="p-3 sm:p-4 md:p-8 h-full flex flex-col bg-gray-50">
-    <div class="flex-shrink-0 mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow text-center">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800">AI 計畫書生成器</h1>
-      <p class="text-xs sm:text-sm text-gray-500 mt-1">專為高效產出專業計劃書而設計</p>
+    <div
+      class="flex-shrink-0 mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow text-center"
+    >
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800">
+        AI 計畫書生成器
+      </h1>
+      <p class="text-xs sm:text-sm text-gray-500 mt-1">
+        專為高效產出專業計劃書而設計
+      </p>
     </div>
 
     <!-- 主工作區：左右佈局 -->
-    <div class="flex-grow grid grid-cols-1 gap-4 sm:gap-6 min-h-0 md:grid-cols-2">
+    <div
+      class="flex-grow grid grid-cols-1 gap-4 sm:gap-6 min-h-0 md:grid-cols-2"
+    >
       <!-- 左側：輸入面板 -->
       <PlanInputPanel
         :all-configs="allConfigs"
         v-model:userInput="userInput"
         :dynamic-inputs="dynamicInputs"
+        :initial-template-id="selectedTemplateId"
         @update:dynamic-inputs="(newVal) => (dynamicInputs = newVal)"
         :is-generating="isLoading"
         :mode="'generator'"
@@ -46,7 +55,9 @@
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <h3 class="mt-3 sm:mt-4 text-base sm:text-lg font-medium text-gray-700">準備開始創作</h3>
+        <h3 class="mt-3 sm:mt-4 text-base sm:text-lg font-medium text-gray-700">
+          準備開始創作
+        </h3>
         <p class="mt-1 text-xs sm:text-sm text-gray-500">
           請在左側面板填寫您的專案想法，點擊生成後，結果將會顯示於此。
         </p>
@@ -92,13 +103,11 @@ const allConfigs = ref([]);
 
 watchEffect(() => {
   const sections = currentSections.value;
-  console.log("hi", sections);
   if (!sections || sections.length === 0) {
     dynamicInputs.value = [];
     return;
   }
   const groupedInputs = [];
-  console.log("l;alaal");
   sections.forEach((section) => {
     const sectionInputs = [];
     if (section.json_schema && section.json_schema.properties) {

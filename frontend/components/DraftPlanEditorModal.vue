@@ -5,7 +5,7 @@
     @click.self="close"
   >
     <div
-      class="bg-gray-50 w-full max-w-3xl h-[96vh] sm:w-[95vw] sm:h-[95vh] rounded-lg shadow-xl flex flex-col p-2 sm:p-4"
+      class="bg-gray-50 w-full h-[96vh] sm:w-[95vw] sm:h-[95vh] rounded-lg shadow-xl flex flex-col p-2 sm:p-4"
     >
       <header
         class="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 pb-2 sm:pb-4 border-b"

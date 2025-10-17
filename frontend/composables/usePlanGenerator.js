@@ -126,6 +126,7 @@ export function usePlanGenerator() {
       !selectedTemplateId.value
     ) {
       selectedTemplateId.value = newTemplates[0].id;
+      console.log("hi", selectedTemplateId.value);
     }
   });
 

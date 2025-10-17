@@ -1,7 +1,13 @@
 <template>
-  <div class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col">
-    <h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-4">生成結果 (可編輯)</h2>
-    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+  <div
+    class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
+  >
+    <h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-4">
+      生成結果 (可編輯)
+    </h2>
+    <div
+      class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6"
+    >
       <!-- 從文件載入 -->
       <button
         v-if="mode === 'golden'"
@@ -98,9 +104,14 @@
     >
       請在左側選擇模板以查看章節。
     </div>
-  <div v-else class="flex-grow space-y-6 sm:space-y-8 overflow-y-auto pr-1 sm:pr-2">
+    <div
+      v-else
+      class="flex-grow space-y-6 sm:space-y-8 overflow-y-auto pr-1 sm:pr-2"
+    >
       <div v-for="section in sections" :key="section.id">
-        <div class="p-3 sm:p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg">
+        <div
+          class="p-3 sm:p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg"
+        >
           <h3 class="text-base sm:text-lg font-semibold text-gray-800">
             {{ section.name }}
           </h3>
@@ -122,7 +133,10 @@
             @update:modelValue="updateSectionContent(section.id, $event)"
           />
           <!-- 等待生成狀態 -->
-          <div v-else class="text-gray-400 italic p-2 sm:p-3 text-sm sm:text-base">
+          <div
+            v-else
+            class="text-gray-400 italic p-2 sm:p-3 text-sm sm:text-base"
+          >
             等待生成或內容無效...
           </div>
         </div>
