@@ -259,6 +259,7 @@ async function saveChanges() {
     }
 
     success("所有設定已成功保存!");
+    emit("close");
   } catch (error) {
     console.error("保存過程中發生錯誤:", error);
   }

@@ -220,10 +220,10 @@ import { useConfirm } from "~/composables/useConfirm";
 const { confirm } = useConfirm();
 const isSaving = ref(false);
 const error = ref(null);
+const { allConfigs } = usePlanGenerator();
 
 const isModalVisible = ref(false);
 const currentDataset = ref(null);
-const allConfigs = ref([]);
 const filters = reactive({
   grantId: "",
   templateId: "",
@@ -316,17 +316,6 @@ async function fetchDatasets() {
   }
 }
 
-// --- Fetch config for dropdowns ---
-async function fetchConfig() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/config`);
-    if (!response.ok) throw new Error("Failed to load configs for filters.");
-    allConfigs.value = await response.json();
-  } catch (e) {
-    console.error(e.message);
-  }
-}
-
 // --- Reset filters ---
 function resetFilters() {
   filters.grantId = "";
@@ -357,7 +346,6 @@ watch(
 watch(filters, fetchDatasets, { deep: true });
 
 onMounted(() => {
-  fetchConfig(); // Load dropdown data
   fetchDatasets(); // Load initial table data
 });
 

@@ -18,7 +18,7 @@
       <!-- 左側：輸入面板 -->
       <PlanInputPanel
         :all-configs="allConfigs"
-        v-model:userInput="userInput"
+        v-model="userInput"
         :dynamic-inputs="dynamicInputs"
         :initial-template-id="selectedTemplateId"
         @update:dynamic-inputs="(newVal) => (dynamicInputs = newVal)"
@@ -93,13 +93,13 @@ const {
   dynamicInputs,
   planContent,
   currentSections,
+  allConfigs,
   buildFinalUserInput,
   onSelectionChange,
 } = usePlanGenerator();
 
 const showCandidateModal = ref(false);
 const candidatePlan = ref({});
-const allConfigs = ref([]);
 
 watchEffect(() => {
   const sections = currentSections.value;
@@ -130,18 +130,6 @@ watchEffect(() => {
     }
   });
   dynamicInputs.value = groupedInputs;
-});
-
-onMounted(async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/config`);
-
-    if (!response.ok) throw new Error("Network response was not ok");
-    allConfigs.value = await response.json();
-  } catch (error) {
-    console.error("Failed to load config:", error);
-    errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
-  }
 });
 
 function onCandidateConfirm({ selected, rejected }) {

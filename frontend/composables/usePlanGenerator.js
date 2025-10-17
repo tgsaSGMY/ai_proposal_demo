@@ -129,14 +129,8 @@ export function usePlanGenerator() {
   });
 
   onMounted(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/config`);
-
-      if (!response.ok) throw new Error("Network response was not ok");
-      allConfigs.value = await response.json();
-    } catch (error) {
-      console.error("Failed to load config:", error);
-      errorNotification("無法加載應用配置，請檢查後端服務是否運行。");
+    if (allConfigs.value.length === 0) {
+      await fetchAllConfigs();
     }
   });
 
@@ -159,6 +153,6 @@ export function usePlanGenerator() {
     // Methods
     buildFinalUserInput,
     onSelectionChange,
-    fetchAllConfigs, // 也暴露出来，以防需要手动刷新
+    fetchAllConfigs,
   };
 }

@@ -3,6 +3,7 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
+from fastapi import Request
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +13,6 @@ from collections import defaultdict
 import logging
 import time
 from app.utils.token_calculator import calculate_openai_tokens
-
 
 logger = logging.getLogger(__name__)
 from app.config import (
@@ -438,6 +438,7 @@ class SupabaseService:
 
     async def update_section_settings(
         self, 
+        request: Request,
         section_id: str, 
         custom_prompt_list: List[str], 
         system_prompt: Optional[str] = None,
@@ -449,9 +450,10 @@ class SupabaseService:
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:
-                update_data["system_prompt"] = system_prompt
+                update_data["system_prompt"] = system_prompt 
 
             response = self.client.from_("sections").update(update_data).eq("id", section_id).execute()
+            request.app.state.all_grants_config = await self.get_all_grants_config()
             
             return len(response.data) > 0
         except Exception as e:

@@ -53,12 +53,14 @@ async def set_routing_rule(
 
 @router.put("/sections/{section_id}/prompts", status_code=200, summary="更新章節的自定義指令列表")
 async def update_section_prompts_endpoint(
+    request: Request,
     section_id: str, 
     request_data: UpdateSectionSettingsRequest,
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
     """更新指定章節的自定義提示詞列表。"""
     success = await supabase_service.update_section_settings(
+        request,
         section_id, 
         request_data.custom_prompt_list, 
         request_data.system_prompt, 
