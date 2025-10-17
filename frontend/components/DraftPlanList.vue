@@ -2,14 +2,17 @@
 <template>
   <div>
     <!-- Filter Controls -->
-    <div class="mb-4 flex items-center gap-4">
+    <div class="mb-6 flex flex-col md:flex-row items-center gap-3 md:gap-4">
       <input
         type="text"
         v-model="searchTerm"
         placeholder="搜索企劃名稱..."
-        class="input-class w-full max-w-xs"
+        class="w-full max-w-xs px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 transition"
       />
-      <select v-model="filterMode" class="select-class">
+      <select
+        v-model="filterMode"
+        class="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 transition"
+      >
         <option value="">所有模式</option>
         <option value="synthetic">AI 生成</option>
         <option value="golden">手動標注</option>
@@ -20,24 +23,29 @@
     <!-- Drafts Grid -->
     <div
       v-if="filteredDrafts.length > 0"
-      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
     >
       <div
         v-for="draft in filteredDrafts"
         :key="draft.id"
-        class="bg-white shadow rounded-lg p-4 border-l-4 relative"
-        :class="getStatusBorderColor(draft.status)"
+        class="group bg-white shadow-lg rounded-2xl pl-4 pr-5 py-5 border border-gray-100 hover:shadow-2xl hover:border-indigo-300 transition relative cursor-pointer overflow-hidden"
         @click="openDraft(draft)"
+        style="min-height: 120px"
       >
-        <div class="flex justify-left items-start cursor-pointer">
-          <h3 class="font-bold truncate pr-3">{{ draft.name }}</h3>
-        </div>
+        <!-- 狀態色條 (z-10) -->
+        <div
+          :class="[
+            'absolute left-0 top-0 h-full w-2 rounded-l-2xl z-10 bg-black',
+            getStatusBorderColor(draft.status),
+          ]"
+        ></div>
 
-        <!-- Menu Icon -->
-        <div class="absolute top-3 right-3">
+        <!-- 右上角操作菜單 (z-30) -->
+        <div class="absolute top-3 right-3 z-30">
           <button
             @click.stop="toggleMenu(draft.id)"
-            class="text-gray-500 hover:text-gray-800 p-1 rounded-full"
+            class="text-gray-400 hover:text-indigo-600 p-1 rounded-full transition"
+            title="更多操作"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -45,68 +53,98 @@
               viewBox="0 0 20 20"
               fill="currentColor"
             >
-              <path
-                d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"
-              />
+              <circle cx="10" cy="4" r="1.5" />
+              <circle cx="10" cy="10" r="1.5" />
+              <circle cx="10" cy="16" r="1.5" />
             </svg>
           </button>
-          <!-- Dropdown Menu -->
-          <div
-            v-if="activeMenu === draft.id"
-            class="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg z-10"
-          >
-            <ul class="py-1">
-              <li>
-                <a
-                  href="#"
-                  @click.stop.prevent="emitRename(draft)"
-                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >重命名</a
-                >
-              </li>
-              <li>
-                <a
-                  href="#"
-                  @click.stop.prevent="emitDelete(draft)"
-                  class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >刪除</a
-                >
-              </li>
-            </ul>
-          </div>
+          <transition name="fade">
+            <div
+              v-if="activeMenu === draft.id"
+              class="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-xl border border-gray-100 z-40 animate-fade-in"
+            >
+              <ul class="py-2">
+                <li>
+                  <a
+                    href="#"
+                    @click.stop.prevent="emitRename(draft)"
+                    class="block px-5 py-2 text-sm text-gray-700 hover:bg-indigo-50 rounded-md transition"
+                    >重命名</a
+                  >
+                </li>
+                <li>
+                  <a
+                    href="#"
+                    @click.stop.prevent="emitDelete(draft)"
+                    class="block px-5 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition"
+                    >刪除</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </transition>
         </div>
 
-        <div @click="openDraft(draft)" class="cursor-pointer">
-          <div class="mt-2 text-sm flex items-center gap-2">
-            <span class="font-medium text-gray-600">狀態:</span>
+        <!-- 卡片內容 (z-20) -->
+        <div class="flex flex-col gap-2 min-h-[110px] relative z-20">
+          <div class="flex items-center gap-2 mb-1 pr-8">
+            <h3 class="font-bold text-lg text-gray-800 truncate flex-1">
+              {{ draft.name }}
+            </h3>
             <span
-              :class="getStatusTextColor(draft.status)"
-              class="font-semibold"
-              >{{ getStatusText(draft.status) }}</span
+              class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200 ml-1 whitespace-nowrap"
+              :class="getModeTypeClass(draft.mode)"
+              style="position: relative; z-index: 20"
+              >{{ modeMap(draft.mode) }}</span
             >
           </div>
-          <span
-            class="text-sm font-mono text-gray-600 flex-shrink-0"
-            :class="getModeTypeClass(draft.mode)"
-            >類型:{{ modeMap(draft.mode) }}</span
-          >
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs font-medium text-gray-500">狀態</span>
+            <span
+              :class="getStatusTextColor(draft.status)"
+              class="text-xs font-bold tracking-wide"
+              >{{ getStatusText(draft.status) }}</span
+            >
+            <span
+              v-if="draft.status === 'error'"
+              class="ml-2 text-xs text-red-500"
+              >失敗</span
+            >
+          </div>
           <div class="text-xs text-gray-400 mt-1">
-            更新于: {{ new Date(draft.updated_at).toLocaleString() }}
+            更新於 {{ new Date(draft.updated_at).toLocaleString() }}
           </div>
           <div
             v-if="
               draft.status === 'generating_idea' ||
               draft.status === 'generating_plan'
             "
-            class="w-full bg-gray-200 rounded-full h-1.5 mt-3"
+            class="w-full bg-gray-200 rounded-full h-1.5 mt-2"
           >
-            <div class="bg-blue-600 h-1.5 rounded-full animate-pulse"></div>
+            <div class="bg-blue-500 h-1.5 rounded-full animate-pulse"></div>
           </div>
         </div>
       </div>
     </div>
-    <div v-else class="text-center py-10 bg-white rounded-lg shadow">
-      <p class="text-gray-500">没有找到符合条件的企划草稿。</p>
+    <div
+      v-else
+      class="text-center py-12 bg-white rounded-2xl shadow-lg border border-gray-100"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="mx-auto h-12 w-12 text-gray-200 mb-3"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+      </svg>
+      <p class="text-gray-400 text-base">没有找到符合條件的企劃草稿。</p>
     </div>
   </div>
 </template>
@@ -172,11 +210,11 @@ const filteredDrafts = computed(() => {
 
 function getStatusBorderColor(status) {
   const map = {
-    completed: "border-green-500",
-    generating_idea: "border-blue-500",
-    generating_plan: "border-blue-500",
-    pending: "border-gray-400",
-    error: "border-red-500",
+    completed: "bg-green-500",
+    generating_idea: "bg-blue-500",
+    generating_plan: "bg-blue-500",
+    pending: "bg-gray-400",
+    error: "bg-red-500",
   };
   return map[status] || "border-gray-300";
 }
