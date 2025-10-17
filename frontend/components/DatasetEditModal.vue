@@ -147,7 +147,6 @@ watch(
   () => props.dataset,
   (newVal) => {
     if (newVal) {
-      console.log("Loading dataset for editing:", newVal);
       editableData.id = newVal.id;
       editableData.prompt = newVal.prompt || "";
       editableData.source_type = newVal.source_type || "synthetic_data";

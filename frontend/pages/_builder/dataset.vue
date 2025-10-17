@@ -204,7 +204,6 @@ onMounted(async () => {
       "postgres_changes",
       { event: "*", schema: "public", table: "draft_plans" },
       (payload) => {
-        console.log("Realtime change received!", payload);
         fetchDrafts();
       }
     )
@@ -218,7 +217,6 @@ onUnmounted(() => {
 });
 
 function openEditor(draft) {
-  console.log("hi");
   // Make sure user_input and plan_content are valid objects
   if (!draft.user_input) draft.user_input = {};
   if (!draft.plan_content) draft.plan_content = {};

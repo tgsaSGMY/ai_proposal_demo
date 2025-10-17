@@ -191,8 +191,6 @@ async function savePreferenceData(selectedData, rejectedData) {
       }).then((response) => {
         if (response.status !== 202) {
           console.error("後台保存偏好數據失敗。");
-        } else {
-          console.log("偏好數據已在後台成功提交。");
         }
       });
     }

@@ -252,7 +252,6 @@ function handleSettingsUpdated(payload) {
 watch(availableTemplates, (newTemplates) => {
   if (newTemplates && newTemplates.length === 1 && !selectedTemplateId.value) {
     selectedTemplateId.value = newTemplates[0].id;
-    console.log("hi", selectedTemplateId.value);
   }
 });
 </script>

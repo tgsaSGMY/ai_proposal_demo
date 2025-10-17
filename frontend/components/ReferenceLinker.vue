@@ -1,9 +1,11 @@
 <template>
-  <div class="space-y-3 sm:space-y-4 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50">
-  <label class="block text-xs sm:text-sm font-medium text-gray-700"
+  <div
+    class="space-y-3 sm:space-y-4 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50"
+  >
+    <label class="block text-xs sm:text-sm font-medium text-gray-700"
       >智能參考資料 (選填)</label
     >
-  <p class="text-[10px] sm:text-xs text-gray-500">
+    <p class="text-[10px] sm:text-xs text-gray-500">
       新增相關網頁連結，系統將自動抓取內容並由 AI
       提煉重點，為您的計劃書生成提供更豐富的上下文。
     </p>
@@ -11,11 +13,11 @@
     <div
       v-for="(link, index) in links"
       :key="index"
-      class="flex flex-col xs:flex-row items-stretch xs:items-center gap-1 xs:gap-2"
+      class="flex items-center gap-2"
     >
       <!-- 狀態指示器 -->
       <div
-        class="flex-shrink-0 w-4 h-4 rounded-full mb-1 xs:mb-0"
+        class="flex-shrink-0 w-4 h-4 rounded-full"
         :class="getStatusClass(link.status)"
         :title="getStatusTitle(link.status)"
       ></div>
@@ -26,12 +28,12 @@
         :value="link.url"
         @input="updateLink(index, 'url', $event.target.value)"
         placeholder="https://example.com"
-        class="flex-grow w-full rounded-md border-gray-300 shadow-sm text-xs sm:text-sm px-2 py-1"
+        class="flex-grow rounded-md border-gray-300 shadow-sm text-xs sm:text-sm px-2 py-1"
         :disabled="link.status === 'loading'"
       />
 
       <!-- 操作按鈕 -->
-  <div class="flex-shrink-0 flex items-center gap-1 mt-1 xs:mt-0">
+      <div class="flex-shrink-0 flex items-center gap-1 mt-1 xs:mt-0">
         <!-- 搜索按鈕 -->
         <button
           @click="$emit('analyze', index)"

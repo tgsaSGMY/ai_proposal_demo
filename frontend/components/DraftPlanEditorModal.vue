@@ -111,7 +111,6 @@ const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
 onMounted(async () => {
   await fetchAllConfigs();
   // Force Composable state to match the draft's config
-  console.log("Initializing editor modal with draft:", props.draft);
   selectedGrantId.value = props.draft.grant_id;
   selectedTemplateId.value = props.draft.template_id;
   planContent.value = props.draft.plan_content;
@@ -131,8 +130,6 @@ const mainIdea = computed({
 
 // This computed property merges the template structure (dynamicInputs) with actual values from the draft
 const dynamicInputsWithValues = computed(() => {
-  console.log("Recomputing dynamicInputsWithValues");
-  console.log(currentSections.value);
   if (!currentSections.value || currentSections.value.length === 0) {
     return [];
   }
@@ -185,8 +182,6 @@ const saveUpdatesToDb = async () => {
 
     if (!res.ok) {
       console.error(`Failed to auto-save draft ${props.draft.id}`);
-    } else {
-      console.log(`Draft ${props.draft.id} auto-saved.`);
     }
   } catch (err) {
     console.error("Auto-save failed:", err);
@@ -240,7 +235,6 @@ function onSelectionChangeInModal(selection) {
 }
 
 function onCandidateConfirm({ selected, rejected }) {
-  console.log(selected, rejected);
   const newPlanContent = {};
   for (const [sectionId, candidate] of Object.entries(selected)) {
     if (candidate && candidate.content) {
@@ -249,7 +243,6 @@ function onCandidateConfirm({ selected, rejected }) {
       newPlanContent[sectionId] = { error: candidate?.error || "No content" };
     }
   }
-  console.log(newPlanContent);
   planContent.value = newPlanContent;
   showCandidateModal.value = false;
   saveUpdatesToDb();
@@ -319,7 +312,6 @@ async function handleGeneratePlanInModal(outerPayload) {
     }
 
     const rawData = await response.json();
-    console.log(rawData);
 
     const processedCandidates = {};
     for (const sectionId in rawData) {
@@ -380,7 +372,6 @@ async function handleGenerateUserInput() {
     });
 
     const data = await response.json();
-    console.log(dynamicInputsWithValues.value);
 
     // 處理返回的結構化數據
     if (data.main_idea) {

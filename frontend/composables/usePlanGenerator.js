@@ -26,7 +26,6 @@ export function usePlanGenerator() {
     const template = availableTemplates.value.find(
       (t) => t.id === selectedTemplateId.value
     );
-    console.log(availableTemplates.value);
     return template ? template.sections : [];
   });
 
@@ -126,7 +125,6 @@ export function usePlanGenerator() {
       !selectedTemplateId.value
     ) {
       selectedTemplateId.value = newTemplates[0].id;
-      console.log("hi", selectedTemplateId.value);
     }
   });
 

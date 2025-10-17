@@ -195,12 +195,10 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted } from "vue";
+import { ref, watch, computed } from "vue";
 const referenceLinks = ref([]);
-import { useNotifications } from "~/composables/useNotifications";
 
 const modelValue = defineModel();
-// modelValue: { type: String, required: true },
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
@@ -260,7 +258,6 @@ const isReadyToGenerate = computed(() => {
 });
 
 watch([selectedGrantId, selectedTemplateId], () => {
-  console.log(selectedGrantId.value, selectedTemplateId.value);
   if (
     selectedGrantId.value !== props.initialGrantId ||
     selectedTemplateId.value !== props.initialTemplateId

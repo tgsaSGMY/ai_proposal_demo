@@ -10,7 +10,9 @@
         class="bg-white rounded-2xl shadow-2xl w-full max-w-lg sm:max-w-2xl md:max-w-4xl lg:max-w-6xl max-h-[85vh] overflow-hidden flex flex-col"
       >
         <!-- Header -->
-  <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b p-3 sm:p-4 bg-gray-100 gap-2 sm:gap-0">
+        <div
+          class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center border-b p-3 sm:p-4 bg-gray-100 gap-2 sm:gap-0"
+        >
           <div>
             <h2 class="text-base sm:text-xl font-semibold text-gray-800">
               選擇最佳生成結果
@@ -37,13 +39,15 @@
         </div>
 
         <!-- Content -->
-  <div class="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+        <div class="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           <div
             v-for="section in sections"
             :key="section.id"
             class="bg-white border rounded-xl shadow-sm p-3 sm:p-4"
           >
-            <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-start mb-2 sm:mb-3 gap-1 sm:gap-0">
+            <div
+              class="flex flex-col sm:flex-row justify-between items-stretch sm:items-start mb-2 sm:mb-3 gap-1 sm:gap-0"
+            >
               <div>
                 <h3 class="font-bold text-base sm:text-lg text-gray-800">
                   {{ section.title || section.name || section.id }}
@@ -83,7 +87,10 @@
                   >
                 </div>
 
-                <div v-if="candidate.error" class="text-red-600 text-xs sm:text-sm mb-2">
+                <div
+                  v-if="candidate.error"
+                  class="text-red-600 text-xs sm:text-sm mb-2"
+                >
                   ⚠️ {{ candidate.error }}
                 </div>
 
@@ -169,8 +176,6 @@ watch(
   () => props.visible,
   (v) => {
     if (v) {
-      console.log("PlanCandidateSelector opened, resetting selections.");
-      console.log(props.sections, props.candidatePlan);
       // 初始化 selected：若 candidatePlan 有候選則預設第一個
       for (const sec of props.sections) {
         const list = props.candidatePlan[sec.id];

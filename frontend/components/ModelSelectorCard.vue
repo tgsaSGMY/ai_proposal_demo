@@ -59,7 +59,9 @@
 
         <!-- 模型列表 -->
         <!-- 注意：内部模型暫時關閉，等未來擁有足夠多的數據在訓練模型 -->
-  <div class="max-h-80 overflow-y-auto pr-1 sm:pr-2 space-y-2 sm:space-y-3">
+        <div
+          class="max-h-80 overflow-y-auto pr-1 sm:pr-2 space-y-2 sm:space-y-3"
+        >
           <div v-if="false && activeTab === 'internal'">
             <div
               v-for="model in internalModels"
@@ -161,7 +163,9 @@
         </div>
       </div>
 
-      <div class="p-4 sm:p-6 bg-gray-50 rounded-b-2xl flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:gap-4">
+      <div
+        class="p-4 sm:p-6 bg-gray-50 rounded-b-2xl flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:gap-4"
+      >
         <button
           @click="$emit('close')"
           class="px-4 sm:px-6 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -265,7 +269,6 @@ async function handleSaveSettings(updatedSettings) {
   if (!updatedSettings) return;
 
   isSavingSettings.value = true;
-  console.log("Saving prompt settings:", updatedSettings);
   try {
     const response = await fetch(
       `${API_BASE_URL}/sections/${props.section.id}/prompts`,

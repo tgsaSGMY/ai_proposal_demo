@@ -30,12 +30,11 @@ async def generate_plan(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
 ):
-    """主功能 -> 生成完整计划书，可生成多候选版本"""
+    """主功能 -> 生成完整計劃書，可生成多候选版本"""
     if not request_data.sections:
         raise HTTPException(status_code=400, detail="No sections provided to generate.")
 
     app_state = request.app.state
-    print(request_data.user_input)
     num_candidates = getattr(request_data, "num_candidates", 1)
 
     async with httpx.AsyncClient() as client:
