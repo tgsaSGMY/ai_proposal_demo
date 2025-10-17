@@ -1,23 +1,27 @@
 <template>
   <div
     v-if="show"
-    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center"
+    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center p-2 sm:p-0"
     @click.self="$emit('close')"
   >
     <div
-      class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200"
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-xs sm:max-w-2xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-200"
     >
       <!-- Header -->
       <header
-        class="p-5 border-b bg-gradient-to-r from-indigo-50 to-white flex items-center justify-between"
+        class="p-3 sm:p-5 border-b bg-gradient-to-r from-indigo-50 to-white flex items-center justify-between"
       >
-        <h2 class="text-lg font-semibold text-gray-800">
+        <h2
+          class="text-base sm:text-lg font-semibold text-gray-800 break-words max-w-[70vw] sm:max-w-none"
+        >
           ✏️ 編輯數據點 #{{ dataset.id }}
         </h2>
       </header>
 
       <!-- Main content -->
-      <main class="p-6 space-y-5 overflow-y-auto text-gray-700 bg-gray-50/60">
+      <main
+        class="p-3 sm:p-6 space-y-3 sm:space-y-5 overflow-y-auto text-gray-700 bg-gray-50/60"
+      >
         <!-- Source Type -->
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2"
@@ -25,7 +29,7 @@
           >
           <select
             v-model="editableData.source_type"
-            class="w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 transition-all duration-150"
+            class="w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 text-sm sm:text-base transition-all duration-150"
           >
             <option value="golden_samples">黃金樣本</option>
             <option value="synthetic_data">合成資料</option>
@@ -40,8 +44,8 @@
           >
           <textarea
             v-model="editableData.prompt"
-            rows="6"
-            class="w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 transition-all duration-150"
+            rows="4"
+            class="w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 text-sm sm:text-base transition-all duration-150"
           ></textarea>
         </div>
 
@@ -52,8 +56,8 @@
           >
           <textarea
             v-model="editableData.final_answer_str"
-            rows="12"
-            class="w-full font-mono text-sm rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 transition-all duration-150"
+            rows="8"
+            class="w-full font-mono text-xs sm:text-sm rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 transition-all duration-150"
             :class="{ 'border-red-500 ring-2 ring-red-400': jsonError }"
           ></textarea>
           <p v-if="jsonError" class="mt-1 text-xs text-red-600">
@@ -64,18 +68,18 @@
 
       <!-- Footer -->
       <footer
-        class="flex-shrink-0 p-4 bg-gradient-to-r from-gray-100 to-gray-50 border-t flex justify-end gap-3"
+        class="flex-shrink-0 p-3 sm:p-4 bg-gradient-to-r from-gray-100 to-gray-50 border-t flex flex-col sm:flex-row justify-end gap-2 sm:gap-3"
       >
         <button
           @click="$emit('close')"
-          class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all duration-150"
+          class="px-3 sm:px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm sm:text-base transition-all duration-150"
         >
           取消
         </button>
         <button
           @click="handleSave"
           :disabled="isSaving"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 flex items-center gap-2 transition-all duration-150 shadow-sm"
+          class="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 flex items-center gap-2 text-sm sm:text-base transition-all duration-150 shadow-sm"
         >
           {{ isSaving ? "保存中..." : "保存更改" }}
         </button>

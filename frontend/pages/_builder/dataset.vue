@@ -1,19 +1,13 @@
 <template>
-  <div class="p-4 md:p-8">
+  <div class="p-4 sm:p-6 md:p-8">
     <header
-      class="mb-6 flex justify-between items-center bg-white p-4 rounded-lg shadow-sm"
+      class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 sm:p-4 rounded-lg shadow-sm gap-3 sm:gap-0"
     >
-      <h1 class="text-2xl font-bold text-gray-800">數據生產工作室</h1>
-      <div class="flex gap-2">
-        <button @click="isBatchModalVisible = true" class="btn-primary">
-          🤖 批量 AI 生成
-        </button>
-        <button @click="handleCreateDraft('golden')" class="btn-secondary">
-          🏆 新建手動標註
-        </button>
-        <button @click="handleCreateDraft('internal')" class="btn-secondary">
-          📝 新建生成企劃
-        </button>
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">數據生產工作室</h1>
+      <div class="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
+        <button @click="isBatchModalVisible = true" class="btn-primary w-full xs:w-auto">🤖 批量 AI 生成</button>
+        <button @click="handleCreateDraft('golden')" class="btn-secondary w-full xs:w-auto">🏆 新建手動標註</button>
+        <button @click="handleCreateDraft('internal')" class="btn-secondary w-full xs:w-auto">📝 新建生成企劃</button>
       </div>
     </header>
 
@@ -22,6 +16,7 @@
       @select="openEditor"
       @rename="handleRenameDraft"
       @delete="handleDeleteDraft"
+      class="mt-4 sm:mt-6"
     />
 
     <BatchSyntheticModal
@@ -29,6 +24,7 @@
       :all-configs="allConfigs"
       @close="isBatchModalVisible = false"
       @start="handleBatchStart"
+      class="z-50"
     />
 
     <DraftPlanEditorModal
@@ -37,6 +33,7 @@
       :all-configs="allConfigs"
       @close="selectedDraft = null"
       @save-to-dataset="handleSaveToFinalDataset"
+      class="z-50"
     />
     <InputPromptModal
       :visible="isInputModalVisible"
@@ -45,6 +42,7 @@
       :defaultValue="inputModalDefaultValue"
       @submit="handleInputModalSubmit"
       @cancel="handleInputModalCancel"
+      class="z-50"
     />
   </div>
 </template>

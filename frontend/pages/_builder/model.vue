@@ -1,15 +1,17 @@
 <template>
-  <div class="py-10 px-4">
-    <div class="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-8">
-      <h1 class="text-3xl font-bold text-gray-800 text-center mb-2">
+  <div class="py-6 px-2 sm:px-4 md:py-10 md:px-8">
+    <div
+      class="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8"
+    >
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 text-center mb-2">
         模型配置中心
       </h1>
-      <p class="text-center text-gray-500 mb-8">
-        為不同的計畫書章節分配最適合的 AI 模型。
+      <p class="text-center text-gray-500 mb-6 sm:mb-8">
+        為不同的計劃書章節分配最適合的 AI 模型。
       </p>
 
       <!-- 選擇器 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+      <div class="grid grid-cols-1 gap-4 sm:gap-6 mb-8 sm:mb-10 md:grid-cols-2">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2"
             >1. 選擇主題 (Grant)</label
@@ -51,18 +53,24 @@
       </div>
 
       <!-- 章節列表 -->
-      <div v-if="selectedTemplateId" class="space-y-4">
-        <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">
+      <div v-if="selectedTemplateId" class="space-y-3 sm:space-y-4">
+        <h2
+          class="text-lg sm:text-xl font-semibold text-gray-700 border-b pb-2 mb-3 sm:mb-4"
+        >
           章節模型配置
         </h2>
         <div
           v-for="section in currentSections"
           :key="section.id"
-          class="p-4 border rounded-lg flex justify-between items-center bg-gray-50 hover:shadow-md transition-shadow"
+          class="p-3 sm:p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 hover:shadow-md transition-shadow"
         >
-          <p class="font-medium text-gray-800">{{ section.name }}</p>
-          <div class="flex items-center gap-4">
-            <div class="text-right">
+          <p class="font-medium text-gray-800 mb-2 sm:mb-0">
+            {{ section.name }}
+          </p>
+          <div
+            class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto"
+          >
+            <div class="text-left sm:text-right">
               <span class="text-sm font-semibold text-indigo-700">{{
                 getAppliedModelForSection(section.id)?.display_name || "未指定"
               }}</span>
@@ -82,7 +90,10 @@
           </div>
         </div>
       </div>
-      <div v-else-if="selectedGrantId" class="text-center py-12 text-gray-500">
+      <div
+        v-else-if="selectedGrantId"
+        class="text-center py-8 sm:py-12 text-gray-500"
+      >
         請選擇一個模板以查看其章節。
       </div>
     </div>

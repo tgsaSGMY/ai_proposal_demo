@@ -3,19 +3,19 @@
     v-if="visible"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
   >
-    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
-      <h2 class="text-lg font-semibold mb-2">{{ title }}</h2>
-      <p v-if="message" class="mb-4 text-gray-600">{{ message }}</p>
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-xs sm:max-w-sm">
+      <h2 class="text-base sm:text-lg font-semibold mb-2">{{ title }}</h2>
+      <p v-if="message" class="mb-2 sm:mb-4 text-gray-600 text-xs sm:text-base">{{ message }}</p>
       <input
         v-model="inputValue"
         :placeholder="placeholder"
-        class="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring"
+        class="w-full border border-gray-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 mb-3 sm:mb-4 focus:outline-none focus:ring text-xs sm:text-base"
         @keyup.enter="submit"
         autofocus
       />
-      <div class="flex justify-end gap-2">
-        <button @click="cancel" class="btn-secondary">取消</button>
-        <button @click="submit" class="btn-primary">确定</button>
+      <div class="flex justify-end gap-1 sm:gap-2">
+        <button @click="cancel" class="btn-secondary text-xs sm:text-base">取消</button>
+        <button @click="submit" class="btn-primary text-xs sm:text-base">确定</button>
       </div>
     </div>
   </div>

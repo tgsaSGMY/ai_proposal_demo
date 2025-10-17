@@ -1,43 +1,43 @@
 <template>
-  <div class="space-y-8">
+  <div class="space-y-6 sm:space-y-8">
     <!-- System Prompt 編輯區 -->
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-2"
+      <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
         >系統提示 (System Prompt)</label
       >
       <textarea
         v-model="editableData.system_prompt"
         rows="8"
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        class="w-full border border-gray-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none bg-white [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       ></textarea>
     </div>
     <!-- Custom Prompts 編輯區 -->
     <div>
-      <label class="block text-sm font-medium text-gray-700 mb-2"
+      <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
         >客製化指令 (Custom Prompts)</label
       >
-      <div class="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+      <div class="p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-2 sm:space-y-3">
         <div
           v-if="
             editableData.custom_prompt_list &&
             editableData.custom_prompt_list.length > 0
           "
-          class="space-y-2"
+          class="space-y-1 sm:space-y-2"
         >
           <div
             v-for="(prompt, index) in editableData.custom_prompt_list"
             :key="index"
-            class="flex items-center gap-2"
+            class="flex items-center gap-1 sm:gap-2"
           >
             <input
               type="text"
               v-model="editableData.custom_prompt_list[index]"
               placeholder="輸入指令..."
-              class="flex-grow border border-gray-300 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              class="flex-grow border border-gray-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
             />
             <button
               @click="deletePrompt(index)"
-              class="p-2 text-red-500 hover:bg-red-100 rounded-lg transition"
+              class="p-1.5 sm:p-2 text-red-500 hover:bg-red-100 rounded-lg transition text-xs sm:text-base"
             >
               刪除
             </button>
@@ -45,7 +45,7 @@
         </div>
         <button
           @click="addPrompt"
-          class="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition"
+          class="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition"
         >
           新增指令
         </button>

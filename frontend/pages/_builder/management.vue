@@ -1,6 +1,6 @@
 <template>
   <div class="p-4 md:p-8">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">數據庫管理</h1>
+      <h1 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">數據庫管理</h1>
     <!-- Filter Section -->
     <div class="mb-6 p-4 bg-white rounded-lg shadow-md">
       <div

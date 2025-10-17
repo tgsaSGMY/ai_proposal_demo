@@ -1,14 +1,91 @@
 <template>
-  <div class="flex min-h-screen bg-gray-100 font-sans">
+  <div class="min-h-screen bg-gray-100 font-sans flex flex-col md:flex-row">
+    <!-- Mobile nav -->
+    <header
+      class="md:hidden bg-gray-800 text-white flex items-center justify-between px-4 py-3 sticky top-0 z-40"
+    >
+      <div class="font-semibold text-lg">
+        AI 計畫書平台 <span class="text-xs text-gray-400 align-top">v0.1</span>
+      </div>
+      <button @click="showSidebar = !showSidebar" class="focus:outline-none">
+        <svg
+          v-if="!showSidebar"
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-7 w-7"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
+        <svg
+          v-else
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-7 w-7"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </header>
+
     <!-- 側邊欄 -->
     <aside
-      class="w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col p-4 sticky top-0 h-screen overflow-y-auto"
+      :class="[
+        showSidebar ? 'block' : 'hidden',
+        'md:block',
+        'w-full md:w-64 flex-shrink-0 bg-gray-800 text-white flex flex-col p-0 md:p-4',
+        showSidebar
+          ? 'fixed top-0 left-0 h-full z-50 overflow-y-auto md:static md:h-screen md:overflow-y-auto md:z-30'
+          : '',
+        !showSidebar
+          ? 'md:sticky md:top-0 md:h-screen md:overflow-y-auto md:z-30'
+          : '',
+      ]"
+      style="max-width: 100vw"
     >
-      <div class="text-center py-4 mb-6">
+      <!-- mobile sticky nav bar -->
+      <div
+        v-if="showSidebar"
+        class="md:hidden sticky top-0 bg-gray-800 z-50 flex items-center justify-between px-4 py-3 border-b border-gray-700"
+      >
+        <div class="font-semibold text-lg">
+          AI 計畫書平台
+          <span class="text-xs text-gray-400 align-top">v0.1</span>
+        </div>
+        <button @click="showSidebar = false" class="focus:outline-none">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-7 w-7"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="text-center py-4 mb-6 hidden md:block">
         <h2 class="text-xl font-semibold">AI 計畫書平台</h2>
         <span class="text-xs text-gray-400">v0.1</span>
       </div>
-
       <nav class="flex-grow">
         <ul>
           <li>
@@ -16,6 +93,7 @@
               to="/"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
               active-class="bg-indigo-600 text-white"
+              @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -37,6 +115,7 @@
               to="/_builder/model"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
               active-class="bg-indigo-600 text-white"
+              @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -56,6 +135,7 @@
               to="/_builder/dataset"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
               active-class="bg-indigo-600 text-white"
+              @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -75,6 +155,7 @@
               to="/_builder/management"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
               active-class="bg-indigo-600 text-white"
+              @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -94,10 +175,20 @@
     </aside>
 
     <!-- 主内容區 -->
-    <main class="flex-1 overflow-y-auto h-screen">
+    <main
+      class="flex-1 overflow-y-auto min-h-screen px-2 py-4 sm:px-4 md:px-8 lg:px-12 xl:px-16"
+    >
       <slot />
     </main>
   </div>
 </template>
 
-<script setup></script>
+<script setup>
+import { ref } from "vue";
+const showSidebar = ref(false);
+function handleNavClick() {
+  if (window.innerWidth < 768) {
+    showSidebar.value = false;
+  }
+}
+</script>

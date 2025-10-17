@@ -2,16 +2,16 @@
 <template>
   <div>
     <!-- Filter Controls -->
-    <div class="mb-6 flex flex-col md:flex-row items-center gap-3 md:gap-4">
+    <div class="mb-4 sm:mb-6 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
       <input
         type="text"
         v-model="searchTerm"
         placeholder="搜索企劃名稱..."
-        class="w-full max-w-xs px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 transition"
+        class="w-full max-w-full sm:max-w-xs px-3 sm:px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 text-sm sm:text-base transition"
       />
       <select
         v-model="filterMode"
-        class="px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 transition"
+        class="w-full max-w-full sm:w-auto px-3 sm:px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 text-sm sm:text-base transition"
       >
         <option value="">所有模式</option>
         <option value="synthetic">AI 生成</option>
@@ -23,14 +23,13 @@
     <!-- Drafts Grid -->
     <div
       v-if="filteredDrafts.length > 0"
-      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
     >
       <div
         v-for="draft in filteredDrafts"
         :key="draft.id"
-        class="group bg-white shadow-lg rounded-2xl pl-4 pr-5 py-5 border border-gray-100 hover:shadow-2xl hover:border-indigo-300 transition relative cursor-pointer overflow-hidden"
+        class="group bg-white shadow-lg rounded-2xl pl-3 pr-4 py-4 sm:pl-4 sm:pr-5 sm:py-5 border border-gray-100 hover:shadow-2xl hover:border-indigo-300 transition relative cursor-pointer overflow-hidden min-h-[110px] sm:min-h-[120px]"
         @click="openDraft(draft)"
-        style="min-height: 120px"
       >
         <!-- 狀態色條 (z-10) -->
         <div
@@ -86,32 +85,32 @@
         </div>
 
         <!-- 卡片內容 (z-20) -->
-        <div class="flex flex-col gap-2 min-h-[110px] relative z-20">
-          <div class="flex items-center gap-2 mb-1 pr-8">
-            <h3 class="font-bold text-lg text-gray-800 truncate flex-1">
+        <div class="flex flex-col gap-1 sm:gap-2 min-h-[90px] sm:min-h-[110px] relative z-20">
+          <div class="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 pr-6 sm:pr-8">
+            <h3 class="font-bold text-base sm:text-lg text-gray-800 truncate flex-1">
               {{ draft.name }}
             </h3>
             <span
-              class="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200 ml-1 whitespace-nowrap"
+              class="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200 ml-1 whitespace-nowrap"
               :class="getModeTypeClass(draft.mode)"
               style="position: relative; z-index: 20"
               >{{ modeMap(draft.mode) }}</span
             >
           </div>
-          <div class="flex items-center gap-2 mt-1">
-            <span class="text-xs font-medium text-gray-500">狀態</span>
+          <div class="flex items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
+            <span class="text-[10px] sm:text-xs font-medium text-gray-500">狀態</span>
             <span
               :class="getStatusTextColor(draft.status)"
-              class="text-xs font-bold tracking-wide"
+              class="text-[10px] sm:text-xs font-bold tracking-wide"
               >{{ getStatusText(draft.status) }}</span
             >
             <span
               v-if="draft.status === 'error'"
-              class="ml-2 text-xs text-red-500"
+              class="ml-1 sm:ml-2 text-[10px] sm:text-xs text-red-500"
               >失敗</span
             >
           </div>
-          <div class="text-xs text-gray-400 mt-1">
+          <div class="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">
             更新於 {{ new Date(draft.updated_at).toLocaleString() }}
           </div>
           <div
@@ -119,20 +118,20 @@
               draft.status === 'generating_idea' ||
               draft.status === 'generating_plan'
             "
-            class="w-full bg-gray-200 rounded-full h-1.5 mt-2"
+            class="w-full bg-gray-200 rounded-full h-1 mt-1 sm:h-1.5 sm:mt-2"
           >
-            <div class="bg-blue-500 h-1.5 rounded-full animate-pulse"></div>
+            <div class="bg-blue-500 h-1 rounded-full animate-pulse sm:h-1.5"></div>
           </div>
         </div>
       </div>
     </div>
     <div
       v-else
-      class="text-center py-12 bg-white rounded-2xl shadow-lg border border-gray-100"
+      class="text-center py-8 sm:py-12 bg-white rounded-2xl shadow-lg border border-gray-100"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        class="mx-auto h-12 w-12 text-gray-200 mb-3"
+        class="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-200 mb-2 sm:mb-3"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -144,7 +143,7 @@
           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
         />
       </svg>
-      <p class="text-gray-400 text-base">没有找到符合條件的企劃草稿。</p>
+      <p class="text-gray-400 text-sm sm:text-base">没有找到符合條件的企劃草稿。</p>
     </div>
   </div>
 </template>

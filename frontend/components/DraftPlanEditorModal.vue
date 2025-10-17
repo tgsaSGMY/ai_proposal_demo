@@ -1,28 +1,38 @@
 <!-- /components/DraftPlanEditorModal.vue -->
 <template>
   <div
-    class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center"
+    class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-2 sm:p-0"
     @click.self="close"
   >
     <div
-      class="bg-gray-50 w-[95vw] h-[95vh] rounded-lg shadow-xl flex flex-col p-4"
+      class="bg-gray-50 w-full max-w-3xl h-[96vh] sm:w-[95vw] sm:h-[95vh] rounded-lg shadow-xl flex flex-col p-2 sm:p-4"
     >
       <header
-        class="flex-shrink-0 flex justify-between items-center mb-4 pb-4 border-b"
+        class="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 pb-2 sm:pb-4 border-b"
       >
-        <h2 class="text-xl font-bold text-gray-800">
+        <h2
+          class="text-lg sm:text-xl font-bold text-gray-800 break-words max-w-xs sm:max-w-none"
+        >
           {{ editableDraft.name }}
         </h2>
-        <div>
-          <button @click="handleSaveToDataset" class="btn-primary">
+        <div class="mt-2 sm:mt-0 flex flex-row gap-2">
+          <button
+            @click="handleSaveToDataset"
+            class="btn-primary text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
+          >
             保存至最终数据集
           </button>
-          <button @click="close" class="btn-secondary ml-2">关闭</button>
+          <button
+            @click="close"
+            class="btn-secondary ml-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
+          >
+            关闭
+          </button>
         </div>
       </header>
 
       <div
-        class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0 overflow-y-scroll"
+        class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 min-h-0 overflow-y-scroll"
       >
         <PlanInputPanel
           :all-configs="allConfigs"
