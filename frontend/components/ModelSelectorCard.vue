@@ -43,6 +43,17 @@
             >
               模型選擇
             </button>
+            <button
+              @click="activeTab = 'prompt'"
+              :class="[
+                'px-6 py-2 text-sm font-medium rounded-md transition',
+                activeTab === 'prompt'
+                  ? 'bg-white shadow text-indigo-600'
+                  : 'text-gray-600 hover:bg-gray-200',
+              ]"
+            >
+              章節編輯
+            </button>
           </div>
         </div>
 
@@ -136,31 +147,21 @@
               暫無外部模型
             </p>
           </div>
+          <div v-if="activeTab === 'prompt'">
+            <SectionSettingsPanel
+              ref="settingsPanelRef"
+              :sectionData="{
+                sectionName: section.name,
+                system_prompt: section.system_prompt,
+                custom_prompt_list: section.custom_prompt_list,
+              }"
+              :is-saving="isSavingSettings"
+            />
+          </div>
         </div>
       </div>
 
       <div class="p-6 bg-gray-50 rounded-b-2xl flex justify-end space-x-4">
-        <div>
-          <button
-            @click="isSettingsModalVisible = true"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-          >
-            <svg
-              class="h-5 w-5 text-gray-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L16.732 3.732z"
-              />
-            </svg>
-            編輯章節 Prompt
-          </button>
-        </div>
         <button
           @click="$emit('close')"
           class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -170,28 +171,17 @@
         <button
           @click="saveChanges"
           class="px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300"
-          :disabled="!selectedModelId || selectedModelId === currentModelId"
         >
           儲存變更
         </button>
       </div>
     </div>
   </div>
-  <SectionSettingsModal
-    :show="isSettingsModalVisible"
-    :sectionData="{
-      sectionName: section.name,
-      system_prompt: section.system_prompt,
-      custom_prompt_list: section.custom_prompt_list,
-    }"
-    :is-saving="isSavingSettings"
-    @close="isSettingsModalVisible = false"
-    @save="handleSaveSettings"
-  />
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref } from "vue";
+import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
 
 const props = defineProps({
   section: { type: Object, required: true },
@@ -203,8 +193,6 @@ const props = defineProps({
 
 const emit = defineEmits(["close", "save", "settings-updated"]);
 
-// --- 控制 SectionSettingsModal 的新狀態 ---
-const isSettingsModalVisible = ref(false);
 const isSavingSettings = ref(false);
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
@@ -212,6 +200,7 @@ const { success } = useNotifications();
 
 const activeTab = ref("internal");
 const selectedModelId = ref(null);
+const settingsPanelRef = ref(null);
 
 // 計算當前規則應用的模型ID
 const currentModelId = computed(() => props.currentRule?.model_id);
@@ -241,23 +230,42 @@ onMounted(() => {
   }
 });
 
-function saveChanges() {
-  if (!selectedModelId.value) return;
-  const newRulePayload = {
-    grant_id: props.grantId || null,
-    template_id: props.templateId || null,
-    section_id: props.section.id,
-    model_id: selectedModelId.value,
-    priority: 20,
-    description: `Rule for section: ${props.section.name}`,
-  };
-  emit("save", newRulePayload);
+async function saveChanges() {
+  try {
+    // 1. 如果有模型選擇變更，儲存模型選擇
+    if (
+      selectedModelId.value &&
+      selectedModelId.value !== currentModelId.value
+    ) {
+      const newRulePayload = {
+        grant_id: props.grantId || null,
+        template_id: props.templateId || null,
+        section_id: props.section.id,
+        model_id: selectedModelId.value,
+        priority: 20,
+        description: `Rule for section: ${props.section.name}`,
+      };
+      emit("save", newRulePayload);
+    }
+
+    // 2. 如果在 prompt 編輯頁面或者有可能編輯過 prompt，儲存 prompt 設定
+    if (settingsPanelRef.value) {
+      const updatedSettings = settingsPanelRef.value.getEditableData();
+      await handleSaveSettings(updatedSettings);
+    }
+
+    success("所有設定已成功保存!");
+  } catch (error) {
+    console.error("保存過程中發生錯誤:", error);
+  }
 }
 
 // ---處理 Prompt 保存的新函數 ---
 async function handleSaveSettings(updatedSettings) {
+  if (!updatedSettings) return;
+
   isSavingSettings.value = true;
-  console.log(updatedSettings);
+  console.log("Saving prompt settings:", updatedSettings);
   try {
     const response = await fetch(
       `${API_BASE_URL}/sections/${props.section.id}/prompts`,
@@ -278,9 +286,10 @@ async function handleSaveSettings(updatedSettings) {
     });
 
     success("Prompt 設定已成功保存！");
-    isSettingsModalVisible.value = false;
   } catch (err) {
-    showError(err.message);
+    console.error("保存 Prompt 設定錯誤:", err);
+    const { error } = useNotifications();
+    error(err.message);
   } finally {
     isSavingSettings.value = false;
   }

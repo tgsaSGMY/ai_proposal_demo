@@ -38,10 +38,65 @@
       @close="selectedDraft = null"
       @save-to-dataset="handleSaveToFinalDataset"
     />
+    <InputPromptModal
+      :visible="isInputModalVisible"
+      :title="inputModalTitle"
+      :message="inputModalMessage"
+      :defaultValue="inputModalDefaultValue"
+      @submit="handleInputModalSubmit"
+      @cancel="handleInputModalCancel"
+    />
   </div>
 </template>
 
 <script setup>
+// Modal submit/cancel handlers
+async function handleInputModalSubmit(value) {
+  isInputModalVisible.value = false;
+  if (!value || !value.trim()) return;
+  if (inputModalMode === "rename" && inputModalDraft) {
+    // Rename draft
+    if (value === inputModalDraft.name) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/draft_plans/${inputModalDraft.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: value }),
+        }
+      );
+      if (!response.ok)
+        throw new Error("重命名失败: " + (await response.text()));
+      success(`企划已重命名为 "${value}"`);
+      fetchDrafts();
+    } catch (e) {
+      errorNotification(e.message);
+    }
+  } else if (inputModalMode === "create" && inputModalDraft) {
+    // Create draft
+    try {
+      const response = await fetch(`${API_BASE_URL}/draft_plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: value, mode: inputModalDraft }),
+      });
+      if (!response.ok)
+        throw new Error("创建草稿失败: " + (await response.text()));
+      const newDraft = await response.json();
+      success(`已创建草稿 "${newDraft.name}"`);
+      drafts.value.unshift(newDraft);
+    } catch (e) {
+      errorNotification(e.message);
+    }
+  }
+  inputModalDraft = null;
+}
+
+function handleInputModalCancel() {
+  isInputModalVisible.value = false;
+  inputModalDraft = null;
+}
 import { ref, onMounted, onUnmounted } from "vue";
 import { supabase } from "~/utils/supabaseClient";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
@@ -49,6 +104,16 @@ import { useNotifications } from "~/composables/useNotifications";
 import DraftPlanList from "~/components/DraftPlanList.vue";
 import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
 import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
+
+import InputPromptModal from "~/components/InputPromptModal.vue";
+
+// Modal state for renaming and creating drafts
+const isInputModalVisible = ref(false);
+const inputModalTitle = ref("");
+const inputModalMessage = ref("");
+const inputModalDefaultValue = ref("");
+let inputModalMode = ""; // 'rename' or 'create'
+let inputModalDraft = null;
 
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
@@ -79,23 +144,12 @@ const sectionsForSelectedDraft = computed(() => {
 });
 
 async function handleRenameDraft(draft) {
-  const newName = prompt("请输入新的企划名称:", draft.name);
-  if (!newName || !newName.trim() || newName === draft.name) {
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/draft_plans/${draft.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName }),
-    });
-    if (!response.ok) throw new Error("重命名失败: " + (await response.text()));
-    success(`企划已重命名为 "${newName}"`);
-    fetchDrafts();
-  } catch (e) {
-    errorNotification(e.message);
-  }
+  inputModalTitle.value = "重命名企划";
+  inputModalMessage.value = "请输入新的企划名称:";
+  inputModalDefaultValue.value = draft.name;
+  inputModalMode = "rename";
+  inputModalDraft = draft;
+  isInputModalVisible.value = true;
 }
 
 async function handleDeleteDraft(draft) {
@@ -160,26 +214,14 @@ function openEditor(draft) {
 }
 
 async function handleCreateDraft(mode) {
-  const name = prompt(
-    `请输入新的企划名称 (${mode === "golden" ? "手动标注" : "生成企划"})：`
-  );
-  if (!name || !name.trim()) return;
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/draft_plans`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, mode }),
-    });
-    if (!response.ok)
-      throw new Error("创建草稿失败: " + (await response.text()));
-    const newDraft = await response.json();
-    success(`已创建草稿 "${newDraft.name}"`);
-    // Realtime should update the list, but we can also add it manually for immediate feedback
-    drafts.value.unshift(newDraft);
-  } catch (e) {
-    errorNotification(e.message);
-  }
+  inputModalTitle.value = "新建企划";
+  inputModalMessage.value = `请输入新的企划名称 (${
+    mode === "golden" ? "手动标注" : "生成企划"
+  })：`;
+  inputModalDefaultValue.value = "";
+  inputModalMode = "create";
+  inputModalDraft = mode;
+  isInputModalVisible.value = true;
 }
 
 async function handleBatchStart(payload) {

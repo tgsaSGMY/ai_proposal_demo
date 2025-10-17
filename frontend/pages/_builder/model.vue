@@ -233,7 +233,7 @@ function handleSettingsUpdated(payload) {
       const section = template.sections.find((s) => s.id === payload.sectionId);
       if (section) {
         section.system_prompt = payload.system_prompt;
-        section.custom_prompt_list = payload.prompts;
+        section.custom_prompt_list = payload.custom_prompt_list;
       }
     }
   }

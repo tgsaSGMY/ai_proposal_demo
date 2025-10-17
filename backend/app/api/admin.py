@@ -60,9 +60,10 @@ async def update_section_prompts_endpoint(
     """更新指定章節的自定義提示詞列表。"""
     success = await supabase_service.update_section_settings(
         section_id, 
-        request_data.prompts, 
+        request_data.custom_prompt_list, 
         request_data.system_prompt, 
     )
+    
     if not success:
         raise HTTPException(status_code=404, detail="Section not found or update failed.")
     return {"message": "Section settings updated successfully."}

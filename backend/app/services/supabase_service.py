@@ -72,7 +72,6 @@ class SupabaseService:
         sections_by_template = defaultdict(list)
         for s_data in sections_data:
             sections_by_template[(s_data['template_id'], s_data['grant_id'])].append(SectionConfig(**s_data))
-
         templates_by_grant = defaultdict(list)
         for t_data in templates_data:
             template_id_tuple = (t_data['id'], t_data['grant_id'])
@@ -443,13 +442,13 @@ class SupabaseService:
     async def update_section_settings(
         self, 
         section_id: str, 
-        prompts: List[str], 
+        custom_prompt_list: List[str], 
         system_prompt: Optional[str] = None,
     ) -> bool:
         """更新指定 section 的 system_prompt, source_type 和 custom_prompt_list"""
         try:
             update_data = {
-                "custom_prompt_list": prompts,
+                "custom_prompt_list": custom_prompt_list,
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:

@@ -112,7 +112,7 @@ class RoutingRule(BaseModel):
 
 # --- 定義 source_type 的可用選項 ---
 class UpdateSectionSettingsRequest(BaseModel):
-    prompts: List[str]
+    custom_prompt_list: List[str]
     system_prompt: Optional[str] = None
 
 
