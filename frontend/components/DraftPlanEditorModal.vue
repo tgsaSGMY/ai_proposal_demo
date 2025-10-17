@@ -38,7 +38,6 @@
           @generatePlan="handleGeneratePlanInModal"
           @generateUserInput="handleGenerateUserInput"
         />
-        {{ editableDraft.grant_id }} - {{ editableDraft.template_id }}
         <PlanOutputPanel
           :plan-content="planContent"
           :sections="currentSections"
@@ -246,10 +245,20 @@ function onCandidateConfirm({ selected, rejected }) {
   success("已選擇方案並填充到結果中！");
 }
 
+function handleAutoFillInModal(filledContent) {
+  if (!planContent.value) planContent.value = {};
+  Object.assign(planContent.value, filledContent);
+  debounceSave();
+}
+
+function onContentUpdateInModal({ sectionId, content }) {
+  if (!planContent.value) planContent.value = {};
+  planContent.value[sectionId] = { content };
+  debounceSave();
+}
+
 function buildFinalUserInputForGeneration(summaries = []) {
   let finalInput = `核心想法: ${editableDraft.user_input?.main_idea || ""}\n\n`;
-
-  console.log(dynamicInputsWithValues.value.flatMap((g) => g.inputs));
   const additionalDetails = dynamicInputsWithValues.value
     .flatMap((g) => g.inputs)
     .filter((input) => input.key && String(input.value).trim() !== "")
@@ -265,7 +274,6 @@ function buildFinalUserInputForGeneration(summaries = []) {
     finalInput += `\n\n--- 額外參考資料重點 ---\n${summariesText}`;
   }
 
-  console.log(finalInput);
   return finalInput;
 }
 
@@ -278,7 +286,7 @@ async function handleGeneratePlanInModal(outerPayload) {
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries
     );
-    const sectionsToGenerate = props.currentSections.map((s) => ({
+    const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
 
@@ -313,10 +321,10 @@ async function handleGeneratePlanInModal(outerPayload) {
 
     candidatePlan.value = processedCandidates;
     showCandidateModal.value = true; // 显示选择模态框
-    success("计划书已生成!");
+    success("計劃書已生成!");
     debounceSave();
   } catch (e) {
-    errorNotification(`生成失败: ${e.message}`);
+    errorNotification(`生成失敗: ${e.message}`);
   } finally {
     isGeneratingPlan.value = false;
   }
@@ -343,7 +351,7 @@ async function handleGenerateUserInput() {
       mode: editableDraft.mode === "golden" ? "reverse" : "random",
       grant_name: currentGrant.value.name,
       template_name: currentTemplate.value.name,
-      section_name: props.currentSections[0]?.name || "general",
+      section_name: currentSections.value[0]?.name || "general",
       json_output: editableDraft.mode === "golden" ? flattened : null,
       // 傳遞動態字段的 schema
       dynamic_fields_schema:

@@ -22,8 +22,6 @@
 </template>
 
 <script setup>
-import { ref, watch, defineProps, defineEmits } from "vue";
-
 const props = defineProps({
   visible: Boolean,
   title: { type: String, default: "请输入" },

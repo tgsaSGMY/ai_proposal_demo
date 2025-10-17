@@ -87,11 +87,10 @@
                   ⚠️ {{ candidate.error }}
                 </div>
 
-                <p
-                  class="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"
-                >
-                  {{ candidate.content || "(無內容)" }}
-                </p>
+                <div
+                  class="prose max-w-none text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"
+                  v-html="generateHtmlForCandidate(section, candidate.content)"
+                ></div>
 
                 <div
                   v-if="candidate.metadata"
@@ -152,6 +151,7 @@
 
 <script setup>
 import { reactive, computed, watch } from "vue";
+import { renderPlanToHtml } from "~/utils/exportToWord";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -169,6 +169,8 @@ watch(
   () => props.visible,
   (v) => {
     if (v) {
+      console.log("PlanCandidateSelector opened, resetting selections.");
+      console.log(props.sections, props.candidatePlan);
       // 初始化 selected：若 candidatePlan 有候選則預設第一個
       for (const sec of props.sections) {
         const list = props.candidatePlan[sec.id];
@@ -246,6 +248,28 @@ function confirmSelection() {
   emit("confirm", { selected: finalSelected, rejected: finalRejected });
 
   emit("close"); // 您可以决定是在确认后自动关闭，还是让父组件来控制
+}
+
+function generateHtmlForCandidate(section, candidateContent) {
+  if (!section || !section.id || !candidateContent) {
+    return '<p class="text-gray-500 italic">（無內容）</p>';
+  }
+
+  const singleSectionArray = [
+    {
+      id: section.id,
+      name: section.title || section.name || section.id,
+      json_schema: section.json_schema,
+    },
+  ];
+
+  const formattedPlanContent = {
+    [section.id]: {
+      content: candidateContent,
+    },
+  };
+
+  return renderPlanToHtml(singleSectionArray, formattedPlanContent);
 }
 </script>
 
