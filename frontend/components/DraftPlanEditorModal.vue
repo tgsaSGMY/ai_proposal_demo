@@ -72,6 +72,7 @@
 import { ref, reactive, watch, onUnmounted, computed, onMounted } from "vue";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
+import { useLoading } from "~/composables/useLoading";
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
@@ -88,7 +89,7 @@ const props = defineProps({
 });
 const emit = defineEmits(["close", "save-to-dataset"]);
 
-const { isLoading } = useLoading();
+const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
@@ -172,11 +173,6 @@ const saveUpdatesToDb = async () => {
       .forEach((input) => {
         dynamic_fields[input.key] = input.value;
       });
-    console.log(dynamic_fields);
-    console.log(
-      "Before save, user_input:",
-      editableDraft.user_input.dynamic_fields
-    );
     editableDraft.user_input.dynamic_fields = dynamic_fields;
 
     const payload = {
@@ -215,7 +211,6 @@ function close() {
   emit("close");
 }
 function handleSaveToDataset() {
-  console.log(editableDraft);
   const finalInputs = buildFinalUserInputForGeneration();
   editableDraft.plan_content = planContent.value;
   emit("save-to-dataset", editableDraft, finalInputs);
@@ -301,6 +296,7 @@ const candidatePlan = ref({});
 
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
+  showLoading();
   try {
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries
@@ -345,6 +341,7 @@ async function handleGeneratePlanInModal(outerPayload) {
     errorNotification(`生成失敗: ${e.message}`);
   } finally {
     isGeneratingPlan.value = false;
+    hideLoading();
   }
 }
 
