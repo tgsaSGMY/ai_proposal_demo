@@ -252,7 +252,7 @@ async function handleBatchStart(payload) {
   }
 }
 
-async function handleSaveToFinalDataset(draftToSave) {
+async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   const { plan_content, user_input, grant_id, template_id, mode } = draftToSave;
 
   if (!plan_content || Object.keys(plan_content).length === 0) {
@@ -280,7 +280,7 @@ async function handleSaveToFinalDataset(draftToSave) {
           grant_id: grant_id,
           template_id: template_id,
           section_id: section.id,
-          prompt: user_input?.main_idea || "",
+          prompt: finalInputs || "",
           final_answer: content,
         };
       })

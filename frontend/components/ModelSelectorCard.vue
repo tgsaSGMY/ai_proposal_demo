@@ -247,7 +247,7 @@ async function saveChanges() {
         section_id: props.section.id,
         model_id: selectedModelId.value,
         priority: 20,
-        description: `Rule for section: ${props.section.name}`,
+        description: `特定模型配置`,
       };
       emit("save", newRulePayload);
     }

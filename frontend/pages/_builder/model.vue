@@ -3,12 +3,47 @@
     <div
       class="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8"
     >
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 text-center mb-2">
-        模型配置中心
-      </h1>
-      <p class="text-center text-gray-500 mb-6 sm:mb-8">
-        為不同的計劃書章節分配最適合的 AI 模型。
-      </p>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
+            模型配置中心
+          </h1>
+          <p class="text-gray-500">
+            為不同的計劃書章節分配最適合的 AI 模型。
+          </p>
+        </div>
+        <button
+          @click="refreshConfigurations"
+          :disabled="isRefreshing"
+          class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 transition flex items-center gap-2 whitespace-nowrap"
+        >
+          <svg
+            v-if="!isRefreshing"
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 1119.778 6.897 1 1 0 11-1.992-.316A5.002 5.002 0 005.099 5.99H7a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.901 14.1H13a1 1 0 110-2h3a1 1 0 011 1v2.101a1 1 0 11-2 0v-2.101a7.002 7.002 0 11-19.778-6.897 1 1 0 111.992.316A5.002 5.002 0 0014.901 5.9H13a1 1 0 110-2h3a1 1 0 011 1v2.101a1 1 0 11-2 0V5.99a7.002 7.002 0 01-12.893 5.067z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          {{ isRefreshing ? "刷新中..." : "刷新配置" }}
+        </button>
+      </div>
 
       <!-- 選擇器 -->
       <div class="grid grid-cols-1 gap-4 sm:gap-6 mb-8 sm:mb-10 md:grid-cols-2">
@@ -74,9 +109,12 @@
                 getAppliedModelForSection(section.id)?.display_name || "未指定"
               }}</span>
               <p class="text-xs text-gray-500">
-                {{
+                <!-- {{
                   getAppliedRuleForSection(section.id)?.description ||
                   "使用全局默認"
+                }} -->
+                {{
+                  getAppliedModelForSection(section.id)?.description || "未指定"
                 }}
               </p>
             </div>
@@ -127,6 +165,7 @@ const selectedGrantId = ref("");
 const selectedTemplateId = ref("");
 const selectedSection = ref(null);
 const isModalOpen = ref(false);
+const isRefreshing = ref(false);
 
 // --- Computed Properties ---
 const availableTemplates = computed(() => {
@@ -168,6 +207,31 @@ async function fetchData() {
 }
 
 onMounted(fetchData);
+
+// --- Refresh Configuration ---
+async function refreshConfigurations() {
+  isRefreshing.value = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/config/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Failed to refresh configurations");
+    }
+
+    // 重新加載所有數據
+    await fetchData();
+    success("配置已成功刷新！");
+  } catch (error) {
+    console.error("Failed to refresh configurations:", error);
+    errorNotification(`刷新失敗: ${error.message}`);
+  } finally {
+    isRefreshing.value = false;
+  }
+}
 
 // --- Logic & Methods ---
 function getAppliedRuleForSection(sectionId) {

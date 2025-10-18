@@ -143,8 +143,7 @@ const dynamicInputsWithValues = computed(() => {
           id: `${section.id}-${key}`,
           key: key,
           label: prop.description || key.replace("_", " "),
-          value:
-            editableDraft.user_input?.dynamic_fields?.[prop.description] || "",
+          value: editableDraft.user_input?.dynamic_fields?.[key] || "",
         });
       });
     }
@@ -166,6 +165,20 @@ let saveTimer = null;
 
 const saveUpdatesToDb = async () => {
   try {
+    // Build dynamic_fields from dynamicInputsWithValues
+    const dynamic_fields = {};
+    dynamicInputsWithValues.value
+      .flatMap((g) => g.inputs)
+      .forEach((input) => {
+        dynamic_fields[input.key] = input.value;
+      });
+    console.log(dynamic_fields);
+    console.log(
+      "Before save, user_input:",
+      editableDraft.user_input.dynamic_fields
+    );
+    editableDraft.user_input.dynamic_fields = dynamic_fields;
+
     const payload = {
       name: editableDraft.name,
       grant_id: editableDraft.grant_id,
@@ -202,8 +215,10 @@ function close() {
   emit("close");
 }
 function handleSaveToDataset() {
+  console.log(editableDraft);
+  const finalInputs = buildFinalUserInputForGeneration();
   editableDraft.plan_content = planContent.value;
-  emit("save-to-dataset", editableDraft);
+  emit("save-to-dataset", editableDraft, finalInputs);
 }
 
 function updateMainIdea(value) {

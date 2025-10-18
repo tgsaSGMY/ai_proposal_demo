@@ -1,7 +1,7 @@
 // 通用 map 定義
 const MODE_MAP = {
   golden: { label: "黃金範例", class: "bg-yellow-200 text-yellow-900" },
-  internal: { label: "生成企劃", class: "bg-emerald-200 text-emerald-900" },
+  internal: { label: "生成企劃", class: "bg-green-200 text-green-900" },
   synthetic: { label: "AI生成", class: "bg-sky-200 text-sky-900" },
 };
 
