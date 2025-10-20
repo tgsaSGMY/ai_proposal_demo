@@ -186,6 +186,7 @@
 <script setup>
 import { ref } from "vue";
 import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
+const { success } = useNotifications();
 
 const props = defineProps({
   section: { type: Object, required: true },
