@@ -6,7 +6,7 @@ from pathlib import Path
 load_dotenv()
 
 # Supabase 配置
-SUPABASE_URL = os.getenv("SUPABASE_URL") # 整个 Supabase 项目的 REST / Realtime / Auth 服务的根 URL
+SUPABASE_URL = os.getenv("SUPABASE_URL") 
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 SUPABASE_BUCKET_NAME = "datasets" # Supabase Storage Bucket 名稱
 
