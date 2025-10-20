@@ -20,13 +20,13 @@
             @click="handleSaveToDataset"
             class="btn-primary text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
           >
-            保存至最终数据集
+            保存至最終數據集
           </button>
           <button
             @click="close"
             class="btn-secondary ml-2 text-sm sm:text-base px-3 sm:px-4 py-1.5 sm:py-2"
           >
-            关闭
+            關閉
           </button>
         </div>
       </header>
@@ -208,6 +208,7 @@ onUnmounted(() => {
 
 // --- Event Handlers ---
 function close() {
+  saveUpdatesToDb();
   emit("close");
 }
 function handleSaveToDataset() {
