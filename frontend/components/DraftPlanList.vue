@@ -2,7 +2,9 @@
 <template>
   <div>
     <!-- Filter Controls -->
-    <div class="mb-4 sm:mb-6 flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+    <div
+      class="mb-4 sm:mb-6 flex flex-col sm:flex-row items-center gap-2 sm:gap-4"
+    >
       <input
         type="text"
         v-model="searchTerm"
@@ -23,7 +25,7 @@
     <!-- Drafts Grid -->
     <div
       v-if="filteredDrafts.length > 0"
-      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6"
     >
       <div
         v-for="draft in filteredDrafts"
@@ -85,9 +87,15 @@
         </div>
 
         <!-- 卡片內容 (z-20) -->
-        <div class="flex flex-col gap-1 sm:gap-2 min-h-[90px] sm:min-h-[110px] relative z-20">
-          <div class="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 pr-6 sm:pr-8">
-            <h3 class="font-bold text-base sm:text-lg text-gray-800 truncate flex-1">
+        <div
+          class="flex flex-col gap-1 sm:gap-2 min-h-[90px] sm:min-h-[110px] relative z-20"
+        >
+          <div
+            class="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 pr-6 sm:pr-8"
+          >
+            <h3
+              class="font-bold text-base sm:text-lg text-gray-800 truncate flex-1"
+            >
               {{ draft.name }}
             </h3>
             <span
@@ -98,7 +106,9 @@
             >
           </div>
           <div class="flex items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
-            <span class="text-[10px] sm:text-xs font-medium text-gray-500">狀態</span>
+            <span class="text-[10px] sm:text-xs font-medium text-gray-500"
+              >狀態</span
+            >
             <span
               :class="getStatusTextColor(draft.status)"
               class="text-[10px] sm:text-xs font-bold tracking-wide"
@@ -120,7 +130,9 @@
             "
             class="w-full bg-gray-200 rounded-full h-1 mt-1 sm:h-1.5 sm:mt-2"
           >
-            <div class="bg-blue-500 h-1 rounded-full animate-pulse sm:h-1.5"></div>
+            <div
+              class="bg-blue-500 h-1 rounded-full animate-pulse sm:h-1.5"
+            ></div>
           </div>
         </div>
       </div>
@@ -143,7 +155,9 @@
           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
         />
       </svg>
-      <p class="text-gray-400 text-sm sm:text-base">没有找到符合條件的企劃草稿。</p>
+      <p class="text-gray-400 text-sm sm:text-base">
+        没有找到符合條件的企劃草稿。
+      </p>
     </div>
   </div>
 </template>
