@@ -62,6 +62,29 @@
 </template>
 
 <script setup>
+// SEO 配置
+useHead({
+  title: "數據生產工作室 - AI 計畫書平台",
+  meta: [
+    {
+      name: "description",
+      content: "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯，建立高品質計畫書數據集。",
+    },
+    {
+      name: "keywords",
+      content: "數據生產,AI 生成,標註,企劃,工作室",
+    },
+    {
+      property: "og:title",
+      content: "數據生產工作室 - AI 計畫書平台",
+    },
+    {
+      property: "og:description",
+      content: "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯。",
+    },
+  ],
+});
+
 // Modal submit/cancel handlers
 async function handleInputModalSubmit(value) {
   isInputModalVisible.value = false;

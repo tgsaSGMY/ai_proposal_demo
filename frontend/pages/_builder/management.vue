@@ -207,6 +207,29 @@
 </template>
 
 <script setup>
+// SEO 配置
+useHead({
+  title: "數據庫管理 - AI 計畫書平台",
+  meta: [
+    {
+      name: "description",
+      content: "管理和編輯計畫書數據集。支持按主題、模板、章節過濾，批量操作數據。",
+    },
+    {
+      name: "keywords",
+      content: "數據庫,數據管理,編輯,過濾,計畫書",
+    },
+    {
+      property: "og:title",
+      content: "數據庫管理 - AI 計畫書平台",
+    },
+    {
+      property: "og:description",
+      content: "管理和編輯計畫書數據集。支持按主題、模板、章節過濾。",
+    },
+  ],
+});
+
 import { ref, onMounted, reactive, watch, computed } from "vue";
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";

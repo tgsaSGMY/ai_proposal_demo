@@ -80,6 +80,33 @@ import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
 
+// SEO 配置
+useHead({
+  title: "AI 計畫書生成器 - 專業提案一鍵生成",
+  meta: [
+    {
+      name: "description",
+      content: "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
+    },
+    {
+      name: "keywords",
+      content: "計畫書,AI 生成,提案,企劃書,自動化",
+    },
+    {
+      property: "og:title",
+      content: "AI 計畫書生成器 - 專業提案一鍵生成",
+    },
+    {
+      property: "og:description",
+      content: "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
+    },
+    {
+      property: "og:type",
+      content: "website",
+    },
+  ],
+});
+
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();

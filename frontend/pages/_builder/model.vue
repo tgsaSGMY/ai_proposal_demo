@@ -154,6 +154,30 @@
 import { ref, onMounted, computed } from "vue";
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
 import { useNotifications } from "~/composables/useNotifications";
+
+// SEO 配置
+useHead({
+  title: "模型配置中心 - AI 計畫書平台",
+  meta: [
+    {
+      name: "description",
+      content: "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
+    },
+    {
+      name: "keywords",
+      content: "模型配置,AI 模型,路由規則,計畫書",
+    },
+    {
+      property: "og:title",
+      content: "模型配置中心 - AI 計畫書平台",
+    },
+    {
+      property: "og:description",
+      content: "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
+    },
+  ],
+});
+
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
