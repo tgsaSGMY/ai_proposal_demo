@@ -207,9 +207,11 @@ onUnmounted(() => {
 });
 
 // --- Event Handlers ---
-function close() {
-  saveUpdatesToDb();
+async function close() {
+  showLoading();
+  await saveUpdatesToDb();
   emit("close");
+  hideLoading();
 }
 function handleSaveToDataset() {
   const finalInputs = buildFinalUserInputForGeneration();

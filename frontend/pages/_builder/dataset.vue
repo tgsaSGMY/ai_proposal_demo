@@ -68,7 +68,8 @@ useHead({
   meta: [
     {
       name: "description",
-      content: "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯，建立高品質計畫書數據集。",
+      content:
+        "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯，建立高品質計畫書數據集。",
     },
     {
       name: "keywords",
@@ -132,14 +133,14 @@ function handleInputModalCancel() {
   isInputModalVisible.value = false;
   inputModalDraft = null;
 }
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { supabase } from "~/utils/supabaseClient";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
+import { useConfirm } from "~/composables/useConfirm";
 import DraftPlanList from "~/components/DraftPlanList.vue";
 import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
 import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
-
 import InputPromptModal from "~/components/InputPromptModal.vue";
 
 // Modal state for renaming and creating drafts
@@ -151,6 +152,7 @@ let inputModalMode = ""; // 'rename' or 'create'
 let inputModalDraft = null;
 
 const { success, error: errorNotification } = useNotifications();
+const { confirm } = useConfirm();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
@@ -281,6 +283,19 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   if (!plan_content || Object.keys(plan_content).length === 0) {
     errorNotification("計劃書内容为空，无法保存。");
     return;
+  }
+
+  // 顯示確認對話框
+  const isConfirmed = await confirm({
+    title: "確認保存至最終數據集",
+    message: `您確定要保存企劃 "${draftToSave.name}" 至最終數據集嗎？\n\n⚠️ 保存後此數據將自動刪除。\n💾 建議先下載 Word 檔案企劃書。`,
+    confirmText: "確認保存",
+    cancelText: "取消",
+    confirmColor: "primary",
+  });
+
+  if (!isConfirmed) {
+    return; // 使用者取消操作
   }
 
   try {
