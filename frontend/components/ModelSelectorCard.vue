@@ -208,7 +208,6 @@ const isSettingsModalVisible = ref(false);
 const isSavingSettings = ref(false);
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-const { success } = useNotifications();
 
 const activeTab = ref("internal");
 const selectedModelId = ref(null);
@@ -277,7 +276,6 @@ async function handleSaveSettings(updatedSettings) {
       ...updatedSettings,
     });
 
-    success("Prompt 設定已成功保存！");
     isSettingsModalVisible.value = false;
   } catch (err) {
     showError(err.message);
