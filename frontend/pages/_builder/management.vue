@@ -97,7 +97,7 @@
     <!-- Data Table -->
     <div
       v-else-if="datasets.length > 0"
-      class="bg-white shadow-lg rounded-lg overflow-hidden"
+      class="bg-white shadow-lg rounded-lg overflow-x-scroll"
     >
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
@@ -162,7 +162,7 @@
             </td>
 
             <td
-              class="px-6 py-4 text-sm text-gray-600 max-w-sm truncate"
+              class="px-6 py-4 text-sm text-gray-600 max-w-72 2xl:max-w-96 truncate"
               :title="item.prompt"
             >
               {{ item.prompt }}
@@ -213,7 +213,8 @@ useHead({
   meta: [
     {
       name: "description",
-      content: "管理和編輯計畫書數據集。支持按主題、模板、章節過濾，批量操作數據。",
+      content:
+        "管理和編輯計畫書數據集。支持按主題、模板、章節過濾，批量操作數據。",
     },
     {
       name: "keywords",
