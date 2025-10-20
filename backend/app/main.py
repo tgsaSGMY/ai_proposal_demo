@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # 導入路由器和生命週期事件
-from app.api import generate, datasets, admin, config as api_config
+from app.api import generate, datasets, admin, config as api_config,draft_plan
 from app.core.lifecycle import startup_event_handler, shutdown_event_handler
 
 # 配置日誌
@@ -41,6 +41,7 @@ app.include_router(generate.router)
 app.include_router(datasets.router)
 app.include_router(admin.router)
 app.include_router(api_config.router)
+app.include_router(draft_plan.router)
 
 @app.get("/", tags=["Root"])
 async def read_root():

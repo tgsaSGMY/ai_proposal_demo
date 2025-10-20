@@ -3,6 +3,7 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
+from fastapi import Request
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +11,8 @@ from contextlib import contextmanager
 import asyncio 
 from collections import defaultdict
 import logging
+import time
+from app.utils.token_calculator import calculate_openai_tokens
 
 logger = logging.getLogger(__name__)
 from app.config import (
@@ -70,7 +73,6 @@ class SupabaseService:
         sections_by_template = defaultdict(list)
         for s_data in sections_data:
             sections_by_template[(s_data['template_id'], s_data['grant_id'])].append(SectionConfig(**s_data))
-
         templates_by_grant = defaultdict(list)
         for t_data in templates_data:
             template_id_tuple = (t_data['id'], t_data['grant_id'])
@@ -159,6 +161,115 @@ class SupabaseService:
         })
         session.commit()
         print("Model registration successful.")
+    
+    
+    async def get_grant_by_id(self, grant_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个 grant 的信息。"""
+        if not grant_id:
+            return None
+        try:
+            response = (
+                self.client
+                .from_("grants")
+                .select("*")
+                .eq("id", grant_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            print(f"Error fetching grant by id '{grant_id}': {e}")
+            return None
+
+
+    async def get_template_by_id(self, template_id: str, grant_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个 plan_template 的信息。"""
+        if not template_id:
+            return None
+        try:
+            response = (
+                self.client
+                .from_("plan_templates")
+                .select("*")
+                .eq("id", template_id)
+                .eq("grant_id", grant_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                return response.data[0] 
+            return None
+        except Exception as e:
+            print(f"Error fetching template by id '{template_id}': {e}")
+            return None
+
+
+    async def get_sections_by_template_id(self, template_id: str, grant_id: str) -> List[Dict[str, Any]]:
+        """根据 template_id 获取其下所有 sections，并按 order 排序。"""
+        if not template_id:
+            return []
+        try:
+            response = (
+                self.client
+                .from_("sections")
+                .select("*")
+                .eq("template_id", template_id)
+                .eq("grant_id", grant_id)
+                .order("order", desc=False)
+                .execute()
+            )
+            return response.data or []  
+        except Exception as e:
+            print(f"Error fetching sections by template_id '{template_id}': {e}")
+            return []
+
+
+    async def get_all_draft_plans(self) -> List[Dict[str, Any]]:
+        """获取所有企划草稿"""
+        response = self.client.from_("draft_plans").select("*").order("created_at", desc=True).execute()
+        return response.data if response.data else []
+
+    async def create_draft_plan(self, name: str, mode: str, grant_id: Optional[str] = None, template_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """创建一个新的企划草稿"""
+        
+        # 检查同名草稿
+        existing_response = self.client.from_("draft_plans").select("id").eq("name", name).execute()
+        if existing_response.data:
+            # 如果存在同名，添加一个时间戳后缀
+            name = f"{name}-{int(time.time())}"
+
+        insert_data = {
+            "name": name,
+            "mode": mode,
+            "status": "pending",
+            "grant_id": grant_id,
+            "template_id": template_id,
+            "user_input": {}, # 初始化为空对象
+            "plan_content": {}  # 初始化为空对象
+        }
+        response = self.client.from_("draft_plans").insert(insert_data).execute()
+        return response.data[0] if response.data else None
+
+    async def get_draft_plan_by_id(self, draft_id: str) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单个草稿"""
+        response = self.client.from_("draft_plans").select("*").eq("id", draft_id).single().execute()
+        return response.data if response.data else None
+    
+    async def update_draft_plan(self, draft_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新一个企划草稿"""
+        if "updated_at" not in data:
+            # 手动更新 updated_at 时间戳
+            data["updated_at"] = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.gmtime())
+
+        response = self.client.from_("draft_plans").update(data).eq("id", draft_id).execute()
+        return response.data[0] if response.data else None
+
+    async def delete_draft_plan(self, draft_id: str) -> bool:
+        """删除一个企划草稿"""
+        response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
+        return len(response.data) > 0
 
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
@@ -176,13 +287,13 @@ class SupabaseService:
 
     async def get_user_usage(self, user_id: str) -> Dict[str, int]:
         """获取用户的 internal 和 external 总用量"""
-        query = self.client.from_("usage_logs").select("model_type, tokens_used").eq("user_id", user_id)
+        query = self.client.from_("usage_logs").select("model_type, cost").eq("user_id", user_id)
         response = query.execute()
         
-        usage = {"internal": 0, "external": 0}
+        usage = 0
         if response.data:
             for log in response.data:
-                usage[log['model_type']] += log['tokens_used']
+                usage += log['cost']
         return usage
 
     async def check_quota(self, user_id: str, model_type: str) -> tuple[bool, str]:
@@ -196,36 +307,32 @@ class SupabaseService:
 
         usage = await self.get_user_usage(user_id)
 
-        if model_type == 'external':
-            remaining = user['external_quota'] - usage['external']
-            if remaining <= 0:
-                return False, "External quota exhausted."
-        elif model_type == 'internal':
-            remaining = user['internal_quota'] - usage['internal']
-            if remaining <= 0:
-                return False, "Internal quota exhausted."
+        remaining = user['external_quota'] - usage
+        if remaining <= 0:
+            return False, "External quota exhausted."
         
-        return True, "Quota available."
+        return True, "Quota available." 
 
-    async def log_usage(self, user_id: str, model_info: Dict[str, Any], tokens_used: int):
+    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int,output_token: int):
         """记录一次模型使用"""
-        model_type = model_info.get('type', 'internal')
+        model_type = model_info.get('type', 'internal') 
         cost = 0.0
         # 简单估算成本，只用external modal 的 output token
         if model_type == 'external' and model_info.get('cost_info'):
             cost_per_million = model_info['cost_info'].get('output', 0)
-            cost = (tokens_used / 1_000_000) * cost_per_million
+            cost = (output_token / 1_000_000) * cost_per_million
 
         new_log = {
             "user_id": user_id,
             "model_id": model_info['id'],
             "model_type": model_type,
-            "tokens_used": tokens_used,
+            "input_token": input_token,
+            "output_token":  output_token,
             "cost": cost
         }
         
         self.client.from_("usage_logs").insert(new_log).execute()
-        print(f"Logged usage for user {user_id}: {tokens_used} tokens for {model_type} model.")
+        print(f"Logged usage for user {user_id}: ${cost} for {model_type} model.")
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
@@ -261,7 +368,8 @@ class SupabaseService:
         template_id: str,
         section_id: str,
         prompt: str,
-        final_answer: dict
+        final_answer: dict,
+        rejected_answer: Optional[dict] = None
     ) -> Dict[str, Any]:
         """向 datasets 表中插入一条新的记录"""
         try:
@@ -271,8 +379,11 @@ class SupabaseService:
                 "template_id": template_id,
                 "section_id": section_id,
                 "prompt": prompt,
-                "final_answer": final_answer, # Supabase client 會自動處理 jsonb
+                "final_answer": final_answer,
+                "rejected_answer": rejected_answer
             }).execute()
+            insert_data = response.data  
+            insert_data_cleaned = {k: v for k, v in insert_data[0].items() if v is not None}  
             
             if response.data: 
                 print(f"Successfully inserted {source_type} entry for section {section_id}.")
@@ -327,22 +438,36 @@ class SupabaseService:
 
     async def update_section_settings(
         self, 
+        request: Request,
         section_id: str, 
-        prompts: List[str], 
+        custom_prompt_list: List[str], 
         system_prompt: Optional[str] = None,
     ) -> bool:
         """更新指定 section 的 system_prompt, source_type 和 custom_prompt_list"""
         try:
             update_data = {
-                "custom_prompt_list": prompts,
+                "custom_prompt_list": custom_prompt_list,
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:
-                update_data["system_prompt"] = system_prompt
+                update_data["system_prompt"] = system_prompt 
 
             response = self.client.from_("sections").update(update_data).eq("id", section_id).execute()
+            request.app.state.all_grants_config = await self.get_all_grants_config()
             
             return len(response.data) > 0
         except Exception as e:
             logger.error(f"Failed to update settings for section {section_id}: {e}")
             return False
+        
+    async def log_cost_usage(self, user_id: str, model_to_use: Dict, messages: List[Dict], raw_output: str):
+        token_counts = calculate_openai_tokens(
+            messages=messages, 
+            model_name=model_to_use['id'], 
+            raw_output_text=raw_output
+        )
+        input_token = token_counts["input_tokens"]
+        output_token = token_counts["output_tokens"]
+        logger.info(f"Calculated tokens -> Input: {input_token}, Output: {output_token}")
+        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token))
+

@@ -10,7 +10,7 @@
   >
     <div
       v-if="isVisible && options"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 p-2 sm:p-4"
       @click.self="handleCancel"
     >
       <Transition
@@ -22,43 +22,43 @@
         leave-to-class="opacity-0 scale-95"
       >
         <div
-          class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden"
+          class="w-full max-w-xs sm:max-w-md bg-white rounded-xl shadow-2xl overflow-hidden"
         >
-          <div class="p-6">
-            <div class="flex items-start">
+          <div class="p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row items-start">
               <!-- Icon -->
               <div
-                class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full"
+                class="mx-auto sm:mx-0 flex-shrink-0 flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                 :class="iconBgColor"
               >
                 <ExclamationTriangleIcon
                   v-if="options.confirmColor === 'danger'"
-                  class="h-6 w-6"
+                  class="h-5 w-5 sm:h-6 sm:w-6"
                   :class="iconColor"
                 />
                 <QuestionMarkCircleIcon
                   v-else
-                  class="h-6 w-6"
+                  class="h-5 w-5 sm:h-6 sm:w-6"
                   :class="iconColor"
                 />
               </div>
-              <div class="mt-0 ml-4 text-left flex-1">
-                <h3 class="text-lg leading-6 font-bold text-gray-900">
+              <div class="mt-3 sm:mt-0 sm:ml-4 text-left flex-1">
+                <h3 class="text-base sm:text-lg leading-6 font-bold text-gray-900">
                   {{ options.title }}
                 </h3>
-                <div class="mt-2">
-                  <p class="text-sm text-gray-500 whitespace-pre-wrap">
+                <div class="mt-1 sm:mt-2">
+                  <p class="text-xs sm:text-sm text-gray-500 whitespace-pre-wrap">
                     {{ options.message }}
                   </p>
                 </div>
               </div>
             </div>
           </div>
-          <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse gap-3">
+          <div class="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col-reverse sm:flex-row-reverse gap-2 sm:gap-3">
             <button
               @click="handleConfirm"
               type="button"
-              class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+              class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-3 sm:px-4 py-2 text-sm sm:text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
               :class="confirmButtonClass"
             >
               {{ options.confirmText }}
@@ -66,7 +66,7 @@
             <button
               @click="handleCancel"
               type="button"
-              class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-3 sm:px-4 py-2 bg-white text-sm sm:text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {{ options.cancelText }}
             </button>

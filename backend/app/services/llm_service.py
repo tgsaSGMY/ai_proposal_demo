@@ -25,6 +25,7 @@ class LLMService:
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
 
+
     def _format_few_shot_examples(self, exemplars: List[Dict[str, Any]]) -> str:
         if not exemplars:
             return ""
@@ -212,7 +213,7 @@ class LLMService:
             critic_model_info=critic_model_info,
             section_details=section_details,
             user_input=user_input
-        )
+        ) 
 
     async def generate_section_content(
         self,  
@@ -286,10 +287,10 @@ class LLMService:
                 error_message = llm_error.get("error")
             else:
                 final_content_json, parse_error = extract_json_block(raw_output, section_id)
+                await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
                 if parse_error:
                     error_message = parse_error.get("error")
                 else:
-                    asyncio.create_task(supabase_service.log_usage(user_id, model_to_use, len(raw_output) // 2))
                     full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
                   
         elif model_type == 'internal': 
@@ -315,12 +316,12 @@ class LLMService:
                 
                 # 记录 Actor 的总用量
                 actor_tokens = (actor_initial_len + actor_final_len) // 2
-                asyncio.create_task(supabase_service.log_usage(user_id, model_to_use, actor_tokens))
+                asyncio.create_task(supabase_service.log_usage(user_id, model_to_use,actor_tokens, actor_tokens))
                 
                 # 记录 Critic 的用量
                 critic_tokens = critic_len // 2
-                asyncio.create_task(supabase_service.log_usage(user_id, critic_model_info, critic_tokens))
-
+                asyncio.create_task(supabase_service.log_usage(user_id, critic_model_info, critic_tokens, critic_tokens))
+    
                 # 异步记录完整的 Actor-Critic 微调数据
                 print("   - Scheduling background task to log Actor-Critic run...")
                 full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"

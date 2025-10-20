@@ -7,9 +7,9 @@ import {
   TextRun,
   HeadingLevel,
   AlignmentType,
-  Numbering,
-  Indent,
 } from "docx";
+import type { ContentRenderer } from "./contentRenderer";
+import { DocxRenderer, HtmlRenderer } from "./contentRenderer";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
 function keyToTitle(key: string): string {
@@ -31,15 +31,13 @@ function nameSwitching(key: string): string {
 function renderSectionContent(
   data: any,
   schema: any, // 傳入對應的 schema
-  paragraphs: Paragraph[]
+  renderer: ContentRenderer<any> // 接收任何一種渲染器
 ) {
   if (!data || typeof data !== "object") {
-    // 如果數據不是對象，直接作為段落添加
-    paragraphs.push(new Paragraph({ text: String(data ?? "") }));
+    if (data) renderer.addParagraph(String(data));
     return;
   }
 
-  // 遍歷 schema 的 properties，以確保輸出的順序和 schema 定義的一致
   const schemaProperties = schema?.properties || {};
 
   for (const key in schemaProperties) {
@@ -48,32 +46,40 @@ function renderSectionContent(
       const propInfo = schemaProperties[key];
       const title = propInfo.description || propInfo.title || keyToTitle(key);
 
-      if (value === null || value === "") continue; // 跳過空值
-      let numberingIndex = 0;
+      if (value === null || value === "") continue;
 
       if (Array.isArray(value)) {
-        // --- 處理數組 ---
         if (value.length > 0) {
-          // 添加數組的小標題 (例如 "Risk Assessment:")
-          paragraphs.push(
-            new Paragraph({
-              children: [new TextRun({ text: title })],
-              spacing: { before: 200, after: 100 },
-              style: "SubSectionHeading",
-            })
-          );
+          renderer.addArrayTitle(title);
 
           value.forEach((item, index) => {
-            numberingIndex++;
+            const numberingIndex = index + 1;
             if (typeof item === "object" && item !== null) {
               const itemSchema = propInfo.items?.properties;
-              let isFirstField = true;
-
-              // 收集標題+描述成對組
               const usedKeys = new Set<string>();
 
+              // 優先處理 title/description 成對情況
+              const titleKey = Object.keys(item).find((k) =>
+                k.includes("title")
+              );
+              const descKey = Object.keys(item).find(
+                (k) => k.includes("description") || k.includes("explanation")
+              );
+
+              if (titleKey && descKey && item[titleKey] && item[descKey]) {
+                renderer.addNumberedListItem(numberingIndex, {
+                  title: String(item[titleKey]),
+                  description: String(item[descKey]),
+                });
+                usedKeys.add(titleKey).add(descKey);
+              }
+
+              // 處理剩餘字段
               for (const itemKey in itemSchema) {
-                if (!Object.prototype.hasOwnProperty.call(item, itemKey))
+                if (
+                  usedKeys.has(itemKey) ||
+                  !Object.prototype.hasOwnProperty.call(item, itemKey)
+                )
                   continue;
 
                 const fieldValue = String(item[itemKey] ?? "").trim();
@@ -86,234 +92,58 @@ function renderSectionContent(
                     keyToTitle(itemKey)
                 );
 
-                // 處理 title/description 成對情況
-                if (itemKey.includes("title")) {
-                  // 找出同一 object 裡包含 'description' 或 'explanation' 的 key
-                  const descKey = Object.keys(item).find((k) =>
-                    k.includes("description")
-                  );
-                  const expKey = Object.keys(item).find((k) =>
-                    k.includes("explanation")
-                  );
-
-                  const descValue = String(
-                    (descKey && item[descKey]) || (expKey && item[expKey]) || ""
-                  ).trim();
-
-                  if (descValue.length > 0) {
-                    paragraphs.push(
-                      new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: `${numberingIndex}. `,
-                          }),
-                          new TextRun({
-                            text: `${fieldValue}：${descValue}`,
-                          }),
-                        ],
-                      })
-                    );
-                    usedKeys.add(itemKey);
-                    if (descKey) usedKeys.add(descKey);
-                    if (expKey) usedKeys.add(expKey);
-                    isFirstField = false;
-                    continue;
-                  }
-                }
-                if (usedKeys.has(itemKey)) continue;
-
-                if (isFirstField) {
-                  // 第一個欄位顯示編號
-                  paragraphs.push(
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: `${numberingIndex}. `,
-                        }),
-                        new TextRun({
-                          text: fieldValue,
-                        }),
-                      ],
-                    })
-                  );
-                  isFirstField = false;
+                // 如果是第一個被渲染的項目，且不是成對的項目，則加上編號
+                if (usedKeys.size === 0) {
+                  renderer.addNumberedListItem(numberingIndex, fieldValue);
                 } else {
-                  // 後續欄位縮排顯示
-                  paragraphs.push(
-                    new Paragraph({
-                      indent: { left: 720 }, // 約 0.5 inch 縮排
-                      children: [
-                        new TextRun({
-                          text: "→" + itemTitle + ": " + fieldValue,
-                        }),
-                      ],
-                    })
-                  );
+                  renderer.addIndentedListItem(itemTitle, fieldValue);
                 }
+                usedKeys.add(itemKey);
               }
             } else {
-              paragraphs.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `${numberingIndex}. `,
-                    }),
-                    new TextRun({
-                      text: String(item ?? ""),
-                    }),
-                  ],
-                })
-              );
+              renderer.addNumberedListItem(numberingIndex, String(item ?? ""));
             }
           });
         }
       } else if (typeof value === "object" && value !== null) {
-        // --- 遞歸處理嵌套對象 (如果有的話) ---
-        paragraphs.push(
-          new Paragraph({
-            children: [new TextRun({ text: title, bold: true })],
-            spacing: { before: 200, after: 100 },
-          })
-        );
-        // 遞歸調用，傳入子對象和子 schema
-        renderSectionContent(value, propInfo, paragraphs);
+        // 遞歸處理嵌套對象
+        renderer.addArrayTitle(title);
+        renderSectionContent(value, propInfo, renderer);
       } else {
-        // --- 處理簡單的字符串/段落 ---
-        // 檢查 schema 是否暗示這是一個長文本段落
+        // 處理簡單的鍵值對或段落
         if (
           key.toLowerCase().includes("paragraph") ||
           key.toLowerCase().includes("description")
         ) {
-          // 如果是段落，則直接輸出內容，不帶標題
-          paragraphs.push(
-            new Paragraph({
-              text: String(value),
-              spacing: { after: 200 },
-            })
-          );
+          renderer.addParagraph(String(value));
         } else {
-          // 否則，作為 "標題: 內容" 格式
-          paragraphs.push(
-            new Paragraph({
-              children: [
-                new TextRun({ text: `${title}: `, bold: true }),
-                new TextRun(String(value)),
-              ],
-              spacing: { after: 100 },
-            })
-          );
+          renderer.addKeyValue(title, String(value));
         }
       }
     }
   }
 }
 
-/**
- * 將 sections + planContent 輸出成更自然的 Word 文檔
- */
-// export async function exportPlanToWord(
-//   sections: { id: string; name: string; json_schema: any }[],
-//   planContent: Record<string, any>
-// ) {
-//   const paragraphs: Paragraph[] = [];
-
-//   for (const section of sections) {
-//     const sectionData = planContent[section.id]?.content;
-
-//     // 添加章節大標題 (例如 "一、計畫背景與目標")
-//     paragraphs.push(
-//       new Paragraph({
-//         text: section.name,
-//         heading: HeadingLevel.HEADING_1,
-//         spacing: { before: 400, after: 200 },
-//       })
-//     );
-
-//     if (!sectionData) {
-//       paragraphs.push(
-//         new Paragraph({
-//           children: [new TextRun({ text: "（無內容）", italics: true })],
-//           spacing: { after: 400 },
-//         })
-//       );
-//       continue;
-//     }
-
-//     // 使用新的渲染函數來處理章節內容
-//     renderSectionContent(sectionData, section.json_schema, paragraphs);
-//   }
-
-//   const doc = new Document({
-//     // 預定義編號樣式，用於處理數組
-//     numbering: {
-//       config: [
-//         {
-//           reference: "my-numbering-style",
-//           levels: [
-//             {
-//               level: 0,
-//               format: "decimal", // 1, 2, 3...
-//               text: "%1.",
-//               alignment: AlignmentType.LEFT,
-//             },
-//           ],
-//         },
-//       ],
-//     },
-//     sections: [
-//       {
-//         children: paragraphs,
-//       },
-//     ],
-//   });
-
-//   const blob = await Packer.toBlob(doc);
-
-//   // 下載邏輯不變
-//   const url = URL.createObjectURL(blob);
-//   const link = document.createElement("a");
-//   link.href = url;
-//   link.download = "計劃書草稿.docx";
-//   document.body.appendChild(link);
-//   link.click();
-//   document.body.removeChild(link);
-//   URL.revokeObjectURL(url);
-// }
-
 export async function exportPlanToWord(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>
 ) {
-  const paragraphs: Paragraph[] = [];
+  const docxRenderer = new DocxRenderer();
 
   for (const section of sections) {
     const sectionData = planContent[section.id]?.content;
 
-    // === Section Title (HEADING 2) ===
-    paragraphs.push(
-      new Paragraph({
-        text: section.name,
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 400, after: 200 },
-        style: "SectionHeading",
-      })
-    );
+    docxRenderer.addSectionTitle(section.name);
 
     if (!sectionData) {
-      paragraphs.push(
-        new Paragraph({
-          children: [new TextRun({ text: "（無內容）", italics: true })],
-          spacing: { after: 400 },
-          style: "NormalText",
-        })
-      );
+      docxRenderer.addEmptyContentMessage();
       continue;
     }
 
-    // 使用你的內容渲染函數
-    renderSectionContent(sectionData, section.json_schema, paragraphs);
+    renderSectionContent(sectionData, section.json_schema, docxRenderer);
   }
 
+  const paragraphs = docxRenderer.getResult();
   // === 定義文件樣式 ===
   const doc = new Document({
     styles: {
@@ -397,4 +227,26 @@ export async function exportPlanToWord(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export function renderPlanToHtml(
+  sections: { id: string; name: string; json_schema: any }[],
+  planContent: Record<string, any>
+): string {
+  const htmlRenderer = new HtmlRenderer();
+
+  for (const section of sections) {
+    const sectionData = planContent[section.id]?.content;
+
+    htmlRenderer.addSectionTitle(section.name);
+
+    if (!sectionData) {
+      htmlRenderer.addEmptyContentMessage();
+      continue;
+    }
+
+    renderSectionContent(sectionData, section.json_schema, htmlRenderer);
+  }
+
+  return htmlRenderer.getResult();
 }

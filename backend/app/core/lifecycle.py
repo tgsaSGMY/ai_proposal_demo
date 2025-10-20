@@ -9,6 +9,39 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
+async def reload_configurations(app: FastAPI):
+    """
+    重新加載模型、路由規則和 Grant 配置數據到內存。
+    可在啟動時和手動刷新時調用。
+    """
+    try:
+        logger.info("Reloading configurations from Supabase...")
+        supabase_service = app.state.supabase_service
+        
+        models_data, rules_data, grants_data = await asyncio.gather(
+            supabase_service.get_all_models(),
+            supabase_service.get_all_routing_rules(),
+            supabase_service.get_all_grants_config()
+        )
+        
+        app.state.model_registry = {m['id']: m for m in models_data}
+        app.state.routing_rules = rules_data
+        app.state.all_grants_config = grants_data
+        
+        logger.info(f"Successfully reloaded {len(app.state.model_registry)} models.")
+        logger.info(f"Successfully reloaded {len(app.state.routing_rules)} routing rules.")
+        logger.info(f"Successfully reloaded configurations for {len(app.state.all_grants_config)} grants.")
+        
+        return {
+            "success": True,
+            "models_count": len(app.state.model_registry),
+            "rules_count": len(app.state.routing_rules),
+            "grants_count": len(app.state.all_grants_config),
+        }
+    except Exception as e:
+        logger.error(f"Failed to reload configurations: {e}", exc_info=True)
+        raise
+
 async def startup_event_handler(app: FastAPI):
     """
     主要任務:
@@ -33,22 +66,7 @@ async def startup_event_handler(app: FastAPI):
 
         # --- 3. 預加載配置數據到內存 ---
         logger.info("Pre-loading configurations from Supabase...")
-        
-        # 使用 asyncio.gather 可以併發執行這些異步加載操作，提高啟動速度
-        models_data, rules_data, grants_data = await asyncio.gather(
-            supabase_service.get_all_models(),
-            supabase_service.get_all_routing_rules(),
-            supabase_service.get_all_grants_config()
-        )
-        
-        # 將加載的數據存儲到 app.state
-        app.state.model_registry = {m['id']: m for m in models_data}
-        app.state.routing_rules = rules_data
-        app.state.all_grants_config = grants_data
-        
-        logger.info(f"Successfully loaded {len(app.state.model_registry)} models.")
-        logger.info(f"Successfully loaded {len(app.state.routing_rules)} routing rules.")
-        logger.info(f"Successfully loaded configurations for {len(app.state.all_grants_config)} grants.")
+        await reload_configurations(app)
         
     except Exception as e:
         logger.critical(f"A critical error occurred during application startup: {e}", exc_info=True)
