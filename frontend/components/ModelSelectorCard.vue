@@ -287,8 +287,6 @@ async function handleSaveSettings(updatedSettings) {
       sectionId: props.section.id,
       ...updatedSettings,
     });
-
-    isSettingsModalVisible.value = false;
   } catch (err) {
     console.error("保存 Prompt 設定錯誤:", err);
     const { error } = useNotifications();
