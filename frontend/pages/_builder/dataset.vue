@@ -190,7 +190,15 @@ async function handleRenameDraft(draft) {
 }
 
 async function handleDeleteDraft(draft) {
-  if (!confirm(`您确定要删除企划 "${draft.name}" 吗？此操作无法撤销。`)) {
+  const isConfirmed = await confirm({
+    title: "確認刪除企劃",
+    message: `您確定要刪除企劃 "${draft.name}" 嗎？\n\n⚠️ 此操作無法撤銷。`,
+    confirmText: "確認刪除",
+    cancelText: "取消",
+    confirmColor: "danger",
+  });
+
+  if (!isConfirmed) {
     return;
   }
 

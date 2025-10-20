@@ -144,7 +144,8 @@ const dynamicInputsWithValues = computed(() => {
           id: `${section.id}-${key}`,
           key: key,
           label: prop.description || key.replace("_", " "),
-          value: editableDraft.user_input?.dynamic_fields?.[key] || "",
+          value:
+            editableDraft.user_input?.dynamic_fields?.[prop.description] || "",
         });
       });
     }

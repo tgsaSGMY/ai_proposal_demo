@@ -13,6 +13,7 @@ from collections import defaultdict
 import logging
 import time
 from app.utils.token_calculator import calculate_openai_tokens
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 from app.config import (
@@ -260,8 +261,9 @@ class SupabaseService:
     async def update_draft_plan(self, draft_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """更新一个企划草稿"""
         if "updated_at" not in data:
-            # 手动更新 updated_at 时间戳
-            data["updated_at"] = time.strftime('%Y-%m-%dT%H:%M:%S%z', time.gmtime())
+            # 设置为东八区时间
+            tz = timezone(timedelta(hours=8))
+            data["updated_at"] = datetime.now(tz).strftime('%Y-%m-%dT%H:%M:%S%z')
 
         response = self.client.from_("draft_plans").update(data).eq("id", draft_id).execute()
         return response.data[0] if response.data else None
