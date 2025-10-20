@@ -1,6 +1,6 @@
 <template>
   <div class="p-4 md:p-8">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">數據庫管理</h1>
+    <h1 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">數據庫管理</h1>
     <!-- Filter Section -->
     <div class="mb-6 p-4 bg-white rounded-lg shadow-md">
       <div
@@ -199,6 +199,7 @@
       :show="isModalVisible"
       :dataset="currentDataset"
       :is-saving="isSaving"
+      :all-configs="allConfigs"
       @close="closeEditModal"
       @save="handleSave"
     />
@@ -206,8 +207,32 @@
 </template>
 
 <script setup>
+// SEO 配置
+useHead({
+  title: "數據庫管理 - AI 計畫書平台",
+  meta: [
+    {
+      name: "description",
+      content: "管理和編輯計畫書數據集。支持按主題、模板、章節過濾，批量操作數據。",
+    },
+    {
+      name: "keywords",
+      content: "數據庫,數據管理,編輯,過濾,計畫書",
+    },
+    {
+      property: "og:title",
+      content: "數據庫管理 - AI 計畫書平台",
+    },
+    {
+      property: "og:description",
+      content: "管理和編輯計畫書數據集。支持按主題、模板、章節過濾。",
+    },
+  ],
+});
+
 import { ref, onMounted, reactive, watch, computed } from "vue";
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
+import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
 
 const datasets = ref([]);
 import { useLoading } from "~/composables/useLoading";
@@ -218,10 +243,10 @@ import { useConfirm } from "~/composables/useConfirm";
 const { confirm } = useConfirm();
 const isSaving = ref(false);
 const error = ref(null);
+const { allConfigs } = usePlanGenerator();
 
 const isModalVisible = ref(false);
 const currentDataset = ref(null);
-const allConfigs = ref([]);
 const filters = reactive({
   grantId: "",
   templateId: "",
@@ -314,17 +339,6 @@ async function fetchDatasets() {
   }
 }
 
-// --- Fetch config for dropdowns ---
-async function fetchConfig() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/config`);
-    if (!response.ok) throw new Error("Failed to load configs for filters.");
-    allConfigs.value = await response.json();
-  } catch (e) {
-    console.error(e.message);
-  }
-}
-
 // --- Reset filters ---
 function resetFilters() {
   filters.grantId = "";
@@ -355,7 +369,6 @@ watch(
 watch(filters, fetchDatasets, { deep: true });
 
 onMounted(() => {
-  fetchConfig(); // Load dropdown data
   fetchDatasets(); // Load initial table data
 });
 
@@ -425,28 +438,6 @@ async function handleDelete(id) {
     await fetchDatasets();
   } catch (e) {
     errorNotification(`刪除失敗: ${e.message}`);
-  }
-}
-
-function getSourceTypeClass(sourceType) {
-  const classes = {
-    golden_samples: "bg-yellow-100 text-yellow-800",
-    synthetic_data: "bg-blue-100 text-blue-800",
-    external_direct: "bg-green-100 text-green-800",
-  };
-  return classes[sourceType] || "bg-gray-100 text-gray-800";
-}
-
-function getSourceTypeName(type) {
-  switch (type) {
-    case "golden_samples":
-      return "黃金樣本";
-    case "synthetic_data":
-      return "生成資料";
-    case "external_direct":
-      return "外部資料";
-    default:
-      return type;
   }
 }
 </script>

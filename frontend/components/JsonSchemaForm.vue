@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4 sm:space-y-6">
     <div v-for="(propInfo, key) in schema.properties" :key="key">
-      <label class="block text-sm font-medium text-gray-700 mb-2">
+      <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2">
         {{ propInfo.description || propInfo.title || key }}
       </label>
 
@@ -11,7 +11,7 @@
           :value="modelValue[key]"
           @input="updateValue(key, $event.target.value)"
           rows="5"
-          class="p-2 w-full font-mono text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
         ></textarea>
       </template>
 
@@ -20,7 +20,7 @@
           type="number"
           :value="modelValue[key]"
           @input="updateValue(key, parseFloat($event.target.value))"
-          class="p-2 w-full font-mono text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
         />
       </template>
 
@@ -30,13 +30,13 @@
           propInfo.type === 'array' && propInfo.items.type === 'object'
         "
       >
-        <div class="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+  <div class="space-y-2 sm:space-y-4 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50">
           <div
             v-for="(item, index) in modelValue[key]"
             :key="index"
-            class="p-4 border border-dashed border-gray-300 rounded-lg relative"
+            class="p-2 sm:p-4 border border-dashed border-gray-300 rounded-lg relative"
           >
-            <h4 class="font-semibold mb-3 text-gray-600">
+            <h4 class="font-semibold mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600">
               項目 #{{ index + 1 }}
             </h4>
             <!-- 遞歸渲染數組內對象的表單 -->
@@ -47,7 +47,7 @@
             />
             <button
               @click="removeArrayItem(key, index)"
-              class="absolute top-2 right-2 text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200"
+              class="absolute top-2 right-2 text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200 text-xs sm:text-base"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -67,7 +67,7 @@
           </div>
           <button
             @click="addArrayItem(key, propInfo.items.properties)"
-            class="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            class="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
           >
             + 新增項目
           </button>
@@ -80,21 +80,21 @@
           propInfo.type === 'array' && propInfo.items.type === 'string'
         "
       >
-        <div class="space-y-3 p-4 border border-gray-200 rounded-lg bg-gray-50">
+  <div class="space-y-2 sm:space-y-3 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50">
           <div
             v-for="(item, index) in modelValue[key]"
             :key="index"
-            class="flex items-start space-x-2"
+            class="flex items-start space-x-1 sm:space-x-2"
           >
             <textarea
               :value="item"
               @input="updateArrayItem(key, index, $event.target.value)"
               rows="3"
-              class="flex-1 p-2 font-mono text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+              class="flex-1 p-2 font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
             ></textarea>
             <button
               @click="removeArrayItem(key, index)"
-              class="text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200"
+              class="text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200 text-xs sm:text-base"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -114,7 +114,7 @@
           </div>
           <button
             @click="addArrayStringItem(key)"
-            class="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            class="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
           >
             + 新增文字項目
           </button>

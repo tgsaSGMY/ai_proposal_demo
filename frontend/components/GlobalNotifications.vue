@@ -1,35 +1,35 @@
 <template>
   <!-- 通知容器，固定在屏幕右上角 -->
-  <div class="fixed top-4 right-4 z-50 w-full max-w-sm space-y-3">
+  <div class="fixed top-2 right-2 sm:top-4 sm:right-4 z-50 w-full max-w-xs sm:max-w-sm space-y-2 sm:space-y-3">
     <!-- 使用 TransitionGroup 讓列表的增刪有動畫效果 -->
     <TransitionGroup name="list" tag="div">
       <div
         v-for="notification in notifications"
         :key="notification.id"
         :class="notificationClasses(notification.type)"
-        class="w-full rounded-lg shadow-lg p-4 flex items-start"
+        class="w-full rounded-lg shadow-lg p-3 sm:p-4 flex items-start"
       >
         <div class="flex-shrink-0">
           <component
             :is="notificationIcon(notification.type)"
-            class="h-6 w-6"
+            class="h-5 w-5 sm:h-6 sm:w-6"
           />
         </div>
         <!--信息 -->
-        <div class="ml-3 w-0 flex-1">
-          <p class="text-sm font-medium">
+        <div class="ml-2 sm:ml-3 w-0 flex-1">
+          <p class="text-xs sm:text-sm font-medium">
             {{ notification.message }}
           </p>
         </div>
         <!-- 關閉按鈕 -->
-        <div class="ml-4 flex-shrink-0 flex">
+        <div class="ml-2 sm:ml-4 flex-shrink-0 flex">
           <button
             @click="remove(notification.id)"
-            class="inline-flex rounded-md text-current opacity-70 hover:opacity-100 focus:outline-none"
+            class="inline-flex rounded-md text-current opacity-70 hover:opacity-100 focus:outline-none text-xs sm:text-base"
           >
             <span class="sr-only">Close</span>
             <svg
-              class="h-5 w-5"
+              class="h-4 w-4 sm:h-5 sm:w-5"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"

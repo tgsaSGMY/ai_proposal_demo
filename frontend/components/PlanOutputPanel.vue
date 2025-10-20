@@ -1,13 +1,19 @@
 <template>
-  <div class="bg-white shadow-xl rounded-2xl p-8 h-full flex flex-col">
-    <h2 class="text-2xl font-bold text-gray-800">生成結果 (可編輯)</h2>
-    <div class="flex flex-wrap items-center gap-3 mb-6">
+  <div
+    class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
+  >
+    <h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-4">
+      生成結果 (可編輯)
+    </h2>
+    <div
+      class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6"
+    >
       <!-- 從文件載入 -->
       <button
         v-if="mode === 'golden'"
         @click="handleFileLoadClick"
         :disabled="isLoading"
-        class="flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-blue-700 active:scale-[0.98] transition-all duration-200 disabled:bg-blue-300 disabled:cursor-not-allowed disabled:shadow-none"
+        class="flex items-center justify-center gap-2 bg-blue-600 text-white font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl shadow-sm hover:bg-blue-700 active:scale-[0.98] transition-all duration-200 disabled:bg-blue-300 disabled:cursor-not-allowed disabled:shadow-none text-sm sm:text-base"
       >
         <svg
           v-if="!isLoading"
@@ -31,7 +37,7 @@
       <button
         v-if="mode === 'golden'"
         @click="$emit('generateUserInput')"
-        class="flex items-center justify-center gap-2 bg-emerald-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all duration-200"
+        class="flex items-center justify-center gap-2 bg-emerald-600 text-white font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl shadow-sm hover:bg-emerald-700 active:scale-[0.98] transition-all duration-200 text-sm sm:text-base"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -62,7 +68,7 @@
       <!-- 導出 Word -->
       <button
         @click="handleExportToWord"
-        class="flex items-center justify-center gap-2 bg-purple-600 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:bg-purple-700 active:scale-[0.98] transition-all duration-200"
+        class="flex items-center justify-center gap-2 bg-purple-600 text-white font-medium py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl shadow-sm hover:bg-purple-700 active:scale-[0.98] transition-all duration-200 text-sm sm:text-base"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -84,33 +90,38 @@
 
     <div
       v-if="isLoading"
-      class="flex-grow space-y-8 overflow-y-auto pr-2 animate-pulse"
+      class="flex-grow space-y-6 sm:space-y-8 overflow-y-auto pr-1 sm:pr-2 animate-pulse"
     >
-      <div v-for="i in 3" :key="i" class="space-y-4">
-        <div class="h-6 bg-gray-200 rounded w-1/3"></div>
-        <div class="h-16 bg-gray-200 rounded w-full"></div>
+      <div v-for="i in 3" :key="i" class="space-y-2 sm:space-y-4">
+        <div class="h-5 sm:h-6 bg-gray-200 rounded w-1/2 sm:w-1/3"></div>
+        <div class="h-10 sm:h-16 bg-gray-200 rounded w-full"></div>
       </div>
     </div>
 
     <div
       v-if="!sections || sections.length === 0"
-      class="flex-grow flex items-center justify-center text-gray-500"
+      class="flex-grow flex items-center justify-center text-gray-500 text-sm sm:text-base"
     >
       請在左側選擇模板以查看章節。
     </div>
-    <div v-else class="flex-grow space-y-8 overflow-y-auto pr-2">
+    <div
+      v-else
+      class="flex-grow space-y-6 sm:space-y-8 overflow-y-auto pr-1 sm:pr-2"
+    >
       <div v-for="section in sections" :key="section.id">
-        <div class="p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg">
-          <h3 class="text-lg font-semibold text-gray-800">
+        <div
+          class="p-3 sm:p-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg"
+        >
+          <h3 class="text-base sm:text-lg font-semibold text-gray-800">
             {{ section.name }}
           </h3>
         </div>
 
-        <div class="mt-4 pl-2">
+        <div class="mt-3 sm:mt-4 pl-1 sm:pl-2">
           <!-- 錯誤狀態顯示 -->
           <div
             v-if="getSectionError(section.id)"
-            class="text-red-600 bg-red-50 p-3 rounded-lg"
+            class="text-red-600 bg-red-50 p-2 sm:p-3 rounded-lg text-sm sm:text-base"
           >
             <strong>錯誤:</strong> {{ getSectionError(section.id) }}
           </div>
@@ -122,7 +133,10 @@
             @update:modelValue="updateSectionContent(section.id, $event)"
           />
           <!-- 等待生成狀態 -->
-          <div v-else class="text-gray-400 italic p-3">
+          <div
+            v-else
+            class="text-gray-400 italic p-2 sm:p-3 text-sm sm:text-base"
+          >
             等待生成或內容無效...
           </div>
         </div>
@@ -220,6 +234,7 @@ async function handleFileSelected(event) {
         section_name: s.name,
         json_schema: s.json_schema,
       })),
+      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
     };
 
     const filledContent = await callAutoFillApi(payload);

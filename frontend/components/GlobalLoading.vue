@@ -9,11 +9,11 @@
   >
     <div
       v-if="isLoading"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60 p-2 sm:p-0"
     >
       <div class="flex flex-col items-center">
         <div
-          class="w-16 h-16 border-4 border-t-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin"
+          class="w-12 h-12 sm:w-16 sm:h-16 border-4 border-t-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin"
         ></div>
       </div>
     </div>

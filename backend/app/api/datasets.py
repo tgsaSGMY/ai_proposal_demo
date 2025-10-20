@@ -39,7 +39,8 @@ async def save_dataset_entries(
                     template_id=entry.template_id,
                     section_id=entry.section_id,
                     prompt=entry.prompt,
-                    final_answer=entry.final_answer
+                    final_answer=entry.final_answer,
+                    rejected_answer=entry.rejected_answer
                 )
                 
                 if new_supabase_entry and 'id' in new_supabase_entry:
