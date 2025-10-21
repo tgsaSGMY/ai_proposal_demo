@@ -52,7 +52,7 @@ class QdrantService:
             search_filter = models.Filter(
                 must=[
                     models.FieldCondition(
-                        key="source",
+                        key="source_type",
                         match=models.MatchAny(any=["golden_samples", "synthetic_data"])
                     )
                 ]
