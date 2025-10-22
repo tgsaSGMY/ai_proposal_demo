@@ -31,18 +31,31 @@ class LLMService:
             return ""
         
         formatted_examples = ["以下是几个你可以参考的优秀范例："]
+        
         for i, ex in enumerate(exemplars):
-            topic = ex.get('topic', '无主题')
-            output_json = json.dumps(ex.get('output', {}), ensure_ascii=False, indent=2)
+            topic = ex.get('prompt', '（无 prompt 内容）')
+            output_json = json.dumps(ex.get('final_answer', {}), ensure_ascii=False, indent=2)
+    
             formatted_examples.append(f"\n--- 范例 {i+1} ---")
-            formatted_examples.append(f"主题: {topic}")
-            formatted_examples.append(f"期望输出格式 (JSON): \n{output_json}")
+            formatted_examples.append(f"输入提示 (Prompt): {topic}") 
+            formatted_examples.append(f"期望输出 (JSON): \n{output_json}")
+
         formatted_examples.append("\n--- 范例结束 ---\n")
         return "\n".join(formatted_examples)
 
-    def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig) -> List[Dict]:
+    async def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> List[Dict]:
         """建立 Actor 首次生成時的 messages"""
-        exemplars = self.qdrant_service.retrieve_exemplars(f"{user_input} {section_details.name}")
+        exemplar_ids = self.qdrant_service.retrieve_exemplar_ids(
+            query_text=f"{user_input} {section_details.name}",
+            grant_id=section_details.grant_id,
+            template_id=section_details.template_id,
+            section_id=section_details.id
+        )
+
+        exemplars = []
+        if exemplar_ids:
+            exemplars = await supabase_service.get_exemplars_by_ids(exemplar_ids)
+
         few_shot_str = self._format_few_shot_examples(exemplars)
         schema_str = json.dumps(section_details.json_schema, ensure_ascii=False)
         return [
@@ -145,12 +158,13 @@ class LLMService:
         actor_func: GenerationFunc, 
         critic_model_info: Dict,
         section_details: SectionConfig,
-        user_input: str
+        user_input: str,
+        supabase_service: "SupabaseService"
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """actor_func 是一個可呼叫的對象，可以是本地生成函數，也可以是 API 呼叫函數。 """
         # --- Step 1: Actor generates initial answer ---
         logger.info("-> [Workflow] Step 1: Actor generating initial answer...")
-        initial_messages = self._build_initial_actor_messages(user_input, section_details)
+        initial_messages = self._build_initial_actor_messages(user_input, section_details,supabase_service)
         initial_answer, error = await self._execute_generation_step(
             generation_func=actor_func,
             messages=initial_messages,
@@ -189,7 +203,7 @@ class LLMService:
         }, None
 
     # --- 4. 公開接口 ---
-    async def run_actor_critic_flow(self, http_session: httpx.AsyncClient, actor_model_bundle: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str) -> Tuple[Optional[Dict], Optional[str]]:
+    async def run_actor_critic_flow(self, http_session: httpx.AsyncClient, actor_model_bundle: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str,supabase_service:"SupabaseService") -> Tuple[Optional[Dict], Optional[str]]:
         """執行 Actor-Critic 流程，Actor 使用加載的本地模型。"""
         # 使用 functools.partial 來固定 actor_func 的 model 和 tokenizer 參數
         actor_func = partial(self.generate_with_loaded_model, actor_model_bundle["model"], actor_model_bundle["tokenizer"])
@@ -198,10 +212,11 @@ class LLMService:
             actor_func=actor_func,
             critic_model_info=critic_model_info,
             section_details=section_details,
-            user_input=user_input
+            user_input=user_input,
+            supabase_service=supabase_service
         )
-    
-    async def run_actor_critic_flow_via_api(self, http_session: httpx.AsyncClient, actor_model_info: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str) -> Tuple[Optional[Dict], Optional[str]]:
+
+    async def run_actor_critic_flow_via_api(self, http_session: httpx.AsyncClient, actor_model_info: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str,supabase_service:"SupabaseService") -> Tuple[Optional[Dict], Optional[str]]:
         """
         執行 Actor-Critic 流程，Actor 是通過 API (如 Ollama) 呼叫的。
         """
@@ -212,7 +227,8 @@ class LLMService:
             actor_func=actor_func,
             critic_model_info=critic_model_info,
             section_details=section_details,
-            user_input=user_input
+            user_input=user_input,
+            supabase_service=supabase_service
         ) 
 
     async def generate_section_content(
@@ -267,7 +283,17 @@ class LLMService:
             # --- 流程 A: 外部或基础 Ollama API 调用 ---
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
 
-            exemplars = self.qdrant_service.retrieve_exemplars(f"{user_input} {section_details.name}")
+            exemplar_ids = self.qdrant_service.retrieve_exemplar_ids(
+                query_text=f"{user_input} {section_details.name}",
+                grant_id=grant_id,
+                template_id=template_id,
+                section_id=section_id
+            )
+
+            exemplars = []
+            if exemplar_ids:
+                exemplars = await supabase_service.get_exemplars_by_ids(exemplar_ids) 
+            
             few_shot_str = self._format_few_shot_examples(exemplars)
             user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
         
@@ -303,7 +329,8 @@ class LLMService:
                 actor_model_info=model_to_use, 
                 critic_model_info=critic_model_info,
                 section_details=section_details,
-                user_input=user_input
+                user_input=user_input,
+                supabase_service=supabase_service
             )
             
             if ac_error:

@@ -136,7 +136,7 @@ async def update_dataset_entry(
         }
 
         # 調用 Qdrant 單筆更新方法
-        await qdrant_service.update_exemplar_by_db_id(
+        qdrant_service.update_exemplar_by_db_id(
             db_id=dataset_id,
             new_text=qdrant_point["text"],
             new_payload=qdrant_point["payload"],

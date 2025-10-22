@@ -482,3 +482,20 @@ class SupabaseService:
         logger.info(f"Calculated tokens -> Input: {input_token}, Output: {output_token}")
         asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token))
 
+    async def get_exemplars_by_ids(self, ids: List[int]) -> List[Dict[str, Any]]:
+        """
+        根據提供的 ID 列表，從 dataset_entries 表中高效地獲取多條範例記錄。
+        主要用於 RAG 流程，在從 Qdrant 拿到 ID 後，回來查詢完整的範例內容。
+        """
+        if not ids:
+            return []
+            
+        try:
+            query = self.client.from_("datasets").select("prompt, final_answer").in_("id", ids)
+            response = query.execute()
+            return response.data if response.data else []
+
+        except Exception as e:
+            print(f"Error fetching exemplars by IDs {ids} from Supabase: {e}")
+            return []
+
