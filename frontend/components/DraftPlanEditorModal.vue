@@ -145,11 +145,12 @@ const dynamicInputsWithValues = computed(() => {
           key: key,
           label: prop.description || key.replace("_", " "),
           value:
-            editableDraft.user_input?.dynamic_fields?.[prop.description] || "",
+            editableDraft.user_input?.dynamic_fields?.[prop.description] ||
+            editableDraft.user_input?.dynamic_fields?.[key] ||
+            "",
         });
       });
     }
-
     // 无论是否有 inputs，都创建 group 以显示 custom_prompt_list
     groupedInputs.push({
       sectionId: section.id,

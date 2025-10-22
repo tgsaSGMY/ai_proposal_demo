@@ -186,17 +186,17 @@
 <script setup>
 import { ref } from "vue";
 import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
-const { success } = useNotifications();
 
 const props = defineProps({
   section: { type: Object, required: true },
   models: { type: Array, required: true },
   currentRule: { type: Object, default: null },
+  defaultModelId: { type: String, default: null },
   templateId: { type: String, default: null },
   grantId: { type: String, default: null },
 });
 
-const emit = defineEmits(["close", "save", "settings-updated"]);
+const emit = defineEmits(["close", "save", "settings-updated", "delete"]);
 
 const isSavingSettings = ref(false);
 const config = useRuntimeConfig();
@@ -205,9 +205,15 @@ const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const activeTab = ref("internal");
 const selectedModelId = ref(null);
 const settingsPanelRef = ref(null);
+const defaultModelId = ref(null);
 
 // 計算當前規則應用的模型ID
 const currentModelId = computed(() => props.currentRule?.model_id);
+
+// 計算默認模型ID（通過 props 傳入的 defaultModel）
+const computedDefaultModelId = computed(
+  () => props.defaultModelId || defaultModelId.value
+);
 
 // 分離內部和外部模型
 const internalModels = computed(() =>
@@ -236,20 +242,31 @@ onMounted(() => {
 
 async function saveChanges() {
   try {
-    // 1. 如果有模型選擇變更，儲存模型選擇
+    // 1. 如果有模型選擇變更，判斷是否需要儲存或刪除
     if (
       selectedModelId.value &&
       selectedModelId.value !== currentModelId.value
     ) {
-      const newRulePayload = {
-        grant_id: props.grantId || null,
-        template_id: props.templateId || null,
-        section_id: props.section.id,
-        model_id: selectedModelId.value,
-        priority: 20,
-        description: `特定模型配置`,
-      };
-      emit("save", newRulePayload);
+      if (
+        computedDefaultModelId.value &&
+        selectedModelId.value === computedDefaultModelId.value
+      ) {
+        // 發出刪除事件，由父組件處理刪除
+        if (props.currentRule?.id) {
+          emit("delete", props.currentRule.id);
+        }
+      } else {
+        // 否則，創建新規則
+        const newRulePayload = {
+          grant_id: props.grantId || null,
+          template_id: props.templateId || null,
+          section_id: props.section.id,
+          model_id: selectedModelId.value,
+          priority: 20,
+          description: `特定模型配置`,
+        };
+        emit("save", newRulePayload);
+      }
     }
 
     // 2. 如果在 prompt 編輯頁面或者有可能編輯過 prompt，儲存 prompt 設定

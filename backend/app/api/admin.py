@@ -51,6 +51,25 @@ async def set_routing_rule(
         logger.error(f"Failed to set routing rule: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/routing-rules/{rule_id}", status_code=200)
+async def delete_routing_rule(
+    rule_id: str,
+    request: Request,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """刪除指定 ID 的路由規則"""
+    try:
+        await supabase_service.delete_routing_rule(rule_id)
+        
+        # 動態更新應用程式的實時狀態
+        request.app.state.routing_rules = await supabase_service.get_all_routing_rules()
+        logger.info(f"Routing rule '{rule_id}' deleted successfully. Reloaded rules.")
+        
+        return {"status": "success", "message": f"Routing rule '{rule_id}' deleted successfully."}
+    except Exception as e:
+        logger.error(f"Failed to delete routing rule: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.put("/sections/{section_id}/prompts", status_code=200, summary="更新章節的自定義指令列表")
 async def update_section_prompts_endpoint(
     request: Request,

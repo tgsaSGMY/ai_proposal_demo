@@ -3,14 +3,14 @@
     <div
       class="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8"
     >
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4"
+      >
         <div>
           <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
             模型配置中心
           </h1>
-          <p class="text-gray-500">
-            為不同的計劃書章節分配最適合的 AI 模型。
-          </p>
+          <p class="text-gray-500">為不同的計劃書章節分配最適合的 AI 模型。</p>
         </div>
         <button
           @click="refreshConfigurations"
@@ -38,8 +38,18 @@
             fill="none"
             stroke="currentColor"
           >
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
           </svg>
           {{ isRefreshing ? "刷新中..." : "刷新配置" }}
         </button>
@@ -143,8 +153,10 @@
       :template-id="selectedTemplateId"
       :grant-id="selectedGrantId"
       :current-rule="getAppliedRuleForSection(selectedSection.id)"
+      :default-model-id="defaultModelId"
       @close="closeModal"
       @save="handleSaveRule"
+      @delete="handleDeleteRule"
       @settings-updated="handleSettingsUpdated"
     />
   </div>
@@ -161,7 +173,8 @@ useHead({
   meta: [
     {
       name: "description",
-      content: "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
+      content:
+        "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
     },
     {
       name: "keywords",
@@ -173,7 +186,8 @@ useHead({
     },
     {
       property: "og:description",
-      content: "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
+      content:
+        "為計畫書不同章節配置最適合的 AI 模型。提供靈活的路由規則和模型選擇。",
     },
   ],
 });
@@ -258,6 +272,14 @@ async function refreshConfigurations() {
 }
 
 // --- Logic & Methods ---
+const defaultModelId = computed(() => {
+  // 通過優先級系統查找默認應用的模型 ID
+  const globalRule = routingRules.value.find(
+    (r) => !r.grant_id && !r.section_id
+  );
+  return globalRule ? globalRule.model_id : null;
+});
+
 function getAppliedRuleForSection(sectionId) {
   // 規則已按優先級排序，第一個匹配的就是最高優先級的規則
   // 1. 查找完全匹配 section_id 的規則
@@ -317,6 +339,30 @@ async function handleSaveRule(rulePayload) {
   } catch (error) {
     console.error("Failed to save routing rule:", error);
     errorNotification(`儲存失敗: ${error.message}`);
+  }
+}
+
+async function handleDeleteRule(ruleId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/routing-rules/${ruleId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Failed to delete rule");
+    }
+
+    // 更新 UI
+    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`);
+    routingRules.value = await rulesRes.json();
+
+    closeModal();
+    success("已移除自訂配置，將使用默認模型！");
+  } catch (error) {
+    console.error("Failed to delete routing rule:", error);
+    errorNotification(`刪除失敗: ${error.message}`);
   }
 }
 

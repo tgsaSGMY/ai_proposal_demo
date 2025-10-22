@@ -362,6 +362,15 @@ class SupabaseService:
         else:
             raise Exception("Failed to upsert routing rule. Check unique constraints.")
     
+    async def delete_routing_rule(self, rule_id: str) -> bool:
+        """根據 ID 刪除路由規則"""
+        try:
+            response = self.client.from_("routing_rules").delete().eq("id", rule_id).execute()
+            return len(response.data) > 0
+        except Exception as e:
+            logger.error(f"Failed to delete routing rule with id '{rule_id}': {e}", exc_info=True)
+            raise Exception(f"Failed to delete routing rule: {str(e)}")
+    
 
     async def add_dataset_entry(
         self,
