@@ -142,6 +142,7 @@ import DraftPlanList from "~/components/DraftPlanList.vue";
 import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
 import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
 import InputPromptModal from "~/components/InputPromptModal.vue";
+import { useLoading } from "~/composables/useLoading";
 
 // Modal state for renaming and creating drafts
 const isInputModalVisible = ref(false);
@@ -155,30 +156,13 @@ const { success, error: errorNotification } = useNotifications();
 const { confirm } = useConfirm();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-
+const { show: showLoading, hide: hideLoading } = useLoading();
 const { allConfigs, fetchAllConfigs } = usePlanGenerator();
 
 const drafts = ref([]);
 const selectedDraft = ref(null);
 const isBatchModalVisible = ref(false);
 let realtimeChannel = null;
-
-const sectionsForSelectedDraft = computed(() => {
-  if (
-    !selectedDraft.value ||
-    !selectedDraft.value.template_id ||
-    !allConfigs.value.length
-  ) {
-    return [];
-  }
-  const grant = allConfigs.value.find(
-    (g) => g.id === selectedDraft.value.grant_id
-  );
-  const template = grant?.templates.find(
-    (t) => t.id === selectedDraft.value.template_id
-  );
-  return template?.sections || [];
-});
 
 async function handleRenameDraft(draft) {
   inputModalTitle.value = "重命名企划";
@@ -308,6 +292,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
 
   try {
     // Need to find sections based on template_id to iterate
+    showLoading();
     const grant = allConfigs.value.find((g) => g.id === grant_id);
     const template = grant?.templates.find((t) => t.id === template_id);
     if (!template || !template.sections) {
@@ -351,8 +336,10 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
     });
     selectedDraft.value = null;
     await fetchDrafts();
+    hideLoading();
   } catch (e) {
     errorNotification(`保存失败: ${e.message}`);
+    hideLoading();
   }
 }
 </script>

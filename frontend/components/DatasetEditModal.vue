@@ -32,7 +32,7 @@
             class="border border-4 p-2 w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 text-sm sm:text-base transition-all duration-150"
           >
             <option value="golden_samples">黃金樣本</option>
-            <option value="synthetic_data">合成資料</option>
+            <option value="synthetic_data">生成資料</option>
             <option value="external_direct">外部資料</option>
           </select>
         </div>
