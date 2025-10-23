@@ -14,7 +14,7 @@ import logging
 import time
 from app.utils.token_calculator import calculate_openai_tokens
 from datetime import datetime, timezone, timedelta
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 logger = logging.getLogger(__name__)
 from app.config import (
@@ -31,10 +31,10 @@ class SupabaseService:
         self.bucket_name = SUPABASE_BUCKET_NAME
         self.engine = create_engine(DATABASE_URL)
         self.Session = sessionmaker(bind=self.engine)
-        self.embedding_model: Optional[SentenceTransformer] = None
+        self.embedding_model: Optional[TextEmbedding] = None
 
         try:
-            self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            self.embedding_model = TextEmbedding(EMBEDDING_MODEL_NAME)
             logger.info("Embedding model initialized for SupabaseService.")
         except Exception as e:
             logger.warning(f"Failed to initialize embedding model '{EMBEDDING_MODEL_NAME}': {e}")
@@ -395,7 +395,8 @@ class SupabaseService:
 
         try:
             # 1. 为查询文本生成嵌入
-            query_embedding = self.embedding_model.encode(query_prompt).tolist()
+            query_embedding_ndarray = list(self.embedding_model.embed(query_prompt))[0]
+            query_embedding = query_embedding_ndarray.tolist()
 
             # 2. 调用我们之前创建的 PostgreSQL 函数
             params = {
@@ -430,7 +431,8 @@ class SupabaseService:
     ) -> Dict[str, Any]:
         """向 datasets 表中插入一条新的记录"""
         try:
-            prompt_embedding = self.embedding_model.encode(prompt).tolist()
+            prompt_embedding_ndarray = list(self.embedding_model.embed(prompt))[0]
+            prompt_embedding = prompt_embedding_ndarray.tolist()
 
             response = self.client.from_("datasets").insert({
                 "source_type": source_type,
