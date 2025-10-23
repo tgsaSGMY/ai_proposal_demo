@@ -41,7 +41,6 @@ AI 提案平台是一個智能化的計劃書生成系統，利用先進的大�
 
 - FastAPI：高性能的 Python Web 框架
 - SQLAlchemy：ORM 數據庫操作
-- Qdrant：向量數據庫，用於語義檢索
 - Supabase：PostgreSQL 托管服務，作為主要數據庫
 - Tiktoken / FastEmbed：文本編碼和嵌入生成
 - Scikit-learn：機器學習工具
@@ -60,7 +59,6 @@ AI 提案平台是一個智能化的計劃書生成系統，利用先進的大�
 - Python 3.8 以上
 - Node.js 18 以上（npm 或 yarn）
 - Supabase 帳戶（用於數據庫服務）
-- Qdrant 實例（向量檢索）
 - LLM API 密鑰（OpenAI 或其他支持的模型提供商）
 
 ### 後端部署
@@ -84,9 +82,6 @@ DATABASE_URL=postgresql://user:password@host:port/database
 SUPABASE_URL=https://your-supabase-url.supabase.co
 SUPABASE_KEY=your-supabase-anon-key
 
-# Qdrant 向量數據庫
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=your-qdrant-api-key
 
 # LLM 模型配置
 OPENAI_API_KEY=your-openai-api-key
@@ -235,7 +230,6 @@ backend/
 │   ├── services/               # 外部服務集成
 │   │   ├── llm_service.py      # LLM 調用服務
 │   │   ├── supabase_service.py # Supabase 數據庫服務
-│   │   └── qdrant_service.py   # Qdrant 向量檢索服務
 │   └── utils/                  # 工具函數
 │       ├── extract_json.py     # JSON 提取工具
 │       ├── formatting.py       # 文本格式化
@@ -339,7 +333,6 @@ Nuxt 應用可部署到 Vercel、Netlify 等平台
 
 - `DATABASE_URL`：PostgreSQL 連接字符串
 - `SUPABASE_URL`、`SUPABASE_KEY`：Supabase 配置
-- `QDRANT_URL`、`QDRANT_API_KEY`：向量數據庫配置
 - `OPENAI_API_KEY`：LLM API 密鑰
 - `DEBUG`：調試模式開關
 
@@ -349,10 +342,6 @@ Nuxt 應用可部署到 Vercel、Netlify 等平台
 - `NUXT_PUBLIC_API_URL`：後端 API 地址
 
 ### 常見問題
-
-#### 無法連接到 Qdrant
-
-檢查 QDRANT_URL 和 API 密鑰配置，確保 Qdrant 服務運行中
 
 #### 前端 API 請求失敗
 

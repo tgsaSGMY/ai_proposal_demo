@@ -3,9 +3,9 @@
 import httpx
 import json
 import re
+from functools import partial
 from typing import Dict, Any, Tuple, Optional, List, Callable, Awaitable
 from app.config import OPENAI_API_KEY, OLLAMA_BASE_URL
-from app.services.qdrant_service import QdrantService
 from app.models import SectionConfig, SectionGenerateResponse 
 from app.utils.extract_json import extract_json_block
 from app.models import SectionGenerateResponse
@@ -20,43 +20,32 @@ logger = logging.getLogger(__name__)
 GenerationFunc = Callable[..., Awaitable[Tuple[Optional[str], Optional[Dict]]]]
 
 class LLMService:
-    def __init__(self, qdrant_service: QdrantService):
-        self.qdrant_service = qdrant_service 
+    def __init__(self):
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
 
 
-    def _format_few_shot_examples(self, exemplars: List[Dict[str, Any]]) -> str:
+    async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
+        exemplars = await supabase_service.retrieve_similar_datasets(
+            query_prompt=user_input,
+            grant_id=section_details.grant_id,
+            template_id=section_details.template_id,
+            section_id=section_details.id,
+            limit=3
+        )
         if not exemplars:
             return ""
         
-        formatted_examples = ["以下是几个你可以参考的优秀范例："]
-        
-        for i, ex in enumerate(exemplars):
-            topic = ex.get('prompt', '（无 prompt 内容）')
-            output_json = json.dumps(ex.get('final_answer', {}), ensure_ascii=False, indent=2)
-    
-            formatted_examples.append(f"\n--- 范例 {i+1} ---")
-            formatted_examples.append(f"输入提示 (Prompt): {topic}") 
-            formatted_examples.append(f"期望输出 (JSON): \n{output_json}")
-
-        formatted_examples.append("\n--- 范例结束 ---\n")
-        return "\n".join(formatted_examples)
+        formatted_examples = []
+        for ex in exemplars:
+            prompt = ex.get('prompt', '')
+            answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
+            formatted_examples.append(f"范例输入:\n{prompt}\n范例输出:\n{answer}")
+        return "以下是一些高质量范例:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
 
     async def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> List[Dict]:
         """建立 Actor 首次生成時的 messages"""
-        exemplar_ids = self.qdrant_service.retrieve_exemplar_ids(
-            query_text=f"{user_input} {section_details.name}",
-            grant_id=section_details.grant_id,
-            template_id=section_details.template_id,
-            section_id=section_details.id
-        )
-
-        exemplars = []
-        if exemplar_ids:
-            exemplars = await supabase_service.get_exemplars_by_ids(exemplar_ids)
-
-        few_shot_str = self._format_few_shot_examples(exemplars)
+        few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service )
         schema_str = json.dumps(section_details.json_schema, ensure_ascii=False)
         return [
             {"role": "system", "content": "You are a helpful assistant designed to output JSON."},
@@ -283,18 +272,7 @@ class LLMService:
             # --- 流程 A: 外部或基础 Ollama API 调用 ---
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
 
-            exemplar_ids = self.qdrant_service.retrieve_exemplar_ids(
-                query_text=f"{user_input} {section_details.name}",
-                grant_id=grant_id,
-                template_id=template_id,
-                section_id=section_id
-            )
-
-            exemplars = []
-            if exemplar_ids:
-                exemplars = await supabase_service.get_exemplars_by_ids(exemplar_ids) 
-            
-            few_shot_str = self._format_few_shot_examples(exemplars)
+            few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
             user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
         
             # 檢查是否有自定義指令，並將它們附加到 user_content

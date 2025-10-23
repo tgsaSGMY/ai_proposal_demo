@@ -3,7 +3,6 @@
 import logging
 from fastapi import FastAPI
 from app.services.supabase_service import SupabaseService
-from app.services.qdrant_service import QdrantService
 from app.services.llm_service import LLMService
 import asyncio
 
@@ -45,7 +44,7 @@ async def reload_configurations(app: FastAPI):
 async def startup_event_handler(app: FastAPI):
     """
     主要任務:
-    1. 初始化所有核心服務 (Supabase, Qdrant, LLM)。
+    1. 初始化所有核心服務 (Supabase, LLM)。
     2. 將服務實例附加到 app.state，以便在整個應用程式中共享。
     3. 從數據庫預加載必要的配置數據到內存中，以提高後續請求的性能。
     """
@@ -55,12 +54,10 @@ async def startup_event_handler(app: FastAPI):
         # --- 1. 初始化核心服務 ---
         logger.info("Initializing core services...")
         supabase_service = SupabaseService()
-        qdrant_service = QdrantService()
-        llm_service = LLMService(qdrant_service) # LLMService 依賴 QdrantService
+        llm_service = LLMService()
 
         # --- 2. 將服務實例附加到 app.state ---
         app.state.supabase_service = supabase_service
-        app.state.qdrant_service = qdrant_service
         app.state.llm_service = llm_service
         logger.info("Core services initialized and attached to app state.")
 

@@ -14,10 +14,11 @@ import logging
 import time
 from app.utils.token_calculator import calculate_openai_tokens
 from datetime import datetime, timezone, timedelta
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 from app.config import (
-    SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET_NAME, DATABASE_URL
+    SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET_NAME, DATABASE_URL, EMBEDDING_MODEL_NAME
 )
 from app.models import GrantConfig, TemplateConfig, SectionConfig, RoutingRule, SourceType 
 
@@ -30,6 +31,13 @@ class SupabaseService:
         self.bucket_name = SUPABASE_BUCKET_NAME
         self.engine = create_engine(DATABASE_URL)
         self.Session = sessionmaker(bind=self.engine)
+        self.embedding_model: Optional[SentenceTransformer] = None
+
+        try:
+            self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            logger.info("Embedding model initialized for SupabaseService.")
+        except Exception as e:
+            logger.warning(f"Failed to initialize embedding model '{EMBEDDING_MODEL_NAME}': {e}")
 
     @contextmanager # 很方便地创建可以配合 with 语法的上下文管理器。
     def get_db_session(self):
@@ -372,6 +380,44 @@ class SupabaseService:
             raise Exception(f"Failed to delete routing rule: {str(e)}")
     
 
+    async def retrieve_similar_datasets(
+        self,
+        query_prompt: str,
+        grant_id: str,
+        template_id: str,
+        section_id: str,
+        limit: int = 3,
+        threshold: float = 0.7
+    ) -> List[Dict[str, Any]]:
+        if not self.embedding_model:
+            logger.warning("Embedding model is not available, cannot retrieve similar datasets.")
+            return []
+
+        try:
+            # 1. 为查询文本生成嵌入
+            query_embedding = self.embedding_model.encode(query_prompt).tolist()
+
+            # 2. 调用我们之前创建的 PostgreSQL 函数
+            params = {
+                'query_embedding': query_embedding,
+                'match_grant_id': grant_id,
+                'match_template_id': template_id,
+                'match_section_id': section_id,
+                'match_threshold': threshold,
+                'match_count': limit
+            }
+            response = self.client.rpc('match_datasets', params).execute()
+            
+            if response.data:
+                logger.info(f"Found {len(response.data)} similar datasets for section '{section_id}'.")
+                return response.data
+            else:
+                logger.info(f"No similar datasets found for section '{section_id}'.")
+                return []
+        except Exception as e:
+            logger.error(f"Error retrieving similar datasets via RPC: {e}")
+            return []
+        
     async def add_dataset_entry(
         self,
         source_type: str,
@@ -384,6 +430,8 @@ class SupabaseService:
     ) -> Dict[str, Any]:
         """向 datasets 表中插入一条新的记录"""
         try:
+            prompt_embedding = self.embedding_model.encode(prompt).tolist()
+
             response = self.client.from_("datasets").insert({
                 "source_type": source_type,
                 "grant_id": grant_id,
@@ -391,10 +439,10 @@ class SupabaseService:
                 "section_id": section_id,
                 "prompt": prompt,
                 "final_answer": final_answer,
+                "embedding": prompt_embedding,
                 "rejected_answer": rejected_answer
             }).execute()
             insert_data = response.data  
-            insert_data_cleaned = {k: v for k, v in insert_data[0].items() if v is not None}  
             
             if response.data: 
                 print(f"Successfully inserted {source_type} entry for section {section_id}.")
@@ -438,7 +486,15 @@ class SupabaseService:
             raise
 
     async def update_dataset_by_id(self, dataset_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """根據 ID 更新 datasets 表中的記錄"""
+        """根據 ID 更新 datasets 表中的記錄，並同步更新向量嵌入"""
+        if "prompt" in data and data["prompt"]:
+            try:
+                query_embedding = self.embedding_model.encode(data["prompt"]).tolist()
+                data["embedding"] = query_embedding
+            except Exception as e:
+                logger.error(f"Failed to regenerate embedding for dataset {dataset_id}: {e}", exc_info=True)
+                data.pop("embedding", None)
+
         response = self.client.from_("datasets").update(data).eq("id", dataset_id).execute()
         return response.data[0] if response.data else None
 
@@ -485,7 +541,6 @@ class SupabaseService:
     async def get_exemplars_by_ids(self, ids: List[int]) -> List[Dict[str, Any]]:
         """
         根據提供的 ID 列表，從 dataset_entries 表中高效地獲取多條範例記錄。
-        主要用於 RAG 流程，在從 Qdrant 拿到 ID 後，回來查詢完整的範例內容。
         """
         if not ids:
             return []

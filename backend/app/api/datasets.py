@@ -6,8 +6,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from app.models import SaveDatasetRequest, DatasetEntry, DatasetEntry
 from app.services.supabase_service import SupabaseService
-from app.services.qdrant_service import QdrantService
-from .dependencies import get_supabase_service, get_qdrant_service
+from .dependencies import get_supabase_service
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +20,17 @@ async def save_dataset_entries(
     req: SaveDatasetRequest,
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
-    qdrant_service: QdrantService = Depends(get_qdrant_service),
 ):
     """
-    異步保存數據集條目到 Supabase，並將對應的向量數據 upsert 到 Qdrant。
+    異步保存數據集條目到 Supabase。
     此操作立即返回，並在後台執行實際的資料庫寫入。
     """
     
     async def background_task(entries: List[DatasetEntry]):
         logger.info(f"Background task started: saving {len(entries)} dataset entries.")
-        qdrant_points = []
         for entry in entries:
             try:
-                new_supabase_entry = await supabase_service.add_dataset_entry(
+                await supabase_service.add_dataset_entry(
                     source_type=entry.source_type,
                     grant_id=entry.grant_id,
                     template_id=entry.template_id,
@@ -42,32 +39,8 @@ async def save_dataset_entries(
                     final_answer=entry.final_answer,
                     rejected_answer=entry.rejected_answer
                 )
-                
-                if new_supabase_entry and 'id' in new_supabase_entry:
-                    db_id = new_supabase_entry['id']
-                    qdrant_points.append({
-                        "db_id": db_id, 
-                        "text": f"User Idea: {entry.prompt}",
-                        "payload": {
-                            "db_id": db_id,
-                            "source_type": entry.source_type,
-                            "grant_id": entry.grant_id,
-                            "template_id": entry.template_id,
-                            "section_id": entry.section_id,
-                            "prompt": entry.prompt[:200]
-                        }
-                    })
-                else:
-                    logger.warning(f"Skipping Qdrant entry for section {entry.section_id} due to no ID from Supabase.")
             except Exception as e:
                 logger.error(f"Failed to process entry for section {entry.section_id}: {e}", exc_info=True)
-
-        if qdrant_points:
-            try:
-                qdrant_service.upsert_exemplars(qdrant_points)
-                logger.info(f"Successfully upserted {len(qdrant_points)} points to Qdrant.")
-            except Exception as e:
-                logger.error(f"Failed to upsert points to Qdrant: {e}", exc_info=True)
         logger.info("Background dataset saving task finished.")
 
     background_tasks.add_task(background_task, req.entries)
@@ -99,10 +72,9 @@ async def update_dataset_entry(
     dataset_id: int,
     req: DatasetEntry,   
     supabase_service: SupabaseService = Depends(get_supabase_service),
-    qdrant_service: QdrantService = Depends(get_qdrant_service),
 ):
     """
-    同步更新 Supabase 和 Qdrant 中的一筆數據集條目（Qdrant 的更新策略是「刪除舊的，再插入新的」）。
+    更新 Supabase 中的一筆數據集條目，並重新計算向量嵌入。
     """
     try:
         # 更新 Supabase
@@ -121,28 +93,7 @@ async def update_dataset_entry(
         if not updated_entry:
             raise HTTPException(status_code=404, detail="Dataset not found in Supabase")
 
-        # 更新 Qdrant（單筆 upsert）
-        qdrant_point = {
-            "db_id": dataset_id,
-            "text": f"User Idea: {req.prompt}",
-            "payload": {
-                "db_id": dataset_id,
-                "source_type": req.source_type,
-                "grant_id": req.grant_id,
-                "template_id": req.template_id,
-                "section_id": req.section_id,
-                "prompt": req.prompt[:200],
-            },
-        }
-
-        # 調用 Qdrant 單筆更新方法
-        qdrant_service.update_exemplar_by_db_id(
-            db_id=dataset_id,
-            new_text=qdrant_point["text"],
-            new_payload=qdrant_point["payload"],
-        )
-
-        return {"message": f"Dataset {dataset_id} updated successfully in both Supabase and Qdrant."}
+        return {"message": f"Dataset {dataset_id} updated successfully."}
 
     except HTTPException:
         raise
@@ -154,21 +105,15 @@ async def update_dataset_entry(
 async def delete_dataset_entry(
     dataset_id: int, 
     supabase: SupabaseService = Depends(get_supabase_service),
-    qdrant: QdrantService = Depends(get_qdrant_service)
 ):
-    """同步刪除 Supabase 和 Qdrant 中的數據。"""
+    """刪除 Supabase 中的數據集紀錄。"""
     try:
-        # 1. 從 Qdrant 刪除
-        await qdrant.delete_exemplar_by_db_id(dataset_id)
-        logger.info(f"Deleted vector for dataset ID {dataset_id} from Qdrant.")
-
-        # 2. 從 Supabase 刪除
         deleted_from_supabase = await supabase.delete_dataset_by_id(dataset_id)
         if not deleted_from_supabase:
-            logger.warning(f"Dataset ID {dataset_id} not found in Supabase, but deletion was attempted (Qdrant vector may have been removed).")
-        
+            logger.warning(f"Dataset ID {dataset_id} not found in Supabase, deletion skipped.")
+
         logger.info(f"Deleted dataset ID {dataset_id} from Supabase.")
-        return {"message": "Dataset entry deleted successfully from both Supabase and Qdrant."}
+        return {"message": "Dataset entry deleted successfully."}
     except Exception as e:
         logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
