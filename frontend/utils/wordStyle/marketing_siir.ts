@@ -268,7 +268,7 @@ function renderFeasibilityAnalysis(data: any, renderer: ContentRenderer<any>) {
       if (hasData) {
         renderer.addArrayTitle("五力分析");
 
-        const fiveHeaders = ["力量", "說明"];
+        const fiveHeaders = ["標題", "說明"];
         const fiveRows = [
           ["現有競爭者競爭強度", fiveForces.現有競爭者競爭強度 || ""],
           ["潛在競爭者議價能力", fiveForces.潛在競爭者議價能力 || ""],

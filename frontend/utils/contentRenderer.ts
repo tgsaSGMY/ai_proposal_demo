@@ -163,14 +163,15 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
 
     // 表格行
     rows.forEach((row, rowIndex) => {
-      // 檢查是否是需要 highlight 的 header 行（Opportunity 機會、Threat 威脅）
-      const isSecondaryHeader = row.some(
-        (cell) =>
-          cell.includes("Opportunity") ||
-          cell.includes("Threat") ||
-          cell.includes("機會") ||
-          cell.includes("威脅")
-      );
+      // 檢查是否是 SWOT 表格的 secondary header 行
+      // 只有當整行都是「Opportunity機會」和「Threat威脅」時，才是 secondary header
+      const isSecondaryHeader =
+        row.length === 2 &&
+        ((row[0] === "Opportunity機會" && row[1] === "Threat威脅") ||
+          (row[0] &&
+            row[0].includes("Opportunity") &&
+            row[1] &&
+            row[1].includes("Threat")));
 
       tableRows.push(
         new TableRow({
@@ -178,7 +179,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             // 處理單元格內容：支持分行和圖片高亮
             const cellParagraphs = this.createCellParagraphs(
               cell,
-              isSecondaryHeader
+              Boolean(isSecondaryHeader)
             );
 
             return new TableCell({
