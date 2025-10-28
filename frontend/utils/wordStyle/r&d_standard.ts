@@ -1,15 +1,6 @@
-// frontend/utils/exportToWord.ts
-
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-  AlignmentType,
-} from "docx";
-import type { ContentRenderer } from "./contentRenderer";
-import { DocxRenderer, HtmlRenderer } from "./contentRenderer";
+import { Document, Packer, AlignmentType } from "docx";
+import type { ContentRenderer } from "../contentRenderer";
+import { DocxRenderer } from "../contentRenderer";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
 function keyToTitle(key: string): string {
@@ -24,14 +15,14 @@ const nameSwitchMap: Record<string, string> = {
 };
 
 function nameSwitching(key: string): string {
-  return nameSwitchMap[key] ?? key; // 如果找不到對應，就回傳原本的 key
+  return nameSwitchMap[key] ?? key;
 }
 
 // --- 核心：遞歸渲染內容的函數 ---
 function renderSectionContent(
   data: any,
-  schema: any, // 傳入對應的 schema
-  renderer: ContentRenderer<any> // 接收任何一種渲染器
+  schema: any,
+  renderer: ContentRenderer<any>
 ) {
   if (!data || typeof data !== "object") {
     if (data) renderer.addParagraph(String(data));
@@ -58,7 +49,6 @@ function renderSectionContent(
               const itemSchema = propInfo.items?.properties;
               const usedKeys = new Set<string>();
 
-              // 優先處理 title/description 成對情況
               const titleKey = Object.keys(item).find((k) =>
                 k.includes("title")
               );
@@ -74,7 +64,6 @@ function renderSectionContent(
                 usedKeys.add(titleKey).add(descKey);
               }
 
-              // 處理剩餘字段
               for (const itemKey in itemSchema) {
                 if (
                   usedKeys.has(itemKey) ||
@@ -92,7 +81,6 @@ function renderSectionContent(
                     keyToTitle(itemKey)
                 );
 
-                // 如果是第一個被渲染的項目，且不是成對的項目，則加上編號
                 if (usedKeys.size === 0) {
                   renderer.addNumberedListItem(numberingIndex, fieldValue);
                 } else {
@@ -106,11 +94,9 @@ function renderSectionContent(
           });
         }
       } else if (typeof value === "object" && value !== null) {
-        // 遞歸處理嵌套對象
         renderer.addArrayTitle(title);
         renderSectionContent(value, propInfo, renderer);
       } else {
-        // 處理簡單的鍵值對或段落
         if (
           key.toLowerCase().includes("paragraph") ||
           key.toLowerCase().includes("description")
@@ -124,88 +110,7 @@ function renderSectionContent(
   }
 }
 
-export async function exportPlanToWord(
-  sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>,
-  grantId?: string,
-  templateId?: string
-) {
-  // 根據 grant 和 template 分發到對應的 grant template 函數
-  const grantTemplateKey = `${grantId}_${templateId}`;
-
-  // 動態導入對應的 grant template 函數
-  try {
-    let exportFn: any;
-
-    // 根據 grantId 和 templateId 映射到對應的導出函數
-    console.log("Determining export function for key:", grantTemplateKey);
-    switch (grantTemplateKey) {
-      case "central_phase1":
-        const { exportPlanToWordCentralPhase1 } = await import(
-          "./wordStyle/central_phase1"
-        );
-        exportFn = exportPlanToWordCentralPhase1;
-        break;
-      case "central_phase2":
-        const { exportPlanToWordCentralPhase2 } = await import(
-          "./wordStyle/central_phase2"
-        );
-        exportFn = exportPlanToWordCentralPhase2;
-        break;
-      case "local_standard":
-        const { exportPlanToWordLocalStandard } = await import(
-          "./wordStyle/local_standard"
-        );
-        exportFn = exportPlanToWordLocalStandard;
-        break;
-      case "marketing_imdp":
-        const { exportPlanToWordMarketingImdp } = await import(
-          "./wordStyle/marketing_imdp"
-        );
-        exportFn = exportPlanToWordMarketingImdp;
-        break;
-      case "marketing_siir":
-        const { exportPlanToWordMarketingSiir } = await import(
-          "./wordStyle/marketing_siir"
-        );
-        exportFn = exportPlanToWordMarketingSiir;
-        break;
-      case "r&d_standard":
-        const { exportPlanToWordRdStandard } = await import(
-          "./wordStyle/r&d_standard"
-        );
-        exportFn = exportPlanToWordRdStandard;
-        break;
-      case "r&d_transform_over_10":
-        const { exportPlanToWordRdTransformOver10 } = await import(
-          "./wordStyle/r&d_transform_over_10"
-        );
-        exportFn = exportPlanToWordRdTransformOver10;
-        break;
-      case "r&d_transform_under9":
-        const { exportPlanToWordRdTransformUnder9 } = await import(
-          "./wordStyle/r&d_transform_under9"
-        );
-        exportFn = exportPlanToWordRdTransformUnder9;
-        break;
-      default:
-        // 默認使用 exportPlanToWordDefault
-        exportFn = exportPlanToWordDefault;
-    }
-
-    return await exportFn(sections, planContent);
-  } catch (error) {
-    console.error(
-      `Failed to export using template ${grantTemplateKey}:`,
-      error
-    );
-    // 降級到默認導出
-    return exportPlanToWordDefault(sections, planContent);
-  }
-}
-
-// 默認導出函數（保留原有邏輯）
-async function exportPlanToWordDefault(
+export async function exportPlanToWordRdStandard(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>
 ) {
@@ -225,7 +130,6 @@ async function exportPlanToWordDefault(
   }
 
   const paragraphs = docxRenderer.getResult();
-  // === 定義文件樣式 ===
   const doc = new Document({
     styles: {
       paragraphStyles: [
@@ -237,7 +141,7 @@ async function exportPlanToWordDefault(
           quickFormat: true,
           run: {
             font: "MS Gothic",
-            size: 26, // 13pt
+            size: 26,
             bold: true,
           },
           paragraph: {
@@ -252,7 +156,7 @@ async function exportPlanToWordDefault(
           quickFormat: true,
           run: {
             font: "MS Gothic",
-            size: 22, // 11pt
+            size: 22,
             bold: true,
           },
           paragraph: {
@@ -266,10 +170,10 @@ async function exportPlanToWordDefault(
           quickFormat: true,
           run: {
             font: "MS Mincho",
-            size: 22, // 11pt
+            size: 22,
           },
           paragraph: {
-            spacing: { line: 276 }, // 約 1.15 倍行距
+            spacing: { line: 276 },
           },
         },
       ],
@@ -308,26 +212,4 @@ async function exportPlanToWordDefault(
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-}
-
-export function renderPlanToHtml(
-  sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
-): string {
-  const htmlRenderer = new HtmlRenderer();
-
-  for (const section of sections) {
-    const sectionData = planContent[section.id]?.content;
-
-    htmlRenderer.addSectionTitle(section.name);
-
-    if (!sectionData) {
-      htmlRenderer.addEmptyContentMessage();
-      continue;
-    }
-
-    renderSectionContent(sectionData, section.json_schema, htmlRenderer);
-  }
-
-  return htmlRenderer.getResult();
 }

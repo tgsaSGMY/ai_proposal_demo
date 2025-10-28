@@ -155,6 +155,8 @@ const props = defineProps({
   sections: { type: Array, default: () => [] },
   mode: { type: String, required: true },
   isLoading: { type: Boolean, default: false },
+  grantId: { type: String, required: false },
+  templateId: { type: String, required: false },
 });
 
 const fileInput = ref(null);
@@ -201,7 +203,12 @@ async function handleExportToWord() {
     errorNotification("請先選擇模板");
     return;
   }
-  await exportPlanToWord(props.sections, props.planContent);
+  await exportPlanToWord(
+    props.sections,
+    props.planContent,
+    props.grantId,
+    props.templateId
+  );
 }
 
 // 接收對象

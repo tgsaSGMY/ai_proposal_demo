@@ -51,6 +51,8 @@
           :plan-content="planContent"
           :sections="currentSections"
           :mode="editableDraft.mode"
+          :grant-id="editableDraft.grant_id"
+          :template-id="editableDraft.template_id"
           @update:content="onContentUpdateInModal"
           @autoFillComplete="handleAutoFillInModal"
           @generateUserInput="handleGenerateUserInput"
