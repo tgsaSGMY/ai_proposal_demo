@@ -74,16 +74,33 @@ async def generate_synthetic_input(
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
-    """根據模式生成用戶輸入，現在支持填充動態字段"""
+    """根據模式生成用戶輸入，使用統一的動態字段格式。
+    
+    支持兩種模式：
+    - 'random': 根據補助主題和模板生成新的隨機用戶輸入
+    - 'reverse': 根據已填充的動態字段內容生成摘要
+    
+    返回格式統一為 { main_idea, dynamic_fields: { label: value } }
+    """
+    print("hi")
     model_info = request.app.state.model_registry.get("gpt-4.1")
     if not model_info:
-        raise HTTPException(status_code=500, detail="GPT-3.5 Turbo model not configured for synthetic generation.")
+        raise HTTPException(status_code=500, detail="GPT-4 model not configured for synthetic generation.")
 
+    # 驗證請求模式
+    if req.mode not in ['random', 'reverse']:
+        raise HTTPException(status_code=400, detail="Invalid mode. Must be 'random' or 'reverse'.")
+    
+    # Reverse 模式需要 plan_content
+    if req.mode == 'reverse' and not req.plan_content:
+        raise HTTPException(status_code=400, detail="plan_content is required for 'reverse' mode.")
+
+    # 使用統一的動態字段標籤格式
+    field_labels = "\n".join([f"- {field.label}" for field in req.dynamic_fields_schema])
+    
     prompt = ""
-    if req.mode == 'random' and req.dynamic_fields_schema:
-        # 這是核心的 prompt 升級
-        field_labels = "\n".join([f"- {field.label}" for field in req.dynamic_fields_schema])
-        
+    if req.mode == 'random':
+        # 隨機生成模式：根據補助主題生成新的用戶輸入
         prompt = f"""
         你是一位嚴謹的商業策略專家，負責生成高品質的 AI 訓練資料。
 
@@ -99,117 +116,117 @@ async def generate_synthetic_input(
 
         ### 關於「鍵名」的嚴格規則
         - 鍵名必須**完全一致**（包含標點符號、括號、數字、中文序號、空格）。
-        - 不可自行添加或刪除任何編號（例如「（一）」「（二）」）。
-        - 不可更改任何鍵名（例如「創新性說明」→「創新說明」會視為錯誤）。
+        - 不可自行添加或刪除任何編號。
+        - 不可更改任何鍵名。
         - 如果有 N 個問題，你的輸出中 **dynamic_fields 物件也必須包含 N 個鍵**，一題都不能少。
 
         ---
 
         ### 輸出格式（請嚴格遵守 JSON 結構）
         你必須回傳**單一有效 JSON 物件**，且前後不能有任何額外文字或註解。  
-        結構如下（請完全照抄鍵名與層級）：
+        結構如下：
 
         ```json
         {{
-        "main_idea": "<在此輸入你生成的核心專案構想（單段文字）>",
+        "main_idea": "<核心專案構想（單段文字）>",
         "dynamic_fields": {{
             "<question_label_1>": "<針對問題 1 的詳細文字回答>",
             "<question_label_2>": "<針對問題 2 的詳細文字回答>",
             ...
         }}
         }}
+        ```
         
         📚 背景資訊
         補助主題：{req.grant_name}
-
         計畫書模板：{req.template_name}
 
         📝 問題清單（這些是 dynamic_fields 的鍵名，請逐一完整回答）：
         {field_labels}
 
-        ⚠️ 請再次確認：
-
-        你的回答必須包含所有上述問題的鍵名。
-
-        鍵名不可被改動、不可新增或刪除。
-
-        JSON 需可被標準 JSON parser 正確解析。
-
-        若任一問題遺漏、鍵名變動或格式錯誤，任務即視為失敗。
+        ⚠️ 重要提醒：
+        - 你的回答必須包含所有上述問題的鍵名
+        - 鍵名不可被改動、不可新增或刪除
+        - JSON 需可被標準 JSON parser 正確解析
+        - 若任一問題遺漏、鍵名變動或格式錯誤，任務即視為失敗
 
         現在，請直接生成最終的 JSON。
         """
-    elif req.mode == 'reverse' and req.json_output:
-        # --- 核心修改：重寫 'reverse' 模式的 Prompt ---
-        json_str = json.dumps(req.json_output, ensure_ascii=False, indent=2)
+    elif req.mode == 'reverse' and req.plan_content:
+        # Reverse 模式：根據計畫書內容反推動態字段
+        plan_content_str = json.dumps(req.plan_content, ensure_ascii=False, indent=2)
         
         prompt = f"""
-        你是一位頂級的數據結構轉換與內容摘要專家。
-        你的任務是根據一份詳細的、結構化的 JSON 輸入，完成兩件事：
-        1.  為整個 JSON 內容生成一個簡潔的核心思想摘要 (`main_idea`)。
-        2.  對 JSON 內的 `dynamic_fields` 部分進行結構保留式的值轉換與摘要。
+        你是一位頂級的商業內容分析和反推專家。
+        你的任務是根據已生成的計畫書內容，反推出原始的核心思想和動態字段內容。
+        
+        **任務說明：**
+        1. 為整個計畫書內容生成一個簡潔的核心想法摘要 (`main_idea`)。
+        2. 根據計畫書內容，為每個提供的動態字段標籤生成對應的內容。
+        3. 生成的內容應該是對計畫書內容的有效總結，而不是逐字複製。
 
-        **轉換規則 (針對 `dynamic_fields`)：**
-        1.  **保留結構**: 最終輸出的 `dynamic_fields` 必須保留與輸入完全相同的 key 和層級結構。絕不能新增、刪除或重命名任何 key。
-        2.  **摘要 `string` 值**: 如果一個字段的值是字符串，請將其內容摘要成更簡潔的核心短語或句子。
-        3.  **轉換 `array` 為 `string`**: 如果一個字段的值是數組 (Array)，無論數組內是字符串還是對象，你都必須將整個數組的內容總結成一段通順、連貫的描述性文字 (String)。
-        4.  **保留其他類型**: 如果字段的值是數字 (Number)、布爾值 (Boolean) 或 `null`，請保持原樣。
+        **生成規則：**
+        1. **使用提供的標籤作為鍵**: 輸出必須包含所有提供的標籤，且鍵名必須完全相同。
+        2. **提煉核心內容**: 將計畫書的相關內容提煉成簡潔、核心的表述。
+        3. **保留邏輯完整性**: 每個字段的內容應該邏輯清晰，能獨立理解。
+        4. **統一格式**: 所有值都應保持為 string 類型。
+
+        **必須使用的動態字段標籤（鍵名）：**
+        {field_labels}
 
         **最終輸出格式：**
-        你的回應必須是一個單一且有效的 JSON 物件，其結構如下：
+        你必須回傳一個有效的 JSON 物件，結構如下：
         ```json
         {{
-            "main_idea": "<這裡是你生成的、對整體內容的核心思想摘要，約 30-50 字>",
+            "main_idea": "<對計畫書的核心想法摘要，約 30-50 字>",
             "dynamic_fields": {{
-                // 這裡是你轉換和摘要後的內容，
-                // 結構與輸入的 json_output 完全一致，
-                // 但 string 值被摘要，array 值被轉換成了 string。
+                "<label_1>": "<根據計畫書內容提煉的內容>",
+                "<label_2>": "<根據計畫書內容提煉的內容>",
+                ...
             }}
         }}
         ```
 
         ---
-        **待處理的原始 JSON 輸入 (`json_output`)：**
+        **待分析的計畫書內容：**
         ```json
-        {json_str}
+        {plan_content_str}
         ```
         ---
 
-        現在，請根據上述規則生成完整的 JSON 回應。不要包含任何額外的解釋或註釋。
-        """
+        ### 重要提醒：
+        - 所有 key 必須與上述提供的標籤完全一致
+        - 必須包含所有提供的標籤，一個都不能少
+        - 只進行總結和提煉，不改變內容的原意
+        - JSON 必須有效且可被標準 parser 解析
+        - 不要包含額外的解釋或註釋
 
+        現在請生成最終的 JSON。
+        """
     else:
         raise HTTPException(status_code=400, detail="Invalid mode or missing required fields.")
 
-    # 異步調用和返回邏輯現在是共享的
-    async with httpx.AsyncClient() as client:
-        messages = [{"role": "user", "content": prompt}]
-        raw_output, error = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
+    try:
+        async with httpx.AsyncClient() as client:
+            messages = [{"role": "user", "content": prompt}]
+            response, error = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
 
-        if error:
-            raise HTTPException(status_code=500, detail=error.get("error", "Failed to generate input."))
-         
-        response_json, parse_error = extract_json_block(raw_output, "synthetic_input")
-        await supabase_service.log_cost_usage(req.user_id, model_info, messages, raw_output)
-
-        if parse_error:
-            raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
-
-        # 確保返回的 dynamic_fields 是個對象，而不是字符串
-        if req.mode == 'reverse' and isinstance(response_json.get("dynamic_fields"), dict):
-            # 遍歷原始 json_output 的結構，確保返回的結構與之匹配
-            original_structure = req.json_output
-            returned_structure = response_json["dynamic_fields"]
             
-            # 我們期望 returned_structure 的 key 集合是 original_structure 的 key 集合的子集或相等
-            if not set(returned_structure.keys()).issubset(set(original_structure.keys())):
-                logger.warning("AI may have returned an incorrect structure for dynamic_fields in reverse mode.")
-            return response_json
-        elif req.mode == 'reverse':
-            # 如果 AI 返回的 dynamic_fields 不是一個字典，說明它沒有遵循指令
-            raise HTTPException(status_code=500, detail="LLM failed to return a valid dictionary for 'dynamic_fields'.")
-
-        return response_json
+            response_text = response
+            # 使用統一的提取邏輯
+            extracted_json, parse_error = extract_json_block(response_text, "synthetic_input")
+            
+            if parse_error:
+                raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
+            
+            # 返回統一格式
+            return {
+                "main_idea": extracted_json.get("main_idea", ""),
+                "dynamic_fields": extracted_json.get("dynamic_fields", {})
+            }
+    except Exception as e:
+        logger.error(f"Error in generate_synthetic_input: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating synthetic input: {str(e)}")
       
 @router.post("/autofill_from_document", summary="從文檔自動填充計劃書內容")
 async def autofill_from_document(
@@ -217,7 +234,7 @@ async def autofill_from_document(
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
-    user_id: str = "admin_user"
+    user_id: str = "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5"
 ):
     """
     接收文檔純文字和多個章節的 schema，
@@ -232,46 +249,59 @@ async def autofill_from_document(
 
     # 構建一個強有力的 System Prompt
     system_prompt = """
-    你是一位頂級的數據提取與結構化專家。你的唯一任務是將一份非結構化的文檔，嚴格且精確地映射到多個預定義的 JSON 結構中。你必須像一個精密的機器一樣工作，只處理和轉換信息，絕不創造、解釋或添加任何原文不存在的內容。
+   你是一個高精度、有上下文感知能力的文本提取引擎。你的唯一任務是將一份結構化良好的文檔，**逐個章節地、精確地**映射到對應的 JSON 結構中。你必須像一個遵循嚴格程序的機器人，盡量將章節内的内容全部一一對應，絕不跨越章節邊界提取信息，也絕不對文本內容做任何形式的解讀。
 
-    **核心指令與規則：**
+**絕對核心指令 (不可違背)：**
 
-    1.  **JSON Schema 絕對至上**: 
-        - 你必須為輸入中提供的每一個 `section_id` 生成一個對應的 JSON 對象。
-        - 生成的 JSON 必須**100%**符合該 `section_id` 對應的 JSON Schema 結構，包括字段名稱、數據類型（字符串、數字、數組、對象等）。
+1.  **絕對原文主義——你是複製機器，不是作家**:
+    *   所有填入 JSON 字段的值，**必須是從原始文檔中 100% 完全複製的文本**。
+    *   **內容的無差別對待 (Indiscriminate Treatment of Content):** 你必須將文檔中所有可見的字符都視為純文本進行複製。這條規則沒有例外，尤其包括：
+        *   **圖片佔位符:** 任何形式的圖片描述或佔位符，例如 **`【圖：企業的外觀】`** 或 `[Chart: Q3 Revenue]`，都**必須**被一字不差地當作普通字符串複製下來。它們是文本的一部分。
+        *   **格式化字符:** 用於排版的空格、破折號、星號列表等，都必須原樣保留。
+        *   **任何註釋或標記:** 只要是文本形式存在於文檔中的內容，就要複製。
+    *   **【極度嚴禁】** 進行任何形式的摘要、總結、重寫、釋義或風格調整。
+    *   **【極度嚴禁】** 創造、推斷或補充原文沒有明確寫出的任何信息。
+    *   **【極度嚴禁】** 修正原文的任何錯字、語法錯誤或格式。原文是什麼，你就複製什麼。
 
-    2.  **內容來源的唯一性——忠於原文**:
-        - 所有填充到 JSON 字段的值，都**必須**直接來源於提供的文檔原文。
-        - **嚴禁**進行任何形式的摘要、重寫、擴寫或杜撰。直接複製粘貼相關文句是最佳策略。
-        - 如果文檔中明確沒有提到某個字段的信息，該字段的值必須設為 `null` 或者一個空字符串 `""` (如果 schema 要求 string 類型)。
+2.  **JSON Schema 是唯一藍圖**:
+    *   你必須為輸入中提供的每一個 `section_id` 生成一個對應的 JSON 對象。
+    *   生成的 JSON 必須**完美無瑕**地符合該 `section_id` 對應的 JSON Schema 結構。
 
-    3.  **結構化映射的順序性與完整性**:
-        - 你必須按照文檔內容的自然順序，將信息依次映射到對應的 JSON 結構中。例如，文檔開頭的內容應優先填充到像 `company_overview` 這樣的早期章節，文檔末尾的內容應填充到像 `budget_plan` 這樣的後期章節。
-        - 努力將文檔中的**所有**相關信息都填充進去，不要遺漏任何細節。對於較長的段落描述，直接將整段文字（包含換行符 `\n`）放入對應的字符串字段中。
+3.  **結構化對應與範圍鎖定 (Structural Correspondence and Scope Locking)**:
+    *   **核心假設：** 輸入文檔的章節結構與你收到的 `sections` 列表（包含 `section_id` 和 `section_name`）是**一一對應**的。
+    *   **工作流程：** 你的工作是**隔離地、逐個章節**進行的，絕不混合信息。
+        1.  **定位：** 處理第一個 `section_id`。首先在文檔中找到與其 `section_name` 完全對應的章節標題。
+        2.  **鎖定範圍：** 該章節的有效內容範圍是**從這個標題開始，到下一個主要章節標題出現之前的所有文本**。這就是你的「工作區」。
+        3.  **範圍內提取：** **只能**使用這個「工作區」內的文本來填充當前 `section_id` 的 JSON 字段。
+        4.  **禁止越界：** **嚴禁**在填充當前章節的 JSON 時，去查看或提取其他章節內的任何文字。
+        5.  **重複：** 完成一個章節後，移動到下一個 `section_id`，並重複以上「定位->鎖定->提取」的過程。
 
-    4.  **最終輸出格式的嚴格性**:
-        - 你的最終輸出**必須**是一個單一的、格式正確的 JSON 對象。
-        - 這個 JSON 對象的 `key` 必須是文檔中提供的 `section_id` (例如 `"company_overview"`, `"execution_plan"`)。
-        - 這個 JSON 對象的 `value` 必須是與 `key` 對應的、已填充內容的 JSON 對象。
-        - **絕不**在最終的 JSON 輸出之外添加任何解釋、註釋或額外文本。
+4.  **空值處理的機械規則**:
+    *   如果在**當前鎖定的章節範圍內**，確定**沒有**能對應某個 Schema 字段的文本，該字段的值必須設為 `null`。如果 Schema 要求該字段為 string 類型，則設為空字符串 `""`。
 
-    **示例輸出結構:**
+5.  **最終輸出格式的絕對純淨**:
+    *   你的最終輸出**只能是**一個單一的、格式完全正確的 JSON 對象。
+    *   這個 JSON 對象的 `key` 是 `section_id`，`value` 是填充好的、符合 schema 的 JSON 對象。
+    *   **絕不**在 JSON 輸出之外附加任何說明、註釋或任何額外文本。
+
+    **示例輸出結構 (你的最終產出必須是這個樣子，沒有其他任何文字):**
     ```json
     {
         "company_overview": {
-            "company_name": "從文檔中提取的公司名稱",
-            "mission_statement": "從文檔中提取的使命宣言段落..."
+            "company_name": "從「公司概覽」章節內找到並一字不差複製過來的公司名稱",
+            "mission_statement": "從「公司概覽」章節內找到並一字不差複製過來的使命宣言段落。"
         },
         "execution_plan": {
+            "primary_contact": null, // 因為在「執行計畫」章節內找不到聯絡人信息
             "tasks": [
             {
-                "task_name": "從文檔中提取的任務一",
-                "description": "關於任務一的詳細描述..."
+                "task_name": "從「執行計畫」章節複製的任務一標題",
+                "description": "關於任務一的詳細描述，原文照貼，僅限於「執行計畫」章節..."
             }
-            ],
-            ...
+            ]
         }
     }
+    ```
     """
 
     # 構建 User Prompt
@@ -288,7 +318,7 @@ async def autofill_from_document(
     """
 
     model_registry = request.app.state.model_registry
-    model_to_use = model_registry.get("gpt-3.5-turbo-1106") or model_registry.get("gpt-4.5-turbo")
+    model_to_use = model_registry.get("gpt-4.1") or model_registry.get("gpt-4.5-turbo")
     if not model_to_use:
         raise HTTPException(status_code=500, detail="A powerful model like GPT-4/3.5 is required for this feature.")
 
@@ -316,6 +346,7 @@ async def autofill_from_document(
             formatted_result[section_id] = {"content": content}
 
         await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
+        print(formatted_result)
 
         return formatted_result
 

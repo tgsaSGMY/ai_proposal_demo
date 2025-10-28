@@ -85,15 +85,16 @@ class SyntheticInputRequest(BaseModel):
     
     支持兩種模式：
     - 'random': 根據補助主題隨機生成新的用戶輸入
-    - 'reverse': 根據已填充的動態字段內容生成摘要和優化
+    - 'reverse': 根據計畫書內容反推摘要和動態字段
     """
-    mode: str = Field(..., description="生成模式，'random'（隨機主題）或 'reverse'（從已有輸入反推摘要）。")
+    mode: str = Field(..., description="生成模式，'random'（隨機主題）或 'reverse'（從計畫書反推）。")
     grant_name: str = Field(..., description="補助主題名稱")
     template_name: str = Field(..., description="模板名稱")
     section_name: str = Field(..., description="章節名稱")
-    # 使用統一的動態字段格式（複合鍵為鍵值）
-    dynamic_fields_input: Optional[Dict[str, str]] = Field(None, description="在 'reverse' 模式下，提供已填充的動態字段值（鍵為標籤）。")
-    dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構（所有模式都使用）。")
+    # 在 reverse 模式下使用：計畫書內容用於反推
+    plan_content: Optional[Dict[str, Any]] = Field(None, description="在 'reverse' 模式下，提供計畫書內容以反推動態字段。")
+    # dynamic_fields_schema 必須提供，包含所有動態字段的標籤和定義
+    dynamic_fields_schema: List[DynamicFieldSchema] = Field(..., description="定義動態輸入字段的結構（所有模式都使用），包含字段標籤。")
     user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
 
 

@@ -385,13 +385,16 @@ async function handleGenerateUserInput() {
       grant_name: currentGrant.value.name,
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
-      dynamic_fields_input:
-        editableDraft.mode === "golden" ? currentDynamicFields : null,
       user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
       dynamic_fields_schema: getDynamicFieldLabels().map((label) => ({
         label,
       })),
     };
+
+    // 在 reverse 模式下，傳送 planContent 讓後端反推
+    if (editableDraft.mode === "golden" && planContent.value) {
+      payload.plan_content = planContent.value;
+    }
     const response = await fetch(`${API_BASE_URL}/generate_synthetic_input`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
