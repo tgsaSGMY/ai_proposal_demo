@@ -238,7 +238,7 @@ class LLMService:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 
         # 2. --- 路由与配额检查 ---
-        original_model_info = resolve_model(grant_id, section_id, app_state)
+        original_model_info = resolve_model(grant_id, template_id, section_id, app_state)
         if not original_model_info:
             return SectionGenerateResponse(section_id=section_id, error="Model routing failed.")
         

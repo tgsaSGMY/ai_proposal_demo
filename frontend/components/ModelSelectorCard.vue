@@ -292,7 +292,11 @@ async function handleSaveSettings(updatedSettings) {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedSettings),
+        body: JSON.stringify({
+          ...updatedSettings,
+          grant_id: props.grantId,
+          template_id: props.templateId,
+        }),
       }
     );
     if (!response.ok) {

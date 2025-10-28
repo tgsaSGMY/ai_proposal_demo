@@ -38,12 +38,11 @@
           :all-configs="allConfigs"
           v-model="mainIdea"
           :is-generating="isGeneratingPlan"
-          :dynamic-inputs="dynamicInputsWithValues"
+          v-model:dynamic-values="dynamicFieldValues"
           :mode="editableDraft.mode"
           :initial-grant-id="editableDraft.grant_id"
           :initial-template-id="editableDraft.template_id"
           @update:modelValue="updateMainIdea"
-          @update:dynamic-inputs="updateDynamicInputs"
           @selectionChange="onSelectionChangeInModal"
           @generatePlan="handleGeneratePlanInModal"
           @generateUserInput="handleGenerateUserInput"
@@ -73,6 +72,13 @@ import { ref, reactive, watch, onUnmounted, computed, onMounted } from "vue";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
+import {
+  buildDynamicSections,
+  mergeIntoEmptyValues,
+  getCompositeKeyFromLabel,
+  getDynamicFieldLabels,
+  makeCompositeKey,
+} from "~/utils/dynamicSchema";
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
@@ -103,10 +109,12 @@ const {
   currentTemplate,
   currentSections,
   allConfigs,
+  dynamicFieldValues,
 } = usePlanGenerator();
 
 const isGeneratingPlan = ref(false);
 const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
+let isHydratingDynamicFields = true;
 
 // --- State Initialization and Synchronization ---
 onMounted(async () => {
@@ -115,6 +123,15 @@ onMounted(async () => {
   selectedGrantId.value = props.draft.grant_id;
   selectedTemplateId.value = props.draft.template_id;
   planContent.value = props.draft.plan_content;
+  dynamicFieldValues.value = mergeIntoEmptyValues(
+    props.draft.user_input?.dynamic_fields
+  );
+  if (!editableDraft.user_input) {
+    editableDraft.user_input = { main_idea: "", dynamic_fields: {} };
+  }
+  editableDraft.user_input.dynamic_fields = {
+    ...dynamicFieldValues.value,
+  };
 });
 
 // Main idea is a computed property for easier v-model binding
@@ -129,53 +146,33 @@ const mainIdea = computed({
   },
 });
 
-// This computed property merges the template structure (dynamicInputs) with actual values from the draft
-const dynamicInputsWithValues = computed(() => {
-  if (!currentSections.value || currentSections.value.length === 0) {
-    return [];
-  }
-
-  const groupedInputs = [];
-  currentSections.value.forEach((section) => {
-    const sectionInputs = [];
-    if (section.json_schema && section.json_schema.properties) {
-      Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
-        sectionInputs.push({
-          id: `${section.id}-${key}`,
-          key: key,
-          label: prop.description || key.replace("_", " "),
-          value:
-            editableDraft.user_input?.dynamic_fields?.[prop.description] ||
-            editableDraft.user_input?.dynamic_fields?.[key] ||
-            "",
-        });
-      });
-    }
-    // 无论是否有 inputs，都创建 group 以显示 custom_prompt_list
-    groupedInputs.push({
-      sectionId: section.id,
-      sectionName: section.name,
-      inputs: sectionInputs,
-      custom_prompt_list: section.custom_prompt_list || [],
-    });
-  });
-
-  return groupedInputs;
-});
-
 // --- Debounce for saving draft updates ---
 let saveTimer = null;
 
+watch(
+  dynamicFieldValues,
+  (newVal) => {
+    if (!editableDraft.user_input) {
+      editableDraft.user_input = { main_idea: "", dynamic_fields: {} };
+    }
+    editableDraft.user_input.dynamic_fields = { ...newVal };
+    if (isHydratingDynamicFields) {
+      isHydratingDynamicFields = false;
+      return;
+    }
+    debounceSave();
+  },
+  { deep: true }
+);
+
 const saveUpdatesToDb = async () => {
   try {
-    // Build dynamic_fields from dynamicInputsWithValues
-    const dynamic_fields = {};
-    dynamicInputsWithValues.value
-      .flatMap((g) => g.inputs)
-      .forEach((input) => {
-        dynamic_fields[input.key] = input.value;
-      });
-    editableDraft.user_input.dynamic_fields = dynamic_fields;
+    if (!editableDraft.user_input) {
+      editableDraft.user_input = { main_idea: "", dynamic_fields: {} };
+    }
+    editableDraft.user_input.dynamic_fields = {
+      ...dynamicFieldValues.value,
+    };
 
     const payload = {
       name: editableDraft.name,
@@ -227,20 +224,6 @@ function updateMainIdea(value) {
   debounceSave();
 }
 
-function updateDynamicInputs(newDynamicInputsGroups) {
-  if (!editableDraft.user_input) editableDraft.user_input = {};
-  if (!editableDraft.user_input.dynamic_fields)
-    editableDraft.user_input.dynamic_fields = {};
-
-  // Flatten and update the dynamic_fields object
-  newDynamicInputsGroups
-    .flatMap((g) => g.inputs)
-    .forEach((input) => {
-      editableDraft.user_input.dynamic_fields[input.key] = input.value;
-    });
-  debounceSave();
-}
-
 function onSelectionChangeInModal(selection) {
   selectedGrantId.value = selection.grantId;
   selectedTemplateId.value = selection.templateId;
@@ -278,10 +261,34 @@ function onContentUpdateInModal({ sectionId, content }) {
 
 function buildFinalUserInputForGeneration(summaries = []) {
   let finalInput = `核心想法: ${editableDraft.user_input?.main_idea || ""}\n\n`;
-  const additionalDetails = dynamicInputsWithValues.value
-    .flatMap((g) => g.inputs)
-    .filter((input) => input.key && String(input.value).trim() !== "")
-    .map((input) => `關於“${input.label}”的補充信息:\n${input.value}`)
+  const sections = buildDynamicSections(dynamicFieldValues.value);
+
+  const additionalDetails = sections
+    .map((section) => {
+      const filledFields = section.fields
+        .map((field) => {
+          const filledSubFields = field.subFields
+            .filter((sub) => sub.value && sub.value.trim() !== "")
+            .map((sub) => `${sub.shortLabel}: ${sub.value}`);
+          if (filledSubFields.length === 0) {
+            return null;
+          }
+          const description = field.description
+            ? `說明: ${field.description}\n`
+            : "";
+          return `【${field.title}】\n${description}${filledSubFields.join(
+            "\n"
+          )}`;
+        })
+        .filter((item) => Boolean(item));
+
+      if (!filledFields.length) {
+        return null;
+      }
+
+      return `◆ ${section.sectionName}\n${filledFields.join("\n\n")}`;
+    })
+    .filter((item) => Boolean(item))
     .join("\n\n");
 
   if (additionalDetails) {
@@ -360,27 +367,30 @@ async function handleGenerateUserInput() {
   isGeneratingPlan.value = true;
 
   try {
-    const flattened = Object.fromEntries(
-      Object.entries(planContent.value).map(([key, section]) => [
-        key,
-        section.content ?? section,
-      ])
-    );
+    // 構建動態字段當前值（用於 reverse 模式）
+    const currentDynamicFields = {};
+    const sections = buildDynamicSections(dynamicFieldValues.value);
+    sections.forEach((section) => {
+      section.fields.forEach((field) => {
+        field.subFields.forEach((subField) => {
+          if (subField.value && subField.value.trim() !== "") {
+            currentDynamicFields[subField.label] = subField.value;
+          }
+        });
+      });
+    });
 
     const payload = {
       mode: editableDraft.mode === "golden" ? "reverse" : "random",
       grant_name: currentGrant.value.name,
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
-      json_output: editableDraft.mode === "golden" ? flattened : null,
+      dynamic_fields_input:
+        editableDraft.mode === "golden" ? currentDynamicFields : null,
       user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
-      // 傳遞動態字段的 schema
-      dynamic_fields_schema:
-        editableDraft.mode !== "golden"
-          ? dynamicInputsWithValues.value
-              .flatMap((group) => group.inputs)
-              .map((f) => ({ label: f.label }))
-          : null,
+      dynamic_fields_schema: getDynamicFieldLabels().map((label) => ({
+        label,
+      })),
     };
     const response = await fetch(`${API_BASE_URL}/generate_synthetic_input`, {
       method: "POST",
@@ -395,27 +405,84 @@ async function handleGenerateUserInput() {
       mainIdea.value = data.main_idea;
     }
     if (data.dynamic_fields) {
-      if (editableDraft.mode !== "golden") {
-        dynamicInputsWithValues.value.forEach((group) => {
-          group.inputs.forEach((input) => {
-            if (data.dynamic_fields[input.label]) {
-              input.value = data.dynamic_fields[input.label];
-            }
-          });
-        });
-      } else {
-        // 对应 'reverse' 模式
-        dynamicInputsWithValues.value.forEach((group) => {
-          if (data.dynamic_fields[group.sectionId]) {
-            const sectionData = data.dynamic_fields[group.sectionId];
-            group.inputs.forEach((input) => {
-              const [_, fieldKey] = input.id.split("-", 2);
-              if (sectionData[fieldKey]) {
-                input.value = sectionData[fieldKey];
-              }
-            });
+      const nextValues = { ...dynamicFieldValues.value };
+      let hasUpdates = false;
+
+      const attemptLabelMap = (fieldMap) => {
+        let updated = false;
+        Object.entries(fieldMap).forEach(([label, fieldValue]) => {
+          const compositeKey = getCompositeKeyFromLabel(label);
+          if (compositeKey && compositeKey in nextValues) {
+            const normalized =
+              typeof fieldValue === "string"
+                ? fieldValue
+                : fieldValue != null
+                ? JSON.stringify(fieldValue)
+                : "";
+            nextValues[compositeKey] = normalized;
+            updated = true;
           }
         });
+        return updated;
+      };
+
+      const attemptNestedMap = (fieldMap) => {
+        let updated = false;
+        Object.entries(fieldMap).forEach(([sectionId, sectionValue]) => {
+          if (!sectionValue || typeof sectionValue !== "object") return;
+          Object.entries(sectionValue).forEach(
+            ([propertyKey, propertyValue]) => {
+              if (!propertyValue || typeof propertyValue !== "object") {
+                const fallbackKey = makeCompositeKey(
+                  sectionId,
+                  propertyKey,
+                  "reply"
+                );
+                if (fallbackKey in nextValues) {
+                  const normalized =
+                    typeof propertyValue === "string"
+                      ? propertyValue
+                      : propertyValue != null
+                      ? JSON.stringify(propertyValue)
+                      : "";
+                  nextValues[fallbackKey] = normalized;
+                  updated = true;
+                }
+                return;
+              }
+              Object.entries(propertyValue).forEach(([subKey, subValue]) => {
+                const compositeKey = makeCompositeKey(
+                  sectionId,
+                  propertyKey,
+                  subKey
+                );
+                if (compositeKey in nextValues) {
+                  const normalized =
+                    typeof subValue === "string"
+                      ? subValue
+                      : subValue != null
+                      ? JSON.stringify(subValue)
+                      : "";
+                  nextValues[compositeKey] = normalized;
+                  updated = true;
+                }
+              });
+            }
+          );
+        });
+        return updated;
+      };
+
+      hasUpdates = attemptLabelMap(data.dynamic_fields);
+
+      if (!hasUpdates) {
+        hasUpdates = attemptNestedMap(data.dynamic_fields);
+      }
+
+      if (hasUpdates) {
+        isHydratingDynamicFields = true;
+        dynamicFieldValues.value = mergeIntoEmptyValues(nextValues);
+        debounceSave();
       }
     }
   } catch (error) {

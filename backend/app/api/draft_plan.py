@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
+from app.models import DynamicFieldSchema
 from app.api.dependencies import get_supabase_service, get_llm_service
 
 
@@ -35,10 +36,15 @@ class CreateDraftRequest(BaseModel):
     template_id: Optional[str] = None
 
 class BatchSyntheticRequest(BaseModel):
-    count: int = Field(..., gt=0, le=20)
+    '''批量生成請求'''
+    count: int = Field(..., gt=0, le=20) # 限制一次最多生成 20 个
     grant_id: str
     template_id: str
     user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
+    dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(
+        default=None,
+        description="指定批量任務使用的動態欄位標籤清單。",
+    )
 
 # --- 後台任务函数 ---
 async def run_synthetic_idea_generation_task(
@@ -46,7 +52,8 @@ async def run_synthetic_idea_generation_task(
     request_for_llm: Request, # 傳入 Request 對象以訪問 app.state
     supabase_service: SupabaseService, 
     llm_service: LLMService,
-    user_id: str
+    user_id: str,
+    dynamic_fields_schema: Optional[List[Dict[str, str]]] = None
 ):
     """ 
     后台任务：只生成合成的用户输入 (想法)，不生成 plan content。
@@ -68,19 +75,18 @@ async def run_synthetic_idea_generation_task(
             raise ValueError("Associated grant/template/sections not found for the draft.")
 
         # 準備调用 internal_generate_synthetic_input 所需的参数
-        dynamic_fields_schema = []
-        for section in sections:
-            if section.get('json_schema', {}).get('properties'):
-                for key, prop in section['json_schema']['properties'].items():
-                    dynamic_fields_schema.append({"label": prop.get("description", key)})
+        dynamic_fields_schema1 = []
+        for df in (dynamic_fields_schema or []):
+            label = getattr(df, "label", "")
+            dynamic_fields_schema1.append({"label": label})
 
         synthetic_req = SyntheticInputRequest(
             mode='random',
             grant_name=grant['name'],
             template_name=template['name'],
-            dynamic_fields_schema=dynamic_fields_schema,
-            user_id=user_id
-
+            dynamic_fields_schema=dynamic_fields_schema1,
+            user_id=user_id,
+            
         )
         
         # 真正调用 LLM 生成想法
@@ -119,7 +125,7 @@ async def create_single_draft(req: CreateDraftRequest, supabase_service: Supabas
 @router.post("/batch_synthetic", status_code=202, summary="异步批量生成 AI 企划想法")
 async def create_batch_synthetic_drafts(
     req: BatchSyntheticRequest,
-    request: Request, # 注入 FastAPI 的 Request 对象
+    request: Request, 
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
@@ -140,7 +146,8 @@ async def create_batch_synthetic_drafts(
                 request_for_llm=request,
                 supabase_service=supabase_service,
                 llm_service=llm_service,
-                user_id=req.user_id
+                user_id=req.user_id,
+                dynamic_fields_schema=req.dynamic_fields_schema
             )
     return {"message": f"Started generating ideas for {len(created_draft_ids)} drafts.", "draft_ids": created_draft_ids}
 

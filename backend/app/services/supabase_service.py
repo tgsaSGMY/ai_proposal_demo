@@ -506,10 +506,12 @@ class SupabaseService:
         return len(response.data) > 0
 
     async def update_section_settings(
-        self, 
+        self,
         request: Request,
-        section_id: str, 
-        custom_prompt_list: List[str], 
+        section_id: str,
+        template_id: str,
+        grant_id: str,
+        custom_prompt_list: List[str],
         system_prompt: Optional[str] = None,
     ) -> bool:
         """更新指定 section 的 system_prompt, source_type 和 custom_prompt_list"""
@@ -519,14 +521,30 @@ class SupabaseService:
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:
-                update_data["system_prompt"] = system_prompt 
+                update_data["system_prompt"] = system_prompt
 
-            response = self.client.from_("sections").update(update_data).eq("id", section_id).execute()
+            response = (
+                self.client
+                .from_("sections")
+                .update(update_data)
+                .eq("id", section_id)
+                .eq("template_id", template_id)
+                .eq("grant_id", grant_id)
+                .execute()
+            )
+
             request.app.state.all_grants_config = await self.get_all_grants_config()
             
             return len(response.data) > 0
         except Exception as e:
-            logger.error(f"Failed to update settings for section {section_id}: {e}")
+            logger.error(
+                "Failed to update settings for section %s (template %s, grant %s): %s",
+                section_id,
+                template_id,
+                grant_id,
+                e,
+                exc_info=True,
+            )
             return False
         
     async def log_cost_usage(self, user_id: str, model_to_use: Dict, messages: List[Dict], raw_output: str):

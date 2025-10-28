@@ -143,6 +143,7 @@ import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
 import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
 import InputPromptModal from "~/components/InputPromptModal.vue";
 import { useLoading } from "~/composables/useLoading";
+import { getAllCompositeKeys } from "~/utils/dynamicSchema";
 
 // Modal state for renaming and creating drafts
 const isInputModalVisible = ref(false);
@@ -253,18 +254,23 @@ async function handleCreateDraft(mode) {
 
 async function handleBatchStart(payload) {
   try {
+    const payload1 = {
+      ...payload,
+      dynamic_fields_schema: getAllCompositeKeys(),
+    };
     const response = await fetch(
       `${API_BASE_URL}/draft_plans/batch_synthetic`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload1),
       }
     );
     if (response.status !== 202)
       throw new Error("启动批量任务失败: " + (await response.text()));
-    success(`已启动 ${payload.count} 个 AI 生成任务，请关注列表状态更新。`);
+    success(`已启动 ${payload1.count} 个 AI 生成任务，请关注列表状态更新。`);
   } catch (e) {
+    console.log(e.message);
     errorNotification(e.message);
   }
 }

@@ -1,5 +1,6 @@
 # 内部人員/系統獨有操作的api
 
+import json
 import logging
 from typing import List, Dict, Any
 
@@ -78,9 +79,14 @@ async def update_section_prompts_endpoint(
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
     """更新指定章節的自定義提示詞列表。"""
+    if not request_data.grant_id or not request_data.template_id:
+        raise HTTPException(status_code=400, detail="Grant ID and template ID are required.")
+
     success = await supabase_service.update_section_settings(
         request,
         section_id, 
+        request_data.template_id,
+        request_data.grant_id,
         request_data.custom_prompt_list, 
         request_data.system_prompt, 
     )
@@ -99,7 +105,7 @@ async def user_usage(user_id: str, supabase_service: SupabaseService = Depends(g
 async def scrape_and_analyze(
     req: ScrapeRequest,
     request: Request,
-    user_id: str = "admin_user",
+    user_id: str = "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
@@ -114,19 +120,53 @@ async def scrape_and_analyze(
             scraped_text = scraped_text[:10000]
 
         # 2️⃣ 準備 Prompt
+        max_items = req.max_items or 4
+        target_lines = []
+        for target in req.context_targets:
+                label = target.label.strip()
+                composite_key = target.composite_key.strip()
+                section_hint = (
+                        f" (section: {target.section_id}, field: {target.property_key}, sub: {target.sub_field_key})"
+                        if target.section_id and target.property_key and target.sub_field_key
+                        else ""
+                )
+                target_lines.append(f"- {label} | composite_key: {composite_key}{section_hint}")
+
+        targets_block = "\n".join(target_lines) if target_lines else "(未提供具體欄位，請僅在高度相關時回傳)"
+
         system_prompt = f"""
-        你是一位高效的信息分析專家。你的任務是閱讀一份網頁內容，
-        並根據用戶提供的「關注點」，提煉出最相關的核心要點。
+        你是一位精準的信息萃取專家。請閱讀提供的網頁原文，
+        只在內容與使用者的關注欄位高度相關時，建立自動填寫建議。
 
-        用戶正在撰寫一份商業計劃書，
-        他們提供的「關注點」是計劃書中需要填寫的欄位。
-        關注點: {req.context_keywords}
+        使用者正在撰寫商業計劃書。以下為潛在的目標欄位：
+        {targets_block}
 
-        請你總結網頁內容中與這些關注點最相關的信息，
-        並以一個清晰、簡潔的段落返回。
+        另外提供的關鍵字參考: {req.context_keywords}
+
+        請務必遵守以下要求：
+        1. 只輸出 JSON 物件，格式為：
+                {{
+                    "summary": "對原文的高度概括，1-2 句",
+                    "auto_fill": [
+                        {{
+                            "composite_key": "<section::property::subfield>",
+                            "label": "對應欄位標籤",
+                            "relevance": "high" 或 "medium",
+                            "content": "從原文中提煉的重點，1-3 句內"
+                        }}
+                    ]
+                }}
+        2. 僅在你非常確信資訊與欄位密切相關、能直接填寫時才輸出該項目。
+        3. 優先輸出 relevance = "high" 的項目，避免無關內容。
+        4. 最多提供 {max_items} 個 auto_fill 項目，若沒有高度相關內容則輸出空陣列。
+        5. 不得虛構或推測資訊。
         """
 
-        user_prompt = f"網頁原文:\n---\n{scraped_text}\n---\n請根據以上原文和系統指令生成重點摘要。"
+        user_prompt = (
+                "網頁原文:\n---\n"
+                + scraped_text
+                + "\n---\n請按照系統指令返回 JSON，若沒有適合填寫的欄位，auto_fill 請留空陣列。"
+        )
 
         # 3️⃣ 取得模型設定
         model_registry = request.app.state.model_registry
@@ -142,20 +182,60 @@ async def scrape_and_analyze(
 
         # 5️⃣ 調用 LLM API
         async with httpx.AsyncClient(timeout=180.0) as client:
-            summary, llm_error = await llm_service.call_external_api(
+            summary_raw, llm_error = await llm_service.call_external_api(
                 client,
                 model_to_use,
                 messages,
-                is_json_output=False  
+                is_json_output=True
             )
 
         if llm_error:
             raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
 
-        await supabase_service.log_cost_usage(user_id, model_to_use, messages, summary)
+        if summary_raw is None:
+            raise HTTPException(status_code=500, detail="LLM 回傳內容為空。")
 
-        # 6️⃣ 返回最終摘要結果
-        return {"summary": summary.strip()}
+        await supabase_service.log_cost_usage(user_id, model_to_use, messages, summary_raw)
+
+        try:
+            parsed_summary = json.loads(summary_raw)
+        except json.JSONDecodeError:
+            logger.warning("LLM 未回傳有效 JSON，回傳原始摘要。")
+            return {"summary": summary_raw.strip(), "auto_fill": []}
+
+        auto_fill_items = parsed_summary.get("auto_fill") or []
+        filtered_items = []
+        seen_keys = set()
+
+        for item in auto_fill_items:
+            composite_key = (item.get("composite_key") or "").strip()
+            content = (item.get("content") or "").strip()
+            relevance = (item.get("relevance") or "").lower()
+
+            if not composite_key or not content:
+                continue
+            if relevance != "high":
+                continue
+            if composite_key in seen_keys:
+                continue
+
+            filtered_items.append(
+                {
+                    "composite_key": composite_key,
+                    "label": item.get("label") or "",
+                    "relevance": relevance,
+                    "content": content,
+                }
+            )
+            seen_keys.add(composite_key)
+
+            if len(filtered_items) >= max_items:
+                break
+
+        parsed_summary["auto_fill"] = filtered_items
+        parsed_summary.setdefault("summary", "")
+
+        return parsed_summary
 
     except HTTPException as e:
         raise e

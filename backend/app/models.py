@@ -81,25 +81,47 @@ class DynamicFieldSchema(BaseModel):
     label: str = Field(..., description="給用戶看的問題或標籤，例如 '我們的目標客戶是誰？'")
 
 class SyntheticInputRequest(BaseModel):
-    """生成合成數據（Synthetic Data）的請求。"""
-    mode: str = Field(..., description="生成模式，'random'（隨機主題）或 'reverse'（從已有輸出反推輸入）。")
-    grant_name: str
-    template_name: str
-    section_name: str
-    json_output: Optional[Dict[str, Any]] = Field(None, description="在 'reverse' 模式下，提供已有的 JSON 輸出。")
-    dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構。")
+    """生成合成數據（Synthetic Data）的請求。
+    
+    支持兩種模式：
+    - 'random': 根據補助主題隨機生成新的用戶輸入
+    - 'reverse': 根據已填充的動態字段內容生成摘要和優化
+    """
+    mode: str = Field(..., description="生成模式，'random'（隨機主題）或 'reverse'（從已有輸入反推摘要）。")
+    grant_name: str = Field(..., description="補助主題名稱")
+    template_name: str = Field(..., description="模板名稱")
+    section_name: str = Field(..., description="章節名稱")
+    # 使用統一的動態字段格式（複合鍵為鍵值）
+    dynamic_fields_input: Optional[Dict[str, str]] = Field(None, description="在 'reverse' 模式下，提供已填充的動態字段值（鍵為標籤）。")
+    dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(None, description="定義動態輸入字段的結構（所有模式都使用）。")
     user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
-class ScrapeRequest(BaseModel): 
-    """"抓取網上資料請求"""
+
+
+class ScrapeContextTarget(BaseModel):
+    """描述可供自動填寫的目標欄位。"""
+    label: str = Field(..., description="欄位標籤，提供給模型的自然語言描述。")
+    composite_key: str = Field(..., description="欄位對應的複合鍵，格式為 section::property::subfield。")
+    section_id: Optional[str] = Field(None, description="欄位所屬章節 ID。")
+    property_key: Optional[str] = Field(None, description="欄位所屬的大項鍵。")
+    sub_field_key: Optional[str] = Field(None, description="欄位的子項鍵，例如 reply / acceptance。")
+
+
+class ScrapeRequest(BaseModel):
+    """抓取網上資料請求"""
     url: str
     context_keywords: Optional[str] = ""
+    context_targets: List[ScrapeContextTarget] = Field(
+        default_factory=list,
+        description="可自動填寫的目標欄位清單，用於精準對應摘要內容。",
+    )
+    max_items: Optional[int] = Field(
+        default=4,
+        ge=1,
+        le=10,
+        description="期望最多回傳的自動填寫項目數量。",
+    )
 
-class BatchSyntheticRequest(BaseModel):
-    '''批量生成請求'''
-    count: int = Field(..., gt=0, le=20) # 限制一次最多生成 20 个
-    grant_id: str
-    template_id: str
-    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
+
 
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
 class RoutingRule(BaseModel):
@@ -113,9 +135,10 @@ class RoutingRule(BaseModel):
 
 # --- 定義 source_type 的可用選項 ---
 class UpdateSectionSettingsRequest(BaseModel):
+    grant_id: str
+    template_id: str
     custom_prompt_list: List[str]
     system_prompt: Optional[str] = None
-
 
 # --- 6. 其他特定 API 模型 (Other Specific API Models) ---
 class SectionSchemaInfo(BaseModel):

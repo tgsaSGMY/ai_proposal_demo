@@ -19,9 +19,8 @@
       <PlanInputPanel
         :all-configs="allConfigs"
         v-model="userInput"
-        :dynamic-inputs="dynamicInputs"
+        v-model:dynamic-values="dynamicFieldValues"
         :initial-template-id="selectedTemplateId"
-        @update:dynamic-inputs="(newVal) => (dynamicInputs = newVal)"
         :is-generating="isLoading"
         :mode="'generator'"
         @selectionChange="onSelectionChange"
@@ -86,7 +85,8 @@ useHead({
   meta: [
     {
       name: "description",
-      content: "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
+      content:
+        "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
     },
     {
       name: "keywords",
@@ -98,7 +98,8 @@ useHead({
     },
     {
       property: "og:description",
-      content: "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
+      content:
+        "使用 AI 技術快速生成專業計畫書。支持多種主題和模板，提高提案效率。",
     },
     {
       property: "og:type",
@@ -117,7 +118,7 @@ const {
   selectedGrantId,
   selectedTemplateId,
   userInput,
-  dynamicInputs,
+  dynamicFieldValues,
   planContent,
   currentSections,
   allConfigs,
@@ -127,37 +128,6 @@ const {
 
 const showCandidateModal = ref(false);
 const candidatePlan = ref({});
-
-watchEffect(() => {
-  const sections = currentSections.value;
-  if (!sections || sections.length === 0) {
-    dynamicInputs.value = [];
-    return;
-  }
-  const groupedInputs = [];
-  sections.forEach((section) => {
-    const sectionInputs = [];
-    if (section.json_schema && section.json_schema.properties) {
-      Object.entries(section.json_schema.properties).forEach(([key, prop]) => {
-        sectionInputs.push({
-          id: `${section.id}-${key}`,
-          label: prop.description || key.replace("_", " "),
-          value: "",
-        });
-      });
-    }
-    if (sectionInputs.length > 0) {
-      groupedInputs.push({
-        sectionId: section.id,
-        sectionName: section.name,
-        inputs: sectionInputs,
-        custom_prompt_list: section.custom_prompt_list || [],
-        system_prompt: section.system_prompt || "",
-      });
-    }
-  });
-  dynamicInputs.value = groupedInputs;
-});
 
 function onCandidateConfirm({ selected, rejected }) {
   const newPlanContent = {};

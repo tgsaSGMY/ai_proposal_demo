@@ -2,6 +2,10 @@
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
   >
+    <span class="text-sm sm:text-base font-semibold text-gray-800">
+      一、摘要</span
+    >
+    <hr class="mb-4 sm:mb-6" />
     <!-- 第一层：主题 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
       <div>
@@ -50,20 +54,38 @@
       <!-- 主想法输入框 -->
       <div class="flex-shrink-0">
         <div
-          class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-1 sm:mb-2 gap-1 sm:gap-0"
+          class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center mb-1 sm:mb-2 gap-2"
         >
           <label class="block text-xs sm:text-sm font-medium text-gray-700"
-            >3. 描述你的核心項目／想法</label
+            >3. 描述你的項目名稱和摘要</label
           >
-          <button
-            v-if="mode === 'synthetic'"
-            @click="$emit('generateUserInput')"
-            class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors mt-1 sm:mt-0 self-start sm:self-auto"
-            title="讓 AI 生成一個創新的項目想法"
-          >
-            ✨ 隨機生成想法
-          </button>
+          <div class="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              v-if="mode === 'synthetic'"
+              @click="$emit('generateUserInput')"
+              class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors"
+              title="讓 AI 生成一個創新的項目想法"
+            >
+              ✨ 隨機生成想法
+            </button>
+            <button
+              type="button"
+              @click="triggerExcelUpload"
+              :disabled="isImportingFromExcel"
+              class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200 transition-colors disabled:bg-indigo-50 disabled:text-indigo-300"
+              title="從 Excel 匯入摘要與章節內容"
+            >
+              {{ isImportingFromExcel ? "匯入中..." : "📥 從 Excel 匯入" }}
+            </button>
+          </div>
         </div>
+        <input
+          ref="excelInputRef"
+          type="file"
+          class="hidden"
+          accept=".xlsx,.xls"
+          @change="handleExcelFileChange"
+        />
         <textarea
           :value="modelValue"
           @input="$emit('update:modelValue', $event.target.value)"
@@ -73,9 +95,9 @@
         ></textarea>
       </div>
 
-      <!-- 根据grants & template 动态生成的辅助输入框区域 -->
+      <!-- 固定結構的輔助輸入區域 -->
       <div
-        v-if="dynamicInputs.length > 0"
+        v-if="dynamicSections.length > 0"
         class="space-y-4 sm:space-y-6 border-t border-gray-200 pt-4 sm:pt-6 flex-grow overflow-y-auto pr-1 sm:pr-2"
       >
         <div
@@ -96,40 +118,108 @@
           class="mt-6"
         />
 
-        <!-- 外層 v-for 遍歷 section 分組 -->
         <div
-          v-for="(group, groupIndex) in dynamicInputs"
-          :key="group.sectionId"
-          class="space-y-2 sm:space-y-4"
+          v-for="section in dynamicSections"
+          :key="section.sectionId"
+          class="space-y-3 sm:space-y-4"
         >
-          <div
-            class="group flex items-center justify-between border-b pb-1 sm:pb-2"
-          >
-            <h4
-              class="text-sm sm:text-md font-semibold text-gray-800 transition-colors"
-            >
-              {{ group.sectionName }}
+          <div class="flex items-center justify-between border-b pb-1 sm:pb-2">
+            <h4 class="text-sm sm:text-md font-semibold text-gray-800">
+              {{ section.sectionName }}
             </h4>
+            <span
+              class="text-xs text-gray-400"
+              v-if="
+                section.fields.some((field) =>
+                  field.subFields.some(
+                    (sub) => sub.value && sub.value.trim() !== ''
+                  )
+                )
+              "
+            >
+              已填寫項目
+            </span>
           </div>
 
-          <!-- 內層 v-for 遍歷該分組內的 inputs -->
-          <div v-for="(input, inputIndex) in group.inputs" :key="input.id">
-            <label
-              :for="input.id"
-              class="block text-xs sm:text-sm font-medium text-gray-600 mb-1 sm:mb-2"
+          <div
+            v-for="field in section.fields"
+            :key="field.propertyKey"
+            class="rounded-xl border border-gray-200 bg-white/80 shadow-sm"
+          >
+            <button
+              type="button"
+              class="w-full flex items-center justify-between gap-3 px-3 sm:px-4 py-3 text-left transition hover:bg-indigo-50"
+              @click="toggleField(section.sectionId, field.propertyKey)"
             >
-              {{ input.label }}
-            </label>
-            <textarea
-              :id="input.id"
-              :value="input.value"
-              @input="
-                updateDynamicInput(groupIndex, inputIndex, $event.target.value)
-              "
-              :placeholder="`關於「${input.label}」的更多細節...`"
-              rows="3"
-              class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y p-2 text-sm sm:text-base"
-            ></textarea>
+              <div class="flex flex-col">
+                <span class="text-sm sm:text-base font-semibold text-gray-800">
+                  {{ field.title }}
+                </span>
+                <span class="text-xs text-gray-500">
+                  {{ computeFieldStatus(field.subFields) }}
+                </span>
+              </div>
+              <svg
+                class="w-4 h-4 text-gray-500 transition-transform duration-200"
+                :class="{
+                  'rotate-90': isFieldExpanded(
+                    section.sectionId,
+                    field.propertyKey
+                  ),
+                }"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+
+            <transition name="fade">
+              <div
+                v-if="isFieldExpanded(section.sectionId, field.propertyKey)"
+                class="px-3 sm:px-4 pb-4 space-y-3 border-t border-gray-100"
+              >
+                <p
+                  v-if="field.description"
+                  class="text-xs sm:text-sm text-gray-600 whitespace-pre-line pt-3"
+                >
+                  {{ field.description }}
+                </p>
+                <div
+                  v-for="subField in field.subFields"
+                  :key="subField.id"
+                  class="flex flex-col gap-1"
+                >
+                  <label
+                    :for="subField.id"
+                    class="text-xs sm:text-sm font-medium text-gray-600"
+                  >
+                    {{ subField.shortLabel }}
+                  </label>
+                  <textarea
+                    :id="subField.id"
+                    :value="subField.value"
+                    @input="
+                      updateDynamicValue(
+                        section.sectionId,
+                        field.propertyKey,
+                        subField.key,
+                        $event.target.value
+                      )
+                    "
+                    rows="3"
+                    class="w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y p-2 text-sm sm:text-base"
+                  ></textarea>
+                </div>
+              </div>
+            </transition>
           </div>
         </div>
 
@@ -195,15 +285,31 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from "vue";
+import { computed, ref, watch } from "vue";
+import {
+  buildDynamicSections,
+  createEmptyDynamicValues,
+  mergeIntoEmptyValues,
+  makeCompositeKey,
+} from "~/utils/dynamicSchema";
+import { useNotifications } from "~/composables/useNotifications";
+import {
+  applyExcelRows,
+  buildExcelReplyTargetMap,
+  extractExcelRows,
+} from "~/utils/excelImport";
+
 const referenceLinks = ref([]);
 
 const modelValue = defineModel();
+const dynamicValuesModel = defineModel("dynamicValues", {
+  type: Object,
+  default: () => createEmptyDynamicValues(),
+});
 
 const props = defineProps({
   allConfigs: { type: Array, required: true },
   isGenerating: { type: Boolean, default: false },
-  dynamicInputs: { type: Array, required: true },
   mode: { type: String, required: true },
   initialGrantId: { type: String, default: "" },
   initialTemplateId: { type: String, default: "" },
@@ -214,14 +320,35 @@ const emit = defineEmits([
   "selectionChange",
   "generatePlan",
   "generateUserInput",
-  "update:dynamicInputs",
 ]);
+
+const { success: notifySuccess, error: notifyError } = useNotifications();
+
+const excelInputRef = ref(null);
+const isImportingFromExcel = ref(false);
 
 // 內部狀態
 const selectedGrantId = ref(props.initialGrantId);
 const selectedTemplateId = ref(props.initialTemplateId);
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+const internalDynamicValues = ref(createEmptyDynamicValues());
+const expandedFieldIds = ref(new Set());
+
+watch(
+  dynamicValuesModel,
+  (newVal) => {
+    internalDynamicValues.value = mergeIntoEmptyValues(newVal);
+  },
+  { immediate: true, deep: true }
+);
+
+function resetDynamicValues() {
+  internalDynamicValues.value = createEmptyDynamicValues();
+  dynamicValuesModel.value = { ...internalDynamicValues.value };
+  expandedFieldIds.value = new Set();
+}
 
 watch(
   () => props.initialGrantId,
@@ -235,7 +362,6 @@ watch(
 watch(
   () => props.initialTemplateId,
   (newVal) => {
-    // 检查内部状态是否与 prop 不同步，如果是，则更新它
     if (selectedTemplateId.value !== newVal) {
       selectedTemplateId.value = newVal;
     }
@@ -249,32 +375,64 @@ const availableTemplates = computed(() => {
   return grant ? grant.templates : [];
 });
 
+const dynamicSections = computed(() =>
+  buildDynamicSections(internalDynamicValues.value)
+);
+
+const analysisTargets = computed(() =>
+  dynamicSections.value.flatMap((section) =>
+    section.fields.flatMap((field) =>
+      field.subFields.map((sub) => ({
+        label: sub.label,
+        composite_key: sub.compositeKey,
+        section_id: section.sectionId,
+        property_key: field.propertyKey,
+        sub_field_key: sub.key,
+      }))
+    )
+  )
+);
+
+const analysisTargetMap = computed(() => {
+  const map = new Map();
+  analysisTargets.value.forEach((target) => {
+    map.set(target.composite_key, target);
+  });
+  return map;
+});
+
+const analysisLabels = computed(() =>
+  analysisTargets.value.map((target) => target.label)
+);
+
+const excelReplyTargetMap = computed(() =>
+  buildExcelReplyTargetMap(dynamicSections.value)
+);
+
 const isReadyToGenerate = computed(() => {
   return (
     selectedTemplateId.value &&
-    props.modelValue &&
-    props.modelValue.trim() !== ""
+    modelValue.value &&
+    modelValue.value.trim() !== ""
   );
 });
 
-watch([selectedGrantId, selectedTemplateId], () => {
-  if (
-    selectedGrantId.value !== props.initialGrantId ||
-    selectedTemplateId.value !== props.initialTemplateId
-  ) {
-    emit("selectionChange", {
-      grantId: selectedGrantId.value,
-      templateId: selectedTemplateId.value,
-    });
-  }
-});
+watch(
+  [selectedGrantId, selectedTemplateId],
+  ([newGrant, newTemplate], [oldGrant, oldTemplate]) => {
+    const grantChanged = oldGrant !== undefined && oldGrant !== newGrant;
+    const templateChanged =
+      oldTemplate !== undefined && oldTemplate !== newTemplate;
 
-// 當用戶在動態輸入框中輸入時，通知父組件更新
-function updateDynamicInput(groupIndex, inputIndex, value) {
-  const newInputs = [...props.dynamicInputs];
-  newInputs[groupIndex].inputs[inputIndex].value = value;
-  emit("update:dynamicInputs", newInputs);
-}
+    if (grantChanged || templateChanged) {
+      resetDynamicValues();
+      emit("selectionChange", {
+        grantId: selectedGrantId.value,
+        templateId: selectedTemplateId.value,
+      });
+    }
+  }
+);
 
 const onGrantChange = () => {
   const isIncluded = availableTemplates.value.some(
@@ -286,6 +444,44 @@ const onGrantChange = () => {
   }
 };
 
+function updateDynamicValue(sectionId, propertyKey, subFieldKey, value) {
+  const key = makeCompositeKey(sectionId, propertyKey, subFieldKey);
+  internalDynamicValues.value = {
+    ...internalDynamicValues.value,
+    [key]: value,
+  };
+  dynamicValuesModel.value = { ...internalDynamicValues.value };
+}
+
+function fieldPanelKey(sectionId, propertyKey) {
+  return `${sectionId}::${propertyKey}`;
+}
+
+function toggleField(sectionId, propertyKey) {
+  const id = fieldPanelKey(sectionId, propertyKey);
+  const next = new Set(expandedFieldIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  expandedFieldIds.value = next;
+}
+
+function isFieldExpanded(sectionId, propertyKey) {
+  return expandedFieldIds.value.has(fieldPanelKey(sectionId, propertyKey));
+}
+
+function computeFieldStatus(subFields) {
+  const filled = subFields.filter(
+    (sub) => sub.value && sub.value.trim() !== ""
+  ).length;
+  if (filled === 0) {
+    return "可選填";
+  }
+  return `${filled}/${subFields.length} 已填寫`;
+}
+
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
 
@@ -293,15 +489,130 @@ const emitGeneratePlan = () => {
     .filter((link) => link.status === "completed" && link.summary)
     .map((link) => link.summary);
 
-  // 將重點傳遞給父組件
   emit("generatePlan", { summaries: completedSummaries });
 };
+
+function triggerExcelUpload() {
+  if (isImportingFromExcel.value) {
+    return;
+  }
+  const input = excelInputRef.value;
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+}
+
+async function handleExcelFileChange(event) {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (input) {
+    input.value = "";
+  }
+  if (!file) {
+    return;
+  }
+
+  isImportingFromExcel.value = true;
+  try {
+    const buffer = await file.arrayBuffer();
+    const rows = extractExcelRows(buffer);
+    console.log("Extracted rows from Excel:", rows);
+    const result = applyExcelRows({
+      rows,
+      dynamicSections: dynamicSections.value,
+      replyTargetMap: excelReplyTargetMap.value,
+      onFill: (sectionId, propertyKey, subFieldKey, value) => {
+        updateDynamicValue(sectionId, propertyKey, subFieldKey, value);
+        ensureFieldExpanded(sectionId, propertyKey);
+      },
+    });
+
+    if (result.summaryText) {
+      modelValue.value = result.summaryText;
+    }
+
+    const messageParts = [];
+    if (result.summaryText) {
+      messageParts.push("已更新摘要內容");
+    }
+    if (result.appliedCount > 0) {
+      messageParts.push(`填入 ${result.appliedCount} 個欄位`);
+    }
+    if (result.skippedCount > 0) {
+      messageParts.push(`略過 ${result.skippedCount} 筆未匹配欄位`);
+    }
+
+    if (messageParts.length > 0) {
+      notifySuccess(`Excel 匯入完成：${messageParts.join("、")}`);
+    } else {
+      notifyError("Excel 檔案未包含可匯入的資料");
+    }
+  } catch (error) {
+    console.error("Failed to import Excel data", error);
+    const message = error?.message || "匯入過程發生未知錯誤";
+    notifyError(`匯入失敗：${message}`);
+  } finally {
+    isImportingFromExcel.value = false;
+  }
+}
 
 const isSummaryModalVisible = ref(false);
 const currentSummary = ref("");
 
 function addReferenceLink() {
   referenceLinks.value.push({ url: "", status: "pending", summary: "" });
+}
+
+function ensureFieldExpanded(sectionId, propertyKey) {
+  const id = fieldPanelKey(sectionId, propertyKey);
+  if (expandedFieldIds.value.has(id)) {
+    return;
+  }
+  const next = new Set(expandedFieldIds.value);
+  next.add(id);
+  expandedFieldIds.value = next;
+}
+
+function applyAutoFillEntries(autoFillItems = []) {
+  if (!Array.isArray(autoFillItems) || autoFillItems.length === 0) {
+    return [];
+  }
+
+  const applied = [];
+
+  autoFillItems.forEach((item) => {
+    const compositeKey = (item.composite_key || item.compositeKey || "").trim();
+    if (!compositeKey) {
+      return;
+    }
+
+    const [sectionId, propertyKey, subFieldKey] = compositeKey.split("::");
+    if (!sectionId || !propertyKey || !subFieldKey) {
+      return;
+    }
+
+    const content = (item.content || "").trim();
+    if (!content) {
+      return;
+    }
+
+    const currentValue = internalDynamicValues.value[compositeKey] || "";
+    if (currentValue.trim()) {
+      return;
+    }
+
+    updateDynamicValue(sectionId, propertyKey, subFieldKey, content);
+    ensureFieldExpanded(sectionId, propertyKey);
+
+    const targetMeta = analysisTargetMap.value.get(compositeKey);
+    applied.push({
+      compositeKey,
+      label: item.label || targetMeta?.label || "",
+    });
+  });
+
+  return applied;
 }
 
 function removeReferenceLink(index) {
@@ -311,7 +622,6 @@ function removeReferenceLink(index) {
 function updateReferenceLink({ index, field, value }) {
   if (referenceLinks.value[index]) {
     referenceLinks.value[index][field] = value;
-    // 如果 URL 改變了，重置狀態
     if (field === "url") {
       referenceLinks.value[index].status = "pending";
       referenceLinks.value[index].summary = "";
@@ -333,18 +643,15 @@ async function handleAnalyzeLink(index) {
   link.status = "loading";
 
   try {
-    // 收集 dynamicInputs 的 labels 作為分析上下文
-    const analysisContext = props.dynamicInputs
-      .flatMap((group) => group.inputs.map((input) => input.label))
-      .join(", ");
-
     const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
         url: link.url,
-        context_keywords: analysisContext,
+        context_keywords: analysisLabels.value.join(", "),
+        context_targets: analysisTargets.value,
+        max_items: 4,
       }),
     });
 
@@ -354,7 +661,31 @@ async function handleAnalyzeLink(index) {
     }
 
     const result = await response.json();
-    link.summary = result.summary;
+    const summaryText =
+      typeof result.summary === "string" ? result.summary.trim() : "";
+    const autoFillItems = Array.isArray(result.auto_fill)
+      ? result.auto_fill
+      : [];
+    const appliedEntries = applyAutoFillEntries(autoFillItems);
+
+    const summaryLines = [];
+    if (summaryText) {
+      summaryLines.push(summaryText);
+    }
+
+    if (appliedEntries.length > 0) {
+      if (summaryLines.length > 0) {
+        summaryLines.push("");
+      }
+      summaryLines.push("自動填寫欄位：");
+      appliedEntries.forEach((entry) => {
+        const label = entry.label || entry.compositeKey;
+        summaryLines.push(`- ${label}`);
+      });
+    }
+
+    const finalSummary = summaryLines.join("\n").trim();
+    link.summary = finalSummary || "此連結未產生可用的摘要。";
     link.status = "completed";
   } catch (error) {
     console.error(`Error analyzing URL ${link.url}:`, error);
@@ -363,3 +694,16 @@ async function handleAnalyzeLink(index) {
   }
 }
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>
