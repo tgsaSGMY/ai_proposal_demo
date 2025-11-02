@@ -447,12 +447,12 @@ function renderTextWithHighlightedImages(
   renderer: ContentRenderer<any>
 ): void {
   // 檢測圖片占位符，在原地highlight
-  const imagePattern = /【圖：[^】]+】/g;
+  const imagePattern = /【圖[:：][^】]+】/g;
   if (imagePattern.test(text)) {
     // 重置正則表達式
     imagePattern.lastIndex = 0;
-    const parts = text.split(/【圖：[^】]+】/);
-    const images = text.match(/【圖：[^】]+】/g) || [];
+    const parts = text.split(/【圖[:：][^】]+】/);
+    const images = text.match(/【圖[:：][^】]+】/g) || [];
 
     // 構建混合段落
     const children: TextRun[] = [];

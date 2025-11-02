@@ -182,7 +182,7 @@ export async function exportPlanToWord(
         );
         exportFn = exportPlanToWordRdTransformOver10;
         break;
-      case "r&d_transform_under9":
+      case "r&d_transform_under_9":
         const { exportPlanToWordRdTransformUnder9 } = await import(
           "./wordStyle/r&d_transform_under9"
         );

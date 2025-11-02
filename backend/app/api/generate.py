@@ -246,10 +246,14 @@ async def autofill_from_document(
         f"JSON Schema:\n{json.dumps(s.json_schema, ensure_ascii=False, indent=2)}"
         for s in request_data.sections
     )
+    print("All Schemas Info:", all_schemas_info)
 
     # 構建一個強有力的 System Prompt
-    system_prompt = """
+    system_prompt = f"""
    你是一個高精度、有上下文感知能力的文本提取引擎。你的唯一任務是將一份結構化良好的文檔，**逐個章節地、精確地**映射到對應的 JSON 結構中。你必須像一個遵循嚴格程序的機器人，盡量將章節内的内容全部一一對應，絕不跨越章節邊界提取信息，也絕不對文本內容做任何形式的解讀。
+
+**重要提醒：你必須為以下所有章節生成輸出（共 {len(request_data.sections)} 個章節）：**
+{chr(10).join(f'- {i+1}. {s.section_id} ({s.section_name})' for i, s in enumerate(request_data.sections))}
 
 **絕對核心指令 (不可違背)：**
 
@@ -257,15 +261,20 @@ async def autofill_from_document(
     *   所有填入 JSON 字段的值，**必須是從原始文檔中 100% 完全複製的文本**。
     *   **內容的無差別對待 (Indiscriminate Treatment of Content):** 你必須將文檔中所有可見的字符都視為純文本進行複製。這條規則沒有例外，尤其包括：
         *   **圖片佔位符:** 任何形式的圖片描述或佔位符，例如 **`【圖：企業的外觀】`** 或 `[Chart: Q3 Revenue]`，都**必須**被一字不差地當作普通字符串複製下來。它們是文本的一部分。
-        *   **格式化字符:** 用於排版的空格、破折號、星號列表等，都必須原樣保留。
         *   **任何註釋或標記:** 只要是文本形式存在於文檔中的內容，就要複製。
     *   **【極度嚴禁】** 進行任何形式的摘要、總結、重寫、釋義或風格調整。
     *   **【極度嚴禁】** 創造、推斷或補充原文沒有明確寫出的任何信息。
     *   **【極度嚴禁】** 修正原文的任何錯字、語法錯誤或格式。原文是什麼，你就複製什麼。
 
-2.  **JSON Schema 是唯一藍圖**:
-    *   你必須為輸入中提供的每一個 `section_id` 生成一個對應的 JSON 對象。
+2.  **JSON Schema 是唯一藍圖 - 必須為所有章節生成內容**:
+    *   你必須為輸入中提供的**每一個** `section_id` 生成一個對應的 JSON 對象。
     *   生成的 JSON 必須**完美無瑕**地符合該 `section_id` 對應的 JSON Schema 結構。
+    *   **沒有例外：即使某個章節在文檔中找不到完全對應的內容，你也應該返回該章節的 JSON 結構，並將字段設為空字符串或 null**。
+
+2.  **你能增加的只有numbering或者bullet point**:
+    *   你可以為了更好地匹配 JSON Schema 的要求，**在複製的文本前添加編號或項目符號**（例如 "1.", "•" 等）。
+    *   你也能夠在table文字轉化成string的途中排版整理順序
+    *   但你絕對不能改動文本本身的內容**，包括文字、標點符號、大小寫等。
 
 3.  **結構化對應與範圍鎖定 (Structural Correspondence and Scope Locking)**:
     *   **核心假設：** 輸入文檔的章節結構與你收到的 `sections` 列表（包含 `section_id` 和 `section_name`）是**一一對應**的。
@@ -282,25 +291,16 @@ async def autofill_from_document(
 5.  **最終輸出格式的絕對純淨**:
     *   你的最終輸出**只能是**一個單一的、格式完全正確的 JSON 對象。
     *   這個 JSON 對象的 `key` 是 `section_id`，`value` 是填充好的、符合 schema 的 JSON 對象。
+    *   **必須包含所有 {len(request_data.sections)} 個章節的輸出**。
     *   **絕不**在 JSON 輸出之外附加任何說明、註釋或任何額外文本。
 
     **示例輸出結構 (你的最終產出必須是這個樣子，沒有其他任何文字):**
     ```json
-    {
-        "company_overview": {
-            "company_name": "從「公司概覽」章節內找到並一字不差複製過來的公司名稱",
-            "mission_statement": "從「公司概覽」章節內找到並一字不差複製過來的使命宣言段落。"
-        },
-        "execution_plan": {
-            "primary_contact": null, // 因為在「執行計畫」章節內找不到聯絡人信息
-            "tasks": [
-            {
-                "task_name": "從「執行計畫」章節複製的任務一標題",
-                "description": "關於任務一的詳細描述，原文照貼，僅限於「執行計畫」章節..."
-            }
-            ]
-        }
-    }
+    {{
+        "section_id_1": {{...完整的 JSON 內容...}},
+        "section_id_2": {{...完整的 JSON 內容...}},
+        "section_id_3": {{...完整的 JSON 內容...}}
+    }}
     ```
     """
 
@@ -339,21 +339,39 @@ async def autofill_from_document(
         if llm_error:
             raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
 
+        print("Raw LLM Output:", raw_output)
+        
         # 解析返回的 JSON 字符串
         filled_data = json.loads(raw_output)
+        
+        # 驗證輸出結構
+        expected_section_ids = {s.section_id for s in request_data.sections}
+        returned_section_ids = set(filled_data.keys())
+        
+        print(f"Expected section IDs: {expected_section_ids}")
+        print(f"Returned section IDs: {returned_section_ids}")
+        print(f"Missing section IDs: {expected_section_ids - returned_section_ids}")
+        
+        # 確保所有章節都有內容，缺少的設為空
         formatted_result = {}
-        for section_id, content in filled_data.items():
-            formatted_result[section_id] = {"content": content}
+        for section in request_data.sections:
+            section_id = section.section_id
+            if section_id in filled_data:
+                formatted_result[section_id] = {"content": filled_data[section_id]}
+            else:
+                logger.warning(f"Missing section in LLM output: {section_id}")
+                formatted_result[section_id] = {"content": {}}
 
         await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
-        print(formatted_result)
 
+        print("Autofill result:", formatted_result)
         return formatted_result
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
+        logger.error(f"Raw output: {raw_output}")
         raise HTTPException(status_code=500, detail="LLM did not return a valid JSON object.")
     except Exception as e:
         logger.error(f"Error during document auto-fill: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 

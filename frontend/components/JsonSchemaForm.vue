@@ -4,7 +4,7 @@
       <label
         class="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-2"
       >
-        {{ propInfo.description || propInfo.title || key }}
+        {{ propInfo.title || key }}
       </label>
 
       <!-- 渲染 String 類型的字段 -->

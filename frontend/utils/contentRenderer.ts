@@ -225,13 +225,17 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
   private createCellParagraphs(text: string, isHeader: boolean): Paragraph[] {
     const paragraphs: Paragraph[] = [];
 
+    // 確保 text 是字符串，如果不是則轉換或返回空
     if (!text) {
       paragraphs.push(new Paragraph({ text: "" }));
       return paragraphs;
     }
 
+    // 將任何非字符串類型轉換為字符串
+    const textStr = typeof text === "string" ? text : String(text);
+
     // 先將多個換行符（2個以上）統一替換為雙換行符
-    const normalizedText = text.replace(/\n{2,}/g, "\n\n");
+    const normalizedText = textStr.replace(/\n{2,}/g, "\n\n");
     // 按雙換行符分段
     const segments = normalizedText
       .split(/\n\n+/)
@@ -247,12 +251,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       lines.forEach((line: string, lineIndex: number) => {
         if (line) {
           // 檢測圖片占位符，在原地 highlight
-          const imagePattern = /【圖：[^】]+】/g;
+          const imagePattern = /【圖[:：][^】]+】/g;
           if (imagePattern.test(line)) {
             // 重置正則表達式
             imagePattern.lastIndex = 0;
-            const parts = line.split(/【圖：[^】]+】/);
-            const images = line.match(/【圖：[^】]+】/g) || [];
+            const parts = line.split(/【圖[:：][^】]+】/);
+            const images = line.match(/【圖[:：][^】]+】/g) || [];
 
             // 構建混合段落
             const children: TextRun[] = [];
