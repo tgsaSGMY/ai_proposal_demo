@@ -25,7 +25,7 @@ class LLMService:
         self.ollama_base_url = OLLAMA_BASE_URL
         self.max_retries = 3
         self.initial_retry_delay = 1  # 秒
-        self.request_semaphore = asyncio.Semaphore(5)  # 同时最多 5 个请求
+        self.request_semaphore = asyncio.Semaphore(20)  # 同时最多 20 个请求（允许更多并发）
 
 
     async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
@@ -267,7 +267,8 @@ class LLMService:
         user_input: str,
         app_state: Any,
         user_id: str,
-        supabase_service: "SupabaseService"
+        supabase_service: "SupabaseService",
+        use_actor_critic: bool = False
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
@@ -337,50 +338,80 @@ class LLMService:
                 else:
                     full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
                   
-        elif model_type == 'internal': 
-            critic_model_info = app_state.model_registry.get("gpt-4-turbo")
-            if not critic_model_info:
-                return SectionGenerateResponse(section_id=section_id, error="Critic model 'gpt-4-turbo' not found.")
-            
-            ac_data, ac_error = await self.run_actor_critic_flow_via_api(
-                http_session=http_session,
-                actor_model_info=model_to_use, 
-                critic_model_info=critic_model_info,
-                section_details=section_details,
-                user_input=user_input,
-                supabase_service=supabase_service
-            )
-            
-            if ac_error:
-                error_message = ac_error
-            else:
-                final_content_json = ac_data["final_answer"]
-                actor_initial_len = len(json.dumps(ac_data["initial_answer"]))
-                critic_len = len(json.dumps(ac_data["critic_json"]))
-                actor_final_len = len(json.dumps(ac_data["final_answer"]))
+        elif model_type == 'internal':
+            if use_actor_critic:
+                # 使用完整的 Actor-Critic 工作流
+                critic_model_info = app_state.model_registry.get("gpt-4-turbo")
+                if not critic_model_info:
+                    return SectionGenerateResponse(section_id=section_id, error="Critic model 'gpt-4-turbo' not found.")
                 
-                # 记录 Actor 的总用量
-                actor_tokens = (actor_initial_len + actor_final_len) // 2
-                asyncio.create_task(supabase_service.log_usage(user_id, model_to_use,actor_tokens, actor_tokens))
-                
-                # 记录 Critic 的用量
-                critic_tokens = critic_len // 2
-                asyncio.create_task(supabase_service.log_usage(user_id, critic_model_info, critic_tokens, critic_tokens))
-    
-                # 异步记录完整的 Actor-Critic 微调数据
-                print("   - Scheduling background task to log Actor-Critic run...")
-                full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
-                asyncio.create_task(
-                    supabase_service.log_actor_critic_run(
-                        grant_id=grant_id,
-                        template_id=template_id,
-                        section_id=section_id,
-                        prompt=full_prompt,
-                        initial_answer=ac_data["initial_answer"],
-                        critic_json=ac_data["critic_json"],
-                        final_answer=ac_data["final_answer"]
-                    )
+                ac_data, ac_error = await self.run_actor_critic_flow_via_api(
+                    http_session=http_session,
+                    actor_model_info=model_to_use, 
+                    critic_model_info=critic_model_info,
+                    section_details=section_details,
+                    user_input=user_input,
+                    supabase_service=supabase_service
                 )
+                
+                if ac_error:
+                    error_message = ac_error
+                else:
+                    final_content_json = ac_data["final_answer"]
+                    actor_initial_len = len(json.dumps(ac_data["initial_answer"]))
+                    critic_len = len(json.dumps(ac_data["critic_json"]))
+                    actor_final_len = len(json.dumps(ac_data["final_answer"]))
+                    
+                    # 记录 Actor 的总用量
+                    actor_tokens = (actor_initial_len + actor_final_len) // 2
+                    asyncio.create_task(supabase_service.log_usage(user_id, model_to_use,actor_tokens, actor_tokens))
+                    
+                    # 记录 Critic 的用量
+                    critic_tokens = critic_len // 2
+                    asyncio.create_task(supabase_service.log_usage(user_id, critic_model_info, critic_tokens, critic_tokens))
+        
+                    # 异步记录完整的 Actor-Critic 微调数据
+                    print("   - Scheduling background task to log Actor-Critic run...")
+                    full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
+                    asyncio.create_task(
+                        supabase_service.log_actor_critic_run(
+                            grant_id=grant_id,
+                            template_id=template_id,
+                            section_id=section_id,
+                            prompt=full_prompt,
+                            initial_answer=ac_data["initial_answer"],
+                            critic_json=ac_data["critic_json"],
+                            final_answer=ac_data["final_answer"]
+                        )
+                    )
+            else:
+                # 仅使用 Actor，跳过 Critic - 更快地生成多个 sections
+                logger.info(f"-> Using fast Actor-only generation for section: {section_id}")
+                few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
+                
+                user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
+            
+                # 檢查是否有自定義指令，並將它們附加到 user_content
+                if section_details.custom_prompt_list:
+                    custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
+                    user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}"
+
+                system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。"
+                messages = [
+                    {"role": "system", "content": system_prompt_for_all},
+                    {"role": "user", "content": user_content} 
+                ]
+
+                raw_output, llm_error = await self.call_external_api(http_session, model_to_use, messages)
+                
+                if llm_error:
+                    error_message = llm_error.get("error")
+                else:
+                    final_content_json, parse_error = extract_json_block(raw_output, section_id)
+                    await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
+                    if parse_error:
+                        error_message = parse_error.get("error")
+
 
     
 

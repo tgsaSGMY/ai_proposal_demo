@@ -34,6 +34,8 @@
           :sections="currentSections"
           :mode="'generator'"
           :is-loading="isLoading"
+          :grant-id="selectedGrantId"
+          :template-id="selectedTemplateId"
         />
       </div>
       <!-- 初始狀態下的提示信息 -->

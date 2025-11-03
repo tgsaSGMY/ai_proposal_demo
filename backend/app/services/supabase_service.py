@@ -555,7 +555,6 @@ class SupabaseService:
         )
         input_token = token_counts["input_tokens"]
         output_token = token_counts["output_tokens"]
-        logger.info(f"Calculated tokens -> Input: {input_token}, Output: {output_token}")
         asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token))
 
     async def get_exemplars_by_ids(self, ids: List[int]) -> List[Dict[str, Any]]:
