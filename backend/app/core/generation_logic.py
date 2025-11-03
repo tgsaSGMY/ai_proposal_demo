@@ -31,9 +31,9 @@ async def internal_generate_synthetic_input(
     """
     可重用的内部函数，用于生成合成的用户输入。
     """
-    model_info = request.app.state.model_registry.get("gpt-4.1")
+    model_info = request.app.state.model_registry.get("gpt-5-mini")
     if not model_info:
-        raise HTTPException(status_code=500, detail="GPT-4.1 model not configured for synthetic generation.")
+        raise HTTPException(status_code=500, detail="GPT-5-mini model not configured for synthetic generation.")
 
     prompt = ""
     if req.mode == 'random' and req.dynamic_fields_schema:

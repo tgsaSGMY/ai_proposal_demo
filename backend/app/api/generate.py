@@ -80,9 +80,9 @@ async def generate_synthetic_input(
     
     返回格式統一為 { main_idea, dynamic_fields: { label: value } }
     """
-    model_info = request.app.state.model_registry.get("gpt-4.1")
+    model_info = request.app.state.model_registry.get("gpt-5-mini")
     if not model_info:
-        raise HTTPException(status_code=500, detail="GPT-4 model not configured for synthetic generation.")
+        raise HTTPException(status_code=500, detail="GPT-5-mini model not configured for synthetic generation.")
 
     # 驗證請求模式
     if req.mode not in ['random', 'reverse']:

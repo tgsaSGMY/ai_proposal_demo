@@ -23,6 +23,9 @@ class LLMService:
     def __init__(self):
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
+        self.max_retries = 3
+        self.initial_retry_delay = 1  # 秒
+        self.request_semaphore = asyncio.Semaphore(5)  # 同时最多 5 个请求
 
 
     async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
@@ -40,8 +43,8 @@ class LLMService:
         for ex in exemplars:
             prompt = ex.get('prompt', '')
             answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
-            formatted_examples.append(f"范例输入:\n{prompt}\n范例输出:\n{answer}")
-        return "以下是一些高质量范例:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
+            formatted_examples.append(f"{answer}")
+        return "以下是一些高质量范例输出:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
 
     async def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> List[Dict]:
         """建立 Actor 首次生成時的 messages"""
@@ -85,7 +88,7 @@ class LLMService:
             if not self.openai_api_key: raise ValueError("OPENAI_API_KEY not set.")
             url = "https://api.openai.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {self.openai_api_key}", "Content-Type": "application/json"}
-            payload = {"model": model_id, "messages": messages, "temperature": 0.3}
+            payload = {"model": model_id, "messages": messages}
             if is_json_output: payload["response_format"] = {"type": "json_object"}
             return url, headers, payload
 
@@ -99,20 +102,55 @@ class LLMService:
         raise ValueError(f"Unsupported external provider: {provider}")
 
     async def call_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict], is_json_output: bool = True) -> Tuple[Optional[str], Optional[Dict]]:
-        """REFACTOR: 重構後更具擴展性的外部 API 呼叫函數"""
-        try:
-            api_url, headers, payload = self._build_api_request(model_info, messages, is_json_output)
-            response = await session.post(api_url, json=payload, headers=headers, timeout=300)
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"], None
-        except (httpx.HTTPStatusError, ValueError) as e:
-            error_msg = f"API call failed for model {model_info.get('id')}: {e}"
-            logger.error(error_msg, exc_info=True)
-            return None, {"error": error_msg}
-        except Exception as e:
-            error_msg = f"An unexpected error occurred during API call: {repr(e)}"
-            logger.error(error_msg, exc_info=True)
-            return None, {"error": error_msg}
+        """REFACTOR: 重構後更具擴展性的外部 API 呼叫函數，支持重试和速率限制"""
+        async with self.request_semaphore:  # 限制并发请求数
+            for attempt in range(self.max_retries): 
+                try:
+                    api_url, headers, payload = self._build_api_request(model_info, messages, is_json_output)
+                    response = await session.post(api_url, json=payload, headers=headers, timeout=300)
+                    response.raise_for_status()
+                    return response.json()["choices"][0]["message"]["content"], None
+                    
+                except httpx.HTTPStatusError as e:
+                    # 处理 429 速率限制错误
+                    if e.response.status_code == 429:
+                        print(e.response.text)
+                        if attempt < self.max_retries - 1:
+                            # 从响应头获取 Retry-After，如果没有则使用指数退避
+                            retry_after = e.response.headers.get("Retry-After")
+                            if retry_after:
+                                wait_time = int(retry_after)
+                            else:
+                                wait_time = self.initial_retry_delay * (2 ** attempt)  # 指数退避: 1, 2, 4 秒
+                            
+                            logger.warning(
+                                f"[Attempt {attempt + 1}/{self.max_retries}] Rate limited (429) for model {model_info.get('id')}. "
+                                f"Retrying after {wait_time}s..."
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            error_msg = f"API rate limited (429) for model {model_info.get('id')} after {self.max_retries} attempts"
+                            logger.error(error_msg)
+                            return None, {"error": error_msg}
+                    
+                    # 其他 HTTP 错误
+                    print(e.response.text)
+                    error_msg = f"API call failed for model {model_info.get('id')}: {e}"
+                    logger.error(error_msg, exc_info=True)
+                    return None, {"error": error_msg}
+                    
+                except ValueError as e:
+                    print(e.response.text)
+                    error_msg = f"Configuration error for model {model_info.get('id')}: {e}"
+                    logger.error(error_msg, exc_info=True)
+                    return None, {"error": error_msg}
+                    
+                except Exception as e:
+                    print(e.response.text)
+                    error_msg = f"An unexpected error occurred during API call: {repr(e)}"
+                    logger.error(error_msg, exc_info=True)
+                    return None, {"error": error_msg}
 
     async def generate_with_loaded_model(self, model: Any, tokenizer: Any, messages: List[Dict]) -> Tuple[Optional[str], Optional[Dict]]:
         try:
@@ -273,6 +311,7 @@ class LLMService:
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
 
             few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
+          
             user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
         
             # 檢查是否有自定義指令，並將它們附加到 user_content
@@ -280,8 +319,9 @@ class LLMService:
                 custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
                 user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}"
 
+            system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。"
             messages = [
-                {"role": "system", "content": section_details.system_prompt},
+                {"role": "system", "content": system_prompt_for_all},
                 {"role": "user", "content": user_content} 
             ]
 
