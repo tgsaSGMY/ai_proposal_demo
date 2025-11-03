@@ -351,18 +351,15 @@ function resetFilters() {
 // --- Watchers to react to filter changes ---
 watch(
   () => filters.grantId,
-  (newVal) => {
-    if (!newVal) {
-      filters.templateId = "";
-    }
+  () => {
+    filters.templateId = "";
+    filters.sectionId = "";
   }
 );
 watch(
   () => filters.templateId,
-  (newVal) => {
-    if (!newVal) {
-      filters.sectionId = "";
-    }
+  () => {
+    filters.sectionId = "";
   }
 );
 

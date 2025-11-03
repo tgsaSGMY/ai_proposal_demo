@@ -65,8 +65,6 @@ async def generate_plan(
 
     return plan_content
  
-
-
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
 async def generate_synthetic_input(
     req: SyntheticInputRequest,
@@ -82,7 +80,6 @@ async def generate_synthetic_input(
     
     返回格式統一為 { main_idea, dynamic_fields: { label: value } }
     """
-    print("hi")
     model_info = request.app.state.model_registry.get("gpt-4.1")
     if not model_info:
         raise HTTPException(status_code=500, detail="GPT-4 model not configured for synthetic generation.")
@@ -246,7 +243,6 @@ async def autofill_from_document(
         f"JSON Schema:\n{json.dumps(s.json_schema, ensure_ascii=False, indent=2)}"
         for s in request_data.sections
     )
-    print("All Schemas Info:", all_schemas_info)
 
     # 構建一個強有力的 System Prompt
     system_prompt = f"""
@@ -331,7 +327,7 @@ async def autofill_from_document(
         async with httpx.AsyncClient(timeout=180.0) as client:
             raw_output, llm_error = await llm_service.call_external_api(
                 client, 
-                model_to_use, 
+                model_to_use,  
                 messages,  
                 is_json_output=True 
             )
@@ -339,7 +335,6 @@ async def autofill_from_document(
         if llm_error:
             raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
 
-        print("Raw LLM Output:", raw_output)
         
         # 解析返回的 JSON 字符串
         filled_data = json.loads(raw_output)
@@ -348,9 +343,6 @@ async def autofill_from_document(
         expected_section_ids = {s.section_id for s in request_data.sections}
         returned_section_ids = set(filled_data.keys())
         
-        print(f"Expected section IDs: {expected_section_ids}")
-        print(f"Returned section IDs: {returned_section_ids}")
-        print(f"Missing section IDs: {expected_section_ids - returned_section_ids}")
         
         # 確保所有章節都有內容，缺少的設為空
         formatted_result = {}
@@ -364,7 +356,6 @@ async def autofill_from_document(
 
         await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
 
-        print("Autofill result:", formatted_result)
         return formatted_result
 
     except json.JSONDecodeError as e:

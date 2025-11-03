@@ -155,14 +155,13 @@ export async function exportPlanToWordRdStandard(
       }
 
       const rdRows: string[][] = [];
-      let itemIndex = 1;
 
       // 獎項
       if (Array.isArray(rd.獎項) && rd.獎項.length > 0) {
         rdRows.push(["獎項", "", `年度`, `獎項名稱`]);
 
         rd.獎項.forEach((item: any, awardIndex: number) => {
-          const itemNum = awardIndex === 0 ? String(itemIndex) : "";
+          const itemNum = String(awardIndex + 1);
           rdRows.push([
             "",
             itemNum,
@@ -170,14 +169,13 @@ export async function exportPlanToWordRdStandard(
             `${safeText(item?.獎項名稱)}`,
           ]);
         });
-        itemIndex++;
       }
 
       // 專利
       if (Array.isArray(rd.專利) && rd.專利.length > 0) {
         rdRows.push(["專利", "", `國別/年度/類型/專利編號`, `專利名稱或內容`]);
         rd.專利.forEach((item: any, patentIndex: number) => {
-          const itemNum = patentIndex === 0 ? String(itemIndex) : "";
+          const itemNum = String(patentIndex + 1);
           const patentDetail = `${safeText(item?.國別)}/${safeText(
             item?.年度
           )}/${safeText(item?.類型)}/${safeText(item?.專利編號)}`;
@@ -415,12 +413,7 @@ export async function exportPlanToWordRdStandard(
       if (Array.isArray(item?.細項) && item.細項.length > 0) {
         docxRenderer.addArrayTitle("（1）工作重點");
 
-        const itemHeaders = [
-          "工作項目",
-          "推動作法",
-          "權重",
-          "查核項目",
-        ];
+        const itemHeaders = ["工作項目", "推動作法", "權重", "查核項目"];
         const itemRows = item.細項.map((subItem: any, subIndex: number) => {
           const subLabel = `${planLabel}${subIndex + 1}`;
           return [
