@@ -66,6 +66,21 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
   }
 
   addKeyValue(key: string, value: string): void {
+    // 检查 value 是否是 array of objects
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstItem = parsed[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          this.addArrayTitle(key);
+          this.addObjectsTable(parsed);
+          return;
+        }
+      }
+    } catch (e) {
+      // 如果不是 JSON，继续正常处理
+    }
+
     this.paragraphs.push(
       new Paragraph({
         children: [
@@ -125,6 +140,11 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
   }
 
   addIndentedListItem(key: string, value: string): void {
+    // 如果 value 包含 [object Object]，跳过显示
+    if (value.includes("[object Object]")) {
+      return;
+    }
+
     this.paragraphs.push(
       new Paragraph({
         indent: { left: 720 }, // 約 0.5 inch 縮排
@@ -323,6 +343,349 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     this.paragraphs.push(paragraph);
   }
 
+  // 为 array of objects 创建表格
+  private addObjectsTable(items: any[]): void {
+    if (!Array.isArray(items) || items.length === 0) return;
+
+    const firstItem = items[0];
+    if (typeof firstItem !== "object" || firstItem === null) return;
+
+    // 检查是否是简单对象（所有值都是基本类型）
+    const isSimpleObject = items.every((item) => {
+      return Object.values(item).every((val) => {
+        return (
+          typeof val === "string" ||
+          typeof val === "number" ||
+          typeof val === "boolean" ||
+          val === null
+        );
+      });
+    });
+
+    // 如果不是简单对象，作为编号列表显示，并递归处理
+    if (!isSimpleObject) {
+      items.forEach((item, index) => {
+        const numberingIndex = index + 1;
+        const titleEntry = Object.entries(item).find(
+          ([key]) => key === "title" || key === "name"
+        );
+
+        // 优先显示 title 作为编号列表项
+        const title = titleEntry ? String(titleEntry[1]) : "";
+        this.paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${numberingIndex}. ${title}`,
+                font: "DFKai-SB",
+                size: 24,
+                bold: true,
+              }),
+            ],
+            spacing: { after: 120, line: 200 },
+          })
+        );
+
+        // 显示其他字段，递归处理嵌套的对象或数组
+        Object.entries(item).forEach(([key, value]) => {
+          if (key !== "title" && key !== "name") {
+            if (Array.isArray(value)) {
+              // 如果是数组，检查是否是 array of objects
+              if (
+                value.length > 0 &&
+                typeof value[0] === "object" &&
+                value[0] !== null
+              ) {
+                // 是 array of objects，添加标题后递归调用
+                this.paragraphs.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: key,
+                        font: "DFKai-SB",
+                        size: 22,
+                        bold: true,
+                      }),
+                    ],
+                    indent: { left: 720 },
+                    spacing: { after: 80, line: 200 },
+                  })
+                );
+                this.addObjectsTable(value);
+              } else {
+                // 普通数组，作为文本显示
+                const displayValue = JSON.stringify(value);
+                this.paragraphs.push(
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `${key}: ${displayValue}`,
+                        font: "DFKai-SB",
+                        size: 22,
+                      }),
+                    ],
+                    indent: { left: 720 },
+                    spacing: { after: 80, line: 200 },
+                  })
+                );
+              }
+            } else if (typeof value === "object" && value !== null) {
+              // 如果是对象，递归调用 addNestedObject
+              this.paragraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: key,
+                      font: "DFKai-SB",
+                      size: 22,
+                      bold: true,
+                    }),
+                  ],
+                  indent: { left: 720 },
+                  spacing: { after: 80, line: 200 },
+                })
+              );
+              this.addNestedObject(value);
+            } else {
+              // 基本类型，直接显示
+              this.paragraphs.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${key}: ${String(value)}`,
+                      font: "DFKai-SB",
+                      size: 22,
+                    }),
+                  ],
+                  indent: { left: 720 },
+                  spacing: { after: 80, line: 200 },
+                })
+              );
+            }
+          }
+        });
+      });
+      return;
+    }
+
+    // 优先检查是否有 title 或 name 字段
+    const hasTitleField = items.some((item) => item.title || item.name);
+    if (hasTitleField) {
+      // 只显示 title 字段
+      items.forEach((item) => {
+        const title = item.title || item.name || "";
+        if (title) {
+          this.paragraphs.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: String(title),
+                  font: "DFKai-SB",
+                  size: 24,
+                }),
+              ],
+              spacing: { after: 120, line: 200 },
+            })
+          );
+        }
+      });
+      return;
+    }
+
+    const hasDescField = items.some(
+      (item) => item.title || item.description || item.explanation
+    );
+    if (hasDescField) {
+      items.forEach((item) => {
+        const desc = item.title || item.description || item.explanation || "";
+        if (desc) {
+          this.paragraphs.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: String(desc),
+                  font: "DFKai-SB",
+                  size: 24,
+                }),
+              ],
+              spacing: { after: 120, line: 200 },
+            })
+          );
+        }
+      });
+      return;
+    }
+
+    // 提取所有可能的键
+    const allKeys = new Set<string>();
+    items.forEach((item) => {
+      Object.keys(item).forEach((key) => allKeys.add(key));
+    });
+    const headers = Array.from(allKeys);
+
+    // 创建表格行
+    const tableRows: TableRow[] = [];
+
+    // 表頭
+    tableRows.push(
+      new TableRow({
+        children: headers.map(
+          (header) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: header,
+                      bold: true,
+                      font: "微軟正黑體",
+                      size: 20,
+                    }),
+                  ],
+                  alignment: AlignmentType.CENTER,
+                }),
+              ],
+              shading: { fill: "D3D3D3" },
+            })
+        ),
+      })
+    );
+
+    // 表格行
+    items.forEach((row) => {
+      tableRows.push(
+        new TableRow({
+          children: headers.map(
+            (header) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: String(row[header] ?? ""),
+                        font: "微軟正黑體",
+                        size: 20,
+                      }),
+                    ],
+                  }),
+                ],
+              })
+          ),
+        })
+      );
+    });
+
+    const table = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: tableRows,
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+        bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+        left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+        right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+        insideHorizontal: {
+          style: BorderStyle.SINGLE,
+          size: 1,
+          color: "000000",
+        },
+        insideVertical: {
+          style: BorderStyle.SINGLE,
+          size: 1,
+          color: "000000",
+        },
+      },
+    });
+
+    this.paragraphs.push(table);
+    this.paragraphs.push(
+      new Paragraph({
+        text: "",
+        spacing: { after: 200 },
+      })
+    );
+  }
+
+  // 递归处理嵌套的单个对象
+  private addNestedObject(obj: any): void {
+    if (!obj || typeof obj !== "object") return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        // 如果是数组，检查是否是 array of objects
+        if (
+          value.length > 0 &&
+          typeof value[0] === "object" &&
+          value[0] !== null
+        ) {
+          // 是 array of objects，添加标题后递归调用
+          this.paragraphs.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: key,
+                  font: "DFKai-SB",
+                  size: 22,
+                  bold: true,
+                }),
+              ],
+              indent: { left: 1440 },
+              spacing: { after: 80, line: 200 },
+            })
+          );
+          this.addObjectsTable(value);
+        } else {
+          // 普通数组，作为文本显示
+          const displayValue = JSON.stringify(value);
+          this.paragraphs.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${key}: ${displayValue}`,
+                  font: "DFKai-SB",
+                  size: 22,
+                }),
+              ],
+              indent: { left: 1440 },
+              spacing: { after: 80, line: 200 },
+            })
+          );
+        }
+      } else if (typeof value === "object" && value !== null) {
+        // 如果是对象，继续递归
+        this.paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: key,
+                font: "DFKai-SB",
+                size: 22,
+                bold: true,
+              }),
+            ],
+            indent: { left: 1440 },
+            spacing: { after: 80, line: 200 },
+          })
+        );
+        this.addNestedObject(value);
+      } else {
+        // 基本类型，直接显示
+        this.paragraphs.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${key}: ${String(value)}`,
+                font: "DFKai-SB",
+                size: 22,
+              }),
+            ],
+            indent: { left: 1440 },
+            spacing: { after: 80, line: 200 },
+          })
+        );
+      }
+    });
+  }
+
   // DocxRenderer 特有的方法
   addEmptyContentMessage(): void {
     this.paragraphs.push(
@@ -360,12 +723,44 @@ export class HtmlRenderer implements ContentRenderer<string> {
   }
 
   addKeyValue(key: string, value: string): void {
+    // 检查 value 是否是 array of objects
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstItem = parsed[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          // this.html += `<div class="my-2"><span class="font-semibold">${escapeHtml(
+          //   key
+          // )}:</span>`;
+          this.renderArrayOfObjects(parsed);
+          this.html += "</div>";
+          return;
+        }
+      }
+    } catch (e) {
+      // 如果不是 JSON，继续正常处理
+    }
+
     this.html += `<p><strong class="font-semibold">${escapeHtml(
       key
     )}:</strong> ${escapeHtml(value)}</p>`;
   }
 
   addParagraph(text: string): void {
+    // 检查是否是 array of objects
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstItem = parsed[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          this.renderArrayOfObjects(parsed);
+          return;
+        }
+      }
+    } catch (e) {
+      // 如果不是 JSON，继续正常处理
+    }
+
     this.html += `<p class="my-2">${escapeHtml(text)}</p>`;
   }
 
@@ -380,8 +775,24 @@ export class HtmlRenderer implements ContentRenderer<string> {
     if (typeof content === "object") {
       this.html += `<p><span class="mr-2">${index}.</span><strong>${escapeHtml(
         content.title
-      )}：</strong>${escapeHtml(content.description)}</p>`;
+      )}</strong></p>`;
     } else {
+      // 检查是否是 array of objects
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const firstItem = parsed[0];
+          if (typeof firstItem === "object" && firstItem !== null) {
+            this.html += `<div class="my-2"><span class="mr-2">${index}.</span>`;
+            this.renderArrayOfObjects(parsed);
+            this.html += "</div>";
+            return;
+          }
+        }
+      } catch (e) {
+        // 如果不是 JSON，继续正常处理
+      }
+
       this.html += `<p><span class="mr-2">${index}.</span>${escapeHtml(
         content
       )}</p>`;
@@ -389,6 +800,30 @@ export class HtmlRenderer implements ContentRenderer<string> {
   }
 
   addIndentedListItem(key: string, value: string): void {
+    // 首先检查 value 是否包含 [object Object] 字符串
+    if (value.includes("[object Object]")) {
+      // 跳过显示这个项，因为数据不完整
+      return;
+    }
+
+    // 检查 value 是否是 array of objects
+    try {
+      const parsed = typeof value === "string" ? JSON.parse(value) : value;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstItem = parsed[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          this.html += `<div class="ml-4 my-2"><span class="font-semibold text-gray-800">${escapeHtml(
+            key
+          )}:</span>`;
+          this.renderArrayOfObjects(parsed);
+          this.html += "</div>";
+          return;
+        }
+      }
+    } catch (e) {
+      // 如果不是 JSON，继续正常处理
+    }
+
     this.html += `<p class="ml-8 text-gray-700"><span class="font-semibold">${escapeHtml(
       key
     )}:</span> ${escapeHtml(value)}</p>`;
@@ -413,6 +848,184 @@ export class HtmlRenderer implements ContentRenderer<string> {
       this.html += "</tr>";
     });
     this.html += "</tbody></table>";
+  }
+
+  // 处理 array of objects 的方法
+  private renderArrayOfObjects(items: any[]): void {
+    if (!Array.isArray(items) || items.length === 0) return;
+
+    const firstItem = items[0];
+    if (typeof firstItem !== "object" || firstItem === null) return;
+
+    // 检查是否所有项都是对象
+    const allObjects = items.every(
+      (item) => typeof item === "object" && item !== null
+    );
+    if (!allObjects) return;
+
+    // 检查是否是简单对象（所有值都是基本类型）
+    const isSimpleObject = items.every((item) => {
+      return Object.values(item).every((val) => {
+        return (
+          typeof val === "string" ||
+          typeof val === "number" ||
+          typeof val === "boolean" ||
+          val === null
+        );
+      });
+    });
+
+    // 如果是简单对象，生成表格
+    if (isSimpleObject) {
+      // 优先检查是否有 title 或 name 字段
+      const hasTitleField = items.some((item) => item.title || item.name);
+      if (hasTitleField) {
+        // 只显示 title 字段
+        items.forEach((item) => {
+          const title = item.title || item.name || "";
+          if (title) {
+            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500"><strong>${escapeHtml(
+              String(title)
+            )}</strong></div>`;
+          }
+        });
+        return;
+      }
+
+      const hasDescField = items.some(
+        (item) => item.title || item.description || item.explanation
+      );
+      if (hasDescField) {
+        items.forEach((item) => {
+          const desc = item.title || item.description || item.explanation || "";
+          if (desc) {
+            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500">${escapeHtml(
+              String(desc)
+            )}</div>`;
+          }
+        });
+        return;
+      }
+
+      // 提取所有可能的键
+      const allKeys = new Set<string>();
+      items.forEach((item) => {
+        Object.keys(item).forEach((key) => allKeys.add(key));
+      });
+      const headers = Array.from(allKeys);
+
+      // 生成表格
+      this.html +=
+        '<table class="border-collapse border border-gray-400 w-full my-3"><thead><tr>';
+      headers.forEach((header) => {
+        this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold text-sm">${escapeHtml(
+          header
+        )}</th>`;
+      });
+      this.html += "</tr></thead><tbody>";
+
+      items.forEach((row) => {
+        this.html += "<tr>";
+        headers.forEach((header) => {
+          const value = row[header];
+          const displayValue =
+            value === null || value === undefined ? "" : String(value);
+          this.html += `<td class="border border-gray-400 p-2 text-sm">${escapeHtml(
+            displayValue
+          )}</td>`;
+        });
+        this.html += "</tr>";
+      });
+      this.html += "</tbody></table>";
+    } else {
+      // 如果对象中包含嵌套的对象或数组，用编号列表显示，并递归处理
+      items.forEach((item, index) => {
+        const numberingIndex = index + 1;
+        // 优先显示 title 字段作为编号列表项的主标题
+        const title = item.title || item.name || "";
+        if (title) {
+          this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span><strong>${escapeHtml(
+            String(title)
+          )}</strong></div>`;
+        } else {
+          this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span></div>`;
+        }
+
+        // 显示其他字段，递归处理嵌套的对象或数组
+        Object.entries(item).forEach(([key, value]) => {
+          if (key !== "title" && key !== "name") {
+            if (Array.isArray(value)) {
+              // 如果是数组，检查是否是 array of objects
+              if (
+                value.length > 0 &&
+                typeof value[0] === "object" &&
+                value[0] !== null
+              ) {
+                // 是 array of objects，递归调用 renderArrayOfObjects
+                this.html += `<div class="ml-8"><strong>${escapeHtml(
+                  key
+                )}:</strong></div>`;
+                this.renderArrayOfObjects(value);
+              } else {
+                // 普通数组，作为文本显示
+                this.html += `<div class="ml-8"><strong>${escapeHtml(
+                  key
+                )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
+              }
+            } else if (typeof value === "object" && value !== null) {
+              // 如果是对象，递归调用 renderNestedObject
+              this.html += `<div class="ml-8"><strong>${escapeHtml(
+                key
+              )}:</strong></div>`;
+              this.renderNestedObject(value);
+            } else {
+              // 基本类型，直接显示
+              this.html += `<div class="ml-8"><strong>${escapeHtml(
+                key
+              )}:</strong> ${escapeHtml(String(value))}</div>`;
+            }
+          }
+        });
+      });
+    }
+  }
+
+  // 递归处理嵌套的单个对象
+  private renderNestedObject(obj: any): void {
+    if (!obj || typeof obj !== "object") return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        // 如果是数组，检查是否是 array of objects
+        if (
+          value.length > 0 &&
+          typeof value[0] === "object" &&
+          value[0] !== null
+        ) {
+          // 是 array of objects，递归调用 renderArrayOfObjects
+          this.html += `<div class="ml-12"><strong>${escapeHtml(
+            key
+          )}:</strong></div>`;
+          this.renderArrayOfObjects(value);
+        } else {
+          // 普通数组，作为文本显示
+          this.html += `<div class="ml-12"><strong>${escapeHtml(
+            key
+          )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
+        }
+      } else if (typeof value === "object" && value !== null) {
+        // 如果是对象，继续递归
+        this.html += `<div class="ml-12"><strong>${escapeHtml(
+          key
+        )}:</strong></div>`;
+        this.renderNestedObject(value);
+      } else {
+        // 基本类型，直接显示
+        this.html += `<div class="ml-12"><strong>${escapeHtml(
+          key
+        )}:</strong> ${escapeHtml(String(value))}</div>`;
+      }
+    });
   }
 
   getResult(): string {

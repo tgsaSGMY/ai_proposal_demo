@@ -44,7 +44,7 @@ function renderSectionContent(
     if (Object.prototype.hasOwnProperty.call(data, key)) {
       const value = data[key];
       const propInfo = schemaProperties[key];
-      const title = propInfo.description || propInfo.title || keyToTitle(key);
+      const title = propInfo.title || "" || keyToTitle(key);
 
       if (value === null || value === "") continue;
 
@@ -52,58 +52,72 @@ function renderSectionContent(
         if (value.length > 0) {
           renderer.addArrayTitle(title);
 
-          value.forEach((item, index) => {
-            const numberingIndex = index + 1;
-            if (typeof item === "object" && item !== null) {
-              const itemSchema = propInfo.items?.properties;
-              const usedKeys = new Set<string>();
+          // 檢查是否所有項都是物件（array of objects）
+          const allObjectItems = value.every(
+            (item) => typeof item === "object" && item !== null
+          );
 
-              // 優先處理 title/description 成對情況
-              const titleKey = Object.keys(item).find((k) =>
-                k.includes("title")
-              );
-              const descKey = Object.keys(item).find(
-                (k) => k.includes("description") || k.includes("explanation")
-              );
+          if (allObjectItems && value.length > 0) {
+            // 如果是 array of objects，直接传递 JSON 字符串给渲染器
+            renderer.addKeyValue(title, JSON.stringify(value));
+          } else {
+            // 原有的逐项处理逻辑
+            value.forEach((item, index) => {
+              const numberingIndex = index + 1;
+              if (typeof item === "object" && item !== null) {
+                const itemSchema = propInfo.items?.properties;
+                const usedKeys = new Set<string>();
 
-              if (titleKey && descKey && item[titleKey] && item[descKey]) {
-                renderer.addNumberedListItem(numberingIndex, {
-                  title: String(item[titleKey]),
-                  description: String(item[descKey]),
-                });
-                usedKeys.add(titleKey).add(descKey);
-              }
-
-              // 處理剩餘字段
-              for (const itemKey in itemSchema) {
-                if (
-                  usedKeys.has(itemKey) ||
-                  !Object.prototype.hasOwnProperty.call(item, itemKey)
-                )
-                  continue;
-
-                const fieldValue = String(item[itemKey] ?? "").trim();
-                if (!fieldValue) continue;
-
-                const itemPropInfo = itemSchema[itemKey];
-                const itemTitle = nameSwitching(
-                  itemPropInfo.description ||
-                    itemPropInfo.title ||
-                    keyToTitle(itemKey)
+                // 優先處理 title/description 成對情況
+                const titleKey = Object.keys(item).find((k) =>
+                  k.includes("title")
+                );
+                const descKey = Object.keys(item).find(
+                  (k) => k.includes("description") || k.includes("explanation")
                 );
 
-                // 如果是第一個被渲染的項目，且不是成對的項目，則加上編號
-                if (usedKeys.size === 0) {
-                  renderer.addNumberedListItem(numberingIndex, fieldValue);
-                } else {
-                  renderer.addIndentedListItem(itemTitle, fieldValue);
+                if (titleKey && descKey && item[titleKey] && item[descKey]) {
+                  renderer.addNumberedListItem(numberingIndex, {
+                    title: String(item[titleKey]),
+                    description: String(item[descKey]),
+                  });
+                  usedKeys.add(titleKey).add(descKey);
                 }
-                usedKeys.add(itemKey);
+
+                // 處理剩餘字段
+                for (const itemKey in itemSchema) {
+                  if (
+                    usedKeys.has(itemKey) ||
+                    !Object.prototype.hasOwnProperty.call(item, itemKey)
+                  )
+                    continue;
+
+                  const fieldValue = String(item[itemKey] ?? "").trim();
+                  if (!fieldValue) continue;
+
+                  const itemPropInfo = itemSchema[itemKey];
+                  const itemTitle = nameSwitching(
+                    itemPropInfo.title ||
+                      itemPropInfo.description ||
+                      keyToTitle(itemKey)
+                  );
+
+                  // 如果是第一個被渲染的項目，且不是成對的項目，則加上編號
+                  if (usedKeys.size === 0) {
+                    renderer.addNumberedListItem(numberingIndex, fieldValue);
+                  } else {
+                    renderer.addIndentedListItem(itemTitle, fieldValue);
+                  }
+                  usedKeys.add(itemKey);
+                }
+              } else {
+                renderer.addNumberedListItem(
+                  numberingIndex,
+                  String(item ?? "")
+                );
               }
-            } else {
-              renderer.addNumberedListItem(numberingIndex, String(item ?? ""));
-            }
-          });
+            });
+          }
         }
       } else if (typeof value === "object" && value !== null) {
         // 遞歸處理嵌套對象

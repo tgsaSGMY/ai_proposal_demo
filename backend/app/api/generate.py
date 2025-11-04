@@ -237,14 +237,12 @@ async def autofill_from_document(
     接收文檔純文字和多個章節的 schema，
     調用強大的 LLM 來解析文本並填充成結構化的 JSON。
     """
-    # 組合所有 schema，方便 LLM 一次性處理
     all_schemas_info = "\n\n".join(
         f"--- 章節 ID: {s.section_id} | 章節名稱: {s.section_name} ---\n"
         f"JSON Schema:\n{json.dumps(s.json_schema, ensure_ascii=False, indent=2)}"
         for s in request_data.sections
     )
 
-    # 構建一個強有力的 System Prompt
     system_prompt = f"""
    你是一個高精度、有上下文感知能力的文本提取引擎。你的唯一任務是將一份結構化良好的文檔，**逐個章節地、精確地**映射到對應的 JSON 結構中。你必須像一個遵循嚴格程序的機器人，盡量將章節内的内容全部一一對應，絕不跨越章節邊界提取信息，也絕不對文本內容做任何形式的解讀。
 
@@ -314,7 +312,7 @@ async def autofill_from_document(
     """
 
     model_registry = request.app.state.model_registry
-    model_to_use = model_registry.get("gpt-4.1") or model_registry.get("gpt-4.5-turbo")
+    model_to_use = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.5-turbo")
     if not model_to_use:
         raise HTTPException(status_code=500, detail="A powerful model like GPT-4/3.5 is required for this feature.")
 
@@ -338,12 +336,6 @@ async def autofill_from_document(
         
         # 解析返回的 JSON 字符串
         filled_data = json.loads(raw_output)
-        
-        # 驗證輸出結構
-        expected_section_ids = {s.section_id for s in request_data.sections}
-        returned_section_ids = set(filled_data.keys())
-        
-        
         # 確保所有章節都有內容，缺少的設為空
         formatted_result = {}
         for section in request_data.sections:
