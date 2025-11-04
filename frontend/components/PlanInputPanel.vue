@@ -59,7 +59,9 @@
           <label class="block text-xs sm:text-sm font-medium text-gray-700"
             >3. 描述你的項目名稱和摘要</label
           >
-          <div class="flex items-center gap-2 self-start sm:self-auto">
+          <div
+            class="flex items-center gap-2 self-start sm:self-auto flex-wrap"
+          >
             <button
               v-if="mode === 'synthetic'"
               @click="$emit('generateUserInput')"
@@ -77,6 +79,15 @@
             >
               {{ isImportingFromExcel ? "匯入中..." : "📥 從 Excel 匯入" }}
             </button>
+            <button
+              type="button"
+              @click="triggerWordUpload"
+              :disabled="isLoading"
+              class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-200 transition-colors disabled:bg-blue-50 disabled:text-blue-300"
+              title="從 Word 檔案匯入摘要與章節內容"
+            >
+              {{ isLoading ? "匯入中..." : "📄 從 Word 匯入" }}
+            </button>
           </div>
         </div>
         <input
@@ -85,6 +96,13 @@
           class="hidden"
           accept=".xlsx,.xls"
           @change="handleExcelFileChange"
+        />
+        <input
+          ref="wordInputRef"
+          type="file"
+          class="hidden"
+          accept=".docx"
+          @change="handleWordFileChange"
         />
         <textarea
           :value="modelValue"
@@ -293,11 +311,18 @@ import {
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
 import { useNotifications } from "~/composables/useNotifications";
+import { useLoading } from "~/composables/useLoading";
 import {
   applyExcelRows,
   buildExcelReplyTargetMap,
   extractExcelRows,
 } from "~/utils/excelImport";
+import {
+  extractTextFromWord,
+  callAutoFillApi,
+  buildSectionSchema,
+  processAutoFillResults,
+} from "~/utils/wordImport";
 
 const referenceLinks = ref([]);
 
@@ -323,8 +348,10 @@ const emit = defineEmits([
 ]);
 
 const { success: notifySuccess, error: notifyError } = useNotifications();
+const { isLoading } = useLoading();
 
 const excelInputRef = ref(null);
+const wordInputRef = ref(null);
 const isImportingFromExcel = ref(false);
 
 // 內部狀態
@@ -503,6 +530,70 @@ function triggerExcelUpload() {
   }
 }
 
+function triggerWordUpload() {
+  const input = wordInputRef.value;
+  if (input) {
+    input.value = "";
+    input.click();
+  }
+}
+
+async function handleWordFileChange(event) {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (input) {
+    input.value = "";
+  }
+  if (!file) {
+    return;
+  }
+
+  const { show: showLoading, hide: hideLoading } = useLoading();
+  showLoading("正在從 Word 檔案中提取內容...", true);
+
+  try {
+    // 檢查是否選擇了模板
+    if (!selectedTemplateId.value) {
+      notifyError("請先選擇模板，以便我們知道要填充哪些欄位");
+      return;
+    }
+
+    // 提取 Word 檔案中的文本
+    const extractedText = await extractTextFromWord(file);
+
+    // 準備傳送給後端的資料
+    const payload = {
+      document_text: extractedText,
+      sections: dynamicSections.value.map((s) => ({
+        section_id: s.sectionId,
+        section_name: s.sectionName,
+        json_schema: buildSectionSchema(s),
+      })),
+      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+    };
+
+    const filledContent = await callAutoFillApi(payload, API_BASE_URL);
+    modelValue.value =
+      filledContent?.main_idea?.content?.project_name_and_summary || "";
+
+    // 處理結果：填入動態欄位
+    processAutoFillResults(
+      filledContent,
+      dynamicSections.value,
+      updateDynamicValue,
+      ensureFieldExpanded
+    );
+
+    notifySuccess("Word 檔案匯入完成！");
+  } catch (error) {
+    console.error("Failed to import Word document", error);
+    const message = error?.message || "匯入過程發生未知錯誤";
+    notifyError(`匯入失敗：${message}`);
+  } finally {
+    hideLoading();
+  }
+}
+
 async function handleExcelFileChange(event) {
   const input = event?.target;
   const file = input?.files?.[0];
@@ -517,7 +608,6 @@ async function handleExcelFileChange(event) {
   try {
     const buffer = await file.arrayBuffer();
     const rows = extractExcelRows(buffer);
-    console.log("Extracted rows from Excel:", rows);
     const result = applyExcelRows({
       rows,
       dynamicSections: dynamicSections.value,

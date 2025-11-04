@@ -152,3 +152,4 @@ class AutoFillRequest(BaseModel):
     """根據一份完整的文檔，自動填充多個章節的內容。"""
     document_text: str
     sections: List[SectionSchemaInfo]
+    prompt_mode: str = "default"  # "default" 或 "word_import" - word_import 针对从 Word 文件导入进行优化

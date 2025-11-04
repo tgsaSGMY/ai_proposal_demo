@@ -17,7 +17,6 @@ export async function exportPlanToWordRdTransformUnder9(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>
 ) {
-  console.log("exportPlanToWordRdTransformUnder9 called", planContent);
   const docxRenderer = new DocxRenderer();
 
   // 按照原計劃書順序渲染各個section

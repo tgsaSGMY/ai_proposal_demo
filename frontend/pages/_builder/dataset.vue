@@ -270,7 +270,6 @@ async function handleBatchStart(payload) {
       throw new Error("启动批量任务失败: " + (await response.text()));
     success(`已启动 ${payload1.count} 个 AI 生成任务，请关注列表状态更新。`);
   } catch (e) {
-    console.log(e.message);
     errorNotification(e.message);
   }
 }

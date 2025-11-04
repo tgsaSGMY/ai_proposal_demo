@@ -17,7 +17,6 @@ export async function exportPlanToWordRdTransformOver10(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>
 ) {
-  console.log("exportPlanToWordRdTransformOver10 called", planContent);
   const docxRenderer = new DocxRenderer();
 
   // 按照原計劃書順序渲染各個section

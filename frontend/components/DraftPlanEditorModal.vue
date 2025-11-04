@@ -253,7 +253,6 @@ function onCandidateConfirm({ selected, rejected }) {
 async function saveRejectedAnswersToDb(rejected) {
   try {
     const rejectedAnswerData = {};
-    console.log("Rejected candidates to save:", rejected);
     for (const [sectionId, candidate] of Object.entries(rejected)) {
       if (candidate && candidate.content) {
         rejectedAnswerData[sectionId] = candidate.content;

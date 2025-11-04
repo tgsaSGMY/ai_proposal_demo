@@ -152,7 +152,6 @@ export async function exportPlanToWord(
     let exportFn: any;
 
     // 根據 grantId 和 templateId 映射到對應的導出函數
-    console.log("Determining export function for key:", grantTemplateKey);
     switch (grantTemplateKey) {
       case "central_phase1":
         const { exportPlanToWordCentralPhase1 } = await import(

@@ -6,7 +6,6 @@ export async function exportPlanToWordMarketingSiir(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>
 ) {
-  console.log("exportPlanToWordMarketingSiir called", planContent);
   const docxRenderer = new DocxRenderer();
 
   // 按照原計劃書順序渲染各個section
