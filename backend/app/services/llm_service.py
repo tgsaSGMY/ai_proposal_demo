@@ -25,7 +25,7 @@ class LLMService:
         self.ollama_base_url = OLLAMA_BASE_URL
         self.max_retries = 3
         self.initial_retry_delay = 1  # 秒
-        self.request_semaphore = asyncio.Semaphore(20)  # 同时最多 20 个请求（允许更多并发）
+        self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
 
 
     async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
@@ -102,7 +102,7 @@ class LLMService:
         raise ValueError(f"Unsupported external provider: {provider}")
 
     async def call_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict], is_json_output: bool = True) -> Tuple[Optional[str], Optional[Dict]]:
-        """REFACTOR: 重構後更具擴展性的外部 API 呼叫函數，支持重试和速率限制"""
+        """呼叫外部 LLM API (如 OpenAI, Ollama)，並處理重試邏輯和錯誤。"""
         async with self.request_semaphore:  # 限制并发请求数
             for attempt in range(self.max_retries): 
                 try:
