@@ -28,6 +28,7 @@ class DraftPlanUpdateRequest(BaseModel):
     template_id: Optional[str] = None
     user_input: Optional[Dict[str, Any]] = None
     plan_content: Optional[Dict[str, Any]] = None
+    rejected_answer: Optional[Dict[str, Any]] = None
 
 class CreateDraftRequest(BaseModel):
     name: str
@@ -111,7 +112,14 @@ async def run_synthetic_idea_generation_task(
 
 @router.get("", response_model=List[Dict[str, Any]], summary="获取所有企划草稿")
 async def get_all_drafts(supabase_service: SupabaseService = Depends(get_supabase_service)):
-    return await llm_service.get_all_draft_plans()
+    return await supabase_service.get_all_draft_plans()
+
+@router.get("/{draft_id}", response_model=Dict[str, Any], summary="获取单个企划草稿")
+async def get_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service)):
+    draft = await supabase_service.get_draft_plan_by_id(draft_id)
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found.")
+    return draft
 
 @router.post("", response_model=Dict[str, Any], status_code=201, summary="创建单个企划草稿")
 async def create_single_draft(req: CreateDraftRequest, supabase_service: SupabaseService = Depends(get_supabase_service)):

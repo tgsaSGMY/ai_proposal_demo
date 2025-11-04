@@ -229,7 +229,8 @@ async function handleFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  isLoading.value = true;
+  const { show: showLoading, hide: hideLoading } = useLoading();
+  showLoading("正在從 Word 檔案中提取內容...", true);
   try {
     const extractedText = await extractTextFromFile(file);
 
@@ -252,7 +253,7 @@ async function handleFileSelected(event) {
     console.error("處理檔案時發生錯誤:", error);
     errorNotification(`處理檔案失敗: ${error.message}`);
   } finally {
-    isLoading.value = false;
+    hideLoading();
     event.target.value = null; // 重設 input，以便能再次選擇同一個檔案
   }
 }

@@ -244,9 +244,43 @@ function onCandidateConfirm({ selected, rejected }) {
     }
   }
   planContent.value = newPlanContent;
+  saveRejectedAnswersToDb(rejected);
   showCandidateModal.value = false;
-  saveUpdatesToDb();
+  debounceSave();
   success("已選擇方案並填充到結果中！");
+}
+
+async function saveRejectedAnswersToDb(rejected) {
+  try {
+    const rejectedAnswerData = {};
+    console.log("Rejected candidates to save:", rejected);
+    for (const [sectionId, candidate] of Object.entries(rejected)) {
+      if (candidate && candidate.content) {
+        rejectedAnswerData[sectionId] = candidate.content;
+      }
+    }
+
+    if (Object.keys(rejectedAnswerData).length === 0) {
+      return; // 没有 rejected answers，不需要保存
+    }
+
+    const payload = {
+      rejected_answer: rejectedAnswerData,
+    };
+    const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      console.error(
+        `Failed to save rejected answers for draft ${props.draft.id}`
+      );
+    }
+  } catch (err) {
+    console.error("Save rejected answers failed:", err);
+  }
 }
 
 function handleAutoFillInModal(filledContent) {
@@ -310,7 +344,7 @@ const candidatePlan = ref({});
 
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
-  showLoading();
+  showLoading("正在生成計劃書...", true);
   try {
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries

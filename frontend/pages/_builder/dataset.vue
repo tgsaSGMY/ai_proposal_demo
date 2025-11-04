@@ -276,7 +276,14 @@ async function handleBatchStart(payload) {
 }
 
 async function handleSaveToFinalDataset(draftToSave, finalInputs) {
-  const { plan_content, user_input, grant_id, template_id, mode } = draftToSave;
+  const {
+    id: draftId,
+    plan_content,
+    user_input,
+    grant_id,
+    template_id,
+    mode,
+  } = draftToSave;
 
   if (!plan_content || Object.keys(plan_content).length === 0) {
     errorNotification("計劃書内容为空，无法保存。");
@@ -297,19 +304,28 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   }
 
   try {
-    // Need to find sections based on template_id to iterate
+    // 從數據庫獲取最新的 draft 數據，包括 rejected_answer
     showLoading();
+    const draftResponse = await fetch(`${API_BASE_URL}/draft_plans/${draftId}`);
+    if (!draftResponse.ok) {
+      throw new Error("無法從數據庫獲取最新的草稿數據");
+    }
+    const latestDraft = await draftResponse.json();
+    const rejected_answer = latestDraft.rejected_answer || {};
+
+    // Need to find sections based on template_id to iterate
     const grant = allConfigs.value.find((g) => g.id === grant_id);
     const template = grant?.templates.find((t) => t.id === template_id);
     if (!template || !template.sections) {
-      throw new Error("无法找到此草稿对应的模板配置。");
+      throw new Error("無法找到此草稿對應的模板配置。");
     }
 
     const entries = template.sections
       .map((section) => {
         const content = plan_content[section.id]?.content;
         if (typeof content !== "object" || content === null) return null;
-        return {
+
+        const entry = {
           source_type:
             mode === "synthetic" || mode == "internal"
               ? "synthetic_data"
@@ -320,6 +336,12 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
           prompt: finalInputs || "",
           final_answer: content,
         };
+
+        if (rejected_answer[section.id]) {
+          entry.rejected_answer = rejected_answer[section.id];
+        }
+
+        return entry;
       })
       .filter(Boolean);
 
@@ -337,7 +359,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
       throw new Error("保存至数据集失败: " + (await response.text()));
 
     success(`企划 "${draftToSave.name}" 已成功保存至最终数据集！`);
-    await fetch(`${API_BASE_URL}/draft_plans/${draftToSave.id}`, {
+    await fetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
       method: "DELETE",
     });
     selectedDraft.value = null;

@@ -192,7 +192,7 @@ async function handleGeneratePlan(outerPayload) {
     errorNotification("請選擇主題、模板，並描述您的核心想法。");
     return;
   }
-  showLoading();
+  showLoading("正在生成計劃書...", true);
   planContent.value = {};
   candidatePlan.value = {};
 
