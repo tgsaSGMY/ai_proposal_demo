@@ -24,7 +24,9 @@ async def get_all_models(request: Request):
     """獲取所有可用的模型列表"""
     if not hasattr(request.app.state, 'model_registry'):
         raise HTTPException(status_code=500, detail="Model registry not initialized.")
-    return list(request.app.state.model_registry.values())
+    
+    models = list(request.app.state.model_registry.values())
+    return models
 
 @router.get("/routing-rules", response_model=List[Dict[str, Any]])
 async def get_all_routing_rules(request: Request):

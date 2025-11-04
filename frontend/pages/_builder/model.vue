@@ -115,16 +115,16 @@
             class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto"
           >
             <div class="text-left sm:text-right">
-              <span class="text-sm font-semibold text-indigo-700">{{
-                getAppliedModelForSection(section.id)?.display_name || "未指定"
-              }}</span>
+              <span class="text-sm font-semibold text-indigo-700"
+                >外部模型：{{
+                  getAppliedModelForSection(section.id, true)?.display_name ||
+                  "未指定 (外部)"
+                }}</span
+              >
               <p class="text-xs text-gray-500">
-                <!-- {{
-                  getAppliedRuleForSection(section.id)?.description ||
-                  "使用全局默認"
-                }} -->
-                {{
-                  getAppliedModelForSection(section.id)?.description || "未指定"
+                内部模型：{{
+                  getAppliedModelForSection(section.id, false)?.display_name ||
+                  "未指定"
                 }}
               </p>
             </div>
@@ -152,8 +152,13 @@
       :models="allModels"
       :template-id="selectedTemplateId"
       :grant-id="selectedGrantId"
-      :current-rule="getAppliedRuleForSection(selectedSection.id)"
-      :default-model-id="defaultModelId"
+      :current-internal-rule="
+        getAppliedRuleForSection(selectedSection.id, false)
+      "
+      :current-external-rule="
+        getAppliedRuleForSection(selectedSection.id, true)
+      "
+      :routing-rules="routingRules"
       @close="closeModal"
       @save="handleSaveRule"
       @delete="handleDeleteRule"
@@ -280,29 +285,31 @@ const defaultModelId = computed(() => {
   return globalRule ? globalRule.model_id : null;
 });
 
-function getAppliedRuleForSection(sectionId) {
-  // 規則已按優先級排序，第一個匹配的就是最高優先級的規則
-  // 1. 查找完全匹配 section_id 的規則
+// 根據 section 和模型類型 (internal/external) 獲取應用的規則
+function getAppliedRuleForSection(sectionId, isExternal) {
+  // 先按 isExternal 過濾，再按 priority 排序
+  // 1. 查找完全匹配 section_id 和 is_external 的規則
   const specificRule = routingRules.value.find(
-    (r) => r.section_id === sectionId
+    (r) =>
+      r.section_id === sectionId &&
+      r.is_external === isExternal &&
+      r.template_id === selectedTemplateId.value &&
+      r.grant_id === selectedGrantId.value
   );
   if (specificRule) return specificRule;
 
-  // 2. 如果沒有，查找 grant_id 匹配且 section_id 為空的規則
-  const grantRule = routingRules.value.find(
-    (r) => r.grant_id === selectedGrantId.value && !r.section_id
-  );
-  if (grantRule) return grantRule;
-
-  // 3. 如果再沒有，查找全局規則 (grant_id 和 section_id 都為空)
+  // 3. 如果再沒有，查找全局規則 (grant_id 和 section_id 都為空) 且 is_external 匹配
+  console.log("routing rules:", routingRules.value);
   const globalRule = routingRules.value.find(
-    (r) => !r.grant_id && !r.section_id
+    (r) => !r.grant_id && !r.section_id && r.is_external === isExternal
   );
+
+  console.log("Global rule for section", sectionId, isExternal, globalRule);
   return globalRule || null;
 }
 
-function getAppliedModelForSection(sectionId) {
-  const rule = getAppliedRuleForSection(sectionId);
+function getAppliedModelForSection(sectionId, isExternal) {
+  const rule = getAppliedRuleForSection(sectionId, isExternal);
   if (!rule) return null;
   return allModels.value.find((m) => m.id === rule.model_id) || null;
 }

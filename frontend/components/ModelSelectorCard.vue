@@ -19,10 +19,9 @@
         <!-- 內/外部模型切換 Bar -->
         <div class="mb-4 sm:mb-6 flex justify-center">
           <div class="bg-gray-100 p-1 rounded-lg flex space-x-1">
-            <!-- 注意：内部模型暫時關閉，等未來擁有足夠多的數據在訓練模型 -->
+            <!-- 內部模型標籤 -->
             <button
               @click="activeTab = 'internal'"
-              v-if="false"
               :class="[
                 'px-4 sm:px-6 py-2 text-xs sm:text-sm font-medium rounded-md transition',
                 activeTab === 'internal'
@@ -41,7 +40,7 @@
                   : 'text-gray-600 hover:bg-gray-200',
               ]"
             >
-              模型選擇
+              外部模型
             </button>
             <button
               @click="activeTab = 'prompt'"
@@ -58,18 +57,18 @@
         </div>
 
         <!-- 模型列表 -->
-        <!-- 注意：内部模型暫時關閉，等未來擁有足夠多的數據在訓練模型 -->
         <div
           class="max-h-80 overflow-y-auto pr-1 sm:pr-2 space-y-2 sm:space-y-3"
         >
-          <div v-if="false && activeTab === 'internal'">
+          <!-- 內部模型列表 -->
+          <div v-if="activeTab === 'internal'">
             <div
               v-for="model in internalModels"
               :key="model.id"
-              @click="selectedModelId = model.id"
+              @click="selectedInternalModelId = model.id"
               :class="[
                 'p-3 sm:p-4 border rounded-lg cursor-pointer transition-all',
-                selectedModelId === model.id
+                selectedInternalModelId === model.id
                   ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300'
                   : 'border-gray-200 hover:border-indigo-400 hover:bg-indigo-50',
               ]"
@@ -84,7 +83,7 @@
                   </p>
                 </div>
                 <svg
-                  v-if="selectedModelId === model.id"
+                  v-if="selectedInternalModelId === model.id"
                   xmlns="http://www.w3.org/2000/svg"
                   class="h-6 w-6 text-indigo-600"
                   viewBox="0 0 20 20"
@@ -106,14 +105,15 @@
             </p>
           </div>
 
+          <!-- 外部模型列表 -->
           <div v-if="activeTab === 'external'">
             <div
               v-for="model in externalModels"
               :key="model.id"
-              @click="selectedModelId = model.id"
+              @click="selectedExternalModelId = model.id"
               :class="[
                 'p-3 sm:p-4 border rounded-lg cursor-pointer transition-all',
-                selectedModelId === model.id
+                selectedExternalModelId === model.id
                   ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300'
                   : 'border-gray-200 hover:border-indigo-400 hover:bg-indigo-50',
               ]"
@@ -128,7 +128,7 @@
                   </p>
                 </div>
                 <svg
-                  v-if="selectedModelId === model.id"
+                  v-if="selectedExternalModelId === model.id"
                   xmlns="http://www.w3.org/2000/svg"
                   class="h-6 w-6 text-indigo-600"
                   viewBox="0 0 20 20"
@@ -149,6 +149,8 @@
               暫無外部模型
             </p>
           </div>
+
+          <!-- 章節編輯 -->
           <div v-if="activeTab === 'prompt'">
             <SectionSettingsPanel
               ref="settingsPanelRef"
@@ -190,8 +192,9 @@ import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
 const props = defineProps({
   section: { type: Object, required: true },
   models: { type: Array, required: true },
-  currentRule: { type: Object, default: null },
-  defaultModelId: { type: String, default: null },
+  currentInternalRule: { type: Object, default: null },
+  currentExternalRule: { type: Object, default: null },
+  routingRules: { type: Array, required: true },
   templateId: { type: String, default: null },
   grantId: { type: String, default: null },
 });
@@ -202,74 +205,78 @@ const isSavingSettings = ref(false);
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-const activeTab = ref("internal");
-const selectedModelId = ref(null);
+const activeTab = ref("external");
+const selectedInternalModelId = ref(null);
+const selectedExternalModelId = ref(null);
 const settingsPanelRef = ref(null);
-const defaultModelId = ref(null);
 
 // 計算當前規則應用的模型ID
-const currentModelId = computed(() => props.currentRule?.model_id);
-
-// 計算默認模型ID（通過 props 傳入的 defaultModel）
-const computedDefaultModelId = computed(
-  () => props.defaultModelId || defaultModelId.value
+const currentInternalModelId = computed(
+  () => props.currentInternalRule?.model_id
+);
+const currentExternalModelId = computed(
+  () => props.currentExternalRule?.model_id
 );
 
-// 分離內部和外部模型
-const internalModels = computed(() =>
-  props.models.filter((m) => m.type === "internal")
-);
-const externalModels = computed(() =>
-  props.models.filter((m) => m.type === "external")
-);
+// 所有模型在兩個標籤頁中都可用
+const internalModels = computed(() => props.models);
+const externalModels = computed(() => props.models);
 
 // 初始化
 onMounted(() => {
-  if (currentModelId.value) {
-    selectedModelId.value = currentModelId.value;
-    const currentModel = props.models.find(
-      (m) => m.id === currentModelId.value
-    );
-    if (currentModel) {
-      activeTab.value = currentModel.type;
-    }
-  } else if (internalModels.value.length > 0) {
-    activeTab.value = "internal";
+  // 初始化內部模型選擇
+  if (currentInternalModelId.value) {
+    selectedInternalModelId.value = currentInternalModelId.value;
+  }
+
+  // 初始化外部模型選擇
+  if (currentExternalModelId.value) {
+    selectedExternalModelId.value = currentExternalModelId.value;
   } else {
-    activeTab.value = "external";
+    // 如果沒有外部模型規則，預設為第一個可用的模型
+    if (props.models.length > 0) {
+      selectedExternalModelId.value = props.models[0].id;
+    }
   }
 });
 
 async function saveChanges() {
   try {
-    // 1. 如果有模型選擇變更，判斷是否需要儲存或刪除
+    // 處理內部模型規則
     if (
-      selectedModelId.value &&
-      selectedModelId.value !== currentModelId.value
+      selectedInternalModelId.value &&
+      selectedInternalModelId.value !== currentInternalModelId.value
     ) {
-      if (
-        computedDefaultModelId.value &&
-        selectedModelId.value === computedDefaultModelId.value
-      ) {
-        // 發出刪除事件，由父組件處理刪除
-        if (props.currentRule?.id) {
-          emit("delete", props.currentRule.id);
-        }
-      } else {
-        // 否則，創建新規則
-        const newRulePayload = {
-          grant_id: props.grantId || null,
-          template_id: props.templateId || null,
-          section_id: props.section.id,
-          model_id: selectedModelId.value,
-          priority: 20,
-          description: `特定模型配置`,
-        };
-        emit("save", newRulePayload);
-      }
+      const internalPayload = {
+        grant_id: props.grantId || null,
+        template_id: props.templateId || null,
+        section_id: props.section.id,
+        model_id: selectedInternalModelId.value,
+        priority: 20,
+        description: `內部模型配置`,
+        is_external: false,
+      };
+      emit("save", internalPayload);
     }
 
-    // 2. 如果在 prompt 編輯頁面或者有可能編輯過 prompt，儲存 prompt 設定
+    // 處理外部模型規則
+    if (
+      selectedExternalModelId.value &&
+      selectedExternalModelId.value !== currentExternalModelId.value
+    ) {
+      const externalPayload = {
+        grant_id: props.grantId || null,
+        template_id: props.templateId || null,
+        section_id: props.section.id,
+        model_id: selectedExternalModelId.value,
+        priority: 20,
+        description: `外部模型配置`,
+        is_external: true,
+      };
+      emit("save", externalPayload);
+    }
+
+    // 如果在 prompt 編輯頁面或者有可能編輯過 prompt，儲存 prompt 設定
     if (settingsPanelRef.value) {
       const updatedSettings = settingsPanelRef.value.getEditableData();
       await handleSaveSettings(updatedSettings);

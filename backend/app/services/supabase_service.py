@@ -347,7 +347,7 @@ class SupabaseService:
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
         新增或更新路由規則。
-        我們基於 (grant_id, section_id) 的組合來判斷是更新還是插入。
+        基於 (grant_id, section_id, template_id, is_external) 的組合來判斷是更新還是插入。
         """
         # 準備要插入/更新的數據
         data_to_upsert = {
@@ -356,13 +356,14 @@ class SupabaseService:
             "template_id": rule.template_id,
             "model_id": rule.model_id,
             "priority": rule.priority,
-            "description": rule.description or f"Rule for {rule.section_id or rule.grant_id or 'all sections'}"
+            "description": rule.description or f"Rule for {rule.section_id or rule.grant_id or 'all sections'}",
+            "is_external": rule.is_external
         }
 
         # on_conflict 指定衝突的列,會合併衝突並更新
         response = self.client.from_("routing_rules").upsert(
             data_to_upsert, 
-            on_conflict="grant_id,template_id, section_id" 
+            on_conflict="grant_id,template_id,section_id,is_external" 
         ).execute()
 
         if response.data:

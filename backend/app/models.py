@@ -133,6 +133,7 @@ class RoutingRule(BaseModel):
     model_id: str
     priority: int = Field(20, description="規則優先級，數字越小優先級越高。")
     description: Optional[str] = None
+    is_external: Optional[bool] = None
 
 # --- 定義 source_type 的可用選項 ---
 class UpdateSectionSettingsRequest(BaseModel):
