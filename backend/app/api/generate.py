@@ -312,9 +312,9 @@ async def autofill_from_document(
     """
 
     model_registry = request.app.state.model_registry
-    model_to_use = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.5-turbo")
+    model_to_use = model_registry.get("gpt-4.1") or model_registry.get("gpt-5-mini")
     if not model_to_use:
-        raise HTTPException(status_code=500, detail="A powerful model like GPT-4/3.5 is required for this feature.")
+        raise HTTPException(status_code=500, detail="A powerful model like GPT-4/5 is required for this feature.")
 
     messages = [
         {"role": "system", "content": system_prompt},
