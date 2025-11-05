@@ -549,7 +549,7 @@ async function handleWordFileChange(event) {
   }
 
   const { show: showLoading, hide: hideLoading } = useLoading();
-  showLoading("正在從 Word 檔案中提取內容...", true);
+  showLoading("正在從 Word 檔案中提取內容...");
 
   try {
     // 檢查是否選擇了模板
