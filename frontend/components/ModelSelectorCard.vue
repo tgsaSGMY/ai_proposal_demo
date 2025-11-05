@@ -311,6 +311,8 @@ async function handleSaveSettings(updatedSettings) {
     }
 
     // 通知父組件(model.vue)數據已更新，以便刷新列表
+    const { success } = useNotifications();
+    success("Prompt 設定已成功保存！");
     emit("settings-updated", {
       sectionId: props.section.id,
       ...updatedSettings,

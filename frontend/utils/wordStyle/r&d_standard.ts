@@ -363,11 +363,11 @@ export async function exportPlanToWordRdStandard(
       const weightDisplay = totalWeight > 0 ? `（${totalWeight}%）` : "";
       // 主分項標題 - 加粗
       const bulletTextRuns: TextRun[] = [
-        new TextRun({
-          text: `• ${planLabel}. `,
-          font: "DFKai-SB",
-          size: 24,
-        }),
+        // new TextRun({
+        //   text: `• ${planLabel}. `,
+        //   font: "DFKai-SB",
+        //   size: 24,
+        // }),
         new TextRun({
           text: `${planName}`,
           font: "DFKai-SB",
@@ -407,7 +407,7 @@ export async function exportPlanToWordRdStandard(
       const planLabel = String.fromCharCode(65 + itemIndex); // A, B, C, ...
 
       // 分項名稱標題
-      docxRenderer.addArrayTitle(`${planLabel}. ${planName}`);
+      docxRenderer.addArrayTitle(`${planName}`);
 
       // （1）工作重點表
       if (Array.isArray(item?.細項) && item.細項.length > 0) {
@@ -446,16 +446,28 @@ export async function exportPlanToWordRdStandard(
         const summary = quantitative.摘要表;
 
         const benefitItems = [
-          { key: "增加產值_千元", label: "增加產值" },
-          { key: "產出新產品或服務數量", label: "產出新產品或服務數量" },
-          { key: "衍生商品或服務數量", label: "衍生商品或服務數量" },
-          { key: "投入研發費用_千元", label: "投入研發費用" },
-          { key: "促成投資額_千元", label: "促成投資額" },
-          { key: "降低成本_千元", label: "降低成本" },
-          { key: "增加就業人數", label: "增加就業人數" },
-          { key: "成立新公司數量", label: "成立新公司數量" },
-          { key: "發明專利數量", label: "發明專利數量" },
-          { key: "新型或新式樣專利數量", label: "新型或新式樣專利數量" },
+          { key: "增加產值_千元", label: "增加產值", unit: "千元" },
+          {
+            key: "產出新產品或服務數量",
+            label: "產出新產品或服務數量",
+            unit: "個",
+          },
+          {
+            key: "衍生商品或服務數量",
+            label: "衍生商品或服務數量",
+            unit: "個",
+          },
+          { key: "投入研發費用_千元", label: "投入研發費用", unit: "千元" },
+          { key: "促成投資額_千元", label: "促成投資額", unit: "千元" },
+          { key: "降低成本_千元", label: "降低成本", unit: "千元" },
+          { key: "增加就業人數", label: "增加就業人數", unit: "人" },
+          { key: "成立新公司數量", label: "成立新公司數量", unit: "家" },
+          { key: "發明專利數量", label: "發明專利數量", unit: "件" },
+          {
+            key: "新型或新式樣專利數量",
+            label: "新型或新式樣專利數量",
+            unit: "件",
+          },
         ];
 
         // 準備表格數據
@@ -469,7 +481,8 @@ export async function exportPlanToWordRdStandard(
             const benefit = summary[item.key];
             quantTableData.push({
               項目: item.label,
-              數值: safeText(benefit?.數值),
+              數值:
+                safeText(benefit?.數值) + (item.unit ? ` ${item.unit}` : ""),
               說明: safeText(benefit?.說明),
             });
           }
@@ -490,9 +503,8 @@ export async function exportPlanToWordRdStandard(
             const cellData = quantTableData[index];
             if (cellData && cellData.項目) {
               row.push(
-                `${index + 1}. ${cellData.項目}\n${cellData.數值}${
-                  cellData.說明 ? `\n${cellData.說明}` : ""
-                }`
+                `${index + 1}. ${cellData.項目}\n${cellData.數值}
+                `
               );
             } else {
               row.push("");

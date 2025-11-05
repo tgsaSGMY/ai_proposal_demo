@@ -362,7 +362,6 @@ const nameMaps = computed(() => {
 // --- Fetch datasets with filters ---
 async function fetchDatasets() {
   error.value = null;
-  console.log("fetchDatasets called");
   showLoading();
 
   try {

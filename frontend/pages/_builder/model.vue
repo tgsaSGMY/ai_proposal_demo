@@ -299,12 +299,10 @@ function getAppliedRuleForSection(sectionId, isExternal) {
   if (specificRule) return specificRule;
 
   // 3. 如果再沒有，查找全局規則 (grant_id 和 section_id 都為空) 且 is_external 匹配
-  console.log("routing rules:", routingRules.value);
   const globalRule = routingRules.value.find(
     (r) => !r.grant_id && !r.section_id && r.is_external === isExternal
   );
 
-  console.log("Global rule for section", sectionId, isExternal, globalRule);
   return globalRule || null;
 }
 
@@ -340,9 +338,8 @@ async function handleSaveRule(rulePayload) {
     // 更新 UI
     const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
-
-    closeModal();
     success("規則已成功儲存！");
+    closeModal();
   } catch (error) {
     console.error("Failed to save routing rule:", error);
     errorNotification(`儲存失敗: ${error.message}`);

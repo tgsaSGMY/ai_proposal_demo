@@ -3,13 +3,8 @@
     class="space-y-3 sm:space-y-4 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50"
   >
     <label class="block text-xs sm:text-sm font-medium text-gray-700"
-      >智能參考資料 (選填)</label
+      >智能參考資料</label
     >
-    <p class="text-[10px] sm:text-xs text-gray-500">
-      新增相關網頁連結，系統將自動抓取內容並由 AI
-      提煉重點，為您的計劃書生成提供更豐富的上下文。
-    </p>
-
     <div
       v-for="(link, index) in links"
       :key="index"
