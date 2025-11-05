@@ -188,7 +188,7 @@ function renderProjectObjectives(data: any, renderer: ContentRenderer<any>) {
 
   if (data.目標列表 && Array.isArray(data.目標列表)) {
     data.目標列表.forEach((item: any, index: number) => {
-      renderer.addArrayTitle(`${index + 1}.${item.標題}`);
+      renderer.addArrayTitle(`${item.標題}`);
       if (item.敘述) {
         renderTextWithLineBreaks(item.敘述, renderer);
       }

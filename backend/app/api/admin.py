@@ -125,14 +125,13 @@ async def scrape_and_analyze(
         max_items = req.max_items or 4
         target_lines = []
         for target in req.context_targets:
-                label = target.label.strip()
                 composite_key = target.composite_key.strip()
                 section_hint = (
                         f" (section: {target.section_id}, field: {target.property_key}, sub: {target.sub_field_key})"
                         if target.section_id and target.property_key and target.sub_field_key
                         else ""
                 )
-                target_lines.append(f"- {label} | composite_key: {composite_key}{section_hint}")
+                target_lines.append(f"- composite_key: {section_hint}")
 
         targets_block = "\n".join(target_lines) if target_lines else "(未提供具體欄位，請僅在高度相關時回傳)"
 
@@ -142,37 +141,33 @@ async def scrape_and_analyze(
 
         使用者正在撰寫商業計劃書。以下為潛在的目標欄位：
         {targets_block}
-
-        另外提供的關鍵字參考: {req.context_keywords}
-
         請務必遵守以下要求：
         1. 只輸出 JSON 物件，格式為：
                 {{
                     "summary": "對原文的高度概括，1-2 句",
                     "auto_fill": [
                         {{
-                            "composite_key": "<section::property::subfield>",
+                            "composite_key": "<section::field::sub>",
                             "label": "對應欄位標籤",
                             "relevance": "high" 或 "medium",
                             "content": "從原文中提煉的重點，1-3 句內"
                         }}
                     ]
                 }}
-        2. 僅在你非常確信資訊與欄位密切相關、能直接填寫時才輸出該項目。
-        3. 優先輸出 relevance = "high" 的項目，避免無關內容。
-        4. 最多提供 {max_items} 個 auto_fill 項目，若沒有高度相關內容則輸出空陣列。
-        5. 不得虛構或推測資訊。
+        2. composite_key 必須與使用者提供的目標欄位完全對應。
+        3. 最多提供 {max_items} 個 auto_fill 項目，若沒有高度相關內容則輸出空陣列。
+        4. 不得虛構或推測資訊。
+        5. content除了公司名等專有名詞外，其他一律使用繁體中文回答。
         """
 
         user_prompt = (
                 "網頁原文:\n---\n"
                 + scraped_text
-                + "\n---\n請按照系統指令返回 JSON，若沒有適合填寫的欄位，auto_fill 請留空陣列。"
         )
 
         # 3️⃣ 取得模型設定
         model_registry = request.app.state.model_registry
-        model_to_use = model_registry.get("gpt-3.5-turbo-1106") or model_registry.get("gpt-4.5-turbo")
+        model_to_use = model_registry.get("gpt-4.1-nano") or model_registry.get("gpt-4.5-turbo")
         if not model_to_use:
             raise HTTPException(status_code=500, detail="需要配置 GPT-3.5 或 GPT-4 模型。")
 
@@ -215,8 +210,6 @@ async def scrape_and_analyze(
             relevance = (item.get("relevance") or "").lower()
 
             if not composite_key or not content:
-                continue
-            if relevance != "high":
                 continue
             if composite_key in seen_keys:
                 continue

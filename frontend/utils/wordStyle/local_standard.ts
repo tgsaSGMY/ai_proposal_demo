@@ -157,35 +157,33 @@ export async function exportPlanToWordLocalStandard(
       docxRenderer.addArrayTitle("研發成果");
 
       const rdRows: string[][] = [];
-      let itemIndex = 1;
+      let awardItemIndex = 1;
+      let patentItemIndex = 1;
 
       // 獎項
       if (Array.isArray(rd.獎項) && rd.獎項.length > 0) {
         rdRows.push(["獎項", "", `年度`, `獎項名稱`]);
 
         rd.獎項.forEach((item: any, awardIndex: number) => {
-          const itemNum = awardIndex === 0 ? String(itemIndex) : "";
           rdRows.push([
             "",
-            itemNum,
+            `${awardIndex + 1}`,
             `${safeText(item?.年度)}`,
             `${safeText(item?.獎項名稱)}`,
           ]);
         });
-        itemIndex++;
       }
 
       // 專利
       rdRows.push(["專利", "", `國別/年度/類型/專利編號`, `專利名稱或內容`]);
       if (Array.isArray(rd.專利) && rd.專利.length > 0) {
         rd.專利.forEach((item: any, patentIndex: number) => {
-          const itemNum = patentIndex === 0 ? String(itemIndex) : "";
           const patentDetail = `${safeText(item?.國別)}/${safeText(
             item?.年度
           )}/${safeText(item?.類型)}/${safeText(item?.專利編號)}`;
           rdRows.push([
             "",
-            itemNum,
+            `${patentIndex + 1}`,
             patentDetail,
             `${safeText(item?.專利名稱或內容)}`,
           ]);

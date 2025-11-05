@@ -409,13 +409,15 @@ const dynamicSections = computed(() =>
 const analysisTargets = computed(() =>
   dynamicSections.value.flatMap((section) =>
     section.fields.flatMap((field) =>
-      field.subFields.map((sub) => ({
-        label: sub.label,
-        composite_key: sub.compositeKey,
-        section_id: section.sectionId,
-        property_key: field.propertyKey,
-        sub_field_key: sub.key,
-      }))
+      field.subFields
+        .filter((sub) => !sub.value || sub.value.trim() === "")
+        .map((sub) => ({
+          label: sub.label,
+          composite_key: sub.compositeKey,
+          section_id: section.sectionId,
+          property_key: field.propertyKey,
+          sub_field_key: sub.key,
+        }))
     )
   )
 );
@@ -427,10 +429,6 @@ const analysisTargetMap = computed(() => {
   });
   return map;
 });
-
-const analysisLabels = computed(() =>
-  analysisTargets.value.map((target) => target.label)
-);
 
 const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value)
@@ -699,6 +697,7 @@ function applyAutoFillEntries(autoFillItems = []) {
     applied.push({
       compositeKey,
       label: item.label || targetMeta?.label || "",
+      content,
     });
   });
 
@@ -731,7 +730,7 @@ async function handleAnalyzeLink(index) {
   if (!link || !link.url) return;
 
   link.status = "loading";
-
+  console.log("analysis targets:", analysisTargets.value);
   try {
     const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
       method: "POST",
@@ -739,7 +738,6 @@ async function handleAnalyzeLink(index) {
       body: JSON.stringify({
         user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
         url: link.url,
-        context_keywords: analysisLabels.value.join(", "),
         context_targets: analysisTargets.value,
         max_items: 4,
       }),
@@ -751,6 +749,7 @@ async function handleAnalyzeLink(index) {
     }
 
     const result = await response.json();
+    console.log("Analysis result:", result);
     const summaryText =
       typeof result.summary === "string" ? result.summary.trim() : "";
     const autoFillItems = Array.isArray(result.auto_fill)
@@ -770,7 +769,7 @@ async function handleAnalyzeLink(index) {
       summaryLines.push("自動填寫欄位：");
       appliedEntries.forEach((entry) => {
         const label = entry.label || entry.compositeKey;
-        summaryLines.push(`- ${label}`);
+        summaryLines.push(`- ${label}: ${entry.content}`);
       });
     }
 
