@@ -362,6 +362,7 @@ async function handleGeneratePlanInModal(outerPayload) {
         sections: sectionsToGenerate,
         user_input: finalUserInput,
         num_candidates: 2,
+        is_external: false,
       }),
     });
     if (!response.ok) {

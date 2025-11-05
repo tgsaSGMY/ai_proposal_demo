@@ -4,29 +4,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: Any) -> Optional[Dict[str, Any]]:
+def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: Any, is_external: Optional[bool] = None) -> Optional[Dict[str, Any]]:
     """寻找路由模型"""
     logger.debug(
-        "Resolving model for grant '%s', template '%s', section '%s'",
+        "Resolving model for grant '%s', template '%s', section '%s', is_external=%s",
         grant_id,
         template_id,
         section_id,
+        is_external,
     )
     # 路由规则已经按优先级排序
     for rule in app_state.routing_rules:
         grant_match = (rule['grant_id'] is None or rule['grant_id'] == grant_id)
         template_match = (rule.get('template_id') is None or rule['template_id'] == template_id)
         section_match = (rule['section_id'] is None or rule['section_id'] == section_id)
+        external_match = (is_external is None or rule.get('is_external') == is_external)
         
-        if grant_match and template_match and section_match:
+        if grant_match and template_match and section_match and external_match:
             model_id = rule["model_id"]
             model_info = app_state.model_registry.get(model_id)
             if model_info:
                 logger.info(
-                    "Routing '%s/%s/%s' to model: %s (Priority: %s)",
+                    "Routing '%s/%s/%s' (is_external=%s) to model: %s (Priority: %s)",
                     grant_id,
                     template_id,
                     section_id,
+                    is_external,
                     model_id,
                     rule['priority'],
                 )
@@ -38,10 +41,11 @@ def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: A
     default_model_info = app_state.model_registry.get(DEFAULT_MODEL_ID)
     if default_model_info:
         logger.info(
-            "No matching rule for %s/%s/%s, falling back to default model: %s",
+            "No matching rule for %s/%s/%s (is_external=%s), falling back to default model: %s",
             grant_id,
             template_id,
             section_id,
+            is_external,
             DEFAULT_MODEL_ID,
         )
         return default_model_info

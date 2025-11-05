@@ -48,6 +48,7 @@ class GenerateRequest(BaseModel):
     user_input: str = Field(..., description="用戶提供的核心需求或主題。")
     sections: List[SectionGenerateRequest] = Field(..., description="需要生成的章節列表。")
     num_candidates: int = Field(2, ge=1, le=3)
+    is_external: bool = Field(True, description="是否使用外部模型（True）還是內部模型（False）。")
 
 class SectionGenerateResponse(BaseModel):
     """單個章節生成的響應結果。"""

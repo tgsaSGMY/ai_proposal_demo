@@ -1,14 +1,48 @@
 <template>
   <div class="p-3 sm:p-4 md:p-8 h-full flex flex-col bg-gray-50">
     <div
-      class="flex-shrink-0 mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow text-center"
+      class="flex-shrink-0 mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow"
     >
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800">
-        AI 計畫書生成器
-      </h1>
-      <p class="text-xs sm:text-sm text-gray-500 mt-1">
-        專為高效產出專業計劃書而設計
-      </p>
+      <div class="text-center mb-4">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800">
+          AI 計畫書生成器
+        </h1>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">
+          專為高效產出專業計劃書而設計
+        </p>
+      </div>
+
+      <!-- 模型類型選擇 Toggle -->
+      <div class="flex justify-center items-center gap-3">
+        <span
+          class="text-xs sm:text-sm font-medium"
+          :class="useModelType === 'internal' ? 'text-indigo-600' : 'text-gray-600'"
+        >
+          內部模型
+        </span>
+        <button
+          @click="useModelType = useModelType === 'internal' ? 'external' : 'internal'"
+          :class="[
+            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+            useModelType === 'external'
+              ? 'bg-indigo-600'
+              : 'bg-gray-300',
+          ]"
+        >
+          <span
+            :class="[
+              'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+              useModelType === 'external' ? 'translate-x-6' : 'translate-x-1',
+            ]"
+          />
+        </button>
+        <span
+          class="text-xs sm:text-sm font-medium"
+          :class="useModelType === 'external' ? 'text-indigo-600' : 'text-gray-600'"
+        >
+          外部模型
+        </span>
+      </div>
     </div>
 
     <!-- 主工作區：左右佈局 -->
@@ -115,6 +149,9 @@ const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+// 模型類型選擇狀態
+const useModelType = ref('external');
+
 // --- 使用 Composable ---
 const {
   selectedGrantId,
@@ -213,6 +250,7 @@ async function handleGeneratePlan(outerPayload) {
         sections: sectionsToGenerate,
         user_input: finalUserInput,
         num_candidates: 2,
+        is_external: useModelType.value === 'external',
       }),
     });
 

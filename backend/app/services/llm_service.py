@@ -268,7 +268,8 @@ class LLMService:
         app_state: Any,
         user_id: str,
         supabase_service: "SupabaseService",
-        use_actor_critic: bool = False
+        use_actor_critic: bool = False,
+        is_external: Optional[bool] = None
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
@@ -277,7 +278,7 @@ class LLMService:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 
         # 2. --- 路由与配额检查 ---
-        original_model_info = resolve_model(grant_id, template_id, section_id, app_state)
+        original_model_info = resolve_model(grant_id, template_id, section_id, app_state, is_external=is_external)
         if not original_model_info:
             return SectionGenerateResponse(section_id=section_id, error="Model routing failed.")
         

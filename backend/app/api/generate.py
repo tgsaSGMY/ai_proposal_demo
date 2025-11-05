@@ -162,6 +162,7 @@ async def generate_plan(
                 app_state=app_state,
                 user_id=request_data.user_id,
                 supabase_service=supabase_service,
+                is_external=request_data.is_external,
             )
             for s in request_data.sections
             for _ in range(num_candidates)
