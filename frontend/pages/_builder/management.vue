@@ -86,28 +86,14 @@
       </div>
     </div>
 
-    <!-- Loading and Error States -->
-    <div v-if="isLoading" class="text-center py-10">
-      <p>正在加載數據...</p>
-    </div>
-    <div v-else-if="error" class="bg-red-100 text-red-700 p-4 rounded-lg">
-      <p>加載失敗: {{ error }}</p>
-    </div>
-
     <!-- Data Table -->
     <div
-      v-else-if="datasets.length > 0"
+      v-if="datasets.length > 0"
       class="bg-white shadow-lg rounded-lg overflow-x-scroll"
     >
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th
-              scope="col"
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              ID
-            </th>
             <th
               scope="col"
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -135,10 +121,7 @@
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="item in datasets" :key="item.id">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ item.id }}
-            </td>
+          <tr v-for="item in paginatedDatasets" :key="item.id">
             <td class="px-6 py-4 whitespace-nowrap">
               <span
                 :class="getSourceTypeClass(item.source_type)"
@@ -187,6 +170,45 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination Controls -->
+      <div class="flex justify-center items-center gap-2 mt-6 mb-4 px-6 py-4">
+        <button
+          v-if="currentPage > 1"
+          @click="previousPage"
+          class="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+        >
+          上一頁
+        </button>
+
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          :class="[
+            'px-3 py-1 rounded',
+            currentPage === page
+              ? 'bg-indigo-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300',
+          ]"
+        >
+          {{ page }}
+        </button>
+
+        <button
+          v-if="currentPage < totalPages"
+          @click="nextPage"
+          class="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+        >
+          下一頁
+        </button>
+      </div>
+
+      <!-- Page Info -->
+      <div class="text-center text-sm text-gray-600 mb-4 px-6 pb-4">
+        第 {{ currentPage }} / {{ totalPages }} 頁 | 共
+        {{ datasets.length }} 條數據
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -236,9 +258,13 @@ import DatasetEditModal from "~/components/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
 
 const datasets = ref([]);
+const allDatasets = ref([]);
+const currentPage = ref(1);
+const itemsPerPage = 50;
+
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
-const { isLoading } = useLoading();
+const { show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
 import { useConfirm } from "~/composables/useConfirm";
 const { confirm } = useConfirm();
@@ -273,6 +299,38 @@ const availableSections = computed(() => {
   return template ? template.sections : [];
 });
 
+const totalPages = computed(() => {
+  return Math.ceil(datasets.value.length / itemsPerPage);
+});
+
+const filteredDatasets = computed(() => {
+  return allDatasets.value.filter((item) => {
+    const grantMatch = !filters.grantId || item.grant_id === filters.grantId;
+    const templateMatch =
+      !filters.templateId || item.template_id === filters.templateId;
+    const sectionMatch =
+      !filters.sectionId || item.section_id === filters.sectionId;
+    const sourceMatch =
+      !filters.sourceType || item.source_type === filters.sourceType;
+    return grantMatch && templateMatch && sectionMatch && sourceMatch;
+  });
+});
+
+watch(
+  filteredDatasets,
+  (newVal) => {
+    datasets.value = newVal;
+    currentPage.value = 1;
+  },
+  { deep: true }
+);
+
+const paginatedDatasets = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return datasets.value.slice(start, end);
+});
+
 const nameMaps = computed(() => {
   const maps = {
     grants: new Map(),
@@ -301,42 +359,21 @@ const nameMaps = computed(() => {
   return maps;
 });
 
-// --- 創建一個輔助函數來查找名稱 ---
-function getSectionDisplayName(item) {
-  const grantName = nameMaps.value.grants.get(item.grant_id) || item.grant_id;
-  const templateName =
-    nameMaps.value.templates.get(item.template_id) || item.template_id;
-  const sectionName =
-    nameMaps.value.sections.get(item.section_id) || item.section_id;
-
-  // 返回一個結構化的字符串，或者你可以返回一個對象在模板中分別渲染
-  return `${grantName} > ${templateName} > ${sectionName}`;
-}
-
 // --- Fetch datasets with filters ---
 async function fetchDatasets() {
-  isLoading.value = true;
   error.value = null;
-
-  const params = new URLSearchParams();
-  if (filters.grantId) params.append("grant_id", filters.grantId);
-  if (filters.templateId) params.append("template_id", filters.templateId);
-  if (filters.sectionId) params.append("section_id", filters.sectionId);
-  if (filters.sourceType) params.append("source_type", filters.sourceType);
-
-  const queryString = params.toString();
-  const fetchURL = `${API_BASE_URL}/datasets${
-    queryString ? "?" + queryString : ""
-  }`;
+  console.log("fetchDatasets called");
+  showLoading();
 
   try {
-    const response = await fetch(fetchURL);
+    const response = await fetch(`${API_BASE_URL}/datasets`);
     if (!response.ok) throw new Error("Network response was not ok.");
-    datasets.value = await response.json();
+    allDatasets.value = await response.json();
+    datasets.value = allDatasets.value;
   } catch (e) {
     error.value = e.message;
   } finally {
-    isLoading.value = false;
+    hideLoading();
   }
 }
 
@@ -346,6 +383,29 @@ function resetFilters() {
   filters.templateId = "";
   filters.sectionId = "";
   filters.sourceType = "";
+  currentPage.value = 1;
+}
+
+// --- Pagination functions ---
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function nextPage() {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function previousPage() {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 }
 
 // --- Watchers to react to filter changes ---
@@ -363,11 +423,8 @@ watch(
   }
 );
 
-// Watch all filters and re-fetch when any of them change
-watch(filters, fetchDatasets, { deep: true });
-
-onMounted(() => {
-  fetchDatasets(); // Load initial table data
+onMounted(async () => {
+  await fetchDatasets();
 });
 
 function openEditModal(dataset) {

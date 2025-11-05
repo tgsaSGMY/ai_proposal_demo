@@ -213,8 +213,9 @@ async function fetchDrafts() {
 }
 
 onMounted(async () => {
+  showLoading("加载中...");
   await fetchAllConfigs(); // Fetch configs for Batch modal
-  fetchDrafts();
+  await fetchDrafts();
 
   realtimeChannel = supabase
     .channel("public:draft_plans")
@@ -226,6 +227,8 @@ onMounted(async () => {
       }
     )
     .subscribe();
+
+  hideLoading();
 });
 
 onUnmounted(() => {
