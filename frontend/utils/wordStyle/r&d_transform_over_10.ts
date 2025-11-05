@@ -130,7 +130,7 @@ export async function exportPlanToWordRdTransformOver10(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "升級轉型計劃書.docx";
+  link.download = "十人以上轉型計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -121,7 +121,7 @@ export async function exportPlanToWordRdTransformUnder9(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "R&D轉型計劃書.docx";
+  link.download = "九人以下轉型計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

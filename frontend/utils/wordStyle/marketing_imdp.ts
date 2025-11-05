@@ -118,7 +118,7 @@ export async function exportPlanToWordMarketingImdp(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "海外市場開發計劃書.docx";
+  link.download = "IMDP計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
