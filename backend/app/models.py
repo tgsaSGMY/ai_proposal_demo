@@ -46,7 +46,6 @@ class GenerateRequest(BaseModel):
     grant: str = Field(..., description="目標計畫書的 ID。")
     template: str = Field(..., description="目標模板的 ID。")
     user_input: str = Field(..., description="用戶提供的核心需求或主題。")
-    sections: List[SectionGenerateRequest] = Field(..., description="需要生成的章節列表。")
     num_candidates: int = Field(2, ge=1, le=3)
     is_external: bool = Field(True, description="是否使用外部模型（True）還是內部模型（False）。")
 
@@ -101,17 +100,14 @@ class SyntheticInputRequest(BaseModel):
 
 class ScrapeContextTarget(BaseModel):
     """描述可供自動填寫的目標欄位。"""
-    label: str = Field(..., description="欄位標籤，提供給模型的自然語言描述。")
-    composite_key: str = Field(..., description="欄位對應的複合鍵，格式為 section::property::subfield。")
-    section_id: Optional[str] = Field(None, description="欄位所屬章節 ID。")
-    property_key: Optional[str] = Field(None, description="欄位所屬的大項鍵。")
-    sub_field_key: Optional[str] = Field(None, description="欄位的子項鍵，例如 reply / acceptance。")
+    section_id: str = Field(None, description="欄位所屬章節 ID。")
+    property_key: str = Field(None, description="欄位所屬的大項鍵。")
+    sub_field_key: str = Field(None, description="欄位的子項鍵，例如 reply / acceptance。")
 
 
 class ScrapeRequest(BaseModel):
     """抓取網上資料請求"""
     url: str
-    context_keywords: Optional[str] = ""
     context_targets: List[ScrapeContextTarget] = Field(
         default_factory=list,
         description="可自動填寫的目標欄位清單，用於精準對應摘要內容。",

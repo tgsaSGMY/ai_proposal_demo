@@ -216,7 +216,6 @@ onMounted(async () => {
   showLoading("加载中...");
   await fetchAllConfigs(); // Fetch configs for Batch modal
   await fetchDrafts();
-
   realtimeChannel = supabase
     .channel("public:draft_plans")
     .on(

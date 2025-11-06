@@ -365,7 +365,8 @@ async function fetchDatasets() {
   showLoading();
 
   try {
-    const response = await fetch(`${API_BASE_URL}/datasets`);
+    // 添加分页参数，初次只加载前 200 条
+    const response = await fetch(`${API_BASE_URL}/datasets?limit=200&offset=0`);
     if (!response.ok) throw new Error("Network response was not ok.");
     allDatasets.value = await response.json();
     datasets.value = allDatasets.value;
@@ -423,6 +424,7 @@ watch(
 );
 
 onMounted(async () => {
+  // 延迟加载，避免阻塞页面初始化
   await fetchDatasets();
 });
 

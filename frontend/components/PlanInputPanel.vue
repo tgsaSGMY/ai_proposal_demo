@@ -295,9 +295,6 @@
         ></path>
       </svg>
       {{ isGenerating ? "正在生成..." : "生成完整計劃書" }}
-      <span v-if="mode === 'golden'" class="text-xs font-normal opacity-75"
-        >(在 Golden Sample 模式下禁用)</span
-      >
     </button>
   </div>
 </template>
@@ -412,8 +409,6 @@ const analysisTargets = computed(() =>
       field.subFields
         .filter((sub) => !sub.value || sub.value.trim() === "")
         .map((sub) => ({
-          label: sub.label,
-          composite_key: sub.compositeKey,
           section_id: section.sectionId,
           property_key: field.propertyKey,
           sub_field_key: sub.key,
@@ -421,14 +416,6 @@ const analysisTargets = computed(() =>
     )
   )
 );
-
-const analysisTargetMap = computed(() => {
-  const map = new Map();
-  analysisTargets.value.forEach((target) => {
-    map.set(target.composite_key, target);
-  });
-  return map;
-});
 
 const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value)
@@ -693,10 +680,9 @@ function applyAutoFillEntries(autoFillItems = []) {
     updateDynamicValue(sectionId, propertyKey, subFieldKey, content);
     ensureFieldExpanded(sectionId, propertyKey);
 
-    const targetMeta = analysisTargetMap.value.get(compositeKey);
     applied.push({
       compositeKey,
-      label: item.label || targetMeta?.label || "",
+      label: item.label || "",
       content,
     });
   });
@@ -730,13 +716,11 @@ async function handleAnalyzeLink(index) {
   if (!link || !link.url) return;
 
   link.status = "loading";
-  console.log("analysis targets:", analysisTargets.value);
   try {
     const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
         url: link.url,
         context_targets: analysisTargets.value,
         max_items: 4,

@@ -144,11 +144,36 @@ async def generate_plan(
     llm_service: LLMService = Depends(get_llm_service),
 ):
     """主功能 -> 生成完整計劃書，可生成多候选版本"""
-    if not request_data.sections:
-        raise HTTPException(status_code=400, detail="No sections provided to generate.")
-
+    
+    # 從 app_state 獲取所有配置
     app_state = request.app.state
-    num_candidates = getattr(request_data, "num_candidates", 1)
+    all_grants_config = getattr(app_state, "all_grants_config", [])
+    
+    # 查找指定的 grant 和 template
+    grant_config = None
+    template_config = None
+    
+    for grant in all_grants_config:
+        if grant.id == request_data.grant:
+            grant_config = grant
+            for template in grant.templates:
+                if template.id == request_data.template:
+                    template_config = template
+                    break
+            break
+    
+    if not template_config:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Template {request_data.template} not found in Grant {request_data.grant}."
+        )
+    
+    # 從 template_config 獲取所有 sections
+    sections = template_config.sections
+    if not sections:
+        raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+    
+    num_candidates = request_data.num_candidates
 
     async with httpx.AsyncClient() as client:
         # 每個 section 生成 num_candidates 個候選版本
@@ -157,14 +182,14 @@ async def generate_plan(
                 http_session=client,
                 grant_id=request_data.grant,
                 template_id=request_data.template,
-                section_id=s.section_id,
+                section_id=s.id,
                 user_input=request_data.user_input,
                 app_state=app_state,
                 user_id=request_data.user_id,
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
             )
-            for s in request_data.sections
+            for s in sections
             for _ in range(num_candidates)
         ]
         results = await asyncio.gather(*tasks)

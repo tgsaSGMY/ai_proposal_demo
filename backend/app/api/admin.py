@@ -125,13 +125,12 @@ async def scrape_and_analyze(
         max_items = req.max_items or 4
         target_lines = []
         for target in req.context_targets:
-                composite_key = target.composite_key.strip()
-                section_hint = (
-                        f" (section: {target.section_id}, field: {target.property_key}, sub: {target.sub_field_key})"
-                        if target.section_id and target.property_key and target.sub_field_key
-                        else ""
-                )
-                target_lines.append(f"- composite_key: {section_hint}")
+            section_hint = (
+                    f" (section: {target.section_id}, field: {target.property_key}, sub: {target.sub_field_key})"
+                    if target.section_id and target.property_key and target.sub_field_key
+                    else ""
+            )
+            target_lines.append(f"- composite_key: {section_hint}")
 
         targets_block = "\n".join(target_lines) if target_lines else "(未提供具體欄位，請僅在高度相關時回傳)"
 
