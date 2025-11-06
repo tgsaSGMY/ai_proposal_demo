@@ -279,7 +279,7 @@ const handleSignUp = async () => {
       email.value = "";
       password.value = "";
       // 2 秒後自動導向登入頁
-      setTimeout(() => router.push("/login"), 2000);
+      //   setTimeout(() => router.push("/login"), 2000);
     }
   } catch (err) {
     errorMessage.value = "發生未知錯誤，請稍後重試。";
