@@ -216,7 +216,7 @@
         </ul>
       </nav>
       <!-- Cost 區塊移至側邊欄底部 -->
-      <div class="mt-auto mb-4 px-4">
+      <!-- <div class="mt-auto mb-4 px-4">
         <div
           class="bg-indigo-600/90 rounded-xl shadow-lg flex items-center gap-3 py-3 px-4 text-white"
         >
@@ -239,14 +239,14 @@
               ></path>
             </g>
           </svg>
-          <!-- <div class="flex flex-col">
+          <div class="flex flex-col">
             <span class="text-xs text-gray-200">花費（預計）</span>
             <span class="text-lg font-bold tracking-wide"
               >${{ userTotalCost }}</span
             >
-          </div> -->
+          </div>
         </div>
-      </div>
+      </div> -->
     </aside>
 
     <!-- 主内容區 -->
