@@ -98,14 +98,58 @@
             <ul class="text-xs text-purple-700 space-y-1">
               <li
                 :class="
-                  password.length >= 6
+                  password.length >= 8
                     ? 'text-purple-600 font-semibold'
                     : 'text-purple-600'
                 "
               >
-                <span v-if="password.length >= 6">✓</span>
+                <span v-if="password.length >= 8">✓</span>
                 <span v-else>○</span>
-                至少 6 個字符
+                至少 8 個字符
+              </li>
+              <li
+                :class="
+                  hasUppercase
+                    ? 'text-purple-600 font-semibold'
+                    : 'text-purple-600'
+                "
+              >
+                <span v-if="hasUppercase">✓</span>
+                <span v-else>○</span>
+                至少 1 個大寫字母 (A-Z)
+              </li>
+              <li
+                :class="
+                  hasLowercase
+                    ? 'text-purple-600 font-semibold'
+                    : 'text-purple-600'
+                "
+              >
+                <span v-if="hasLowercase">✓</span>
+                <span v-else>○</span>
+                至少 1 個小寫字母 (a-z)
+              </li>
+              <li
+                :class="
+                  hasNumber
+                    ? 'text-purple-600 font-semibold'
+                    : 'text-purple-600'
+                "
+              >
+                <span v-if="hasNumber">✓</span>
+                <span v-else>○</span>
+                至少 1 個數字 (0-9)
+              </li>
+              <li
+                :class="
+                  hasSpecialChar
+                    ? 'text-purple-600 font-semibold'
+                    : 'text-purple-600'
+                "
+              >
+                <span v-if="hasSpecialChar">✓</span>
+                <span v-else>○</span>
+                至少 1 個特殊字符 (!@#$%^&*)
               </li>
             </ul>
           </div>
@@ -175,7 +219,7 @@
           <!-- Submit Button -->
           <button
             type="submit"
-            :disabled="loading"
+            :disabled="loading || !isPasswordValid"
             class="w-full bg-gradient-to-r from-purple-600 to-violet-600 text-white font-bold py-3 px-4 rounded-lg hover:shadow-lg hover:from-purple-700 hover:to-violet-700 transition duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
           >
             <svg
@@ -232,14 +276,33 @@ const errorMessage = ref("");
 const successMessage = ref("");
 const showPassword = ref(false);
 
+// 密碼驗證計算屬性
+const hasUppercase = computed(() => /[A-Z]/.test(password.value));
+const hasLowercase = computed(() => /[a-z]/.test(password.value));
+const hasNumber = computed(() => /[0-9]/.test(password.value));
+const hasSpecialChar = computed(() =>
+  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
+);
+
+const isPasswordValid = computed(() => {
+  return (
+    password.value.length >= 8 &&
+    hasUppercase.value &&
+    hasLowercase.value &&
+    hasNumber.value &&
+    hasSpecialChar.value
+  );
+});
+
 const handleSignUp = async () => {
   if (!email.value || !password.value) {
     errorMessage.value = "請輸入電子郵件和密碼";
     return;
   }
 
-  if (password.value.length < 6) {
-    errorMessage.value = "密碼長度不能少於 6 位";
+  if (!isPasswordValid.value) {
+    errorMessage.value =
+      "密碼不符合要求。請確保包含大小寫字母、數字和特殊字符，且至少 8 個字符。";
     return;
   }
 
@@ -265,7 +328,25 @@ const handleSignUp = async () => {
       return;
     }
 
-    // 步驟 2: 如果 Email 在白名單中，才執行真正的註冊
+    // 步驟 2: 檢查 Email 是否已經註冊過了
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: "dummy_password_check", // 這只是用來檢查 email 是否存在
+    });
+
+    // 如果錯誤訊息是密碼錯誤，表示使用者已存在
+    if (
+      signInError &&
+      signInError.message &&
+      signInError.message.includes("Invalid login credentials")
+    ) {
+      // 這表示 email 存在但密碼錯誤，所以 email 已被註冊
+      errorMessage.value = "此電子郵件已被註冊。請使用登入功能。";
+      loading.value = false;
+      return;
+    }
+
+    // 步驟 3: 如果 Email 在白名單中且未被註冊，才執行真正的註冊
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
