@@ -133,7 +133,7 @@
         </form>
 
         <!-- Footer Section -->
-        <div
+        <!-- <div
           class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
         >
           <p class="text-gray-600 text-sm">
@@ -145,7 +145,7 @@
               返回首頁
             </NuxtLink>
           </p>
-        </div>
+        </div> -->
       </div>
     </div>
   </div>
