@@ -62,6 +62,10 @@
 </template>
 
 <script setup>
+definePageMeta({
+  middleware: "auth",
+});
+
 // SEO 配置
 useHead({
   title: "數據生產工作室 - AI 計畫書平台",

@@ -168,6 +168,10 @@
 </template>
 
 <script setup>
+definePageMeta({
+  middleware: "auth",
+});
+
 import { ref, onMounted, computed } from "vue";
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
 import { useNotifications } from "~/composables/useNotifications";

@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-gray-100 font-sans flex flex-col md:flex-row">
     <!-- Mobile nav -->
     <header
-      class="md:hidden bg-gray-800 text-white flex items-center justify-between px-4 py-3 sticky top-0 z-40"
+      class="md:hidden bg-gray-800 text-white flex items-center justify-between px-4 sticky top-0 z-40"
     >
       <div class="font-semibold text-lg">
         AI 計畫書平台 <span class="text-xs text-gray-400 align-top">v0.1</span>
@@ -90,6 +90,7 @@
         <ul>
           <li>
             <NuxtLink
+              v-if="isAuthenticated"
               to="/"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
               active-class="bg-indigo-600 text-white"
@@ -110,7 +111,7 @@
               <span>計畫書生成</span>
             </NuxtLink>
           </li>
-          <li class="mt-2">
+          <li v-if="isAuthenticated" class="mt-2">
             <NuxtLink
               to="/_builder/model"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
@@ -130,7 +131,7 @@
               <span>模型配置</span>
             </NuxtLink>
           </li>
-          <li class="mt-2">
+          <li v-if="isAuthenticated" class="mt-2">
             <NuxtLink
               to="/_builder/dataset"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
@@ -150,7 +151,7 @@
               <span>資料集更新</span>
             </NuxtLink>
           </li>
-          <li class="mt-2">
+          <li v-if="isAuthenticated" class="mt-2">
             <NuxtLink
               to="/_builder/management"
               class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700"
@@ -169,6 +170,48 @@
               </svg>
               <span>數據庫管理</span>
             </NuxtLink>
+          </li>
+          <li v-if="!isAuthenticated" class="mt-2">
+            <NuxtLink
+              to="/login"
+              class="flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-gray-700 text-indigo-300 hover:text-white"
+              active-class="bg-indigo-600 text-white"
+              @click.native="handleNavClick"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1h12a1 1 0 110 2H4v12a1 1 0 11-2 0V4a1 1 0 011-1z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <span>登入</span>
+            </NuxtLink>
+          </li>
+          <li v-if="isAuthenticated" class="mt-2">
+            <button
+              @click="handleLogout"
+              class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors duration-200 hover:bg-red-700 text-red-300 hover:text-white text-left"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V4a1 1 0 00-1-1H3zm11 4.414l-4.293 4.293a1 1 0 001.414 1.414L15.414 9l-4.293-4.293a1 1 0 00-1.414 1.414L13.586 7H6a1 1 0 000 2h7.586l-1.293 1.293a1 1 0 001.414 1.414l4.293-4.293V8z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <span>登出</span>
+            </button>
           </li>
         </ul>
       </nav>
@@ -216,13 +259,52 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
+import { supabase } from "~/utils/supabaseClient";
+
 const showSidebar = ref(false);
+const isAuthenticated = ref(false);
+
 function handleNavClick() {
   if (window.innerWidth < 768) {
     showSidebar.value = false;
   }
 }
+
+// 檢查認證狀態
+async function checkAuth() {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    isAuthenticated.value = !!session?.user;
+  } catch (error) {
+    console.error("Auth check error:", error);
+    isAuthenticated.value = false;
+  }
+}
+
+// 登出功能
+async function handleLogout() {
+  try {
+    await supabase.auth.signOut();
+    isAuthenticated.value = false;
+    await useRouter().push("/login");
+  } catch (error) {
+    console.error("Logout error:", error);
+  }
+}
+
+onMounted(() => {
+  checkAuth();
+
+  // 監聽認證狀態變化
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    isAuthenticated.value = !!session?.user;
+  });
+});
 
 // 用戶總 cost 狀態
 const userTotalCost = ref(0);

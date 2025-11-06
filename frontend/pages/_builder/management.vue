@@ -229,6 +229,10 @@
 </template>
 
 <script setup>
+definePageMeta({
+  middleware: "auth",
+});
+
 // SEO 配置
 useHead({
   title: "數據庫管理 - AI 計畫書平台",
