@@ -733,7 +733,6 @@ async function handleAnalyzeLink(index) {
     }
 
     const result = await response.json();
-    console.log("Analysis result:", result);
     const summaryText =
       typeof result.summary === "string" ? result.summary.trim() : "";
     const autoFillItems = Array.isArray(result.auto_fill)

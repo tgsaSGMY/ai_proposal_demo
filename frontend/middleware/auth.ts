@@ -18,7 +18,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
     // 如果沒有 session 或沒有用戶，重新導向到登入頁面
     if (!session || !session.user) {
-      console.log("No authenticated session found, redirecting to login");
       return navigateTo("/login");
     }
 

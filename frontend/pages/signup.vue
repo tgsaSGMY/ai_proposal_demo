@@ -309,7 +309,6 @@ const handleSignUp = async () => {
   loading.value = true;
   errorMessage.value = "";
   successMessage.value = "";
-  console.log("Attempting signup with email:", email.value);
 
   try {
     // 步驟 1: 檢查 Email 是否在白名單中
@@ -318,8 +317,6 @@ const handleSignUp = async () => {
       .select("email")
       .eq("email", email.value)
       .single();
-
-    console.log("Whitelist query result:", { whitelistEntry, whitelistError });
 
     // 如果查詢出錯或 Email 不在白名單中
     if (whitelistError || !whitelistEntry) {

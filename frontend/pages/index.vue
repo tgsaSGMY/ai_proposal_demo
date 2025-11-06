@@ -247,15 +247,6 @@ async function handleGeneratePlan(outerPayload) {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
-    console.log("生成計劃書請求負載:", {
-      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
-      grant: selectedGrantId.value,
-      template: selectedTemplateId.value,
-      sections: sectionsToGenerate,
-      user_input: finalUserInput,
-      num_candidates: 2,
-      is_external: useModelType.value === "external",
-    });
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
