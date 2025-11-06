@@ -239,12 +239,12 @@
               ></path>
             </g>
           </svg>
-          <div class="flex flex-col">
+          <!-- <div class="flex flex-col">
             <span class="text-xs text-gray-200">花費（預計）</span>
             <span class="text-lg font-bold tracking-wide"
               >${{ userTotalCost }}</span
             >
-          </div>
+          </div> -->
         </div>
       </div>
     </aside>
