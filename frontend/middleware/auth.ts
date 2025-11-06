@@ -10,6 +10,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return;
   }
 
+  if (process.server) return;
+
   // 檢查 Supabase 中的認證狀態
   try {
     const {
