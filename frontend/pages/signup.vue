@@ -325,29 +325,12 @@ const handleSignUp = async () => {
       return;
     }
 
-    // 步驟 2: 檢查 Email 是否已經註冊過了
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.value,
-      password: "dummy_password_check", // 這只是用來檢查 email 是否存在
-    });
-
-    // 如果錯誤訊息是密碼錯誤，表示使用者已存在
-    // if (
-    //   signInError &&
-    //   signInError.message &&
-    //   signInError.message.includes("Invalid login credentials")
-    // ) {
-    //   // 這表示 email 存在但密碼錯誤，所以 email 已被註冊
-    //   errorMessage.value = "此電子郵件已被註冊。請使用登入功能。";
-    //   loading.value = false;
-    //   return;
-    // }
-
     // 步驟 3: 如果 Email 在白名單中且未被註冊，才執行真正的註冊
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.value,
       password: password.value,
     });
+    console.log("SignUp data:", data);
 
     if (signUpError) {
       errorMessage.value = signUpError.message || "註冊失敗，請稍後重試";
@@ -356,8 +339,6 @@ const handleSignUp = async () => {
       // 清空表單
       email.value = "";
       password.value = "";
-      // 2 秒後自動導向登入頁
-      //   setTimeout(() => router.push("/login"), 2000);
     }
   } catch (err) {
     errorMessage.value = "發生未知錯誤，請稍後重試。";
