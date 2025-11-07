@@ -287,14 +287,6 @@ async function checkAuth() {
 // 登出功能
 async function handleLogout() {
   try {
-    const { data } = await supabase.auth.getSession();
-    console.log(data.session);
-    if (!data.session) {
-      console.warn("No active session, just redirecting.");
-      await useRouter().push("/login");
-      return;
-    }
-
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     isAuthenticated.value = false;
