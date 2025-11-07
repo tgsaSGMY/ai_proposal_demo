@@ -443,10 +443,12 @@ watch(
 
 async function initializeDatasets() {
   // get from lifecycle preloaded datasets /datasets-lifecycle
+  showLoading("加載數據庫...");
   const response = await fetch(`${API_BASE_URL}/datasets-lifecycle`);
   if (!response.ok) throw new Error("Failed to fetch preloaded datasets");
   const data = await response.json();
   allDatasets.value = data;
+  hideLoading();
 }
 onMounted(async () => {
   // 頁面初始化時直接使用 lifecycle 預加載的 datasets
