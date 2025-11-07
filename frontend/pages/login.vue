@@ -154,6 +154,10 @@
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
 
+definePageMeta({
+  middleware: "redirect-if-authenticated",
+});
+
 const router = useRouter();
 
 const email = ref("");
