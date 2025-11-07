@@ -287,8 +287,10 @@ async function checkAuth() {
 // 登出功能
 async function handleLogout() {
   try {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     isAuthenticated.value = false;
+    localStorage.clear();
     await useRouter().push("/login");
   } catch (error) {
     console.error("Logout error:", error);
