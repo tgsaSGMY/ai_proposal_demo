@@ -237,3 +237,28 @@ async def scrape_and_analyze(
         logger.error(f"Error during scrape_and_analyze: {e}")
         raise HTTPException(status_code=500, detail="伺服器內部錯誤")
 
+@router.post("/refresh-datasets", summary="手動刷新所有 datasets")
+async def refresh_datasets_endpoint(
+    request: Request,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """
+    手動刷新所有 datasets 數據，從數據庫重新加載最新的 datasets。
+    更新 app.state.all_datasets。
+    """
+    try:
+        logger.info("Starting manual refresh of datasets...")
+        datasets_data = await supabase_service.get_all_datasets()
+        
+        # 更新應用程式的實時狀態
+        request.app.state.all_datasets = datasets_data
+        logger.info(f"Successfully reloaded {len(request.app.state.all_datasets)} datasets.")
+        
+        return {
+            "status": "success",
+            "message": "Datasets refreshed successfully",
+            "datasets": request.app.state.all_datasets,
+        }
+    except Exception as e:
+        logger.error(f"Failed to refresh datasets: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

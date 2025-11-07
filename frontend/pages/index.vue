@@ -13,7 +13,7 @@
       </div>
 
       <!-- 模型類型選擇 Toggle -->
-      <!-- <div class="flex justify-center items-center gap-3">
+      <div class="flex justify-center items-center gap-3">
         <span
           class="text-xs sm:text-sm font-medium"
           :class="
@@ -46,7 +46,7 @@
         >
           外部模型
         </span>
-      </div> -->
+      </div>
     </div>
 
     <!-- 主工作區：左右佈局 -->

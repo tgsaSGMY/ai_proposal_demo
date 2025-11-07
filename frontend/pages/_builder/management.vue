@@ -1,6 +1,16 @@
 <template>
   <div class="p-4 md:p-8">
-    <h1 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">數據庫管理</h1>
+    <div class="flex justify-between items-center mb-4 sm:mb-6">
+      <h1 class="text-xl sm:text-2xl font-bold">數據庫管理</h1>
+      <button
+        @click="handleRefreshDatasets"
+        :disabled="isRefreshing"
+        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 h-9 flex items-center gap-2"
+      >
+        <span v-if="!isRefreshing">刷新數據庫</span>
+        <span v-else>刷新中...</span>
+      </button>
+    </div>
     <!-- Filter Section -->
     <div class="mb-6 p-4 bg-white rounded-lg shadow-md">
       <div
@@ -260,6 +270,7 @@ useHead({
 import { ref, onMounted, reactive, watch, computed } from "vue";
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
+import { usePlanGenerator } from "~/composables/usePlanGenerator";
 
 const datasets = ref([]);
 const allDatasets = ref([]);
@@ -273,6 +284,7 @@ const { success, error: errorNotification } = useNotifications();
 import { useConfirm } from "~/composables/useConfirm";
 const { confirm } = useConfirm();
 const isSaving = ref(false);
+const isRefreshing = ref(false);
 const error = ref(null);
 const { allConfigs } = usePlanGenerator();
 
@@ -363,21 +375,23 @@ const nameMaps = computed(() => {
   return maps;
 });
 
-// --- Fetch datasets with filters ---
-async function fetchDatasets() {
-  error.value = null;
-  showLoading();
-
+// --- Refresh datasets from database ---
+async function handleRefreshDatasets() {
+  isRefreshing.value = true;
   try {
-    // 添加分页参数，初次只加载前 200 条
-    const response = await fetch(`${API_BASE_URL}/datasets?limit=200&offset=0`);
+    const response = await fetch(`${API_BASE_URL}/refresh-datasets`, {
+      method: "POST",
+    });
     if (!response.ok) throw new Error("Network response was not ok.");
-    allDatasets.value = await response.json();
+
+    const result = await response.json();
+    allDatasets.value = result.datasets;
     datasets.value = allDatasets.value;
+    success("數據庫刷新成功！");
   } catch (e) {
-    error.value = e.message;
+    errorNotification(`刷新失敗: ${e.message}`);
   } finally {
-    hideLoading();
+    isRefreshing.value = false;
   }
 }
 
@@ -427,9 +441,17 @@ watch(
   }
 );
 
+async function initializeDatasets() {
+  // get from lifecycle preloaded datasets /datasets-lifecycle
+  const response = await fetch(`${API_BASE_URL}/datasets-lifecycle`);
+  if (!response.ok) throw new Error("Failed to fetch preloaded datasets");
+  const data = await response.json();
+  allDatasets.value = data;
+}
 onMounted(async () => {
-  // 延迟加载，避免阻塞页面初始化
-  await fetchDatasets();
+  // 頁面初始化時直接使用 lifecycle 預加載的 datasets
+  await initializeDatasets();
+  datasets.value = allDatasets.value;
 });
 
 function openEditModal(dataset) {
@@ -465,7 +487,7 @@ async function handleSave(updatedData) {
     }
     success("保存成功！");
     closeEditModal();
-    await fetchDatasets();
+    handleRefreshDatasets();
   } catch (e) {
     errorNotification(`保存失敗: ${e.message}`);
   } finally {
@@ -495,7 +517,7 @@ async function handleDelete(id) {
       throw new Error(errData.detail || "刪除失敗");
     }
     success("刪除成功！");
-    await fetchDatasets();
+    handleRefreshDatasets();
   } catch (e) {
     errorNotification(`刪除失敗: ${e.message}`);
   }
