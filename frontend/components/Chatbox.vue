@@ -318,7 +318,6 @@ const questionFlowCompleted = ref(false);
 
 const chatContainer = ref(null);
 const draftMessage = ref("");
-const conversationNotes = ref([]);
 const lastCandidateSnapshot = ref("{}");
 const lastFinalSnapshot = ref("{}");
 const isCandidateSelectorVisible = ref(false);
@@ -622,7 +621,6 @@ function handleSend() {
       content: messageContent,
     };
     messages.value.push(payload);
-    conversationNotes.value.push(payload.content);
   }
 
   draftMessage.value = "";
@@ -646,15 +644,6 @@ async function requestGeneration() {
     }
   }
   const promptParts = [];
-  promptParts.push(`補助主題: ${activeGrantName.value}`);
-  promptParts.push(`模板: ${activeTemplateName.value}`);
-
-  if (props.referenceSummaries.length) {
-    const refs = props.referenceSummaries
-      .map((summary, idx) => `參考資料 ${idx + 1}: ${summary}`)
-      .join("\n\n");
-    promptParts.push(refs);
-  }
 
   if (guidedQuestions.length) {
     const qaText = guidedQuestions
@@ -663,14 +652,7 @@ async function requestGeneration() {
         return `${idx + 1}. ${question.label}\n${answer}`;
       })
       .join("\n\n");
-    promptParts.push(`核心問答紀錄:\n${qaText}`);
-  }
-
-  if (conversationNotes.value.length) {
-    promptParts.push("額外對話紀錄:");
-    conversationNotes.value.forEach((note, idx) => {
-      promptParts.push(`${idx + 1}. ${note}`);
-    });
+    promptParts.push(`${qaText}`);
   }
 
   emit("generatePlan", {

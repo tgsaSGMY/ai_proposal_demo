@@ -436,6 +436,7 @@ const isPreparingForChat = ref(false);
 const isLinkSummaryModalVisible = ref(false);
 const linkSummaryContent = ref("");
 const linkSummaryTitle = ref("");
+const lastGenerationPrompt = ref("");
 
 const dynamicSections = computed(() =>
   buildDynamicSections(dynamicFieldValues.value)
@@ -531,10 +532,14 @@ function onCandidateConfirm({ selected, rejected }) {
   }
   finalPlanContent.value = newPlanContent;
   success("已選擇方案並填充到結果中！");
-  savePreferenceData(selected, rejected);
+  savePreferenceData(selected, rejected, lastGenerationPrompt.value);
 }
 
-async function savePreferenceData(selectedData, rejectedData) {
+async function savePreferenceData(
+  selectedData,
+  rejectedData,
+  finalPrompt = ""
+) {
   try {
     const entriesToSave = currentSections.value
       .map((section) => {
@@ -547,7 +552,7 @@ async function savePreferenceData(selectedData, rejectedData) {
             grant_id: selectedGrantId.value,
             template_id: selectedTemplateId.value,
             section_id: section.id,
-            prompt: "conversation_mode",
+            prompt: finalPrompt || "conversation_mode",
             final_answer: chosen.content,
             rejected_answer: rejected?.content || null,
           };
@@ -664,6 +669,7 @@ async function handleGeneratePlan(payload) {
   showLoading("正在生成計劃書...", true);
   finalPlanContent.value = {};
   candidatePlan.value = {};
+  lastGenerationPrompt.value = payload.prompt;
 
   try {
     const sectionsToGenerate = currentSections.value.map((s) => ({

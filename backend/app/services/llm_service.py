@@ -321,7 +321,7 @@ class LLMService:
                 custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
                 user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}"
 
-            system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。"
+            system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。\n用戶的輸入若是無或是相關資料量不夠，可以自己發散思維來寫作內容，客觀内容可以用OOO代替。"
             messages = [
                 {"role": "system", "content": system_prompt_for_all},
                 {"role": "user", "content": user_content} 
