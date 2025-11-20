@@ -210,7 +210,7 @@
         v-model="draftMessage"
         class="w-full min-h-32 bg-slate-900 bg-opacity-80 border border-slate-500 border-opacity-20 rounded-2xl p-3.5 text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
         :placeholder="composerPlaceholder"
-        :disabled="allQuestionsAnswered"
+        :disabled="allQuestionsAnswered || isGenerationComplete"
         @keydown.enter.prevent="handleEnter"
       ></textarea>
       <div class="flex gap-3 flex-wrap">
@@ -218,8 +218,14 @@
           class="px-6 py-2.5 rounded-full font-semibold bg-slate-600 bg-opacity-20 border border-transparent text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-30 transition-all duration-200"
           type="button"
           @click="handleSend"
-          :disabled="!canSendMessage"
-          :title="!canSendMessage ? '所有核心問題已完成，請生成候選計畫' : ''"
+          :disabled="!canSendMessage || isGenerationComplete"
+          :title="
+            isGenerationComplete
+              ? '已生成計畫，無法傳送'
+              : !canSendMessage
+              ? '所有核心問題已完成，請生成候選計畫'
+              : ''
+          "
         >
           傳送
         </button>
@@ -227,7 +233,7 @@
           class="px-6 py-2.5 rounded-full font-semibold bg-gradient-to-r from-indigo-600 to-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-indigo-500 hover:to-purple-600 transition-all duration-200"
           type="button"
           @click="requestGeneration"
-          :disabled="!canRequestPlan || isGenerating"
+          :disabled="!canRequestPlan || isGenerating || isGenerationComplete"
         >
           {{ isGenerating ? "等待回應..." : "生成計畫候選" }}
         </button>
@@ -327,6 +333,7 @@ const editQuestionId = ref(null);
 const editQuestionLabel = ref("");
 const editQuestionPrompt = ref("");
 const editAnswerDraft = ref("");
+const isGenerationComplete = ref(false);
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
@@ -675,6 +682,7 @@ function handleCandidateConfirm(payload) {
 
 function buildCandidateMessage() {
   isCandidateSelectorVisible.value = true;
+  isGenerationComplete.value = true;
   messages.value.push({
     id: `candidates-${Date.now()}`,
     role: "assistant",
