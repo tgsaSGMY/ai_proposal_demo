@@ -1108,25 +1108,30 @@ async function runWordAutofillQueue() {
 
   wordAutofillQueue.value = [];
 
-  for (const doc of queue) {
-    try {
-      const payload = {
-        document_text: doc.documentText,
-        sections: dynamicSections.value.map((section) => ({
-          section_id: section.sectionId,
-          section_name: section.sectionName,
-          json_schema: buildSectionSchema(section),
-        })),
-        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
-      };
+  try {
+    // 合併所有 Word 文字
+    const combinedText = queue
+      .map((doc) => doc.documentText)
+      .join("\n\n---\n\n");
 
-      const filledContent = await callAutoFillApi(payload, API_BASE_URL);
-      applyWordAutoFillResults(filledContent);
-      success(`${doc.title} 已完成欄位自動填寫`);
-    } catch (error) {
-      console.error("Word autofill failed", error);
-      errorNotification(`Word 自動填寫失敗：${error?.message || "未知錯誤"}`);
-    }
+    const payload = {
+      document_text: combinedText,
+      sections: dynamicSections.value.map((section) => ({
+        section_id: section.sectionId,
+        section_name: section.sectionName,
+        json_schema: buildSectionSchema(section),
+      })),
+      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+    };
+
+    const filledContent = await callAutoFillApi(payload, API_BASE_URL);
+    applyWordAutoFillResults(filledContent);
+
+    const docTitles = queue.map((doc) => doc.title).join("、");
+    success(`${docTitles} 已完成欄位自動填寫`);
+  } catch (error) {
+    console.error("Word autofill failed", error);
+    errorNotification(`Word 自動填寫失敗：${error?.message || "未知錯誤"}`);
   }
 }
 
