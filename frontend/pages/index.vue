@@ -896,6 +896,12 @@ function removeReference(id) {
     dynamicFieldValues.value = createEmptyDynamicValues();
     prefillMainIdea.value = "";
   }
+
+  if (item && item.title.endsWith(".docx")) {
+    wordAutofillQueue.value = wordAutofillQueue.value.filter(
+      (doc) => doc.title !== item.title
+    );
+  }
 }
 
 function clearReferences() {
