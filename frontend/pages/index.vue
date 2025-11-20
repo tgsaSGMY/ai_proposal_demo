@@ -211,7 +211,7 @@
             第二階段 · 補充參考連結
           </p>
           <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">
-            使用鏈接補足未填欄位
+            使用鏈接補足未填欄位 （可略過）
           </h2>
           <p class="text-sm sm:text-base text-slate-600">
             系統僅會將分析結果填入目前仍為空白的欄位
