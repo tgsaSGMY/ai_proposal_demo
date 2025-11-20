@@ -250,9 +250,7 @@
     </aside>
 
     <!-- 主内容區 -->
-    <main
-      class="flex-1 overflow-y-auto min-h-screen px-2 py-4 sm:px-4 md:px-8 lg:px-12 xl:px-16"
-    >
+    <main class="flex-1 overflow-y-auto min-h-screen">
       <slot />
     </main>
   </div>

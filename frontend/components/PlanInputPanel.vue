@@ -128,6 +128,7 @@
         </div>
         <ReferenceLinker
           :links="referenceLinks"
+          :available-fields="referenceFieldOptions"
           @add="addReferenceLink"
           @remove="removeReferenceLink"
           @update="updateReferenceLink"
@@ -403,8 +404,9 @@ const dynamicSections = computed(() =>
   buildDynamicSections(internalDynamicValues.value)
 );
 
-const analysisTargets = computed(() =>
-  dynamicSections.value.flatMap((section) =>
+const referenceFieldOptions = computed(() => {
+  const sections = dynamicSections.value || [];
+  return sections.flatMap((section) =>
     section.fields.flatMap((field) =>
       field.subFields
         .filter((sub) => !sub.value || sub.value.trim() === "")
@@ -412,8 +414,21 @@ const analysisTargets = computed(() =>
           section_id: section.sectionId,
           property_key: field.propertyKey,
           sub_field_key: sub.key,
+          label: `${section.sectionName} · ${field.title}${
+            sub.shortLabel ? ` (${sub.shortLabel})` : ""
+          }`,
         }))
     )
+  );
+});
+
+const analysisTargets = computed(() =>
+  referenceFieldOptions.value.map(
+    ({ section_id, property_key, sub_field_key }) => ({
+      section_id,
+      property_key,
+      sub_field_key,
+    })
   )
 );
 
@@ -717,13 +732,32 @@ async function handleAnalyzeLink(index) {
 
   link.status = "loading";
   try {
+    const selectedFieldLabels =
+      Array.isArray(link.selectedFields) && link.selectedFields.length > 0
+        ? link.selectedFields
+        : null;
+
+    const targetFields = selectedFieldLabels
+      ? referenceFieldOptions.value.filter((field) =>
+          selectedFieldLabels.includes(field.label)
+        )
+      : referenceFieldOptions.value;
+
+    const contextTargets = targetFields.length
+      ? targetFields.map(({ section_id, property_key, sub_field_key }) => ({
+          section_id,
+          property_key,
+          sub_field_key,
+        }))
+      : analysisTargets.value;
+
     const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: link.url,
-        context_targets: analysisTargets.value,
-        max_items: 4,
+        context_targets: contextTargets,
+        max_items: selectedFieldLabels ? targetFields.length || 1 : 4,
       }),
     });
 
@@ -759,6 +793,9 @@ async function handleAnalyzeLink(index) {
     const finalSummary = summaryLines.join("\n").trim();
     link.summary = finalSummary || "此連結未產生可用的摘要。";
     link.status = "completed";
+    if (selectedFieldLabels) {
+      link.selectedFields = [];
+    }
   } catch (error) {
     console.error(`Error analyzing URL ${link.url}:`, error);
     link.status = "error";

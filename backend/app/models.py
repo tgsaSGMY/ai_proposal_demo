@@ -115,7 +115,7 @@ class ScrapeRequest(BaseModel):
     max_items: Optional[int] = Field(
         default=4,
         ge=1,
-        le=10,
+        le=31,
         description="期望最多回傳的自動填寫項目數量。",
     )
 
