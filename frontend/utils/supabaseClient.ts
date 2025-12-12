@@ -15,6 +15,9 @@ export const supabase: SupabaseClient = createClient(
   supabaseUrl,
   supabaseAnonKey,
   {
+    db: {
+      schema: "v1" as any,
+    },
     auth: {
       autoRefreshToken: true,
       persistSession: true,
