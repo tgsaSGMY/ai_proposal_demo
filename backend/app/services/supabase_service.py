@@ -4,7 +4,7 @@ import os
 import json
 from typing import List, Dict, Any, Optional
 from fastapi import Request
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
@@ -27,9 +27,16 @@ class SupabaseService:
         if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
             raise ValueError("Supabase URL or Key not set in environment variables.")
         
-        self.client: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        self.client: Client = create_client(
+            SUPABASE_URL, 
+            SUPABASE_SERVICE_KEY,
+            options=ClientOptions(schema="v1")
+        )
         self.bucket_name = SUPABASE_BUCKET_NAME
-        self.engine = create_engine(DATABASE_URL)
+        self.engine = create_engine(
+            DATABASE_URL,
+            connect_args={'options': '-csearch_path=v1'}
+        )
         self.Session = sessionmaker(bind=self.engine)
         self.embedding_model: Optional[TextEmbedding] = None
 
