@@ -5,7 +5,7 @@
       class="md:hidden bg-gray-800 text-white flex items-center justify-between px-4 sticky top-0 z-40"
     >
       <div class="font-semibold text-lg">
-        AI 計畫書平台 <span class="text-xs text-gray-400 align-top">v0.1</span>
+        AI 計畫書平台 <span class="text-xs text-gray-400 align-top">v2.0</span>
       </div>
       <button @click="showSidebar = !showSidebar" class="focus:outline-none">
         <svg
@@ -63,7 +63,7 @@
       >
         <div class="font-semibold text-lg">
           AI 計畫書平台
-          <span class="text-xs text-gray-400 align-top">v0.1</span>
+          <span class="text-xs text-gray-400 align-top">v2.0</span>
         </div>
         <button @click="showSidebar = false" class="focus:outline-none">
           <svg
@@ -84,7 +84,7 @@
       </div>
       <div class="text-center py-4 mb-6 hidden md:block">
         <h2 class="text-xl font-semibold">AI 計畫書平台</h2>
-        <span class="text-xs text-gray-400">v0.1</span>
+        <span class="text-xs text-gray-400">v2.0</span>
       </div>
       <nav class="flex-grow flex-1">
         <ul>
