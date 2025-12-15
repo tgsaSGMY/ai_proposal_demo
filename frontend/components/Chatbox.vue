@@ -1,244 +1,296 @@
 <template>
   <div
-    class="flex flex-col h-full w-full bg-slate-900 text-slate-200 p-6 shadow-2xl"
+    class="flex h-full min-h-0 flex-col rounded-[32px] bg-[#f7f8fc] shadow-2xl"
   >
-    <div
-      class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4"
+    <header
+      class="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-white px-6 py-2 shadow-lg"
     >
-      <div>
-        <p class="text-xs uppercase tracking-widest text-slate-400">第三階段</p>
-        <p class="text-[11px] text-slate-500 mt-1">
-          已回答 {{ answeredCount }} / {{ totalQuestions }} 題
-        </p>
-      </div>
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <span
-            class="text-xs sm:text-sm font-semibold"
-            :class="
-              useModelType === 'internal' ? 'text-indigo-300' : 'text-slate-400'
-            "
-          >
-            內部模型
-          </span>
-          <button
-            @click="() => emit('toggleModel')"
-            :class="[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              useModelType === 'external' ? 'bg-indigo-600' : 'bg-slate-500',
-            ]"
+        <span
+          class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ffb067] via-[#ff7a66] to-[#ff4b5c] text-base font-semibold text-white"
+        >
+          AI
+        </span>
+        <div>
+          <p class="text-lg font-semibold text-slate-900">企劃引擎</p>
+          <p class="flex items-center gap-2 text-xs text-slate-400">
+            <span
+              class="flex h-2 w-2 rounded-full bg-green-500 shadow-lg shadow-green-500/50"
+            ></span>
+            智慧推演進行中 · {{ activeGrantName }}
+            <span v-if="activeTemplateName">/ {{ activeTemplateName }}</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <button
+          type="button"
+          class="rounded-full border border-[#ff9380] px-5 py-2 text-sm font-semibold text-[#ff4b5c] transition hover:bg-[#fff2ef] disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!hasCandidatePlan"
+          @click="openCandidateSelector"
+        >
+          檢視推演結果
+        </button>
+        <button
+          type="button"
+          class="rounded-full bg-[#ff4b5c] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b5c]/30 transition hover:-translate-y-0.5 hover:bg-[#ff2f45] disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!canRequestPlan || isGenerating"
+          @click="requestGeneration"
+        >
+          {{ isGenerating ? "推演中..." : "啟動精準推演" }}
+        </button>
+      </div>
+    </header>
+
+    <div class="mt-6 h-[50vh]">
+      <div
+        ref="chatContainer"
+        class="h-full space-y-4 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-rose-300 scrollbar-track-transparent"
+      >
+        <div
+          v-for="message in messages"
+          :key="message.id"
+          class="flex"
+          :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+        >
+          <div
+            class="flex max-w-3xl flex-1 px-2 gap-3"
+            :class="message.role === 'user' ? 'flex-row-reverse' : 'flex-row'"
           >
             <span
-              :class="[
-                'inline-block h-3 w-3 transform rounded-full bg-white transition-transform',
-                useModelType === 'external' ? 'translate-x-5' : 'translate-x-1',
-              ]"
-            />
-          </button>
-          <span
-            class="text-xs sm:text-sm font-semibold"
-            :class="
-              useModelType === 'external' ? 'text-indigo-300' : 'text-slate-400'
-            "
-          >
-            外部模型
-          </span>
-        </div>
-        <button
-          type="button"
-          class="px-3 py-1.5 rounded-full border border-slate-400 border-opacity-40 text-slate-200 text-xs sm:text-sm font-semibold bg-transparent disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-all"
-          @click="() => emit('backToStageOne')"
-        >
-          重新開始
-        </button>
-      </div>
-      <div
-        v-if="activeTemplateName"
-        class="text-xs sm:text-sm text-indigo-200 bg-slate-800 bg-opacity-30 px-3 py-2 rounded-full whitespace-nowrap"
-      >
-        {{ activeGrantName }} · {{ activeTemplateName }}
-      </div>
-    </div>
-
-    <div
-      ref="chatContainer"
-      class="flex-1 overflow-y-auto pr-2 sm:pr-3 flex flex-col gap-4 scrollbar-thin scrollbar-thumb-indigo-500 scrollbar-track-slate-800"
-    >
-      <div
-        v-for="message in messages"
-        :key="message.id"
-        :class="[
-          'max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg p-4 rounded-2xl',
-          message.role === 'user'
-            ? 'self-end bg-purple-900 border border-white border-opacity-10'
-            : 'self-start bg-slate-800 bg-opacity-85 border border-slate-500 border-opacity-20',
-        ]"
-      >
-        <template v-if="message.type === 'text'">
-          <p class="leading-relaxed whitespace-pre-line">
-            {{ message.content }}
-          </p>
-        </template>
-
-        <template v-else-if="message.type === 'question'">
-          <div class="space-y-2">
-            <div>
-              <p class="text-xs uppercase tracking-wide text-indigo-300">
-                {{ message.label }}
-              </p>
-              <p class="leading-relaxed whitespace-pre-line font-semibold">
-                {{ message.content }}
-              </p>
-            </div>
-          </div>
-        </template>
-
-        <template v-else-if="message.type === 'answer'">
-          <div class="space-y-2">
-            <div
-              class="flex items-center justify-between gap-2 text-[11px] uppercase tracking-widest"
+              v-if="message.role !== 'user'"
+              class="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff1ea] text-sm font-semibold text-[#ff6b3d]"
             >
-              <span class="text-slate-300">
-                {{ message.source === "prefill" ? "已帶入答案" : "最新回答" }}
-              </span>
-              <button
-                v-if="message.questionId"
-                class="text-indigo-200 font-semibold border border-white border-opacity-20 rounded-full px-3 py-0.5 hover:bg-white hover:bg-opacity-10 transition-all"
-                type="button"
-                @click="() => editAnswer(message.questionId)"
-              >
-                修改
-              </button>
-            </div>
-            <p class="leading-relaxed whitespace-pre-line">
-              {{ message.content }}
-            </p>
-          </div>
-        </template>
-
-        <template
-          v-else-if="message.type === 'references' && referenceSummaries.length"
-        >
-          <div
-            class="bg-slate-800 bg-opacity-60 border border-slate-500 border-opacity-20 rounded-2xl p-4 flex flex-col gap-4"
-          >
-            <p class="text-sm font-semibold">已加入的參考資料</p>
-            <ul class="space-y-2">
-              <li
-                v-for="(summary, idx) in referenceSummaries"
-                :key="idx"
-                class="flex gap-2 bg-slate-500 bg-opacity-10 rounded-xl p-2"
-              >
-                <span class="font-semibold text-indigo-300"
-                  >#{{ idx + 1 }}</span
+              AI
+            </span>
+            <div class="flex-1 space-y-3">
+              <template v-if="message.type === 'text'">
+                <article
+                  :class="[
+                    'px-5 py-4 rounded-[28px] shadow-md',
+                    message.role === 'user'
+                      ? 'bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] text-white shadow-lg'
+                      : 'border border-[#f0f2ff] bg-white text-slate-700',
+                  ]"
                 >
-                <p class="flex-1 text-sm text-slate-200">{{ summary }}</p>
-              </li>
-            </ul>
-          </div>
-        </template>
+                  <p class="text-sm leading-relaxed whitespace-pre-line">
+                    {{ message.content }}
+                  </p>
+                </article>
+              </template>
 
-        <template v-else-if="message.type === 'candidates'">
-          <div
-            class="bg-slate-800 bg-opacity-60 border border-slate-500 border-opacity-20 rounded-2xl p-4 flex flex-col gap-3"
-          >
-            <p class="text-sm font-semibold">候選章節已就緒</p>
-            <p class="text-xs text-slate-400">
-              已為
-              {{ message.sectionCount || sections.length }}
-              個章節生成候選內容，請打開選擇器確認採用的版本。
-            </p>
-            <button
-              type="button"
-              class="self-start px-6 py-2.5 rounded-full font-semibold bg-gradient-to-r from-indigo-600 to-purple-700 text-white hover:from-indigo-500 hover:to-purple-600"
-              @click="openCandidateSelector"
-            >
-              開啟候選選擇器
-            </button>
-          </div>
-        </template>
+              <template v-else-if="message.type === 'question'">
+                <article
+                  class="rounded-[28px] border border-[#ffe5da] bg-[#fff8f5] px-5 py-4 shadow-sm"
+                >
+                  <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#ff7a5b]"
+                  >
+                    {{ message.label }}
+                  </p>
+                  <p
+                    class="mt-2 text-sm font-semibold text-slate-800 whitespace-pre-line"
+                  >
+                    {{ message.content }}
+                  </p>
+                </article>
+              </template>
 
-        <template v-else-if="message.type === 'final'">
-          <div
-            class="bg-slate-800 bg-opacity-60 border border-slate-500 border-opacity-20 rounded-2xl p-4 flex flex-col gap-4"
-          >
-            <p class="text-sm font-semibold">最終輸出</p>
-            <div class="space-y-4">
-              <div
-                v-for="section in message.sections"
-                :key="section.id"
-                class="bg-slate-800 bg-opacity-50 border border-slate-500 border-opacity-20 rounded-2xl p-3"
+              <template v-else-if="message.type === 'answer'">
+                <article
+                  class="rounded-[28px] border border-[#e1e7ff] bg-white px-5 py-4 shadow-sm"
+                >
+                  <div
+                    class="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-slate-400"
+                  >
+                    <span>
+                      {{
+                        message.source === "prefill" ? "已帶入答案" : "最新回答"
+                      }}
+                    </span>
+                    <button
+                      v-if="message.questionId"
+                      type="button"
+                      class="rounded-full border border-[#d7dcf8] px-3 py-1 text-[11px] font-semibold text-[#7a80b6] hover:bg-[#f4f5ff]"
+                      @click="() => editAnswer(message.questionId)"
+                    >
+                      修改
+                    </button>
+                  </div>
+                  <p class="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                    {{ message.content }}
+                  </p>
+                </article>
+              </template>
+
+              <template
+                v-else-if="
+                  message.type === 'references' && referenceSummaries.length
+                "
               >
-                <div
-                  v-if="section.html"
-                  class="prose prose-invert max-w-none text-sm text-slate-100"
-                  v-html="section.html"
-                ></div>
-                <p v-else class="text-sm text-slate-100 whitespace-pre-line">
-                  {{ section.content }}
-                </p>
-              </div>
-            </div>
-            <button
-              class="px-6 py-2.5 rounded-full font-semibold bg-transparent border border-slate-500 border-opacity-40 text-slate-200 hover:bg-slate-700 hover:bg-opacity-30 transition-all duration-200"
-              @click="emit('requestExport')"
-            >
-              下載 Word 檔
-            </button>
-          </div>
-        </template>
-      </div>
+                <article
+                  class="rounded-[28px] border border-[#dde3ff] bg-white px-5 py-4 shadow-md"
+                >
+                  <p class="text-sm font-semibold text-slate-800">
+                    已加入的參考資料
+                  </p>
+                  <ul class="mt-3 space-y-2">
+                    <li
+                      v-for="(summary, idx) in referenceSummaries"
+                      :key="idx"
+                      class="rounded-2xl bg-[#f8f9ff] px-4 py-2 text-sm text-slate-600"
+                    >
+                      <span class="mr-2 font-semibold text-[#ff6b3d]"
+                        >#{{ idx + 1 }}</span
+                      >
+                      {{ summary }}
+                    </li>
+                  </ul>
+                </article>
+              </template>
 
-      <div
-        v-if="isGenerating"
-        class="flex flex-col items-center justify-center mt-4"
-      >
-        <div class="flex gap-1">
-          <span
-            v-for="n in 3"
-            :key="n"
-            class="w-2 h-2 rounded-full bg-slate-300 animate-bounce"
-            :style="{ animationDelay: `${(n - 1) * 0.15}s` }"
-          ></span>
+              <template v-else-if="message.type === 'candidates'">
+                <article
+                  class="rounded-[28px] border border-[#ffd6c9] bg-[#fff5f1] px-5 py-5 shadow-md"
+                >
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <p class="text-sm font-semibold text-[#ff4b5c]">
+                        候選章節已就緒
+                      </p>
+                      <p class="text-xs text-slate-500">
+                        已為
+                        {{ message.sectionCount || sections.length }}
+                        個章節生成提案。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="rounded-full bg-[#ff4b5c] px-4 py-2 text-xs font-semibold text-white shadow"
+                      @click="openCandidateSelector"
+                    >
+                      查看詳情
+                    </button>
+                  </div>
+                </article>
+              </template>
+
+              <template v-else-if="message.type === 'final'">
+                <article
+                  class="rounded-[32px] border-2 border-[#ffb4a8] bg-white px-6 py-5 shadow-xl"
+                >
+                  <header
+                    class="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div>
+                      <p
+                        class="text-xs font-semibold uppercase tracking-[0.4em] text-[#ff7a5b]"
+                      >
+                        計畫推演報告
+                        <span class="ml-2 text-[11px] text-slate-400"
+                          >Plan Deduction</span
+                        >
+                      </p>
+                      <p class="mt-2 text-sm text-slate-600">
+                        根據資料庫的情境與文件分析，以下為符合當前條件的推演結果摘要。
+                      </p>
+                    </div>
+                    <span
+                      class="rounded-full bg-[#fff1ea] px-3 py-1 text-xs font-semibold text-[#ff6b3d]"
+                    >
+                      專案熱度高
+                    </span>
+                  </header>
+                  <div class="mt-4 space-y-4">
+                    <div
+                      v-for="section in message.sections"
+                      :key="section.id"
+                      class="rounded-2xl bg-[#fff7f3] px-4 py-3"
+                    >
+                      <p
+                        class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8a70]"
+                      >
+                        {{ section.name }}
+                      </p>
+                      <div
+                        v-if="section.html"
+                        class="mt-2 text-sm leading-relaxed text-slate-700 prose prose-sm prose-slate"
+                        v-html="section.html"
+                      ></div>
+                      <p
+                        v-else
+                        class="mt-2 text-sm leading-relaxed text-slate-700 whitespace-pre-line"
+                      >
+                        {{ section.content }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-5 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      class="rounded-full border border-[#ffb4a8] px-5 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef]"
+                      @click="emit('requestExport')"
+                    >
+                      下載報告 Word
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-full bg-[#ff4b5c] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b5c]/20"
+                      @click="emit('backToStageOne')"
+                    >
+                      重新啟動推演
+                    </button>
+                  </div>
+                </article>
+              </template>
+            </div>
+          </div>
         </div>
-        <p class="text-xs text-slate-400 mt-2">AI 正在生成候選內容...</p>
+
+        <div
+          v-if="isGenerating"
+          class="flex flex-col items-center justify-center pt-6"
+        >
+          <div class="flex gap-1">
+            <span
+              v-for="n in 3"
+              :key="n"
+              class="h-2.5 w-2.5 animate-bounce rounded-full bg-[#ffb4a8]"
+              :style="{ animationDelay: `${(n - 1) * 0.15}s` }"
+            ></span>
+          </div>
+          <p class="mt-2 text-xs text-slate-400">AI 正在推演整體架構...</p>
+        </div>
       </div>
     </div>
 
-    <div class="mt-6 flex flex-col gap-3">
+    <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
       <textarea
         v-model="draftMessage"
-        class="w-full min-h-32 bg-slate-900 bg-opacity-80 border border-slate-500 border-opacity-20 rounded-2xl p-3.5 text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        class="mt-3 h-16 w-full resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
         :placeholder="composerPlaceholder"
-        :disabled="allQuestionsAnswered || isGenerationComplete"
+        :disabled="isGenerationComplete"
         @keydown.enter.prevent="handleEnter"
       ></textarea>
-      <div class="flex gap-3 flex-wrap">
+      <div class="mt-4 flex flex-wrap gap-3">
         <button
-          class="px-6 py-2.5 rounded-full font-semibold bg-slate-600 bg-opacity-20 border border-transparent text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-opacity-30 transition-all duration-200"
           type="button"
-          @click="handleSend"
+          class="rounded-full border border-[#dfe3ff] px-5 py-2 text-sm font-semibold text-[#6c719b] hover:bg-[#f4f5ff] disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canSendMessage || isGenerationComplete"
-          :title="
-            isGenerationComplete
-              ? '已生成計畫，無法傳送'
-              : !canSendMessage
-              ? '所有核心問題已完成，請生成候選計畫'
-              : ''
-          "
+          @click="handleSend"
         >
-          傳送
+          回覆當前問題
         </button>
         <button
-          class="px-6 py-2.5 rounded-full font-semibold bg-gradient-to-r from-indigo-600 to-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:from-indigo-500 hover:to-purple-600 transition-all duration-200"
           type="button"
+          class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!canRequestPlan || isGenerating"
           @click="requestGeneration"
-          :disabled="!canRequestPlan || isGenerating || isGenerationComplete"
         >
-          {{ isGenerating ? "等待回應..." : "生成計畫候選" }}
+          {{ isGenerating ? "推演中..." : "輸出完整推演" }}
         </button>
       </div>
-    </div>
+    </footer>
 
     <PlanCandidateSelector
       :visible="isCandidateSelectorVisible"
@@ -295,6 +347,7 @@ const emit = defineEmits([
   "requestExport",
   "toggleModel",
   "backToStageOne",
+  "messagesUpdated",
 ]);
 
 const messages = ref([
@@ -368,6 +421,10 @@ const canRequestPlan = computed(() => {
   return Boolean(props.grantId && props.templateId);
 });
 
+const hasCandidatePlan = computed(
+  () => Object.keys(props.candidatePlan || {}).length > 0
+);
+
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
 function questionMessageExists(questionId) {
@@ -425,6 +482,14 @@ watch(
   () => props.referenceSummaries,
   () => {
     scrollToBottom();
+  },
+  { deep: true }
+);
+
+watch(
+  messages,
+  (newMessages) => {
+    emit("messagesUpdated", newMessages);
   },
   { deep: true }
 );
@@ -815,23 +880,26 @@ function buildGuidedQuestionList() {
   width: 6px;
 }
 
-.scrollbar-thumb-indigo-500::-webkit-scrollbar-thumb {
-  background-color: rgb(99, 102, 241);
+.scrollbar-thumb-indigo-500::-webkit-scrollbar-thumb,
+.scrollbar-thumb-rose-300::-webkit-scrollbar-thumb {
+  background-color: #ffb4a8;
   border-radius: 3px;
 }
 
-.scrollbar-thumb-indigo-500::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(79, 70, 229);
+.scrollbar-thumb-indigo-500::-webkit-scrollbar-thumb:hover,
+.scrollbar-thumb-rose-300::-webkit-scrollbar-thumb:hover {
+  background-color: #ff998e;
 }
 
-.scrollbar-track-slate-800::-webkit-scrollbar-track {
-  background-color: rgb(30, 41, 59);
+.scrollbar-track-slate-800::-webkit-scrollbar-track,
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background-color: transparent;
   border-radius: 3px;
 }
 
 /* Firefox scrollbar */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgb(99, 102, 241) rgb(30, 41, 59);
+  scrollbar-color: #ffb4a8 transparent;
 }
 </style>
