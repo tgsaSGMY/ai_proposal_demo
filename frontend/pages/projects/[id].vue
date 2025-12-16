@@ -142,7 +142,6 @@ import { useLoading } from "~/composables/useLoading";
 import { exportPlanToWord } from "~/utils/exportToWord";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 
-
 definePageMeta({
   middleware: "auth",
 });
