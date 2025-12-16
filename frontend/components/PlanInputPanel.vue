@@ -301,7 +301,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   buildDynamicSections,
   createEmptyDynamicValues,
@@ -310,6 +310,7 @@ import {
 } from "~/utils/dynamicSchema";
 import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 import {
   applyExcelRows,
   buildExcelReplyTargetMap,
@@ -347,6 +348,19 @@ const emit = defineEmits([
 
 const { success: notifySuccess, error: notifyError } = useNotifications();
 const { isLoading } = useLoading();
+const { userId: currentUserId, refreshUser } = useCurrentUser();
+
+onMounted(() => {
+  refreshUser();
+});
+
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    notifyError("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
 
 const excelInputRef = ref(null);
 const wordInputRef = ref(null);
@@ -561,6 +575,11 @@ async function handleWordFileChange(event) {
     // 提取 Word 檔案中的文本
     const extractedText = await extractTextFromWord(file);
 
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
+
     // 準備傳送給後端的資料
     const payload = {
       document_text: extractedText,
@@ -569,7 +588,7 @@ async function handleWordFileChange(event) {
         section_name: s.sectionName,
         json_schema: buildSectionSchema(s),
       })),
-      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+      user_id: userId,
     };
 
     const filledContent = await callAutoFillApi(payload, API_BASE_URL);

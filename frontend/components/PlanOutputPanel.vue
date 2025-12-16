@@ -146,9 +146,13 @@
 </template>
 
 <script setup>
+import { onMounted, ref } from "vue";
 import JsonSchemaForm from "./JsonSchemaForm.vue";
 import mammoth from "mammoth";
 import { exportPlanToWord } from "@/utils/exportToWord";
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
 const props = defineProps({
   planContent: { type: Object, required: true },
@@ -160,16 +164,16 @@ const props = defineProps({
 });
 
 const fileInput = ref(null);
-import { useLoading } from "~/composables/useLoading";
-import { useNotifications } from "~/composables/useNotifications";
 const { error: errorNotification } = useNotifications();
 const { isLoading } = useLoading();
+const { userId: currentUserId, refreshUser } = useCurrentUser();
 
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 let pdfjsLib = null;
 onMounted(async () => {
+  await refreshUser();
   try {
     // 動態導入模塊
     const pdfjsModule = await import("pdfjs-dist/build/pdf");
@@ -186,6 +190,14 @@ const emit = defineEmits([
   "generateUserInput",
   "autoFillComplete",
 ]);
+
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    errorNotification("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
 
 // 直接返回對象
 function getSectionContent(sectionId) {
@@ -233,6 +245,10 @@ async function handleFileSelected(event) {
   showLoading("正在從 Word 檔案中提取內容...", true);
   try {
     const extractedText = await extractTextFromFile(file);
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
 
     // 準備傳送給後端的資料
     const payload = {
@@ -242,7 +258,7 @@ async function handleFileSelected(event) {
         section_name: s.name,
         json_schema: s.json_schema,
       })),
-      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+      user_id: userId,
     };
 
     const filledContent = await callAutoFillApi(payload);

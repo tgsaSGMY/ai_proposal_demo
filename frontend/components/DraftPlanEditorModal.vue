@@ -84,6 +84,7 @@ import {
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
 const props = defineProps({
   draft: {
@@ -101,6 +102,7 @@ const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const { userId: currentUserId, refreshUser } = useCurrentUser();
 
 const {
   selectedGrantId,
@@ -120,6 +122,7 @@ let isHydratingDynamicFields = true;
 
 // --- State Initialization and Synchronization ---
 onMounted(async () => {
+  await refreshUser();
   await fetchAllConfigs();
   // Force Composable state to match the draft's config
   selectedGrantId.value = props.draft.grant_id;
@@ -341,10 +344,22 @@ function buildFinalUserInputForGeneration(summaries = []) {
 const showCandidateModal = ref(false);
 const candidatePlan = ref({});
 
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    errorNotification("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
+
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
   showLoading("正在生成計劃書...", true);
   try {
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries
     );
@@ -356,7 +371,7 @@ async function handleGeneratePlanInModal(outerPayload) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+        user_id: userId,
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         user_input: finalUserInput,
@@ -402,6 +417,10 @@ async function handleGenerateUserInput() {
   isGeneratingPlan.value = true;
 
   try {
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
     // 構建動態字段當前值（用於 reverse 模式）
     const currentDynamicFields = {};
     const sections = buildDynamicSections(dynamicFieldValues.value);
@@ -420,7 +439,7 @@ async function handleGenerateUserInput() {
       grant_name: currentGrant.value.name,
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
-      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+      user_id: userId,
       dynamic_fields_schema: getDynamicFieldLabels().map((label) => ({
         label,
       })),

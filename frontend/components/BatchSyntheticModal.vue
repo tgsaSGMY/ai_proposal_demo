@@ -87,17 +87,25 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { useNotifications } from "~/composables/useNotifications";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
 const props = defineProps({
   visible: Boolean,
   allConfigs: Array,
 });
 const emit = defineEmits(["close", "start"]);
+const { error: notifyError } = useNotifications();
+const { userId: currentUserId, refreshUser } = useCurrentUser();
 
 const count = ref(5);
 const selectedGrantId = ref("");
 const selectedTemplateId = ref("");
+
+onMounted(() => {
+  refreshUser();
+});
 
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
@@ -120,12 +128,24 @@ function close() {
   emit("close");
 }
 
-function startBatch() {
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    notifyError("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
+
+async function startBatch() {
+  const userId = await getUserIdOrNotify();
+  if (!userId) {
+    return;
+  }
   emit("start", {
     count: count.value,
     grant_id: selectedGrantId.value,
     template_id: selectedTemplateId.value,
-    user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+    user_id: userId,
   });
   close();
 }

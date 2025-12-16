@@ -281,6 +281,56 @@ class SupabaseService:
         response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
         return len(response.data) > 0
 
+    async def create_project_record(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """在 projects 表中新增一筆記錄。"""
+        response = (
+            self.client.from_("projects")
+            .insert({k: v for k, v in data.items() if v is not None})
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """取得單一專案。"""
+        try:
+            response = (
+                self.client.from_("projects")
+                .select("*")
+                .eq("id", project_id)
+                .single()
+                .execute()
+            )
+            return response.data if response.data else None
+        except Exception as error:
+            logger.error("Failed to fetch project %s: %s", project_id, error, exc_info=True)
+            return None
+
+    async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """取得指定使用者的所有專案，依更新時間排序。"""
+        response = (
+            self.client.from_("projects")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .execute()
+        )
+        return response.data if response.data else []
+
+    async def update_project_record(self, project_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新指定專案。"""
+        response = (
+            self.client.from_("projects")
+            .update({k: v for k, v in data.items() if v is not None})
+            .eq("id", project_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def delete_project_record(self, project_id: str) -> bool:
+        """刪除指定專案。"""
+        response = self.client.from_("projects").delete().eq("id", project_id).execute()
+        return len(response.data) > 0
+
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
 

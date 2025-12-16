@@ -327,12 +327,14 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { supabase } from "~/utils/supabaseClient";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
 const router = useRouter();
 const route = useRoute();
 const showSidebar = ref(false);
 const isAuthenticated = ref(false);
 const isInternalView = ref(false);
+const { userId: currentUserId, refreshUser } = useCurrentUser();
 
 let authSubscription = null;
 
@@ -359,13 +361,20 @@ async function checkAuth() {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    isAuthenticated.value = !!session?.user;
+    const sessionUserId = session?.user?.id ?? null;
+    currentUserId.value = sessionUserId;
+    isAuthenticated.value = !!sessionUserId;
     if (!isAuthenticated.value) {
       isInternalView.value = false;
+      userTotalCost.value = null;
+      return;
     }
+    await fetchUserUsage(sessionUserId);
   } catch (error) {
     console.error("Auth check error:", error);
     isAuthenticated.value = false;
+    currentUserId.value = null;
+    userTotalCost.value = null;
   }
 }
 
@@ -375,6 +384,8 @@ async function handleLogout() {
     if (error) throw error;
     isAuthenticated.value = false;
     isInternalView.value = false;
+    currentUserId.value = null;
+    userTotalCost.value = null;
     localStorage.clear();
     await router.push("/login");
     handleNavClick();
@@ -384,14 +395,19 @@ async function handleLogout() {
 }
 
 onMounted(() => {
+  refreshUser();
   checkAuth();
-  fetchUserUsage();
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
-    isAuthenticated.value = !!session?.user;
+    const sessionUserId = session?.user?.id ?? null;
+    currentUserId.value = sessionUserId;
+    isAuthenticated.value = !!sessionUserId;
     if (!isAuthenticated.value) {
       isInternalView.value = false;
+      userTotalCost.value = null;
+    } else {
+      fetchUserUsage(sessionUserId);
     }
   });
   authSubscription = subscription;
@@ -402,13 +418,16 @@ onBeforeUnmount(() => {
 });
 
 const userTotalCost = ref(0);
-const userId = "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5";
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-async function fetchUserUsage() {
+async function fetchUserUsage(targetUserId) {
+  if (!targetUserId) {
+    userTotalCost.value = null;
+    return;
+  }
   try {
     const response = await fetch(
-      `${API_BASE_URL}/user-usage?user_id=${userId}`
+      `${API_BASE_URL}/user-usage?user_id=${targetUserId}`
     );
     if (!response.ok) throw new Error("Failed to fetch usage");
     const data = await response.json();

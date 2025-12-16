@@ -138,8 +138,10 @@ function renderSectionContent(
   }
 }
 
+type ExportableSection = { id: string; name: string; json_schema?: any };
+
 export async function exportPlanToWord(
-  sections: { id: string; name: string; json_schema: any }[],
+  sections: ExportableSection[],
   planContent: Record<string, any>,
   grantId?: string,
   templateId?: string
@@ -219,7 +221,7 @@ export async function exportPlanToWord(
 
 // 默認導出函數（保留原有邏輯）
 async function exportPlanToWordDefault(
-  sections: { id: string; name: string; json_schema: any }[],
+  sections: ExportableSection[],
   planContent: Record<string, any>
 ) {
   const docxRenderer = new DocxRenderer();
@@ -324,7 +326,7 @@ async function exportPlanToWordDefault(
 }
 
 export function renderPlanToHtml(
-  sections: { id: string; name: string; json_schema: any }[],
+  sections: ExportableSection[],
   planContent: Record<string, any>
 ): string {
   const htmlRenderer = new HtmlRenderer();

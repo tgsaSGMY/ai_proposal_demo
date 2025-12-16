@@ -113,6 +113,12 @@
           新增指令
         </button>
       </div>
+      <p
+        v-if="isLoadingCommands"
+        class="text-xs font-semibold uppercase tracking-wide text-gray-400"
+      >
+        正在同步 Supabase 指令...
+      </p>
 
       <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <article
@@ -257,6 +263,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import CommandEditModal from "~/components/CommandEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
+import { supabase } from "~/utils/supabaseClient";
 
 interface CommandItem {
   id: string;
@@ -265,65 +272,50 @@ interface CommandItem {
   lastUpdated: string;
   isOpen: boolean;
   isCompany: boolean;
+  userId: string;
+}
+
+interface SupabaseCommandRow {
+  id: string;
+  title: string;
+  description: string;
+  user_id: string;
+  last_updated: string | null;
+  is_open: boolean;
+  is_company: boolean;
 }
 
 type CommandTab = "all" | "system" | "company";
 
-const commands = ref<CommandItem[]>([
-  {
-    id: "cmd-1",
-    title: "公司基本資料與資訊庫",
-    description:
-      "整合成立時間、AIOT 解決方案、認證與過往里程碑，作為 AI 回答專案背景的必備素材。",
-    lastUpdated: "2 天前",
-    isOpen: true,
-    isCompany: true,
-  },
-  {
-    id: "cmd-2",
-    title: "公司商業策略與機會",
-    description:
-      "聚焦 B2B 訂閱制策略，強調客戶留存率與系統整合能力，指引 AI 優先回應商務策略。",
-    lastUpdated: "1 週前",
-    isOpen: true,
-    isCompany: true,
-  },
-  {
-    id: "cmd-3",
-    title: "企業 ESG 規範",
-    description:
-      "所有提案需符合 SDGs 指標 12，優先說明供應鏈及材料策略，並強調 ESG 治理。",
-    lastUpdated: "3 天前",
-    isOpen: false,
-    isCompany: false,
-  },
-  {
-    id: "cmd-4",
-    title: "專用名詞庫",
-    description:
-      "統一定義內部用語與產品名稱，避免生成時出現舊稱呼或錯誤拼法，維護品牌一致性。",
-    lastUpdated: "2 天前",
-    isOpen: true,
-    isCompany: false,
-  },
-  {
-    id: "cmd-5",
-    title: "工程師提問模組",
-    description:
-      "蒐集技術 PM 常見問題，規範提問格式與必要欄位，確保 AI 可快速回覆技術細節。",
-    lastUpdated: "1 天前",
-    isOpen: false,
-    isCompany: true,
-  },
-]);
+const DEFAULT_COMMANDS = [
+  { title: "公司基本資料與資訊庫", isCompany: true },
+  { title: "公司商業策略與機會", isCompany: true },
+  { title: "企業 ESG 規範", isCompany: false },
+  { title: "專用名詞庫", isCompany: false },
+  { title: "工程師提問模組", isCompany: true },
+] as const;
 
+const commands = ref<CommandItem[]>([]);
 const activeTab = ref<CommandTab>("all");
 const searchTerm = ref("");
 const menuOpenId = ref<string | null>(null);
 const isEditModalOpen = ref(false);
-const editingCommand = ref<CommandItem | null>(null);
+const editingCommand = ref<{
+  id?: string;
+  title: string;
+  description: string;
+  isCompany: boolean;
+} | null>(null);
 const { confirm } = useConfirm();
-const { success, info } = useNotifications();
+const {
+  success,
+  info,
+  error: notifyError,
+  warning: notifyWarning,
+} = useNotifications();
+const userId = ref<string | null>(null);
+const isLoadingCommands = ref(false);
+let hasSeededDefaults = false;
 
 const tabCounts = computed(() => ({
   all: commands.value.length,
@@ -372,7 +364,12 @@ function toggleMenu(id: string) {
 }
 
 function openEdit(command: CommandItem) {
-  editingCommand.value = { ...command };
+  editingCommand.value = {
+    id: command.id,
+    title: command.title,
+    description: command.description,
+    isCompany: command.isCompany,
+  };
   isEditModalOpen.value = true;
   menuOpenId.value = null;
 }
@@ -382,28 +379,57 @@ function closeEditModal() {
   editingCommand.value = null;
 }
 
-function handleSave(payload: {
+async function handleSave(payload: {
   id?: string;
   title: string;
   description: string;
   isCompany: boolean;
 }) {
-  if (!payload.id) return;
-  const index = commands.value.findIndex(
-    (command) => command.id === payload.id
-  );
-  if (index === -1) return;
-  // @ts-ignore
-  commands.value[index] = {
-    ...commands.value[index],
-    id: payload.id!, // Ensure id is non-undefined
-    title: payload.title,
-    description: payload.description,
-    isCompany: payload.isCompany,
-    lastUpdated: "剛剛",
+  if (!userId.value) {
+    notifyWarning("請先登入後再儲存指令");
+    return;
+  }
+
+  const normalized = {
+    title: payload.title.trim(),
+    description: payload.description.trim(),
+    is_company: payload.isCompany,
   };
-  success("指令內容已更新");
-  closeEditModal();
+
+  if (!normalized.title || !normalized.description) {
+    notifyWarning("指令標題與描述不可為空");
+    return;
+  }
+
+  try {
+    const timestamp = new Date().toISOString();
+    if (payload.id) {
+      const { error } = await supabase
+        .from("commands")
+        .update({
+          ...normalized,
+          last_updated: timestamp,
+        })
+        .eq("id", payload.id)
+        .eq("user_id", userId.value);
+      if (error) throw error;
+      success("指令內容已更新");
+    } else {
+      const { error } = await supabase.from("commands").insert({
+        ...normalized,
+        user_id: userId.value,
+        is_open: true,
+        last_updated: timestamp,
+      });
+      if (error) throw error;
+      success("已新增指令");
+    }
+    await loadCommands();
+    closeEditModal();
+  } catch (error: any) {
+    console.error("Failed to save command", error);
+    notifyError(error?.message || "儲存指令失敗，請稍後再試");
+  }
 }
 
 async function handleDelete(command: CommandItem) {
@@ -415,27 +441,150 @@ async function handleDelete(command: CommandItem) {
     confirmColor: "danger",
   });
   if (!confirmed) return;
-  commands.value = commands.value.filter((item) => item.id !== command.id);
+  if (!userId.value) {
+    notifyWarning("請先登入後再進行操作");
+    return;
+  }
+  const { error } = await supabase
+    .from("commands")
+    .delete()
+    .eq("id", command.id)
+    .eq("user_id", userId.value);
+  if (error) {
+    console.error("Failed to delete command", error);
+    notifyError("刪除指令失敗，請稍後再試");
+    return;
+  }
+  await loadCommands();
   success("指令已刪除");
 }
 
 function handleCreateCommand() {
-  info("建置中，敬請期待");
+  editingCommand.value = {
+    title: "",
+    description: "",
+    isCompany: false,
+  };
+  isEditModalOpen.value = true;
 }
 
-function handleToggle(commandId: string) {
+async function bootstrapCommands() {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error) throw error;
+    userId.value = user?.id || null;
+    await loadCommands();
+  } catch (error: any) {
+    console.error("Failed to initialize commands", error);
+    notifyError("無法取得指令資料，請稍後再試");
+  }
+}
+
+async function loadCommands() {
+  if (!userId.value) {
+    commands.value = [];
+    return;
+  }
+  isLoadingCommands.value = true;
+  try {
+    const { data, error } = await supabase
+      .from("commands")
+      .select("*")
+      .eq("user_id", userId.value)
+      .order("last_updated", { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      if (!hasSeededDefaults) {
+        await seedDefaultCommands();
+        hasSeededDefaults = true;
+        await loadCommands();
+        return;
+      }
+    }
+    hasSeededDefaults = false;
+    commands.value = (data || []).map(mapCommandRow);
+  } catch (error: any) {
+    console.error("Failed to load commands", error);
+    notifyError("載入指令列表失敗，請稍後再試");
+  } finally {
+    isLoadingCommands.value = false;
+  }
+}
+
+async function seedDefaultCommands() {
+  if (!userId.value) {
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  const payload = DEFAULT_COMMANDS.map((item) => ({
+    title: item.title,
+    description: "",
+    user_id: userId.value,
+    is_open: false,
+    is_company: item.isCompany,
+    last_updated: timestamp,
+  }));
+  const { error } = await supabase.from("commands").insert(payload);
+  if (error) {
+    throw error;
+  }
+}
+
+function mapCommandRow(row: SupabaseCommandRow): CommandItem {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    lastUpdated: formatTimestamp(row.last_updated),
+    isOpen: row.is_open,
+    isCompany: row.is_company,
+    userId: row.user_id,
+  };
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-TW", { hour12: false });
+}
+
+async function handleToggle(commandId: string) {
+  if (!userId.value) {
+    notifyWarning("請先登入後再進行操作");
+    return;
+  }
   const target = commands.value.find((item) => item.id === commandId);
   if (!target) return;
-  target.isOpen = !target.isOpen;
-  info(target.isOpen ? "已啟用此指令" : "已停用此指令");
+  const nextState = !target.isOpen;
+  const timestamp = new Date().toISOString();
+  const { error } = await supabase
+    .from("commands")
+    .update({ is_open: nextState, last_updated: timestamp })
+    .eq("id", commandId)
+    .eq("user_id", userId.value);
+  if (error) {
+    console.error("Failed to toggle command", error);
+    notifyError("切換指令狀態失敗，請稍後再試");
+    return;
+  }
+  target.isOpen = nextState;
+  target.lastUpdated = formatTimestamp(timestamp);
+  info(nextState ? "已啟用此指令" : "已停用此指令");
 }
 
 const handleDocumentClick = () => {
   menuOpenId.value = null;
 };
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener("click", handleDocumentClick);
+  await bootstrapCommands();
 });
 
 onBeforeUnmount(() => {

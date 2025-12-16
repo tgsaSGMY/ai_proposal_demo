@@ -292,49 +292,24 @@
             <button
               class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
               type="button"
-              :disabled="!canEnterChat || isProcessingBackground"
+              :disabled="
+                !canEnterChat || isProcessingBackground || isCreatingProject
+              "
               :class="{
                 'opacity-60 cursor-not-allowed':
-                  !canEnterChat || isProcessingBackground,
+                  !canEnterChat || isProcessingBackground || isCreatingProject,
               }"
               @click="enterChatStage"
             >
-              {{ isProcessingBackground ? "解析附件中..." : "進入 Chatbox" }}
+              {{
+                isProcessingBackground
+                  ? "解析附件中..."
+                  : isCreatingProject
+                  ? "建立工作區..."
+                  : "進入 Chatbox"
+              }}
             </button>
           </div>
-        </div>
-      </section>
-
-      <!-- Stage 3: Chatbox + Sidebar -->
-      <section v-else class="flex min-h-[80vh] gap-4 rounded-3xl p-0">
-        <!-- Left: Chatbox (80%) -->
-        <div class="w-4/5">
-          <Chatbox
-            :key="chatSessionKey"
-            class="h-full"
-            :sections="currentSections"
-            :reference-summaries="backgroundSummary"
-            :candidate-plan="candidatePlan"
-            :final-plan="finalPlanContent"
-            :is-generating="isLoading"
-            :grant-id="selectedGrantId"
-            :template-id="selectedTemplateId"
-            :grant-name="selectedPlanType?.title || ''"
-            :template-name="resolvedTemplateName || ''"
-            :use-model-type="useModelType"
-            :prefilled-answers="prefilledChatAnswers"
-            @generatePlan="handleGeneratePlan"
-            @finalizeCandidates="onCandidateConfirm"
-            @requestExport="handleExportWord"
-            @toggleModel="toggleModel"
-            @backToStageOne="backToStage(1)"
-            @messagesUpdated="handleMessagesUpdated"
-          />
-        </div>
-
-        <!-- Right: Sidebar (20%) -->
-        <div class="w-1/5">
-          <ChatSidebar :messages="chatMessages" :versions="versionHistory" />
         </div>
       </section>
     </div>
@@ -342,15 +317,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import Chatbox from "~/components/Chatbox.vue";
-import ChatSidebar from "~/components/ChatSidebar.vue";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
-import { useLoading } from "~/composables/useLoading";
-import { exportPlanToWord } from "~/utils/exportToWord";
 import { extractTextFromWord } from "~/utils/wordImport";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
 definePageMeta({
   middleware: "auth",
@@ -499,18 +471,16 @@ const {
   error: notifyError,
   warning: notifyWarning,
 } = useNotifications();
-const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
+const { userId: currentUserId, refreshUser } = useCurrentUser();
+onMounted(() => {
+  refreshUser();
+});
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-const {
-  allConfigs,
-  selectedGrantId,
-  selectedTemplateId,
-  currentSections,
-  planContent: finalPlanContent,
-  onSelectionChange,
-} = usePlanGenerator();
+const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
+  usePlanGenerator();
 
-const candidatePlan = ref<Record<string, any>>({});
 const currentStage = ref(1);
 const selectedPlanType = ref<PlanTypeOption | null>(null);
 const selectedMode = ref<ModeOption["id"] | null>(null);
@@ -521,12 +491,16 @@ const backgroundFiles = ref<BackgroundAttachment[]>([]);
 const isDraggingBackground = ref(false);
 const isProcessingBackground = ref(false);
 const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
-const chatSessionKey = ref(0);
-const useModelType = ref("external");
-const lastGenerationPrompt = ref("");
-const chatMessages = ref<any[]>([]);
-const versionHistory = ref<any[]>([]);
 let pdfjsLib: any | null = null;
+const isCreatingProject = ref(false);
+
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    notifyError("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
 
 const configsLoaded = computed(() => allConfigs.value.length > 0);
 const canConfirmPlanType = computed(
@@ -593,6 +567,19 @@ const prefilledChatAnswers = computed(() => {
   }
   return answers;
 });
+
+function buildProjectMetadata() {
+  return {
+    planName: planName.value.trim(),
+    planSummary: planSummary.value.trim(),
+    planType: selectedPlanType.value,
+    backgroundEntries: backgroundSummary.value,
+    backgroundNotes: planBackground.value.trim(),
+    prefilledChatAnswers: prefilledChatAnswers.value,
+    mode: selectedMode.value,
+    createdAt: new Date().toISOString(),
+  };
+}
 
 function triggerBackgroundUpload() {
   if (isProcessingBackground.value) {
@@ -810,169 +797,53 @@ function backToStage(stage: number) {
   currentStage.value = stage;
 }
 
-function enterChatStage() {
-  if (!canEnterChat.value) {
+async function enterChatStage() {
+  if (!canEnterChat.value || isProcessingBackground.value) {
     notifyWarning("請先完成模式與背景資訊填寫");
     return;
   }
-  chatSessionKey.value += 1;
-  chatMessages.value = [];
-  versionHistory.value = [];
-  currentStage.value = 3;
-}
-
-function handleExportWord() {
-  const hasPlan = Object.keys(finalPlanContent.value || {}).length > 0;
-  if (!hasPlan) {
-    notifyWarning("尚未有可匯出的內容");
+  const userId = await getUserIdOrNotify();
+  if (!userId || isCreatingProject.value) {
     return;
   }
-  // return exportPlanToWord(
-  //   currentSections.value,
-  //   finalPlanContent.value,
-  //   selectedGrantId.value,
-  //   selectedTemplateId.value
-  // );
-}
 
-function toggleModel() {
-  useModelType.value =
-    useModelType.value === "internal" ? "external" : "internal";
-}
-
-function onCandidateConfirm({
-  selected,
-  rejected,
-}: {
-  selected: Record<string, any>;
-  rejected: Record<string, any>;
-}) {
-  const newPlanContent: Record<string, { content?: string; error?: string }> =
-    {};
-  Object.entries(selected).forEach(([sectionId, candidate]) => {
-    if (candidate && (candidate as any).content) {
-      newPlanContent[sectionId] = { content: (candidate as any).content };
-    } else {
-      newPlanContent[sectionId] = {
-        error: (candidate as any)?.error || "No content",
-      };
-    }
-  });
-  finalPlanContent.value = newPlanContent;
-  success("已選擇方案並填充到結果中！");
-  savePreferenceData(selected, rejected, lastGenerationPrompt.value);
-}
-
-async function handleGeneratePlan(payload: { prompt: string }) {
-  if (!payload?.prompt || !selectedTemplateId.value || !selectedGrantId.value) {
-    notifyError("請先完成基本設定，並輸入至少一則對話訊息。");
-    return;
-  }
-  showLoading("正在生成計畫書...", true);
-  finalPlanContent.value = {};
-  candidatePlan.value = {};
-  lastGenerationPrompt.value = payload.prompt;
-
-  const config = useRuntimeConfig();
-  const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-
+  const metadata = buildProjectMetadata();
+  isCreatingProject.value = true;
   try {
-    const sectionsToGenerate = currentSections.value.map((section) => ({
-      section_id: section.id,
-    }));
-
-    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
+    const response = await fetch(`${API_BASE_URL}/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
-        grant: selectedGrantId.value,
-        template: selectedTemplateId.value,
-        user_input: payload.prompt,
-        num_candidates: 2,
-        is_external: useModelType.value === "external",
-        sections: sectionsToGenerate,
+        user_id: userId,
+        mode: selectedMode.value || "interactive",
+        title:
+          planName.value.trim() ||
+          selectedPlanType.value?.title ||
+          "未命名計畫案",
+        description: planSummary.value.trim() || "尚未填寫摘要",
+        saved_plan: {},
+        conversation_history: [],
+        stored_answer: {},
+        grant_id: selectedGrantId.value || null,
+        template_id: selectedTemplateId.value || null,
+        plan_type_id: selectedPlanType.value?.id || null,
+        plan_metadata: metadata,
       }),
     });
 
     if (!response.ok) {
-      const errorDetail = await response.text();
-      throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
+      const detail = await response.text();
+      throw new Error(detail || "建立計畫失敗");
     }
 
-    const rawData = await response.json();
-    const processedCandidates: Record<string, any> = {};
-    for (const sectionId in rawData) {
-      processedCandidates[sectionId] = rawData[sectionId].map(
-        (candidate: any) => ({
-          content: candidate.raw_json_content,
-          error: candidate.error || null,
-        })
-      );
-    }
-    candidatePlan.value = processedCandidates;
-    success("計畫書草稿已生成！");
+    const record = await response.json();
+    success("已建立計畫並準備前往工作區");
+    router.push(`/projects/${record.id}`);
   } catch (error: any) {
-    console.error("生成計畫書時發生錯誤:", error);
-    notifyError(`生成失敗: ${error.message}`);
+    console.error("Failed to create project", error);
+    notifyError(error?.message || "建立計畫失敗，請稍後再試");
   } finally {
-    hideLoading();
-  }
-}
-
-async function savePreferenceData(
-  selectedData: Record<string, any>,
-  rejectedData: Record<string, any>,
-  finalPrompt = ""
-) {
-  try {
-    const config = useRuntimeConfig();
-    const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-    const entriesToSave = currentSections.value
-      .map((section) => {
-        const chosen = selectedData[section.id];
-        const rejected = rejectedData[section.id];
-        if (chosen && chosen.content) {
-          return {
-            section_id: section.id,
-            section_name: section.name,
-            chosen_content: chosen.content,
-            rejected_content: rejected?.content || "",
-            final_prompt: finalPrompt,
-          };
-        }
-        return null;
-      })
-      .filter(Boolean);
-
-    if (entriesToSave.length > 0) {
-      fetch(`${API_BASE_URL}/datasets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: entriesToSave }),
-      }).then((response) => {
-        if (response.status !== 202) {
-          console.error("後台保存偏好數據失敗。");
-        }
-      });
-    }
-  } catch (error) {
-    console.error("準備保存偏好數據時出錯:", error);
-  }
-}
-
-function handleMessagesUpdated(messages: any[]) {
-  chatMessages.value = messages;
-
-  // 更新版本記錄：每當生成完整推演時，增加一個版本記錄
-  const hasFinalMessage = messages.some((msg) => msg.type === "final");
-  if (hasFinalMessage && versionHistory.value.length === 0) {
-    versionHistory.value.push({
-      id: `v1`,
-      number: 1,
-      title: "初版推演結果",
-      timestamp: new Date().toLocaleString("zh-TW"),
-    });
+    isCreatingProject.value = false;
   }
 }
 </script>

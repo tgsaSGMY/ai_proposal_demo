@@ -338,12 +338,13 @@
   </div>
 </template>
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import Chatbox from "~/components/Chatbox.vue";
 import ReferenceLinker from "~/components/ReferenceLinker.vue";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 import {
   extractTextFromWord,
   callAutoFillApi,
@@ -437,6 +438,10 @@ const isLinkSummaryModalVisible = ref(false);
 const linkSummaryContent = ref("");
 const linkSummaryTitle = ref("");
 const lastGenerationPrompt = ref("");
+const { userId: currentUserId, refreshUser } = useCurrentUser();
+onMounted(() => {
+  refreshUser();
+});
 
 const dynamicSections = computed(() =>
   buildDynamicSections(dynamicFieldValues.value)
@@ -445,6 +450,14 @@ const dynamicSections = computed(() =>
 const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value)
 );
+
+async function getUserIdOrNotify() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    errorNotification("無法取得使用者資訊，請重新登入後再試。");
+  }
+  return userId;
+}
 
 const prefilledChatAnswers = computed(() => {
   const answers = {};
@@ -675,12 +688,16 @@ async function handleGeneratePlan(payload) {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+        user_id: userId,
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         user_input: payload.prompt,
@@ -1119,6 +1136,10 @@ async function runWordAutofillQueue() {
     const combinedText = queue
       .map((doc) => doc.documentText)
       .join("\n\n---\n\n");
+    const userId = await getUserIdOrNotify();
+    if (!userId) {
+      return;
+    }
 
     const payload = {
       document_text: combinedText,
@@ -1127,7 +1148,7 @@ async function runWordAutofillQueue() {
         section_name: section.sectionName,
         json_schema: buildSectionSchema(section),
       })),
-      user_id: "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
+      user_id: userId,
     };
 
     const filledContent = await callAutoFillApi(payload, API_BASE_URL);

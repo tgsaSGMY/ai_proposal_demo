@@ -41,11 +41,50 @@
         </div>
       </section>
 
-      <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <section
+        v-if="isLoadingProjects"
+        class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-gray-500"
+      >
+        <span class="text-sm font-semibold tracking-wide">正在載入計畫...</span>
+        <span class="mt-2 text-xs text-gray-400">請稍候片刻</span>
+      </section>
+
+      <section
+        v-else-if="loadError"
+        class="flex flex-col items-center justify-center rounded-3xl border border-rose-100 bg-white p-8 text-center"
+      >
+        <p class="text-base font-semibold text-rose-500">{{ loadError }}</p>
+        <p class="mt-2 text-sm text-gray-500">無法載入專案，請重新整理。</p>
+        <button
+          class="mt-4 rounded-2xl bg-rose-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-rose-600"
+          @click="fetchProjects"
+        >
+          重新嘗試
+        </button>
+      </section>
+
+      <section
+        v-else-if="projects.length === 0"
+        class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white/90 p-10 text-center"
+      >
+        <p class="text-lg font-semibold text-gray-800">目前尚無已儲存的計畫</p>
+        <p class="mt-2 text-sm text-gray-500">
+          回到首頁生成企劃後，我們會自動把成果同步到這裡。
+        </p>
+        <NuxtLink
+          to="/"
+          class="mt-4 inline-flex items-center rounded-2xl bg-rose-500 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-rose-600"
+        >
+          立即建立
+        </NuxtLink>
+      </section>
+
+      <section v-else class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="project in projects"
           :key="project.id"
-          class="relative flex h-full flex-col rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"
+          class="relative flex h-full flex-col rounded-3xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-rose-200 cursor-pointer"
+          @click="goToProject(project.id)"
         >
           <div class="flex items-start justify-between gap-4">
             <div>
@@ -223,10 +262,35 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import PlanLibraryEditModal from "~/components/PlanLibraryEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
+import { useCurrentUser } from "~/composables/useCurrentUser";
+
+interface Accent {
+  tagBg: string;
+  tagText: string;
+  progress: string;
+}
+
+interface ProjectRecord {
+  id: string;
+  user_id: string;
+  mode: string;
+  title: string;
+  description: string | null;
+  saved_plan: Record<string, any> | null;
+  conversation_history: any;
+  stored_answer: Record<string, any> | null;
+  grant_id?: string | null;
+  template_id?: string | null;
+  plan_type_id?: string | null;
+  plan_metadata?: Record<string, any> | null;
+  created_at: string;
+  updated_at: string | null;
+}
 
 interface ProjectCard {
   id: string;
@@ -235,12 +299,24 @@ interface ProjectCard {
   type: string;
   completeness: number;
   lastUpdate: string;
-  accent: {
-    tagBg: string;
-    tagText: string;
-    progress: string;
-  };
+  accent: Accent;
+  record: ProjectRecord;
 }
+
+const accentPalette: Accent[] = [
+  { tagBg: "bg-rose-50", tagText: "text-rose-500", progress: "bg-rose-500" },
+  { tagBg: "bg-amber-50", tagText: "text-amber-600", progress: "bg-amber-500" },
+  {
+    tagBg: "bg-purple-50",
+    tagText: "text-purple-600",
+    progress: "bg-purple-500",
+  },
+  {
+    tagBg: "bg-emerald-50",
+    tagText: "text-emerald-600",
+    progress: "bg-emerald-500",
+  },
+];
 
 const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   year: "numeric",
@@ -248,70 +324,19 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "2-digit",
 });
 
-const projects = ref<ProjectCard[]>([
-  {
-    id: "plan-1",
-    title: "智慧零售數據樞紐平台",
-    description:
-      "建立跨品牌資料整合合作，運用 AI 預測客群與供應鏈管理貫穿門市運作。",
-    type: "SBIR 審查中",
-    completeness: 85,
-    lastUpdate: "2024/09/05",
-    accent: {
-      tagBg: "bg-rose-50",
-      tagText: "text-rose-500",
-      progress: "bg-rose-500",
-    },
-  },
-  {
-    id: "plan-2",
-    title: "高效碳排監測應用模組",
-    description:
-      "提升製造業 4.0 數據整合之即時判讀，結合區塊鏈技術確保 ESG 稽核。",
-    type: "SBIR 執行中",
-    completeness: 42,
-    lastUpdate: "2024/05/18",
-    accent: {
-      tagBg: "bg-amber-50",
-      tagText: "text-amber-600",
-      progress: "bg-amber-500",
-    },
-  },
-  {
-    id: "plan-3",
-    title: "城市共享空間協同平台",
-    description:
-      "規劃跨部門協力的場域資料整合平台，結合數據視覺化提升閒置空間利用率。",
-    type: "SIT 執行編號",
-    completeness: 63,
-    lastUpdate: "2024/06/10",
-    accent: {
-      tagBg: "bg-purple-50",
-      tagText: "text-purple-600",
-      progress: "bg-purple-500",
-    },
-  },
-  {
-    id: "plan-4",
-    title: "環保材料食品包裝設計",
-    description: "導入可分解材質與無毒色料之包裝設計，提升產品保存與回收效率。",
-    type: "CITD 品項驗收",
-    completeness: 18,
-    lastUpdate: "2024/04/22",
-    accent: {
-      tagBg: "bg-emerald-50",
-      tagText: "text-emerald-600",
-      progress: "bg-emerald-500",
-    },
-  },
-]);
-
+const projects = ref<ProjectCard[]>([]);
+const isLoadingProjects = ref(false);
+const loadError = ref("");
 const menuOpenId = ref<string | null>(null);
 const isEditModalOpen = ref(false);
 const editingProject = ref<ProjectCard | null>(null);
 
+const router = useRouter();
 const { confirm } = useConfirm();
-const { success, info } = useNotifications();
+const { success, error: notifyError } = useNotifications();
+const { userId: currentUserId, refreshUser } = useCurrentUser();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 const handleDocumentClick = () => {
   menuOpenId.value = null;
@@ -319,14 +344,84 @@ const handleDocumentClick = () => {
 
 onMounted(() => {
   document.addEventListener("click", handleDocumentClick);
+  refreshUser();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleDocumentClick);
 });
 
+watch(
+  () => currentUserId.value,
+  (userId) => {
+    if (userId) {
+      fetchProjects();
+    } else {
+      projects.value = [];
+    }
+  },
+  { immediate: true }
+);
+
+function decorateProject(
+  record: ProjectRecord,
+  index: number,
+  accentOverride?: Accent
+): ProjectCard {
+  const accent = accentOverride || accentPalette[index % accentPalette.length];
+  const savedPlanFilled =
+    record.saved_plan && Object.keys(record.saved_plan).length > 0;
+  const storedAnswerFilled =
+    record.stored_answer && Object.keys(record.stored_answer).length > 0;
+  const completeness = savedPlanFilled ? 100 : storedAnswerFilled ? 70 : 25;
+  const modeLabel = record.mode === "generator" ? "生成模式" : "互動模式";
+  const lastUpdateSource = record.updated_at || record.created_at;
+  const lastUpdate = dateFormatter.format(new Date(lastUpdateSource));
+
+  return {
+    id: record.id,
+    title: record.title,
+    description: record.description || "尚未提供描述",
+    type: modeLabel,
+    completeness,
+    lastUpdate,
+    accent,
+    record,
+  };
+}
+
+async function fetchProjects() {
+  const userId = currentUserId.value || (await refreshUser());
+  if (!userId) {
+    projects.value = [];
+    return;
+  }
+  isLoadingProjects.value = true;
+  loadError.value = "";
+  try {
+    const response = await fetch(`${API_BASE_URL}/projects?user_id=${userId}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || "Failed to load projects");
+    }
+    const data: ProjectRecord[] = await response.json();
+    projects.value = data.map((record, index) =>
+      decorateProject(record, index)
+    );
+  } catch (error: any) {
+    console.error("Failed to fetch projects", error);
+    loadError.value = error?.message || "無法載入專案列表";
+  } finally {
+    isLoadingProjects.value = false;
+  }
+}
+
 function toggleMenu(id: string) {
   menuOpenId.value = menuOpenId.value === id ? null : id;
+}
+
+function goToProject(id: string) {
+  router.push(`/projects/${id}`);
 }
 
 function openEdit(project: ProjectCard) {
@@ -340,25 +435,40 @@ function closeEditModal() {
   editingProject.value = null;
 }
 
-function handleSave(payload: {
+async function handleSave(payload: {
   id?: string;
   title: string;
   description: string;
 }) {
   if (!payload.id) return;
-  const index = projects.value.findIndex(
-    (project) => project.id === payload.id
-  );
-  if (index === -1) return;
-  // @ts-ignore
-  projects.value[index] = {
-    ...projects.value[index],
-    title: payload.title,
-    description: payload.description,
-    lastUpdate: dateFormatter.format(new Date()),
-  };
-  success("計畫內容已更新");
-  closeEditModal();
+  try {
+    const response = await fetch(`${API_BASE_URL}/projects/${payload.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: payload.title,
+        description: payload.description,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || "更新計畫失敗");
+    }
+    const updated: ProjectRecord = await response.json();
+    const index = projects.value.findIndex(
+      (project) => project.id === payload.id
+    );
+    if (index !== -1) {
+      const accent = projects.value[index]?.accent;
+      projects.value[index] = decorateProject(updated, index, accent);
+    }
+    success("計畫內容已更新");
+  } catch (error: any) {
+    console.error("Failed to update project", error);
+    notifyError(error?.message || "更新計畫失敗，請稍後再試");
+  } finally {
+    closeEditModal();
+  }
 }
 
 async function handleDelete(project: ProjectCard) {
@@ -370,11 +480,24 @@ async function handleDelete(project: ProjectCard) {
     confirmColor: "danger",
   });
   if (!confirmed) return;
-  projects.value = projects.value.filter((item) => item.id !== project.id);
-  success("計畫已刪除");
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/projects/${project.id}`, {
+      method: "DELETE",
+    });
+    if (!response.ok && response.status !== 204) {
+      const detail = await response.text();
+      throw new Error(detail || "刪除計畫失敗");
+    }
+    projects.value = projects.value.filter((item) => item.id !== project.id);
+    success("計畫已刪除");
+  } catch (error: any) {
+    console.error("Failed to delete project", error);
+    notifyError(error?.message || "刪除失敗，請稍後再試");
+  }
 }
 
 function handleCreateProject() {
-  info("建置中，敬請期待");
+  router.push("/");
 }
 </script>
