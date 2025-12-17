@@ -141,14 +141,13 @@ import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
 import { exportPlanToWord } from "~/utils/exportToWord";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { mergeIntoEmptyValues } from "~/utils/dynamicSchema";
 
 definePageMeta({
   middleware: "auth",
 });
 
 interface ProjectMetadata {
-  planName?: string;
-  planSummary?: string;
   planType?: Record<string, any> | null;
   backgroundEntries?: string[];
   prefilledChatAnswers?: Record<string, string>;
@@ -286,6 +285,27 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
+function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
+  if (!record?.stored_answer || typeof record.stored_answer !== "object") {
+    return;
+  }
+  const userInputPayload = (record.stored_answer as any).user_input;
+  if (!userInputPayload || typeof userInputPayload !== "object") {
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(userInputPayload, "main_idea")) {
+    userInput.value = userInputPayload.main_idea || "";
+  }
+  if (
+    userInputPayload.dynamic_fields &&
+    typeof userInputPayload.dynamic_fields === "object"
+  ) {
+    dynamicFieldValues.value = mergeIntoEmptyValues(
+      userInputPayload.dynamic_fields as Record<string, string>
+    );
+  }
+}
+
 async function fetchProject() {
   if (!projectId.value) return;
   isProjectLoading.value = true;
@@ -314,6 +334,7 @@ async function fetchProject() {
     if (data.mode === "generator") {
       await initializeGeneratorStateFromProject(data);
     }
+    hydrateInputStateFromStoredAnswer(data);
   } catch (error: any) {
     console.error("Failed to load project", error);
     loadError.value = error?.message || "無法載入專案";
@@ -352,7 +373,7 @@ function scheduleConversationSync() {
   }
   conversationSyncTimer.value = setTimeout(() => {
     persistConversationHistory();
-  }, 1200);
+  }, 2000);
 }
 
 async function persistConversationHistory() {
@@ -434,6 +455,7 @@ async function updateProject(payload: Record<string, any>) {
   projectRecord.value = updated;
   planMetadata.value = updated.plan_metadata || planMetadata.value;
   finalPlanContent.value = updated.saved_plan || finalPlanContent.value;
+  hydrateInputStateFromStoredAnswer(updated);
   return updated;
 }
 

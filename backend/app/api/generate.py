@@ -2,10 +2,19 @@
 
 import asyncio
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request 
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 import logging
 import json
+from pathlib import Path
 
 from app.models import (
     GenerateRequest, SectionGenerateResponse, AutoFillRequest, SyntheticInputRequest
@@ -15,8 +24,14 @@ from app.services.supabase_service import SupabaseService
 from .dependencies import get_llm_service, get_supabase_service
 from app.utils.extract_json import extract_json_block  
 from typing import Dict, Any
+from app.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
+
+OPENAI_FILES_ENDPOINT = "https://api.openai.com/v1/files"
+OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses"
+ALLOWED_FILE_SUFFIXES = {".pdf", ".txt"}
+MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
 
 # ========== Helper Functions for System Prompts ==========
 
@@ -135,6 +150,53 @@ router = APIRouter(
     prefix="/api",
     tags=["Generation"]
 )
+
+
+def _build_field_analysis_prompt(
+    field_title: str,
+    field_description: str,
+    subfield_label: str,
+    current_value: str,
+) -> str:
+    readable_title = field_title or "未命名欄位"
+    readable_desc = field_description or "無額外描述"
+    readable_label = subfield_label or readable_title
+    preserved_value = current_value.strip() or "(目前沒有使用者輸入)"
+
+    return f"""
+你是一位嚴謹的計畫書欄位輔助編輯助手。根據使用者上傳的 PDF / TXT 文件（內含可供 OCR 的圖像），請完成以下任務：
+
+1. 針對欄位〈{readable_title}〉，理解欄位說明「{readable_desc}」與子欄位標籤「{readable_label}」。
+2. 生成更新後的 subfield 文字（enhanced_value）。新的文字不要包含原始輸入的文字意思以免文字重叠：
+<<<ORIGINAL_VALUE_START>>>
+<<<ORIGINAL_VALUE_END>>>
+
+規則：
+- enhanced_value 可以根據用戶輸入的文件來寫，但不要包含原始輸入的文字意思以免文字重叠。
+- 請記住， enhanced value 將會直接stack在original value後面，因此必須是用戶輸入全新的內容，不能與原始輸入的內容重複。
+- 僅根據文件所提供的內容進行推論，不要臆測不存在的資訊。
+- 以繁體中文輸出。
+
+請輸出唯一一個 JSON 物件，格式如下：
+{{
+  "enhanced_value": "..."
+}}
+"""
+
+
+def _extract_output_text(payload: Dict[str, Any]) -> str:
+    direct_text = payload.get("output_text")
+    if direct_text:
+        if isinstance(direct_text, list):
+            return "\n".join(direct_text)
+        return str(direct_text)
+
+    for block in payload.get("output", []):
+        for content in block.get("content", []):
+            if content.get("type") in {"output_text", "text"} and content.get("text"):
+                return content["text"]
+
+    raise ValueError("OpenAI Responses payload did not include text output.")
 
 @router.post("/generate_plan")
 async def generate_plan( 
@@ -451,4 +513,121 @@ async def autofill_from_document(
     except Exception as e:
         logger.error(f"Error during document auto-fill: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/field_file_analysis", summary="針對單一欄位進行檔案輔助分析")
+async def field_file_analysis(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    field_title: str = Form(...),
+    field_description: str = Form(""),
+    subfield_label: str = Form(""),
+    current_value: str = Form(""),
+):
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
+
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="請至少上傳一個檔案。")
+    
+    if len(files) > 5:
+        raise HTTPException(status_code=400, detail="最多只能同時上傳 5 個檔案。")
+
+    for file in files:
+        suffix = Path(file.filename or "").suffix.lower()
+        if suffix not in ALLOWED_FILE_SUFFIXES:
+            raise HTTPException(status_code=400, detail="僅支援 PDF / TXT 檔案格式。")
+
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    uploaded_file_ids = []
+    prompt = _build_field_analysis_prompt(
+        field_title=field_title,
+        field_description=field_description,
+        subfield_label=subfield_label,
+        current_value=current_value,
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            for upload_file in files:
+                file_bytes = await upload_file.read()
+                if not file_bytes:
+                    raise HTTPException(status_code=400, detail=f"檔案 {upload_file.filename} 內容為空。")
+                if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+                    raise HTTPException(status_code=400, detail="檔案過大，請控制在 20MB 以內。")
+                
+                upload_resp = await client.post(
+                    OPENAI_FILES_ENDPOINT,
+                    headers=headers,
+                    data={"purpose": "assistants"},
+                    files={
+                        "file": (
+                            upload_file.filename,
+                            file_bytes,
+                            upload_file.content_type or "application/octet-stream",
+                        )
+                    },
+                )
+                upload_resp.raise_for_status()
+                file_id = upload_resp.json().get("id")
+                if not file_id:
+                    raise HTTPException(status_code=500, detail=f"OpenAI file upload failed for {upload_file.filename}.")
+                uploaded_file_ids.append(file_id)
+
+            content_items = [{"type": "input_text", "text": prompt}]
+            for fid in uploaded_file_ids:
+                content_items.append({"type": "input_file", "file_id": fid})
+
+            responses_resp = await client.post(
+                OPENAI_RESPONSES_ENDPOINT,
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "model": "gpt-4.1-mini",
+                    "input": [
+                        {
+                            "role": "user",
+                            "content": content_items,
+                        }
+                    ],
+                    # "modalities": ["text"],
+                    "max_output_tokens": 900,
+                    "temperature": 0.2,
+                    "metadata": {"feature": "field_file_analysis"},
+                },
+            )
+            responses_resp.raise_for_status()
+
+            output_text = _extract_output_text(responses_resp.json())
+            print("Extracted output text:", output_text)
+            parsed = json.loads(output_text)
+
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text if e.response else str(e)
+        logger.error("OpenAI API returned an error: %s", detail)
+        raise HTTPException(status_code=502, detail="分析服務暫時無法使用，請稍後再試。")
+    except json.JSONDecodeError:
+        logger.error("OpenAI response parsing failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="AI 回傳的格式無法解析。")
+    except Exception as e:
+        logger.error("Unexpected error during field file analysis: %s", repr(e))
+        raise HTTPException(status_code=500, detail="分析過程發生未知錯誤。")
+    finally:
+        if uploaded_file_ids:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as cleaner:
+                    for fid in uploaded_file_ids:
+                        await cleaner.delete(
+                            f"{OPENAI_FILES_ENDPOINT}/{fid}",
+                            headers=headers,
+                        )
+            except Exception:
+                logger.warning("Failed to delete temporary OpenAI files")
+
+    enhanced_value = parsed.get("enhanced_value", "").strip()
+    original_value = current_value.strip()
+    if original_value and original_value not in enhanced_value:
+        enhanced_value = f"{original_value}\n\n{enhanced_value}".strip()
+
+    filenames = ", ".join([f.filename for f in files])
+    return JSONResponse({"value": enhanced_value, "filenames": filenames})
 

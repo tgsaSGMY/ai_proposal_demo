@@ -299,16 +299,15 @@
       @confirm="handleCandidateConfirm"
       @close="isCandidateSelectorVisible = false"
     />
+    <AnswerEditModal
+      :visible="isEditModalVisible"
+      :question-label="editQuestionLabel"
+      :question-prompt="editQuestionPrompt"
+      v-model:draft="editAnswerDraft"
+      @cancel="cancelEditAnswer"
+      @save="saveEditedAnswer"
+    />
   </div>
-
-  <AnswerEditModal
-    :visible="isEditModalVisible"
-    :question-label="editQuestionLabel"
-    :question-prompt="editQuestionPrompt"
-    v-model:draft="editAnswerDraft"
-    @cancel="cancelEditAnswer"
-    @save="saveEditedAnswer"
-  />
 </template>
 
 <script setup>

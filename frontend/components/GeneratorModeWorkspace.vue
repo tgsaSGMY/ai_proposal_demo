@@ -10,6 +10,8 @@
           :mode="projectRecord?.mode || 'generator'"
           :initial-grant-id="projectRecord?.grant_id || ''"
           :initial-template-id="projectRecord?.template_id || ''"
+          :project-title="projectPlanName"
+          :project-summary="projectPlanSummary"
           @update:modelValue="handleMainIdeaUpdate"
           @selectionChange="handleGeneratorSelectionChange"
           @generatePlan="handleGeneratorPlanRequest"
@@ -42,8 +44,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import PlanInputPanel from "~/components/PlanInputPanel.vue";
-import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
+import PlanInputPanel from "~/components/editor/generator/PlanInputPanel.vue";
+import PlanOutputPanel from "~/components/editor/generator/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
 import type { DynamicSubFieldKey } from "~/utils/dynamicSchema";
 import {
@@ -137,22 +139,37 @@ const selectedGrantId = computed(() => props.selectedGrantId);
 const selectedTemplateId = computed(() => props.selectedTemplateId);
 const projectRecord = computed(() => props.projectRecord);
 
+const projectPlanName = computed(() => {
+  const fallback = props.projectRecord?.title;
+  return typeof fallback === "string" ? fallback : "";
+});
+
+const projectPlanSummary = computed(() => {
+  const fallback = props.projectRecord?.description;
+  return typeof fallback === "string" ? fallback : "";
+});
+
 // Watchers to keep local state in sync
 watch(
   () => props.userInput,
   (newVal) => {
-    if (!isHydratingMainIdeaState) {
-      userInput.value = newVal;
+    const normalized = newVal ?? "";
+    if (normalized === (userInput.value ?? "")) {
+      return;
     }
+    isHydratingMainIdeaState = true;
+    userInput.value = normalized;
   }
 );
 
 watch(
   () => props.dynamicFieldValues,
   (newVal) => {
-    if (!isHydratingDynamicFieldState) {
-      dynamicFieldValues.value = { ...newVal };
+    if (recordsAreEqual(newVal, dynamicFieldValues.value)) {
+      return;
     }
+    isHydratingDynamicFieldState = true;
+    dynamicFieldValues.value = { ...(newVal || {}) };
   },
   { deep: true }
 );
@@ -164,6 +181,28 @@ watch(
   },
   { deep: true }
 );
+
+function recordsAreEqual(
+  next?: Record<string, string> | null,
+  prev?: Record<string, string> | null
+) {
+  if (next === prev) {
+    return true;
+  }
+  const a = next || {};
+  const b = prev || {};
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Watch local state changes and emit updates
 watch(userInput, () => {
@@ -185,10 +224,6 @@ watch(
   },
   { deep: true }
 );
-
-watch(finalPlanContent, () => {
-  scheduleGeneratorAutosave();
-});
 
 onBeforeUnmount(() => {
   if (generatorAutosaveTimer.value) {
@@ -215,7 +250,7 @@ function scheduleGeneratorAutosave() {
   }
   generatorAutosaveTimer.value = setTimeout(() => {
     void persistGeneratorState();
-  }, 1500);
+  }, 2000);
 }
 
 async function persistGeneratorState() {
@@ -306,9 +341,15 @@ async function handleGeneratorPlanRequest(outerPayload?: {
       hideLoading();
       return;
     }
-    const finalUserInput = props.buildFinalUserInput(
-      outerPayload?.summaries || []
-    );
+    const userInput = props.buildFinalUserInput(outerPayload?.summaries || []);
+    const finalUserInput =
+      "計劃名稱: " +
+      projectPlanName.value +
+      "\n\n計劃摘要: " +
+      projectPlanSummary.value +
+      "\n\n" +
+      userInput;
+
     finalPlanContent.value = {};
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
@@ -319,7 +360,7 @@ async function handleGeneratorPlanRequest(outerPayload?: {
         template: selectedTemplateId.value,
         user_input: finalUserInput,
         num_candidates: 2,
-        is_external: false,
+        is_external: true,
       }),
     });
 
@@ -528,7 +569,6 @@ function onCandidateConfirm({
     rejectedData: rejected,
     finalPrompt: lastPrompt,
   });
-
   scheduleGeneratorAutosave();
 }
 </script>

@@ -285,25 +285,25 @@ class LLMService:
         model_to_use = original_model_info
         model_type = model_to_use.get('type', 'internal')
 
-        has_quota, reason = await supabase_service.check_quota(user_id, model_type)
+        # has_quota, reason = await supabase_service.check_quota(user_id, model_type)
         
         # 配额降级逻辑
-        if model_type == 'external' and not has_quota:
-            print(f"   ⚠️ External quota exhausted for user {user_id}. Attempting downgrade.")
-            internal_fallback = next((m for m in app_state.model_registry.values() if m['type'] == 'internal'), None)
+        # if model_type == 'external' and not has_quota:
+        #     print(f"   ⚠️ External quota exhausted for user {user_id}. Attempting downgrade.")
+        #     internal_fallback = next((m for m in app_state.model_registry.values() if m['type'] == 'internal'), None)
             
-            if internal_fallback:
-                has_internal_quota, _ = await supabase_service.check_quota(user_id, 'internal')
-                if has_internal_quota:
-                    print(f"   -> Downgrading to internal model: {internal_fallback['id']}")
-                    model_to_use = internal_fallback
-                    model_type = 'internal'
-                else:
-                    return SectionGenerateResponse(section_id=section_id, error="All quotas (external and internal) exhausted.")
-            else:
-                return SectionGenerateResponse(section_id=section_id, error="External quota exhausted, no internal fallback available.")
-        elif not has_quota:
-            return SectionGenerateResponse(section_id=section_id, error=reason)
+        #     if internal_fallback:
+        #         has_internal_quota, _ = await supabase_service.check_quota(user_id, 'internal')
+        #         if has_internal_quota:
+        #             print(f"   -> Downgrading to internal model: {internal_fallback['id']}")
+        #             model_to_use = internal_fallback
+        #             model_type = 'internal'
+        #         else:
+        #             return SectionGenerateResponse(section_id=section_id, error="All quotas (external and internal) exhausted.")
+        #     else:
+        #         return SectionGenerateResponse(section_id=section_id, error="External quota exhausted, no internal fallback available.")
+        # elif not has_quota:
+        #     return SectionGenerateResponse(section_id=section_id, error=reason)
         
         # 3. --- 根据模型类型选择生成流程 ---
         final_content_json = None; error_message = None

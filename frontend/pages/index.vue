@@ -129,8 +129,8 @@
             class="flex h-full flex-col rounded-3xl border p-5 text-left transition"
             :class="
               selectedMode === mode.id
-                ? 'border-indigo-400 bg-indigo-50 shadow-md'
-                : 'border-slate-100 bg-slate-50 shadow-sm hover:border-indigo-200 hover:bg-white'
+                ? 'border-rose-400 bg-rose-50 shadow-md'
+                : 'border-slate-100 bg-slate-50 shadow-sm hover:border-rose-200 hover:bg-white'
             "
             @click="selectedMode = mode.id"
           >
@@ -150,7 +150,9 @@
 
         <div class="mt-6 space-y-4">
           <label class="block space-y-2">
-            <span class="text-sm font-semibold text-slate-700">計畫名稱</span>
+            <span class="text-sm font-semibold text-slate-700"
+              >計畫名稱 <span class="text-red-500">*</span></span
+            >
             <input
               v-model="planName"
               type="text"
@@ -159,7 +161,9 @@
             />
           </label>
           <label class="block space-y-2">
-            <span class="text-sm font-semibold text-slate-700">計畫摘要</span>
+            <span class="text-sm font-semibold text-slate-700"
+              >計畫摘要 <span class="text-red-500">*</span></span
+            >
             <textarea
               v-model="planSummary"
               rows="4"
@@ -178,7 +182,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p class="text-xs text-slate-500">
-                  支援 Word (.docx) 與 PDF 檔案，系統會將內容轉為摘要供 AI
+                  支援 Word (.docx) 與 PDF 檔案，系統會將文字內容轉為摘要供 AI
                   優先引用。
                 </p>
               </div>
@@ -306,7 +310,7 @@
                   ? "解析附件中..."
                   : isCreatingProject
                   ? "建立工作區..."
-                  : "進入 Chatbox"
+                  : "進入工作區"
               }}
             </button>
           </div>
@@ -321,8 +325,19 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
-import { extractTextFromWord } from "~/utils/wordImport";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { useFileExtractor } from "~/composables/useFileExtractor";
+import {
+  callAutoFillApi,
+  buildSectionSchema,
+  processAutoFillResults,
+} from "~/utils/wordImport";
+import {
+  buildDynamicSections,
+  createEmptyDynamicValues,
+  makeCompositeKey,
+  type DynamicSubFieldKey,
+} from "~/utils/dynamicSchema";
 
 definePageMeta({
   middleware: "auth",
@@ -359,6 +374,20 @@ interface BackgroundAttachment {
   content: string;
   snippet: string;
   size: number;
+}
+
+interface AttachmentAutofillResult {
+  dynamicFields: Record<string, string>;
+  mainIdea: string;
+}
+
+interface ProjectMetadataPayload {
+  planType: PlanTypeOption | null;
+  backgroundEntries: string[];
+  backgroundNotes: string;
+  prefilledChatAnswers: Record<string, string>;
+  mode: ModeOption["id"] | null;
+  createdAt: string;
 }
 
 const planTypes: PlanTypeOption[] = [
@@ -483,7 +512,7 @@ const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
 
 const currentStage = ref(1);
 const selectedPlanType = ref<PlanTypeOption | null>(null);
-const selectedMode = ref<ModeOption["id"] | null>(null);
+const selectedMode = ref<ModeOption["id"] | null>("interactive");
 const planName = ref("");
 const planSummary = ref("");
 const planBackground = ref("");
@@ -491,8 +520,9 @@ const backgroundFiles = ref<BackgroundAttachment[]>([]);
 const isDraggingBackground = ref(false);
 const isProcessingBackground = ref(false);
 const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
-let pdfjsLib: any | null = null;
 const isCreatingProject = ref(false);
+
+const { extractTextFromFile } = useFileExtractor();
 
 async function getUserIdOrNotify() {
   const userId = currentUserId.value || (await refreshUser());
@@ -568,16 +598,94 @@ const prefilledChatAnswers = computed(() => {
   return answers;
 });
 
-function buildProjectMetadata() {
+function buildProjectMetadata(): ProjectMetadataPayload {
   return {
-    planName: planName.value.trim(),
-    planSummary: planSummary.value.trim(),
     planType: selectedPlanType.value,
     backgroundEntries: backgroundSummary.value,
     backgroundNotes: planBackground.value.trim(),
     prefilledChatAnswers: prefilledChatAnswers.value,
     mode: selectedMode.value,
     createdAt: new Date().toISOString(),
+  };
+}
+
+async function runAttachmentAutofill(
+  userId: string
+): Promise<AttachmentAutofillResult | null> {
+  if (!backgroundFiles.value.length) {
+    return null;
+  }
+
+  const entries: string[] = [];
+  const summary = planSummary.value.trim();
+  if (summary) {
+    entries.push(`【計畫摘要】\n${summary}`);
+  }
+
+  backgroundFiles.value.forEach((file) => {
+    const body = (file.content || "").trim();
+    if (body) {
+      entries.push(`【${file.name}】\n${body}`);
+    }
+  });
+
+  const combinedText = entries.join("\n\n---\n\n").trim();
+  if (!combinedText) {
+    return null;
+  }
+
+  const baseValues = createEmptyDynamicValues();
+  const sectionsView = buildDynamicSections(baseValues);
+  const sectionsPayload = sectionsView.map((section) => ({
+    section_id: section.sectionId,
+    section_name: section.sectionName,
+    json_schema: buildSectionSchema(section),
+  }));
+
+  const filledContent = await callAutoFillApi(
+    {
+      document_text: combinedText,
+      sections: sectionsPayload,
+      user_id: userId,
+    },
+    API_BASE_URL
+  );
+
+  const accumulator = { ...baseValues };
+  processAutoFillResults(
+    filledContent,
+    sectionsView,
+    (sectionId, propertyKey, subFieldKey, value) => {
+      const normalized = (value || "").trim();
+      if (!normalized) {
+        return;
+      }
+      const key = makeCompositeKey(
+        sectionId,
+        propertyKey,
+        subFieldKey as DynamicSubFieldKey
+      );
+      accumulator[key] = normalized;
+    },
+    () => {}
+  );
+
+  const dynamicFields = Object.fromEntries(
+    Object.entries(accumulator).filter(([, value]) =>
+      Boolean(value && value.trim())
+    )
+  ) as Record<string, string>;
+
+  const mainIdea =
+    filledContent?.main_idea?.content?.project_name_and_summary?.trim() || "";
+
+  if (!Object.keys(dynamicFields).length && !mainIdea) {
+    return null;
+  }
+
+  return {
+    dynamicFields,
+    mainIdea,
   };
 }
 
@@ -650,10 +758,7 @@ function detectBackgroundType(file: File): "word" | "pdf" | null {
 
 async function importBackgroundFile(file: File, type: "word" | "pdf") {
   try {
-    const rawText =
-      type === "word"
-        ? await extractTextFromWord(file)
-        : await extractTextFromPdf(file);
+    const rawText = await extractTextFromFile(file);
     const normalized = normalizeBackgroundText(rawText);
     const snippet = normalized
       ? `${normalized.slice(0, 200)}${normalized.length > 200 ? "..." : ""}`
@@ -674,44 +779,6 @@ async function importBackgroundFile(file: File, type: "word" | "pdf") {
     console.error("failed to import background file", error);
     notifyError(`解析 ${file.name} 失敗：${error?.message || "請稍後再試"}`);
   }
-}
-
-async function extractTextFromPdf(file: File): Promise<string> {
-  const pdfjs = await ensurePdfJsLoaded();
-  if (!pdfjs) {
-    throw new Error("無法載入 PDF 解析模組");
-  }
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-  let text = "";
-  for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
-    const page = await pdf.getPage(pageIndex);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item: any) => (item?.str ? item.str : ""))
-      .join(" ")
-      .trim();
-    if (pageText) {
-      text += (text ? "\n\n" : "") + pageText;
-    }
-  }
-  return text;
-}
-
-async function ensurePdfJsLoaded() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  if (pdfjsLib) {
-    return pdfjsLib;
-  }
-  return null;
-  // const pdfjsModule = await import("pdfjs-dist/build/pdf");
-  // pdfjsLib = pdfjsModule;
-  // if (pdfjsLib?.GlobalWorkerOptions) {
-  //   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-  // }
-  // return pdfjsLib;
 }
 
 function normalizeBackgroundText(value: string) {
@@ -809,7 +876,32 @@ async function enterChatStage() {
 
   const metadata = buildProjectMetadata();
   isCreatingProject.value = true;
+  let storedAnswerPayload: Record<string, any> | null = null;
   try {
+    if (backgroundFiles.value.length) {
+      try {
+        const autofillResult = await runAttachmentAutofill(userId);
+        if (autofillResult) {
+          //直接存入stored answer
+          storedAnswerPayload = {
+            user_input: {
+              main_idea:
+                autofillResult.mainIdea ||
+                planSummary.value.trim() ||
+                selectedPlanType.value?.title ||
+                "",
+              dynamic_fields: autofillResult.dynamicFields,
+            },
+          };
+        }
+      } catch (autofillError) {
+        console.error("Failed to auto-fill dynamic sections", autofillError);
+        notifyWarning(
+          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。"
+        );
+      }
+    }
+
     const response = await fetch(`${API_BASE_URL}/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -823,7 +915,7 @@ async function enterChatStage() {
         description: planSummary.value.trim() || "尚未填寫摘要",
         saved_plan: {},
         conversation_history: [],
-        stored_answer: {},
+        stored_answer: storedAnswerPayload || {},
         grant_id: selectedGrantId.value || null,
         template_id: selectedTemplateId.value || null,
         plan_type_id: selectedPlanType.value?.id || null,
