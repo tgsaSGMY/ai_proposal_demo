@@ -334,7 +334,6 @@ const handleSignUp = async () => {
       email: email.value,
       password: password.value,
     });
-    console.log("SignUp data:", data);
 
     if (signUpError) {
       errorMessage.value = signUpError.message || "註冊失敗，請稍後重試";

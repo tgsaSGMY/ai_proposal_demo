@@ -114,10 +114,7 @@
                   multiple
                   @change="handleFileChange"
                 />
-                <div
-                  v-if="selectedFiles.length > 0"
-                  class="w-full space-y-2"
-                >
+                <div v-if="selectedFiles.length > 0" class="w-full space-y-2">
                   <div
                     v-for="(file, idx) in selectedFiles"
                     :key="idx"
@@ -419,7 +416,9 @@ async function analyzeFile() {
       enhancedValue: payload?.value || props.subFieldValue || "",
     };
     editableValue.value = analysisResult.value.enhancedValue;
-    notifySuccess(`檔案分析完成（已分析 ${selectedFiles.value.length} 個檔案）。`);
+    notifySuccess(
+      `檔案分析完成（已分析 ${selectedFiles.value.length} 個檔案）。`
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "分析失敗";
     errorMessage.value = message;

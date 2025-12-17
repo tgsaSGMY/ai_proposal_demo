@@ -11,7 +11,6 @@ async function loadPdfJs() {
     // @ts-expect-error: pdfjs-dist/build/pdf doesn't have type declarations
     const pdfjsModule = await import("pdfjs-dist/build/pdf");
     pdfjsLib = pdfjsModule;
-    console.log("pdfjsLib version:", pdfjsLib.version);
     // 設置 worker 路徑 - 使用本地 node_modules 中的 worker 文件
     if (pdfjsLib.GlobalWorkerOptions) {
       // 使用相對路徑指向 node_modules 中的 worker
