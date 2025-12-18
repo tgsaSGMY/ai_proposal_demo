@@ -123,10 +123,17 @@
             @toggleModel="toggleModel"
             @backToStageOne="router.push('/')"
             @messagesUpdated="handleMessagesUpdated"
+            @questionAnswersUpdated="handleQuestionAnswersUpdated"
+            @guidedQuestionsUpdated="handleGuidedQuestionsUpdated"
           />
         </div>
         <div class="w-1/5">
-          <ChatSidebar :messages="chatMessages" :versions="versionHistory" />
+          <ChatSidebar
+            :messages="chatMessages"
+            :versions="versionHistory"
+            :question-answers="chatQuestionAnswers"
+            :guided-questions="chatGuidedQuestions"
+          />
         </div>
       </section>
     </div>
@@ -205,6 +212,8 @@ const loadError = ref("");
 const planMetadata = ref<ProjectMetadata | null>(null);
 const candidatePlan = ref<Record<string, any>>({});
 const chatMessages = ref<any[]>([]);
+const chatQuestionAnswers = ref<Record<string, string>>({});
+const chatGuidedQuestions = ref<any[]>([]);
 const versionHistory = ref<any[]>([]);
 const useModelType = ref("external");
 const lastGenerationPrompt = ref("");
@@ -638,5 +647,13 @@ function handleMessagesUpdated(messages: any[]) {
     });
   }
   scheduleConversationSync();
+}
+
+function handleQuestionAnswersUpdated(payload: Record<string, string>) {
+  chatQuestionAnswers.value = { ...(payload || {}) };
+}
+
+function handleGuidedQuestionsUpdated(payload: any[]) {
+  chatGuidedQuestions.value = Array.isArray(payload) ? payload : [];
 }
 </script>

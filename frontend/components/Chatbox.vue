@@ -261,6 +261,15 @@
           </div>
           <p class="mt-2 text-xs text-slate-400">AI 正在推演整體架構...</p>
         </div>
+        <div
+          v-if="isFetchingNextQuestion && !isGenerationComplete"
+          class="flex items-center justify-center gap-2 pt-4 text-xs text-slate-400"
+        >
+          <span
+            class="h-2.5 w-2.5 animate-ping rounded-full bg-[#ffb4a8]"
+          ></span>
+          AI 正在構思下一個提問...
+        </div>
       </div>
     </div>
 
@@ -321,6 +330,9 @@ import {
 } from "~/utils/dynamicSchema";
 import { renderPlanToHtml } from "~/utils/exportToWord";
 
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
 const props = defineProps({
   referenceSummaries: { type: Array, default: () => [] },
   sections: { type: Array, default: () => [] },
@@ -347,6 +359,8 @@ const emit = defineEmits([
   "toggleModel",
   "backToStageOne",
   "messagesUpdated",
+  "questionAnswersUpdated",
+  "guidedQuestionsUpdated",
 ]);
 
 const messages = ref([
@@ -386,6 +400,7 @@ const editQuestionLabel = ref("");
 const editQuestionPrompt = ref("");
 const editAnswerDraft = ref("");
 const isGenerationComplete = ref(false);
+const isFetchingNextQuestion = ref(false);
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
@@ -398,21 +413,19 @@ const composerPlaceholder = computed(() => {
   if (!props.grantId || !props.templateId) {
     return "請先完成第一階段的設定";
   }
-  if (currentQuestion.value) {
-    return `回答：${currentQuestion.value.prompt}`;
+  if (isFetchingNextQuestion.value) {
+    return "AI 正在思考...";
   }
-  if (!allQuestionsAnswered.value) {
-    return "請等待下一個問題...";
+  if (allQuestionsAnswered.value) {
+    return "所有核心問題已完成，請生成候選計畫";
   }
-  return "所有核心問題已完成，請生成候選計畫";
+  return "請輸入你的想法或回答 AI 的問題";
 });
 
 const canSendMessage = computed(() => {
-  // Only allow sending if we're still answering questions
+  // 只要项目已选择且不是生成完成状态，就允许发送
   return Boolean(
-    props.grantId &&
-      props.templateId &&
-      (currentQuestion.value || !allQuestionsAnswered.value)
+    props.grantId && props.templateId && !isGenerationComplete.value
   );
 });
 
@@ -426,6 +439,13 @@ const hasCandidatePlan = computed(
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
+function getQuestionMeta(questionId) {
+  if (!questionId) {
+    return null;
+  }
+  return guidedQuestions.find((item) => item.id === questionId) || null;
+}
+
 function questionMessageExists(questionId) {
   if (!questionId) {
     return false;
@@ -433,6 +453,145 @@ function questionMessageExists(questionId) {
   return messages.value.some(
     (msg) => msg.type === "question" && msg.questionId === questionId
   );
+}
+
+function buildAnsweredSummaryMap() {
+  const summary = {};
+  guidedQuestions.forEach((question) => {
+    const answer = questionAnswers.value[question.id];
+    if (answer && answer.trim()) {
+      summary[question.label || question.id] = answer.trim();
+    }
+  });
+  return summary;
+}
+
+function buildConversationHistoryPayload(limit = 8) {
+  const simpleHistory = [];
+  const allowedTypes = new Set(["text", "question", "answer"]);
+  messages.value
+    .filter((msg) => allowedTypes.has(msg.type))
+    .slice(-limit)
+    .forEach((msg) => {
+      let content = msg.content || "";
+      if (msg.type === "answer" && msg.questionId) {
+        const meta = getQuestionMeta(msg.questionId);
+        const label = meta?.label || msg.questionId;
+        content = `${label}：${msg.content}`;
+      }
+      if (!content.trim()) {
+        return;
+      }
+      simpleHistory.push({
+        role: msg.role === "user" ? "user" : "assistant",
+        content,
+      });
+    });
+  return simpleHistory;
+}
+
+async function streamAIGuidanceMessage(question) {
+  if (!question || !question.id) {
+    return;
+  }
+  if (!props.grantId || !props.templateId) {
+    return;
+  }
+
+  const config = useRuntimeConfig();
+  const wsProtocol = config.public.apiBaseUrl.startsWith("https")
+    ? "wss"
+    : "ws";
+  const wsUrl = `${wsProtocol}://${
+    config.public.apiBaseUrl.split("://")[1]
+  }/api/ws/chat_guidance`;
+
+  // 如果是初始化阶段，只建立连接，不创建 AI 消息
+  if (question.id === "init") {
+    if (
+      !window.chatWebSocket ||
+      window.chatWebSocket.readyState !== WebSocket.OPEN
+    ) {
+      window.chatWebSocket = new WebSocket(wsUrl);
+
+      window.chatWebSocket.onopen = () => {
+        const payload = {
+          grant_id: props.grantId,
+          template_id: props.templateId,
+          grant_name: props.grantName || "",
+          template_name: props.templateName || "",
+          all_questions: guidedQuestions,
+          current_answers: questionAnswers.value,
+          history: buildConversationHistoryPayload(),
+        };
+        window.chatWebSocket.send(JSON.stringify(payload));
+      };
+
+      window.chatWebSocket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.event === "ready") {
+            console.log("WebSocket 已连接，等待初始问题...");
+          } else if (msg.event === "chunk_start") {
+            // 创建新的 AI 消息来接收块数据
+            const aiMsg = {
+              id: `ai-stream-${Date.now()}`,
+              role: "assistant",
+              type: "text",
+              content: "",
+              isStreaming: true,
+            };
+            messages.value.push(aiMsg);
+            scrollToBottom();
+          } else if (msg.event === "chunk") {
+            // 追加到最后一个 AI 消息
+            const lastMsg = messages.value[messages.value.length - 1];
+            if (
+              lastMsg &&
+              lastMsg.role === "assistant" &&
+              lastMsg.isStreaming
+            ) {
+              lastMsg.content += msg.data;
+              scrollToBottom();
+            }
+          } else if (msg.event === "filled") {
+            const filledFields = msg.data || {};
+            Object.entries(filledFields).forEach(([fieldId, value]) => {
+              if (value && String(value).trim()) {
+                questionAnswers.value = {
+                  ...questionAnswers.value,
+                  [fieldId]: String(value).trim(),
+                };
+              }
+            });
+          } else if (msg.event === "done") {
+            const lastMsg = messages.value[messages.value.length - 1];
+            if (lastMsg && lastMsg.isStreaming) {
+              lastMsg.isStreaming = false;
+            }
+            isFetchingNextQuestion.value = false;
+          } else if (msg.event === "error") {
+            console.error("WebSocket error:", msg.message);
+            const lastMsg = messages.value[messages.value.length - 1];
+            if (lastMsg && lastMsg.isStreaming) {
+              lastMsg.isStreaming = false;
+              lastMsg.content = lastMsg.content || "抱歉，無法取得 AI 回應。";
+            }
+            isFetchingNextQuestion.value = false;
+          }
+        } catch (e) {
+          console.error("Failed to parse WebSocket message:", e);
+        }
+      };
+
+      window.chatWebSocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        isFetchingNextQuestion.value = false;
+      };
+    }
+    return;
+  }
 }
 
 function upsertAnswerMessage(
@@ -489,6 +648,14 @@ watch(
   messages,
   (newMessages) => {
     emit("messagesUpdated", newMessages);
+  },
+  { deep: true }
+);
+
+watch(
+  questionAnswers,
+  (newAnswers) => {
+    emit("questionAnswersUpdated", newAnswers);
   },
   { deep: true }
 );
@@ -567,7 +734,7 @@ function applyPrefilledAnswers(prefillMap) {
     );
     activeQuestionId.value = null;
   }
-  askNextQuestion();
+  void askNextQuestion();
 }
 
 function extractPrefillValue(prefillMap, questionId) {
@@ -622,20 +789,6 @@ function saveEditedAnswer() {
   cancelEditAnswer();
 }
 
-function appendQuestionMessage(question) {
-  if (!question || !question.id || questionMessageExists(question.id)) {
-    return;
-  }
-  messages.value.push({
-    id: `question-${question.id}-${Date.now()}`,
-    role: "assistant",
-    type: "question",
-    label: question.label,
-    content: question.prompt,
-    questionId: question.id,
-  });
-}
-
 function finalizeQuestionFlowMessage() {
   if (questionFlowCompleted.value) {
     return;
@@ -650,7 +803,7 @@ function finalizeQuestionFlowMessage() {
   scrollToBottom();
 }
 
-function handleEnter(event) {
+async function handleEnter(event) {
   if (event.shiftKey) {
     return;
   }
@@ -659,43 +812,49 @@ function handleEnter(event) {
     return;
   }
   event.preventDefault();
-  handleSend();
+  await handleSend();
 }
 
-function handleSend() {
+async function handleSend() {
   if (!props.grantId || !props.templateId) {
     return;
   }
   const normalizedText = draftMessage.value.trim();
   const messageContent = normalizedText || "無";
-  const currentId = activeQuestionId.value;
-  const questionMeta = guidedQuestions.find((item) => item.id === currentId);
 
-  if (currentId && questionMeta) {
-    const isEditing =
-      questionAnswers.value[currentId] &&
-      questionAnswers.value[currentId].trim();
-    upsertAnswerMessage(currentId, messageContent, "user");
+  // 添加用户消息到聊天记录
+  const userMsg = {
+    id: `user-${Date.now()}`,
+    role: "user",
+    type: "text",
+    content: messageContent,
+  };
+  messages.value.push(userMsg);
+  scrollToBottom();
+
+  // 如果有当前的活动问题，更新答案
+  if (activeQuestionId.value) {
     questionAnswers.value = {
       ...questionAnswers.value,
-      [currentId]: messageContent,
+      [activeQuestionId.value]: messageContent,
     };
     activeQuestionId.value = null;
-    if (!isEditing) {
-      askNextQuestion();
-    }
-  } else {
-    const payload = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      type: "text",
-      content: messageContent,
+  }
+
+  // 发送用户消息到 WebSocket
+  if (
+    window.chatWebSocket &&
+    window.chatWebSocket.readyState === WebSocket.OPEN
+  ) {
+    const userPayload = {
+      user_message: messageContent,
+      current_answers: questionAnswers.value,
     };
-    messages.value.push(payload);
+    isFetchingNextQuestion.value = true;
+    window.chatWebSocket.send(JSON.stringify(userPayload));
   }
 
   draftMessage.value = "";
-  scrollToBottom();
 }
 
 async function requestGeneration() {
@@ -756,25 +915,10 @@ function buildCandidateMessage() {
   scrollToBottom();
 }
 
-function askNextQuestion() {
-  while (nextQuestionIndex.value < guidedQuestions.length) {
-    const question = guidedQuestions[nextQuestionIndex.value];
-    appendQuestionMessage(question);
-    const existingAnswer = questionAnswers.value[question.id];
-    nextQuestionIndex.value += 1;
-
-    if (existingAnswer && existingAnswer.trim()) {
-      upsertAnswerMessage(question.id, existingAnswer, "prefill");
-      continue;
-    }
-
-    activeQuestionId.value = question.id;
-    scrollToBottom();
-    return;
-  }
-
-  activeQuestionId.value = null;
-  finalizeQuestionFlowMessage();
+async function askNextQuestion() {
+  // 这个函数现在由后端 AI 通过 WebSocket 驱动
+  // 保留以保持兼容性，但实际工作由 WebSocket 消息处理
+  return;
 }
 
 function buildFinalMessage() {
@@ -842,8 +986,15 @@ function scrollToBottom() {
 
 onMounted(() => {
   chatInitialized.value = true;
+  emit("guidedQuestionsUpdated", guidedQuestions);
   scrollToBottom();
-  askNextQuestion();
+
+  // 初始化 WebSocket 连接（虚拟问题用于建立连接）
+  if (props.grantId && props.templateId) {
+    const dummyQuestion = { id: "init", label: "初始化", prompt: "初始化" };
+    isFetchingNextQuestion.value = true;
+    void streamAIGuidanceMessage(dummyQuestion);
+  }
 });
 
 function buildGuidedQuestionList() {

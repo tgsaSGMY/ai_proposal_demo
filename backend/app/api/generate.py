@@ -10,6 +10,8 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
 import logging
@@ -17,7 +19,12 @@ import json
 from pathlib import Path
 
 from app.models import (
-    GenerateRequest, SectionGenerateResponse, AutoFillRequest, SyntheticInputRequest
+    GenerateRequest,
+    SectionGenerateResponse,
+    AutoFillRequest,
+    SyntheticInputRequest,
+    ChatGuidanceRequest,
+    ChatGuidanceResponse,
 )
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
@@ -198,6 +205,120 @@ def _extract_output_text(payload: Dict[str, Any]) -> str:
 
     raise ValueError("OpenAI Responses payload did not include text output.")
 
+
+@router.post(
+    "/chat_guidance",
+    response_model=ChatGuidanceResponse,
+    summary="產生對話式引導問題",
+)
+async def generate_chat_guidance_message(
+    request_data: ChatGuidanceRequest,
+    request: Request,
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """使用 GPT-4o-mini 生成更自然的提問內容，協助蒐集欄位答案。"""
+
+    model_registry = getattr(request.app.state, "model_registry", {}) or {}
+    model_info = model_registry.get("gpt-4o-mini")
+    if not model_info:
+        model_info = {
+            "id": "gpt-4o-mini",
+            "provider": "openai",
+            "type": "external",
+        }
+
+    answer_lines = [
+        f"- {label}: {value.strip()}"
+        for label, value in (request_data.answers or {}).items()
+        if value and value.strip()
+    ]
+    answers_summary = (
+        "\n".join(answer_lines) if answer_lines else "尚未收集到其他欄位的答案。"
+    )
+
+    history_lines = []
+    for entry in request_data.history[-8:]:
+        content = (entry.content or "").strip()
+        if not content:
+            continue
+        role_label = "使用者" if entry.role == "user" else "AI"
+        history_lines.append(f"{role_label}: {content}")
+    history_summary = (
+        "\n".join(history_lines) if history_lines else "尚未開始任何對話。"
+    )
+
+    system_prompt = (
+        "You are a proposal-planning coach that interviews the user field by field. "
+        "Respond in Traditional Chinese, keep the tone friendly and concise, and always conclude with a single open question. "
+        "Reference prior context when useful, but never invent information or ask about multiple fields at once."
+    )
+
+    user_prompt = f"""
+專案主題：{request_data.grant_name or request_data.grant_id}
+模板：{request_data.template_name or request_data.template_id}
+
+目前要蒐集的欄位：
+- ID: {request_data.question.id}
+- 名稱: {request_data.question.label}
+- 引導說明: {request_data.question.prompt}
+
+已完成的其他欄位答案：
+{answers_summary}
+
+最近的對話摘要：
+{history_summary}
+
+請根據上述資訊產生下一句 AI 要說的話。語氣親切自然，先銜接上一則內容，再清楚請求使用者補充與該欄位相關的細節，最後用一個問題作結。僅詢問單一欄位。
+請以 JSON 物件輸出：
+{{
+  "message": "<AI 要說的繁體中文句子>"
+}}
+    """.strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            raw_output, llm_error = await llm_service.call_external_api(
+                client,
+                model_info,
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                is_json_output=True,
+            )
+    except Exception as exc:
+        logger.error("Chat guidance request failed: %s", exc, exc_info=True)
+        raw_output, llm_error = None, {"error": str(exc)}
+
+    if llm_error or not raw_output:
+        fallback_message = (
+            request_data.question.prompt.strip()
+            if request_data.question.prompt
+            else "請分享更多細節，協助我理解。"
+        )
+        return ChatGuidanceResponse(
+            question_id=request_data.question.id,
+            message=fallback_message,
+        )
+
+    try:
+        parsed = json.loads(raw_output)
+        ai_message = (parsed.get("message") or "").strip()
+    except json.JSONDecodeError:
+        ai_message = (raw_output or "").strip()
+
+    if not ai_message:
+        ai_message = (
+            request_data.question.prompt.strip()
+            if request_data.question.prompt
+            else "請分享更多細節，協助我理解。"
+        )
+
+    return ChatGuidanceResponse(
+        question_id=request_data.question.id,
+        message=ai_message,
+    )
+
 @router.post("/generate_plan")
 async def generate_plan( 
     request_data: GenerateRequest,
@@ -265,7 +386,246 @@ async def generate_plan(
         plan_content[section_id].append(res.dict())
 
     return plan_content
- 
+
+
+@router.websocket("/ws/chat_guidance")
+async def websocket_chat_guidance(websocket: WebSocket):
+    """WebSocket 端點：智能多轮对话，自动识别并填充字段。"""
+    await websocket.accept()
+    llm_service = websocket.app.state.llm_service
+    
+    try:
+        # 接收初始 payload（第一次握手）
+        data = await websocket.receive_json()
+        
+        grant_id = data.get("grant_id", "")
+        template_id = data.get("template_id", "")
+        grant_name = data.get("grant_name", "")
+        template_name = data.get("template_name", "")
+        all_questions = data.get("all_questions", [])  # 所有问题列表
+        current_answers = data.get("current_answers", {})  # 已填答案
+        history = data.get("history", [])  # 聊天历史
+        
+        if not all_questions:
+            await websocket.send_json({"event": "error", "message": "Missing all_questions"})
+            await websocket.close()
+            return
+        
+        model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
+        model_info = model_registry.get("gpt-5.1-chat-latest") or {
+            "id": "gpt-5.1-chat-latest",
+            "provider": "openai",
+            "type": "external",
+        }
+        
+        # 发送初始提示
+        await websocket.send_json({
+            "event": "ready",
+            "message": "系统已连接，等待您的回答..."
+        })
+        
+        # 生成第一个问题
+        first_question_prompt = f"""
+你是一个友好的项目规划助手。用户刚刚开始填写一个关于"{grant_name or grant_id}"的项目企划。
+
+请用友好、自然的语气提问，帮助用户开始这个过程。
+
+只输出你要说的一句话或两句话，不要包含任何JSON或结构化数据。例如："你好！我是你的项目规划助手。为了帮助你更好地制定这个计划，我想先了解一下你的核心想法。能告诉我这个项目的主要创意或目标是什么吗？"
+"""
+        
+        # 流式生成第一个问题
+        await websocket.send_json({"event": "chunk_start"})
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                async for chunk in llm_service.stream_external_api(
+                    client,
+                    model_info,
+                    [{"role": "user", "content": first_question_prompt}]
+                ):
+                    await websocket.send_json({"event": "chunk", "data": chunk})
+                
+                await websocket.send_json({"event": "done"})
+            except Exception as e:
+                logger.error(f"Initial question error: {e}", exc_info=True)
+                await websocket.send_json({"event": "error", "message": str(e)})
+        
+        # 主对话循环：持续接收用户消息并进行分析
+        while True:
+            try:
+                # 接收用户消息
+                user_data = await websocket.receive_json()
+                user_message = user_data.get("user_message", "").strip()
+                
+                if not user_message:
+                    await websocket.send_json({
+                        "event": "error", 
+                        "message": "请输入有效的消息"
+                    })
+                    continue
+                
+                # 更新当前答案（用户可能在 UI 中更新了）
+                current_answers = user_data.get("current_answers", current_answers)
+                
+                # 构建所有问题的列表描述
+                questions_desc = "\n".join([
+                    f"- {q.get('label', q.get('id'))}: {q.get('prompt', '')}"
+                    for q in all_questions
+                ])
+                
+                answered_desc = "\n".join([
+                    f"- {label}: {value[:100]}..." if len(value) > 100 else f"- {label}: {value}"
+                    for label, value in current_answers.items()
+                    if value and value.strip()
+                ]) or "（无）"
+                
+                unanswered = [
+                    q for q in all_questions
+                    if q.get("id") not in current_answers or not current_answers.get(q.get("id"), "").strip()
+                ]
+                unanswered_desc = "\n".join([
+                    f"- {q.get('label', q.get('id'))}"
+                    for q in unanswered
+                ]) or "（全部已填）"
+                
+                # 第一步：分析用户消息并提取字段
+                analyze_prompt = f"""
+你是一个智能项目规划助手。用户刚刚说了一句话，请分析他的回答对应了哪些字段。
+
+【所有可填字段】
+{questions_desc}
+
+【已填字段】
+{answered_desc}
+
+【待填字段】
+{unanswered_desc}
+
+【用户最后说的话】
+{user_message}
+
+请完成以下任务：
+1. 分析用户的话对应了哪些字段（可能是0个、1个或多个）
+2. 提取用户对这些字段的回答内容（直接从用户的话中提取，不要改写）
+3. 决定是否需要追问（如果回答不够详细或不够清楚）
+
+请输出 JSON：
+{{
+  "filled_fields": {{
+    "field_id_1": "用户提供的答案内容",
+    "field_id_2": "..."
+  }},
+  "needs_clarification": true or false,
+  "reasoning": "简要说明为什么这样分析"
+}}
+"""
+                
+                # 调用 GPT 分析用户消息
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    analysis_response, error = await llm_service.call_external_api(
+                        client,
+                        model_info,
+                        [{"role": "user", "content": analyze_prompt}],
+                        is_json_output=True
+                    )
+                
+                if error or not analysis_response:
+                    logger.error(f"Failed to analyze user message: {error}")
+                    filled_fields = {}
+                    needs_clarification = False
+                else:
+                    try:
+                        import json as json_lib
+                        analysis = json_lib.loads(analysis_response)
+                        filled_fields = analysis.get("filled_fields", {})
+                        needs_clarification = analysis.get("needs_clarification", False)
+                    except Exception as e:
+                        logger.error(f"Failed to parse analysis: {e}")
+                        filled_fields = {}
+                        needs_clarification = False
+                
+                # 发送填充的字段信息
+                await websocket.send_json({
+                    "event": "filled",
+                    "data": filled_fields
+                })
+                
+                # 更新 current_answers 中被识别出来的字段
+                for field_id, value in filled_fields.items():
+                    if value and str(value).strip():
+                        current_answers[field_id] = str(value).strip()
+                
+                # 第二步：生成 AI 的下一句话
+                # 决定下一个要问的字段
+                next_question = None
+                for q in all_questions:
+                    qid = q.get("id")
+                    if qid not in current_answers or not current_answers[qid].strip():
+                        # 如果这个字段没填，检查是否刚刚用户回答了它
+                        if qid not in filled_fields:
+                            next_question = q
+                            break
+                
+                conversation_prompt = f"""
+你是一个友好的项目规划助手。继续和用户自然对话。
+
+【项目信息】
+主题：{grant_name or grant_id}
+模板：{template_name or template_id}
+
+【用户刚才说】
+{user_message}
+
+【已填字段】
+{answered_desc}
+
+【未填字段】
+{unanswered_desc}
+
+{"【接下来应该确认什么】" if needs_clarification else "【接下来应该询问】"}
+{next_question.get("label") if next_question else "（所有字段已填完）"}
+
+请按照以下要求生成回应：
+1. 确认或感谢用户的输入
+2. 如果需要澄清，用友好的方式进行确认，例如："你是说...对吗？"
+3. 如果还有未填字段，自然地过渡到下一个话题
+4. 语气亲切、自然，像是真实的对话，不要提及"字段"、"表单"等
+5. 如果所有字段都已填完，恭喜用户并提示可以生成计划了
+
+只输出你要说的一句话或几句话，不要包含任何JSON或结构化数据。
+"""
+                
+                # 开始流式生成 AI 回复
+                await websocket.send_json({"event": "chunk_start"})
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    try:
+                        async for chunk in llm_service.stream_external_api(
+                            client,
+                            model_info,
+                            [{"role": "user", "content": conversation_prompt}]
+                        ):
+                            await websocket.send_json({"event": "chunk", "data": chunk})
+                        
+                        # 流式结束，发送 done 信号
+                        await websocket.send_json({"event": "done"})
+                    except Exception as e:
+                        logger.error(f"Streaming error: {e}", exc_info=True)
+                        await websocket.send_json({"event": "error", "message": str(e)})
+            
+            except WebSocketDisconnect:
+                logger.info("WebSocket client disconnected during message loop")
+                break
+    
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({"event": "error", "message": str(e)})
+        except:
+            pass
+        await websocket.close()
+
+
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
 async def generate_synthetic_input(
     req: SyntheticInputRequest,

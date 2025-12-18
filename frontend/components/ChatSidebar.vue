@@ -1,6 +1,5 @@
 <template>
-  <div class="flex h-full flex-col rounded-[32px] bg-white shadow-lg">
-    <!-- Q&A Section -->
+  <div class="flex h-screen flex-col rounded-[32px] bg-white shadow-lg">
     <div class="flex-1 overflow-hidden border-b border-slate-200">
       <div class="px-5 py-4">
         <p class="text-sm font-semibold text-slate-900">想法匯總</p>
@@ -28,7 +27,6 @@
       </div>
     </div>
 
-    <!-- Version History Section -->
     <div class="flex-1 overflow-hidden">
       <div class="px-5 py-4">
         <p class="text-sm font-semibold text-slate-900">版本記錄</p>
@@ -88,26 +86,26 @@ const props = defineProps({
     type: Array as () => VersionRecord[],
     default: () => [],
   },
+  questionAnswers: {
+    type: Object as () => Record<string, string>,
+    default: () => {},
+  },
+  guidedQuestions: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const qaItems = computed(() => {
   const items: QAItem[] = [];
-  let questionIndex = 0;
 
-  (props.messages || []).forEach((msg: any) => {
-    if (msg.type === "question") {
-      questionIndex += 1;
-      items.push({
-        id: msg.id,
-        questionLabel: msg.label || `問題 ${questionIndex}`,
-        answer: "",
-      });
-    } else if (msg.type === "answer" && items.length > 0) {
-      const lastItem = items[items.length - 1];
-      if (lastItem) {
-        lastItem.answer = msg.content || "";
-      }
-    }
+  (props.guidedQuestions || []).forEach((question: any) => {
+    const answer = props.questionAnswers?.[question.id] || "";
+    items.push({
+      id: question.id,
+      questionLabel: question.label || question.prompt || "問題",
+      answer: answer,
+    });
   });
 
   return items;
