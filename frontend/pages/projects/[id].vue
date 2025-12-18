@@ -98,7 +98,10 @@
         @candidateConfirmed="handleGeneratorCandidateConfirm"
       />
 
-      <section v-else class="flex min-h-[80vh] gap-4 rounded-3xl p-0">
+      <section
+        v-else-if="!isGeneratorMode && workspaceReady"
+        class="flex min-h-[80vh] gap-4 rounded-3xl p-0"
+      >
         <div class="w-4/5">
           <Chatbox
             :key="projectRecord?.id"
