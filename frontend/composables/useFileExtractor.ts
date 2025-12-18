@@ -1,5 +1,16 @@
 import { ref, onMounted } from "vue";
-import mammoth from "mammoth";
+
+let mammothModule: any = null;
+
+async function loadMammoth() {
+  if (mammothModule) return mammothModule;
+  if (process.server) {
+    throw new Error("mammoth should not be loaded on server");
+  }
+  const mod = await import("mammoth");
+  mammothModule = mod.default || mod;
+  return mammothModule;
+}
 
 let pdfjsLib: any = null;
 
@@ -64,6 +75,7 @@ export function useFileExtractor() {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
       const arrayBuffer = await file.arrayBuffer();
+      const mammoth = await loadMammoth();
       const result = await mammoth.extractRawText({ arrayBuffer });
       return result.value;
     } else {
