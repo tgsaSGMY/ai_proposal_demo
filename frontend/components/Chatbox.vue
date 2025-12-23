@@ -105,7 +105,7 @@
                           {{
                             message.source === "prefill"
                               ? "已帶入答案"
-                              : "最新回答"
+                              : "我的回答"
                           }}
                         </span>
                         <button
