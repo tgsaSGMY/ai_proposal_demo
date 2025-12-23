@@ -98,6 +98,35 @@ class SyntheticInputRequest(BaseModel):
     user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
 
 
+class ChatGuidanceHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatGuidanceQuestion(BaseModel):
+    id: str
+    label: str
+    prompt: str
+
+
+class ChatGuidanceRequest(BaseModel):
+    grant_id: str
+    template_id: str
+    grant_name: Optional[str] = None
+    template_name: Optional[str] = None
+    question: ChatGuidanceQuestion
+    answers: Dict[str, str] = Field(default_factory=dict)
+    history: List[ChatGuidanceHistoryMessage] = Field(
+        default_factory=list,
+        description="最近的對話歷史，將作為語境提供給 AI。",
+    )
+
+
+class ChatGuidanceResponse(BaseModel):
+    question_id: str
+    message: str
+
+
 class ScrapeContextTarget(BaseModel):
     """描述可供自動填寫的目標欄位。"""
     section_id: str = Field(None, description="欄位所屬章節 ID。")

@@ -100,34 +100,33 @@
 
       <section
         v-else-if="!isGeneratorMode && workspaceReady"
-        class="flex min-h-[80vh] gap-4 rounded-3xl p-0"
+        class="min-h-[80vh] rounded-3xl p-0"
       >
-        <div class="w-4/5">
-          <Chatbox
-            :key="projectRecord?.id"
-            class="h-full"
-            :sections="currentSections"
-            :reference-summaries="referenceSummaries"
-            :candidate-plan="candidatePlan"
-            :final-plan="finalPlanContent"
-            :is-generating="isLoading"
-            :grant-id="selectedGrantId"
-            :template-id="selectedTemplateId"
-            :grant-name="grantLabel"
-            :template-name="activeTemplateName"
-            :use-model-type="useModelType"
-            :prefilled-answers="prefilledChatAnswers"
-            @generatePlan="handleChatPlanGeneration"
-            @finalizeCandidates="onCandidateConfirm"
-            @requestExport="handleExportWord"
-            @toggleModel="toggleModel"
-            @backToStageOne="router.push('/')"
-            @messagesUpdated="handleMessagesUpdated"
-          />
-        </div>
-        <div class="w-1/5">
-          <ChatSidebar :messages="chatMessages" :versions="versionHistory" />
-        </div>
+        <Chatbox
+          :key="projectRecord?.id"
+          class="h-full"
+          :sections="currentSections"
+          :reference-summaries="referenceSummaries"
+          :candidate-plan="candidatePlan"
+          :final-plan="finalPlanContent"
+          :is-generating="isLoading"
+          :grant-id="selectedGrantId"
+          :template-id="selectedTemplateId"
+          :grant-name="grantLabel"
+          :template-name="activeTemplateName"
+          :use-model-type="useModelType"
+          :prefilled-answers="prefilledChatAnswers"
+          :project-id="projectRecord?.id || ''"
+          :saved-plan-versions="savedPlanVersions"
+          show-sidebar
+          @generatePlan="handleChatPlanGeneration"
+          @finalizeCandidates="onCandidateConfirm"
+          @requestExport="handleExportWord"
+          @toggleModel="toggleModel"
+          @backToStageOne="router.push('/')"
+          @messagesUpdated="handleMessagesUpdated"
+          @aiResponseComplete="persistConversationHistory"
+        />
       </section>
     </div>
   </div>
@@ -137,7 +136,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Chatbox from "~/components/Chatbox.vue";
-import ChatSidebar from "~/components/ChatSidebar.vue";
 import GeneratorModeWorkspace from "~/components/GeneratorModeWorkspace.vue";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
@@ -205,7 +203,6 @@ const loadError = ref("");
 const planMetadata = ref<ProjectMetadata | null>(null);
 const candidatePlan = ref<Record<string, any>>({});
 const chatMessages = ref<any[]>([]);
-const versionHistory = ref<any[]>([]);
 const useModelType = ref("external");
 const lastGenerationPrompt = ref("");
 const isPersistingProject = ref(false);
@@ -217,6 +214,34 @@ const referenceSummaries = computed(
 const prefilledChatAnswers = computed(
   () => planMetadata.value?.prefilledChatAnswers || {}
 );
+const savedPlanVersions = computed(() => {
+  if (!projectRecord.value?.saved_plan) {
+    return [];
+  }
+  const savedPlan = projectRecord.value.saved_plan;
+  // 如果 saved_plan 是数组，直接返回
+  if (Array.isArray(savedPlan)) {
+    return savedPlan.map((version, index) => ({
+      id: `v${index + 1}`,
+      number: index + 1,
+      title: version.title || `版本 ${index + 1}`,
+      timestamp: version.timestamp || new Date().toLocaleString("zh-TW"),
+      data: version.data || version,
+    }));
+  }
+  // 如果 saved_plan 是对象，转换为单个版本
+  return [
+    {
+      id: "v1",
+      number: 1,
+      title: "初版推演結果",
+      timestamp: projectRecord.value.updated_at
+        ? new Date(projectRecord.value.updated_at).toLocaleString("zh-TW")
+        : new Date().toLocaleString("zh-TW"),
+      data: savedPlan,
+    },
+  ];
+});
 const isGeneratorMode = computed(
   () => projectRecord.value?.mode === "generator"
 );
@@ -270,16 +295,6 @@ onBeforeUnmount(() => {
   }
 });
 
-watch(
-  () => projectRecord.value?.id,
-  (newId, oldId) => {
-    if (newId && newId !== oldId) {
-      // reset version history when loading a different project
-      versionHistory.value = [];
-    }
-  }
-);
-
 async function getUserIdOrNotify() {
   const userId = currentUserId.value || (await refreshUser());
   if (!userId) {
@@ -322,14 +337,23 @@ async function fetchProject() {
     const data: ProjectRecord = await response.json();
     projectRecord.value = data;
     planMetadata.value = data.plan_metadata || null;
-    finalPlanContent.value = data.saved_plan || {};
+
+    // 从 saved_plan 中提取最新版本的内容用于显示
+    if (data.saved_plan) {
+      const savedPlanArray = Array.isArray(data.saved_plan)
+        ? data.saved_plan
+        : [data.saved_plan];
+      const latestVersion = savedPlanArray[savedPlanArray.length - 1];
+      finalPlanContent.value = latestVersion?.data || {};
+    } else {
+      finalPlanContent.value = {};
+    }
+
     chatMessages.value = Array.isArray(data.conversation_history)
       ? data.conversation_history
       : [];
     if (chatMessages.value.length) {
       handleMessagesUpdated(chatMessages.value);
-    } else {
-      versionHistory.value = [];
     }
     selectedGrantId.value = data.grant_id || "";
     selectedTemplateId.value = data.template_id || "";
@@ -351,16 +375,30 @@ function toggleModel() {
     useModelType.value === "internal" ? "external" : "internal";
 }
 
-async function handleExportWord() {
-  const hasPlan = Object.keys(finalPlanContent.value || {}).length > 0;
-  if (!hasPlan) {
-    notifyError("尚未有可匯出的內容");
-    return;
+async function handleExportWord(payload?: { version?: any }) {
+  let contentToExport = finalPlanContent.value;
+
+  // 如果是从版本弹窗传来的导出请求
+  if (payload?.version) {
+    const versionData = payload.version.data;
+    if (!versionData || Object.keys(versionData).length === 0) {
+      notifyError("該版本沒有可匯出的內容");
+      return;
+    }
+    contentToExport = versionData;
+  } else {
+    // 原有逻辑：导出当前显示的最新版本
+    const hasPlan = Object.keys(contentToExport || {}).length > 0;
+    if (!hasPlan) {
+      notifyError("尚未有可匯出的內容");
+      return;
+    }
   }
+
   try {
     await exportPlanToWord(
       currentSections.value,
-      finalPlanContent.value,
+      contentToExport,
       selectedGrantId.value,
       selectedTemplateId.value
     );
@@ -429,10 +467,31 @@ async function handleGeneratorCandidateConfirm(payload: {
   finalPrompt: string;
 }) {
   lastGenerationPrompt.value = payload.finalPrompt;
+
+  // 创建新版本对象
+  const currentSavedPlan = projectRecord.value?.saved_plan || [];
+  const versionArray = Array.isArray(currentSavedPlan)
+    ? currentSavedPlan
+    : [currentSavedPlan];
+  const versionNumber = versionArray.length + 1;
+
+  const newVersion = {
+    number: versionNumber,
+    title: `版本 ${versionNumber}`,
+    timestamp: new Date().toLocaleString("zh-TW"),
+    data: payload.selectedData,
+  };
+
+  const updatedSavedPlan = [...versionArray, newVersion];
+
   await persistProjectRecord({
-    savedPlan: payload.selectedData,
-    storedAnswer: payload.selectedData,
+    savedPlan: updatedSavedPlan,
+    storedAnswer: projectRecord.value?.stored_answer || null,
   });
+
+  // Save conversation history when version is confirmed
+  await persistConversationHistory();
+
   savePreferenceData(
     payload.selectedData,
     payload.rejectedData,
@@ -476,7 +535,7 @@ function serializeForStorage<T>(value: T): T | null {
 
 async function persistProjectRecord(options: {
   savedPlan: Record<string, any>;
-  storedAnswer: Record<string, any>;
+  storedAnswer?: Record<string, any> | null;
 }) {
   if (!projectRecord.value || isPersistingProject.value) {
     return;
@@ -486,10 +545,15 @@ async function persistProjectRecord(options: {
 
   isPersistingProject.value = true;
   try {
-    await updateProject({
+    const payload: Record<string, any> = {
       saved_plan: serializeForStorage(options.savedPlan),
-      stored_answer: serializeForStorage(options.storedAnswer),
       conversation_history: serializeForStorage(chatMessages.value),
+    };
+    if (options.storedAnswer !== undefined) {
+      payload.stored_answer = serializeForStorage(options.storedAnswer);
+    }
+    await updateProject({
+      ...payload,
     });
     info("計畫已同步到我的計畫庫");
   } catch (error: any) {
@@ -507,6 +571,7 @@ async function onCandidateConfirm({
   selected: Record<string, any>;
   rejected: Record<string, any>;
 }) {
+  // 构建当前版本的内容
   const newPlanContent: Record<string, { content?: string; error?: string }> =
     {};
   Object.entries(selected).forEach(([sectionId, candidate]) => {
@@ -518,12 +583,37 @@ async function onCandidateConfirm({
       };
     }
   });
+
+  // 创建新版本对象
+  const currentSavedPlan = projectRecord.value?.saved_plan || [];
+  const versionArray = Array.isArray(currentSavedPlan)
+    ? currentSavedPlan
+    : [currentSavedPlan];
+  const versionNumber = versionArray.length + 1;
+
+  const newVersion = {
+    number: versionNumber,
+    title: `版本 ${versionNumber}`,
+    timestamp: new Date().toLocaleString("zh-TW"),
+    data: newPlanContent,
+  };
+
+  // 追加新版本到数组
+  const updatedSavedPlan = [...versionArray, newVersion];
+
+  // 更新前端显示内容为最新版本
   finalPlanContent.value = newPlanContent;
   success("已選擇方案並填充到結果中！");
+
+  // 保存到数据库
   await persistProjectRecord({
-    savedPlan: newPlanContent,
-    storedAnswer: selected,
+    savedPlan: updatedSavedPlan,
+    storedAnswer: projectRecord.value?.stored_answer || null,
   });
+
+  // Save conversation history when version is confirmed
+  await persistConversationHistory();
+
   savePreferenceData(selected, rejected, lastGenerationPrompt.value);
 }
 
@@ -598,11 +688,15 @@ async function savePreferenceData(
         const rejected = rejectedData[section.id];
         if (chosen && chosen.content) {
           return {
+            source_type: "external_direct",
+            grant_id: selectedGrantId.value,
+            template_id: selectedTemplateId.value,
             section_id: section.id,
-            section_name: section.name,
-            chosen_content: chosen.content,
-            rejected_content: rejected?.content || "",
-            final_prompt: finalPrompt,
+            prompt: finalPrompt,
+            final_answer: { content: chosen.content },
+            rejected_answer: rejected?.content
+              ? { content: rejected.content }
+              : null,
           };
         }
         return null;
@@ -627,16 +721,6 @@ async function savePreferenceData(
 
 function handleMessagesUpdated(messages: any[]) {
   chatMessages.value = messages;
-
-  const hasFinalMessage = messages.some((msg) => msg.type === "final");
-  if (hasFinalMessage && versionHistory.value.length === 0) {
-    versionHistory.value.push({
-      id: `v1`,
-      number: 1,
-      title: "初版推演結果",
-      timestamp: new Date().toLocaleString("zh-TW"),
-    });
-  }
-  scheduleConversationSync();
+  // Removed auto-save on keystroke - now saving only when AI responds or versions are confirmed
 }
 </script>

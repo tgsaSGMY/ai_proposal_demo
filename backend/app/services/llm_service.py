@@ -101,6 +101,50 @@ class LLMService:
             
         raise ValueError(f"Unsupported external provider: {provider}")
 
+    async def stream_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict]):
+        """流式調用 OpenAI GPT-4o-mini，逐段推送 delta。"""
+        provider = model_info.get("provider")
+        if provider != "openai":
+            raise ValueError(f"Streaming only supported for OpenAI, got {provider}")
+        
+        if not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY not set.")
+        
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {self.openai_api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": model_info.get("id"),
+            "messages": messages,
+            "stream": True,
+            # "temperature": 0.7,
+        }
+        
+        try:
+            async with session.stream("POST", url, json=payload, headers=headers, timeout=300) as response:
+                if response.status_code != 200:
+                    error_text = await response.aread()
+                    raise ValueError(f"OpenAI API error {response.status_code}: {error_text}")
+                
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    
+                    try:
+                        chunk = json.loads(data_str)
+                        delta = chunk.get("choices", [{}])[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield content
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            raise
+
     async def call_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict], is_json_output: bool = True) -> Tuple[Optional[str], Optional[Dict]]:
         """呼叫外部 LLM API (如 OpenAI, Ollama)，並處理重試邏輯和錯誤。"""
         async with self.request_semaphore:  # 限制并发请求数

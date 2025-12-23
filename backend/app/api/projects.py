@@ -16,7 +16,7 @@ class ProjectBase(BaseModel):
     title: str = Field(..., max_length=255)
     description: Optional[str] = Field(default=None, max_length=4000)
     mode: str = Field(..., description="互動/生成模式標記")
-    saved_plan: Optional[Dict[str, Any]] = None
+    saved_plan: Optional[Any] = None  # 可以是字典或列表（版本数组）
     conversation_history: Optional[Any] = None
     stored_answer: Optional[Dict[str, Any]] = None
     grant_id: Optional[str] = Field(default=None, max_length=255)
@@ -33,7 +33,7 @@ class ProjectUpdateRequest(BaseModel):
     title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = Field(default=None, max_length=4000)
     mode: Optional[str] = None
-    saved_plan: Optional[Dict[str, Any]] = None
+    saved_plan: Optional[Any] = None  # 可以是字典或列表（版本数组）
     conversation_history: Optional[Any] = None
     stored_answer: Optional[Dict[str, Any]] = None
     grant_id: Optional[str] = Field(default=None, max_length=255)

@@ -1,7 +1,9 @@
 # 使用ai生成内容功能的api
 
 import asyncio
+import copy
 import httpx
+from datetime import datetime, timezone
 from fastapi import (
     APIRouter,
     Depends,
@@ -10,14 +12,22 @@ from fastapi import (
     HTTPException,
     Request,
     UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
 import logging
 import json
+from uuid import uuid4
 from pathlib import Path
 
 from app.models import (
-    GenerateRequest, SectionGenerateResponse, AutoFillRequest, SyntheticInputRequest
+    GenerateRequest,
+    SectionGenerateResponse,
+    AutoFillRequest,
+    SyntheticInputRequest,
+    ChatGuidanceRequest,
+    ChatGuidanceResponse,
 )
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
@@ -198,6 +208,120 @@ def _extract_output_text(payload: Dict[str, Any]) -> str:
 
     raise ValueError("OpenAI Responses payload did not include text output.")
 
+
+@router.post(
+    "/chat_guidance",
+    response_model=ChatGuidanceResponse,
+    summary="產生對話式引導問題",
+)
+async def generate_chat_guidance_message(
+    request_data: ChatGuidanceRequest,
+    request: Request,
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """使用 GPT-4o-mini 生成更自然的提問內容，協助蒐集欄位答案。"""
+
+    model_registry = getattr(request.app.state, "model_registry", {}) or {}
+    model_info = model_registry.get("gpt-4o-mini")
+    if not model_info:
+        model_info = {
+            "id": "gpt-4o-mini",
+            "provider": "openai",
+            "type": "external",
+        }
+
+    answer_lines = [
+        f"- {label}: {value.strip()}"
+        for label, value in (request_data.answers or {}).items()
+        if value and value.strip()
+    ]
+    answers_summary = (
+        "\n".join(answer_lines) if answer_lines else "尚未收集到其他欄位的答案。"
+    )
+
+    history_lines = []
+    for entry in request_data.history[-8:]:
+        content = (entry.content or "").strip()
+        if not content:
+            continue
+        role_label = "使用者" if entry.role == "user" else "AI"
+        history_lines.append(f"{role_label}: {content}")
+    history_summary = (
+        "\n".join(history_lines) if history_lines else "尚未開始任何對話。"
+    )
+
+    system_prompt = (
+        "You are a proposal-planning coach that interviews the user field by field. "
+        "Respond in Traditional Chinese, keep the tone friendly and concise, and always conclude with a single open question. "
+        "Reference prior context when useful, but never invent information or ask about multiple fields at once."
+    )
+
+    user_prompt = f"""
+專案主題：{request_data.grant_name or request_data.grant_id}
+模板：{request_data.template_name or request_data.template_id}
+
+目前要蒐集的欄位：
+- ID: {request_data.question.id}
+- 名稱: {request_data.question.label}
+- 引導說明: {request_data.question.prompt}
+
+已完成的其他欄位答案：
+{answers_summary}
+
+最近的對話摘要：
+{history_summary}
+
+請根據上述資訊產生下一句 AI 要說的話。語氣親切自然，先銜接上一則內容，再清楚請求使用者補充與該欄位相關的細節，最後用一個問題作結。僅詢問單一欄位。
+請以 JSON 物件輸出：
+{{
+  "message": "<AI 要說的繁體中文句子>"
+}}
+    """.strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            raw_output, llm_error = await llm_service.call_external_api(
+                client,
+                model_info,
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                is_json_output=True,
+            )
+    except Exception as exc:
+        logger.error("Chat guidance request failed: %s", exc, exc_info=True)
+        raw_output, llm_error = None, {"error": str(exc)}
+
+    if llm_error or not raw_output:
+        fallback_message = (
+            request_data.question.prompt.strip()
+            if request_data.question.prompt
+            else "請分享更多細節，協助我理解。"
+        )
+        return ChatGuidanceResponse(
+            question_id=request_data.question.id,
+            message=fallback_message,
+        )
+
+    try:
+        parsed = json.loads(raw_output)
+        ai_message = (parsed.get("message") or "").strip()
+    except json.JSONDecodeError:
+        ai_message = (raw_output or "").strip()
+
+    if not ai_message:
+        ai_message = (
+            request_data.question.prompt.strip()
+            if request_data.question.prompt
+            else "請分享更多細節，協助我理解。"
+        )
+
+    return ChatGuidanceResponse(
+        question_id=request_data.question.id,
+        message=ai_message,
+    )
+
 @router.post("/generate_plan")
 async def generate_plan( 
     request_data: GenerateRequest,
@@ -265,7 +389,402 @@ async def generate_plan(
         plan_content[section_id].append(res.dict())
 
     return plan_content
- 
+
+
+# --- 輔助函數 ---
+def get_current_timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
+def build_history_entry(role: str, content: str):
+    return {
+        "id": f"{role}-{uuid4().hex[:8]}",
+        "role": role,
+        "type": "text",
+        "content": content,
+        "timestamp": get_current_timestamp(),
+    }
+
+def normalize_filled_fields(filled_data: dict, all_questions: list) -> dict:
+    """
+    将 LLM 提取的 Key (通常是 Label) 强制转换为 all_questions 中定义的标准 ID。
+    策略：忽略所有空格进行匹配。
+    """
+    # 1. 建立 "指纹" -> "标准 ID" 的映射表
+    # 指纹 = 字符串去除所有空格后的样子
+    fingerprint_map = {}
+    
+    for q in all_questions:
+        real_id = q.get('id')         # e.g. "七、可行性分析::過往研究成果"
+        label = q.get('label')        # e.g. "七、可行性分析｜3.有無過往參展..."
+        
+        if not real_id:
+            continue
+            
+        # 存 ID 本身 (以防 LLM 偶尔真的吐出了 ID)
+        fingerprint_map[real_id.replace(" ", "")] = real_id
+        
+        # 存 Label -> ID 的映射 (这是最关键的)
+        if label:
+            # 只要 LLM 输出的内容去掉空格后 = Label 去掉空格后，就映射回 real_id
+            fingerprint_map[label.replace(" ", "")] = real_id
+
+    # 2. 清洗 filled_data 并映射
+    normalized = {}
+    
+    for key, value in filled_data.items():
+        # 1. 预处理 Key：去掉 ::reply，去掉两端空白
+        clean_key = key.replace("::reply", "").strip()
+        
+        # 2. 制作指纹：去掉所有空格 (解决 "之 纪录" vs "之纪录" 的问题)
+        key_fingerprint = clean_key.replace(" ", "")
+        
+        # 3. 查找映射
+        if key_fingerprint in fingerprint_map:
+            standard_id = fingerprint_map[key_fingerprint]
+            normalized[standard_id] = value
+        else:
+            # 如果真的找不到 (比如 LLM 编造了一个不存在的字段名)
+            # 记录原始 key，或者你可以选择丢弃
+            logger.warning(f"Field mismatch: '{key}' maps to nothing. Kept original.")
+            normalized[clean_key] = value
+            
+    return normalized
+
+def format_qa_descriptions(all_questions, current_answers):
+    """
+    生成 Prompt 用的問答描述 (支持 ::reply 後綴查找 & 模糊匹配)
+    """
+    
+    # 1. 建立 Lookup Map: 處理 current_answers 裡的 Key
+    answer_lookup = {}
+    
+    for k, v in current_answers.items():
+        if not v or not str(v).strip():
+            continue
+            
+        # 存原始 Key
+        answer_lookup[k] = v
+        
+        # 處理 "::reply" 後綴
+        clean_k = k.replace("::reply", "")
+        answer_lookup[clean_k] = v
+        
+        # 處理空格 (徹底標準化)
+        answer_lookup[clean_k.replace(" ", "")] = v
+
+    answered_list = []
+    unanswered_list = []
+
+    for q in all_questions:
+        qid = q.get('id')   # e.g. "二、研發動機::市 場規模"
+        label = q.get('label', qid)
+        
+        # 準備查找用的 Key
+        # 我們主要用 qid 找，因為上面已經把 answer_lookup 的 key 變成 qid 風格了
+        qid_no_space = qid.replace(" ", "")
+        label_no_space = label.replace(" ", "")
+
+        val = None
+        
+        # --- 多重查找策略 ---
+        # 1. 用 ID 找
+        if qid in answer_lookup:
+            val = answer_lookup[qid]
+        # 2. 用 去空格ID 找
+        elif qid_no_space in answer_lookup:
+            val = answer_lookup[qid_no_space]
+        # 3. 用 Label 找 (fallback)
+        elif label in answer_lookup:
+            val = answer_lookup[label]
+        # 4. 用 去空格Label 找
+        elif label_no_space in answer_lookup:
+            val = answer_lookup[label_no_space]
+
+        # 構建描述
+        if val:
+            val_str = str(val).strip()
+            display_val = val_str[:100] + "..." if len(val_str) > 100 else val_str
+            # 這裡顯示 Label 給 AI 看，比較友善
+            answered_list.append(f"- {label}: {display_val}")
+        else:
+            unanswered_list.append(q)
+
+    # 生成文本
+    questions_desc = "\n".join([
+        f"- {q.get('label', q.get('id'))}: {q.get('prompt', '')}" 
+        for q in all_questions
+    ])
+    
+    answered_desc = "\n".join(answered_list) or "（無）"
+    
+    unanswered_desc = "\n".join([
+        f"- {q.get('label', q.get('id'))}"
+        for q in unanswered_list
+    ]) or "（全部已填）"
+
+    return questions_desc, answered_desc, unanswered_desc, unanswered_list
+
+# --- 新增：历史记录注入工具 ---
+
+def get_chat_messages(system_prompt: str, history_records: list, last_user_msg: str = None, limit: int = 10):
+    """
+    构建发送给 LLM 的 messages 列表。
+    1. System Prompt
+    2. 最近 N 条历史 (去除最后一条如果它和 current_user_msg 重复)
+    3. Current User Message
+    """
+    messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+
+    # 1. 提取并清洗历史记录 (OpenAI 只接受 role 和 content)
+    # limit 控制注入的历史条数，防止 Token 溢出
+    clean_history = []
+    start_index = max(0, len(history_records) - limit)
+    
+    subset_history = history_records[start_index:]
+    if last_user_msg and subset_history and subset_history[-1]['content'] == last_user_msg:
+         subset_history = subset_history[:-1]
+
+    for h in subset_history:
+        role = h.get("role", "user")
+        content = h.get("content", "")
+        if role in ["user", "assistant", "system"]:
+            messages.append({"role": role, "content": content})
+
+    # 2. 添加当前的 User Input
+    if last_user_msg:
+        messages.append({"role": "user", "content": last_user_msg})
+        
+    return messages
+
+# --- 主要 WebSocket Endpoint ---
+
+@router.websocket("/ws/chat_guidance")
+async def websocket_chat_guidance(websocket: WebSocket):
+    await websocket.accept()
+    
+    llm_service = websocket.app.state.llm_service
+    supabase_service = getattr(websocket.app.state, "supabase_service", None)
+    model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
+    model_info = model_registry.get("gpt-5.1-chat-latest") or {
+        "id": "gpt-5.1-chat-latest",
+        "provider": "openai",
+        "type": "external",
+    }
+    
+    project_id = ""
+    conversation_history_records = []
+    stored_answer_state = {}
+    current_answers = {}
+    all_questions = []
+
+    async def save_state_to_db():
+        if not project_id or not supabase_service:
+            return
+        try:
+            stored_answer_state["chat_answers"] = current_answers.copy()
+            payload = {
+                "conversation_history": conversation_history_records,
+                "stored_answer": stored_answer_state,
+            }
+            await supabase_service.update_project_record(project_id, payload)
+        except Exception as exc:
+            logger.error(f"DB Save Error: {exc}")
+
+    # --- 分析用户意图 (注入历史) ---
+    async def analyze_user_input(history: list, client: httpx.AsyncClient):
+        # 注意：这里的 history 此时已经包含了 [User Message, AI Message]
+        
+        q_desc, _, _, _ = format_qa_descriptions(all_questions, current_answers)
+        
+        # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
+        system_prompt = f"""
+你是一个专业的数据归档员。
+你的任务是根据**用户和助手的最新对话**，将确认的信息提取并归档到指定字段中。
+
+【字段定义】
+{q_desc}
+
+【分析策略】
+1. 观察用户的输入。
+2. **重点参考助手(Assistant)的回复**。如果助手在回复中确认了某个数值（例如"好的，预算5000已记录"），则该信息可信度极高。
+3. 仅输出 JSON。
+
+【输出格式】
+{{
+  "filled_fields": {{ "field_id": "提取的内容" }}
+}}
+"""
+        # 构建 Messages: 取最近的对话记录 (比如最近 4 条足矣: User -> AI -> User -> AI)
+        messages = get_chat_messages(system_prompt, history, limit=6)
+
+        resp, error = await llm_service.call_external_api(
+            client, model_info, messages, is_json_output=True
+        )
+        
+        if error:
+            logger.error(f"Analysis failed: {error}")
+            return {}
+        
+        try:
+            data = json.loads(resp)
+            return data.get("filled_fields", {})
+        except:
+            return {}
+        
+    # --- 生成回答 (注入历史) ---
+    async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str):
+      
+        _, a_desc, ua_desc, ua_list = format_qa_descriptions(all_questions, current_answers)
+        
+        next_q_label = "（请检查是否还有未填项）"
+        if ua_list:
+            next_q_label = ua_list[0].get("label") or ua_list[0].get("id")
+
+        system_prompt = f"""
+你是一个友好的项目规划助手，正在协助用户填写【{grant_name}】。
+
+【当前系统记录状态】(可能稍微滞后，请以最新对话为准)
+- 已填 (Do NOT ask these)：{a_desc}
+- 待填：{ua_desc}
+
+【重要规则】
+1. **绝对禁止**重复询问【已填数据】中的字段。
+2. 如果【已填数据】中已有内容，请直接基于这些内容，询问【待填字段】中的下一项。
+3. 你的首要目标是推进进度，直接引导到：**{next_q_label}**。
+
+【任务】
+1. 回应用户的最新输入。如果用户提供了信息，请进行确认或总结（例如："好的，已记录..."）。
+2. 如果用户刚刚回答了某个【待填】问题，请自然地继续询问下一个字段：{next_q_label}。
+3. 如果用户的问题不清楚，请追问。
+
+注意：请根据对话历史流畅回应。即使系统显示某字段"待填"，如果用户刚刚在对话里回答了，就当作已填处理。
+"""
+        
+        # 构建 Messages：System -> History -> User
+        # limit=10 表示带上最近 10 句对话作为上下文，让 AI 回答更连贯
+        messages = get_chat_messages(system_prompt, history, last_user_msg=user_msg, limit=10)
+
+        await websocket.send_json({"event": "chunk_start"})
+        
+        full_response = []
+        try:
+            async for chunk in llm_service.stream_external_api(
+                client, model_info, messages
+            ):
+                if chunk:
+                    full_response.append(chunk)
+                    await websocket.send_json({"event": "chunk", "data": chunk})
+            
+            await websocket.send_json({"event": "done"})
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+            await websocket.send_json({"event": "error", "message": str(e)})
+            
+        return "".join(full_response).strip()
+
+    try:
+        init_data = await websocket.receive_json()
+        project_id = init_data.get("project_id", "")
+        grant_name = init_data.get("grant_name", "")
+        all_questions = init_data.get("all_questions", [])
+        # 加载 DB 状态
+        if project_id and supabase_service:
+            try:
+                rec = await supabase_service.get_project_by_id(project_id)
+                if rec:
+                    conversation_history_records = rec.get("conversation_history") or []
+                    stored_answer_state = rec.get("stored_answer") or {}
+                    db_answers = stored_answer_state.get("chat_answers", {})
+                    frontend_answers = init_data.get("current_answers", {})
+                    current_answers = {**db_answers, **frontend_answers}
+            except Exception as e:
+                logger.error(f"Load project error: {e}")
+
+        # 初始化历史
+        if not conversation_history_records:
+            raw_history = init_data.get("history") or []
+            for h in raw_history:
+                if isinstance(h, dict) and h.get("content"):
+                    conversation_history_records.append(build_history_entry(h.get("role"), h.get("content")))
+
+        await websocket.send_json({"event": "ready", "message": "系统就绪"})
+
+
+        # --- 生成开场白 (如果是新对话) ---
+        last_is_assistant = False
+        if conversation_history_records:
+             last_entry = conversation_history_records[-1]
+             if str(last_entry.get("id", "")).startswith("assistant") or last_entry.get("role") == "assistant":
+                 last_is_assistant = True
+
+        if not last_is_assistant:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                first_reply = await stream_ai_reply("（用户刚进入，请根据项目名称开始引导）", conversation_history_records, False, client, grant_name)
+                conversation_history_records.append(build_history_entry("assistant", first_reply))
+                await save_state_to_db()
+
+        # --- 主循环 ---
+        while True:
+            try:
+                # A. 接收用戶消息
+                user_payload = await websocket.receive_json()
+                user_msg = user_payload.get("user_message", "").strip()
+                incoming_answers = user_payload.get("current_answers", {})
+                if incoming_answers:
+                    current_answers.update(incoming_answers)
+
+                if not user_msg:
+                    continue
+
+                # B. 记录用户发言
+                conversation_history_records.append(build_history_entry("user", user_msg))
+                
+                # C. 处理逻辑 (使用同一个 Client)
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    
+                    # --- 步骤 1: 先生成并流式传输回答 (Response First) ---
+                    ai_reply = await stream_ai_reply(
+                        user_msg, 
+                        conversation_history_records, 
+                        False,
+                        client, 
+                        grant_name
+                    )
+                    
+                    # 记录 AI 发言 (这对下一步分析至关重要)
+                    if ai_reply:
+                        conversation_history_records.append(build_history_entry("assistant", ai_reply))
+                    
+                    # --- 步骤 2: 后台分析并提取数据 (Extract Later) ---
+                    # 此时 history 包含了 User 的话 AND AI 的总结
+                    filled = await analyze_user_input(conversation_history_records, client)
+                    
+                    if filled:
+                        logger.info(f"Extracted fields (after reply): {filled}")
+                        clean_filled = normalize_filled_fields(filled, all_questions)
+                    
+                        logger.info(f"Normalized fields: {clean_filled}")
+                        
+                        # 更新到 current_answers
+                        current_answers.update(clean_filled)
+                        
+                    # --- 步骤 3: 统一保存状态 ---
+                    # 此时保存包含了完整的对话记录 + 最新提取的答案
+                    await save_state_to_db()
+
+            except WebSocketDisconnect:
+                logger.info("Client disconnected inside loop")
+                break
+            except Exception as loop_e:
+                logger.error(f"Loop error: {loop_e}", exc_info=True)
+                await websocket.send_json({"event": "error", "message": "Processing error"})
+
+    except Exception as e:
+        logger.error(f"Endpoint error: {e}", exc_info=True)
+        await websocket.close()
+
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
 async def generate_synthetic_input(
     req: SyntheticInputRequest,
@@ -589,7 +1108,6 @@ async def field_file_analysis(
                             "content": content_items,
                         }
                     ],
-                    # "modalities": ["text"],
                     "max_output_tokens": 900,
                     "temperature": 0.2,
                     "metadata": {"feature": "field_file_analysis"},
@@ -598,7 +1116,6 @@ async def field_file_analysis(
             responses_resp.raise_for_status()
 
             output_text = _extract_output_text(responses_resp.json())
-            print("Extracted output text:", output_text)
             parsed = json.loads(output_text)
 
     except httpx.HTTPStatusError as e:
