@@ -187,15 +187,25 @@
             :placeholder="composerPlaceholder"
             @keydown.enter.prevent="handleEnter"
           ></textarea>
-          <div class="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              class="rounded-full border border-[#dfe3ff] px-5 py-2 text-sm font-semibold text-[#6c719b] hover:bg-[#f4f5ff] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="!canSendMessage"
-              @click="handleSend"
-            >
-              回覆當前問題
-            </button>
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap gap-3">
+              <button
+                type="button"
+                class="rounded-full border border-[#dfe3ff] px-5 py-2 text-sm font-semibold text-[#6c719b] hover:bg-[#f4f5ff] disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canSendMessage"
+                @click="handleSend(false)"
+              >
+                回覆當前問題
+              </button>
+              <button
+                type="button"
+                class="rounded-full bg-gradient-to-r from-[#ffd5c4] to-[#ffb8a8] px-5 py-2 text-sm font-semibold text-[#c44536] shadow-md shadow-[#ffb8a8]/30 hover:shadow-lg hover:from-[#ffc9b5] hover:to-[#ffaa99] disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canSendMessage"
+                @click="() => handleSend(true)"
+              >
+                由AI自動幫忙填寫
+              </button>
+            </div>
             <button
               type="button"
               class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
@@ -728,12 +738,14 @@ async function handleEnter(event) {
   await handleSend();
 }
 
-async function handleSend() {
+async function handleSend(useAIFill = false) {
   if (!props.grantId || !props.templateId) {
     return;
   }
   const normalizedText = draftMessage.value.trim();
-  const messageContent = normalizedText || "請AI自動幫我填寫";
+  const messageContent = useAIFill
+    ? "請AI自動幫我填寫"
+    : normalizedText || "無";
 
   // 添加用户消息到聊天记录
   const userMsg = {
