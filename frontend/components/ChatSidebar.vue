@@ -17,7 +17,7 @@
           >
             {{ item.questionLabel }}
           </p>
-          <p class="mt-2 text-xs text-slate-600 line-clamp-2">
+          <p class="mt-2 text-xs text-slate-600">
             {{ item.answer || "（待回答）" }}
           </p>
         </div>
@@ -34,10 +34,12 @@
       <div
         class="max-h-[calc(100%-56px)] space-y-2 overflow-y-auto px-5 pb-4 pr-3 scrollbar-thin scrollbar-thumb-rose-300 scrollbar-track-transparent"
       >
-        <div
+        <button
           v-for="version in versions"
           :key="version.id"
-          class="flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-left"
+          type="button"
+          class="w-full flex items-start gap-2 rounded-2xl bg-slate-50 p-3 text-left transition hover:bg-slate-100 hover:shadow-md"
+          @click="$emit('selectVersion', version)"
         >
           <span
             class="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[#fff1ea] text-xs font-semibold text-[#ff6b3d]"
@@ -52,7 +54,7 @@
               {{ version.timestamp }}
             </p>
           </div>
-        </div>
+        </button>
         <div v-if="!versions.length" class="py-6 text-center">
           <p class="text-xs text-slate-400">尚無版本記錄</p>
         </div>
@@ -90,20 +92,60 @@ const props = defineProps({
     type: Object as () => Record<string, string>,
     default: () => {},
   },
-  guidedQuestions: {
-    type: Array,
-    default: () => [],
-  },
 });
+
+const emit = defineEmits(["selectVersion"]);
 
 const qaItems = computed(() => {
   const items: QAItem[] = [];
+  const answers = props.questionAnswers || {};
 
-  (props.guidedQuestions || []).forEach((question: any) => {
-    const answer = props.questionAnswers?.[question.id] || "";
+  // 中文数字顺序映射
+  const chineseNumberOrder: Record<string, number> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+  };
+
+  // 先提取所有key-value对，计算label
+  const tempItems: Array<{ key: string; label: string; answer: string }> = [];
+
+  Object.entries(answers).forEach(([key, value]) => {
+    const answer = String(value || "").trim();
+    if (answer) {
+      // 提取label：如果有两个"::"，只保留第二个"::"之前的所有文字
+      let label = key;
+      const doubleColonCount = (key.match(/::/g) || []).length;
+      if (doubleColonCount >= 2) {
+        const lastDoubleColonIndex = key.lastIndexOf("::");
+        label = key.substring(0, lastDoubleColonIndex);
+      }
+
+      tempItems.push({ key, label, answer });
+    }
+  });
+
+  // 按照label中的中文数字排序
+  tempItems.sort((a, b) => {
+    const aFirstChar = a.label.charAt(0);
+    const bFirstChar = b.label.charAt(0);
+    const aOrder = chineseNumberOrder[aFirstChar] ?? 999;
+    const bOrder = chineseNumberOrder[bFirstChar] ?? 999;
+    return aOrder - bOrder;
+  });
+
+  // 排序后再push到items
+  tempItems.forEach(({ key, label, answer }) => {
     items.push({
-      id: question.id,
-      questionLabel: question.label || question.prompt || "問題",
+      id: key,
+      questionLabel: label,
       answer: answer,
     });
   });
@@ -134,12 +176,5 @@ const qaItems = computed(() => {
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: #ffb4a8 transparent;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 </style>

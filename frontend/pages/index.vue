@@ -883,16 +883,22 @@ async function enterChatStage() {
         const autofillResult = await runAttachmentAutofill(userId);
         if (autofillResult) {
           //直接存入stored answer
-          storedAnswerPayload = {
-            user_input: {
-              main_idea:
-                autofillResult.mainIdea ||
-                planSummary.value.trim() ||
-                selectedPlanType.value?.title ||
-                "",
-              dynamic_fields: autofillResult.dynamicFields,
-            },
-          };
+          if (selectedMode.value === "generator") {
+            storedAnswerPayload = {
+              user_input: {
+                main_idea:
+                  autofillResult.mainIdea ||
+                  planSummary.value.trim() ||
+                  selectedPlanType.value?.title ||
+                  "",
+                dynamic_fields: autofillResult.dynamicFields,
+              },
+            };
+          } else {
+            storedAnswerPayload = {
+              chat_answers: autofillResult.dynamicFields,
+            };
+          }
         }
       } catch (autofillError) {
         console.error("Failed to auto-fill dynamic sections", autofillError);
@@ -913,7 +919,7 @@ async function enterChatStage() {
           selectedPlanType.value?.title ||
           "未命名計畫案",
         description: planSummary.value.trim() || "尚未填寫摘要",
-        saved_plan: {},
+        saved_plan: [],
         conversation_history: [],
         stored_answer: storedAnswerPayload || {},
         grant_id: selectedGrantId.value || null,

@@ -299,6 +299,7 @@
           :template-name="selectedTemplateName"
           :use-model-type="useModelType"
           :prefilled-answers="prefilledChatAnswers"
+          project-id=""
           @generatePlan="handleGeneratePlan"
           @finalizeCandidates="onCandidateConfirm"
           @requestExport="handleExportWord"

@@ -1,7 +1,9 @@
 # 使用ai生成内容功能的api
 
 import asyncio
+import copy
 import httpx
+from datetime import datetime, timezone
 from fastapi import (
     APIRouter,
     Depends,
@@ -16,6 +18,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 import logging
 import json
+from uuid import uuid4
 from pathlib import Path
 
 from app.models import (
@@ -388,243 +391,399 @@ async def generate_plan(
     return plan_content
 
 
+# --- 輔助函數 ---
+def get_current_timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
+def build_history_entry(role: str, content: str):
+    return {
+        "id": f"{role}-{uuid4().hex[:8]}",
+        "role": role,
+        "type": "text",
+        "content": content,
+        "timestamp": get_current_timestamp(),
+    }
+
+def normalize_filled_fields(filled_data: dict, all_questions: list) -> dict:
+    """
+    将 LLM 提取的 Key (通常是 Label) 强制转换为 all_questions 中定义的标准 ID。
+    策略：忽略所有空格进行匹配。
+    """
+    # 1. 建立 "指纹" -> "标准 ID" 的映射表
+    # 指纹 = 字符串去除所有空格后的样子
+    fingerprint_map = {}
+    
+    for q in all_questions:
+        real_id = q.get('id')         # e.g. "七、可行性分析::過往研究成果"
+        label = q.get('label')        # e.g. "七、可行性分析｜3.有無過往參展..."
+        
+        if not real_id:
+            continue
+            
+        # 存 ID 本身 (以防 LLM 偶尔真的吐出了 ID)
+        fingerprint_map[real_id.replace(" ", "")] = real_id
+        
+        # 存 Label -> ID 的映射 (这是最关键的)
+        if label:
+            # 只要 LLM 输出的内容去掉空格后 = Label 去掉空格后，就映射回 real_id
+            fingerprint_map[label.replace(" ", "")] = real_id
+
+    # 2. 清洗 filled_data 并映射
+    normalized = {}
+    
+    for key, value in filled_data.items():
+        # 1. 预处理 Key：去掉 ::reply，去掉两端空白
+        clean_key = key.replace("::reply", "").strip()
+        
+        # 2. 制作指纹：去掉所有空格 (解决 "之 纪录" vs "之纪录" 的问题)
+        key_fingerprint = clean_key.replace(" ", "")
+        
+        # 3. 查找映射
+        if key_fingerprint in fingerprint_map:
+            standard_id = fingerprint_map[key_fingerprint]
+            normalized[standard_id] = value
+        else:
+            # 如果真的找不到 (比如 LLM 编造了一个不存在的字段名)
+            # 记录原始 key，或者你可以选择丢弃
+            logger.warning(f"Field mismatch: '{key}' maps to nothing. Kept original.")
+            normalized[clean_key] = value
+            
+    return normalized
+
+def format_qa_descriptions(all_questions, current_answers):
+    """
+    生成 Prompt 用的問答描述 (支持 ::reply 後綴查找 & 模糊匹配)
+    """
+    
+    # 1. 建立 Lookup Map: 處理 current_answers 裡的 Key
+    answer_lookup = {}
+    
+    for k, v in current_answers.items():
+        if not v or not str(v).strip():
+            continue
+            
+        # 存原始 Key
+        answer_lookup[k] = v
+        
+        # 處理 "::reply" 後綴
+        clean_k = k.replace("::reply", "")
+        answer_lookup[clean_k] = v
+        
+        # 處理空格 (徹底標準化)
+        answer_lookup[clean_k.replace(" ", "")] = v
+
+    answered_list = []
+    unanswered_list = []
+
+    for q in all_questions:
+        qid = q.get('id')   # e.g. "二、研發動機::市 場規模"
+        label = q.get('label', qid)
+        
+        # 準備查找用的 Key
+        # 我們主要用 qid 找，因為上面已經把 answer_lookup 的 key 變成 qid 風格了
+        qid_no_space = qid.replace(" ", "")
+        label_no_space = label.replace(" ", "")
+
+        val = None
+        
+        # --- 多重查找策略 ---
+        # 1. 用 ID 找
+        if qid in answer_lookup:
+            val = answer_lookup[qid]
+        # 2. 用 去空格ID 找
+        elif qid_no_space in answer_lookup:
+            val = answer_lookup[qid_no_space]
+        # 3. 用 Label 找 (fallback)
+        elif label in answer_lookup:
+            val = answer_lookup[label]
+        # 4. 用 去空格Label 找
+        elif label_no_space in answer_lookup:
+            val = answer_lookup[label_no_space]
+
+        # 構建描述
+        if val:
+            val_str = str(val).strip()
+            display_val = val_str[:100] + "..." if len(val_str) > 100 else val_str
+            # 這裡顯示 Label 給 AI 看，比較友善
+            answered_list.append(f"- {label}: {display_val}")
+        else:
+            unanswered_list.append(q)
+
+    # 生成文本
+    questions_desc = "\n".join([
+        f"- {q.get('label', q.get('id'))}: {q.get('prompt', '')}" 
+        for q in all_questions
+    ])
+    
+    answered_desc = "\n".join(answered_list) or "（無）"
+    
+    unanswered_desc = "\n".join([
+        f"- {q.get('label', q.get('id'))}"
+        for q in unanswered_list
+    ]) or "（全部已填）"
+
+    return questions_desc, answered_desc, unanswered_desc, unanswered_list
+
+# --- 新增：历史记录注入工具 ---
+
+def get_chat_messages(system_prompt: str, history_records: list, last_user_msg: str = None, limit: int = 10):
+    """
+    构建发送给 LLM 的 messages 列表。
+    1. System Prompt
+    2. 最近 N 条历史 (去除最后一条如果它和 current_user_msg 重复)
+    3. Current User Message
+    """
+    messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+
+    # 1. 提取并清洗历史记录 (OpenAI 只接受 role 和 content)
+    # limit 控制注入的历史条数，防止 Token 溢出
+    clean_history = []
+    start_index = max(0, len(history_records) - limit)
+    
+    subset_history = history_records[start_index:]
+    if last_user_msg and subset_history and subset_history[-1]['content'] == last_user_msg:
+         subset_history = subset_history[:-1]
+
+    for h in subset_history:
+        role = h.get("role", "user")
+        content = h.get("content", "")
+        if role in ["user", "assistant", "system"]:
+            messages.append({"role": role, "content": content})
+
+    # 2. 添加当前的 User Input
+    if last_user_msg:
+        messages.append({"role": "user", "content": last_user_msg})
+        
+    return messages
+
+# --- 主要 WebSocket Endpoint ---
+
 @router.websocket("/ws/chat_guidance")
 async def websocket_chat_guidance(websocket: WebSocket):
-    """WebSocket 端點：智能多轮对话，自动识别并填充字段。"""
     await websocket.accept()
-    llm_service = websocket.app.state.llm_service
     
-    try:
-        # 接收初始 payload（第一次握手）
-        data = await websocket.receive_json()
-        
-        grant_id = data.get("grant_id", "")
-        template_id = data.get("template_id", "")
-        grant_name = data.get("grant_name", "")
-        template_name = data.get("template_name", "")
-        all_questions = data.get("all_questions", [])  # 所有问题列表
-        current_answers = data.get("current_answers", {})  # 已填答案
-        history = data.get("history", [])  # 聊天历史
-        
-        if not all_questions:
-            await websocket.send_json({"event": "error", "message": "Missing all_questions"})
-            await websocket.close()
+    llm_service = websocket.app.state.llm_service
+    supabase_service = getattr(websocket.app.state, "supabase_service", None)
+    model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
+    model_info = model_registry.get("gpt-5.1-chat-latest") or {
+        "id": "gpt-5.1-chat-latest",
+        "provider": "openai",
+        "type": "external",
+    }
+    
+    project_id = ""
+    conversation_history_records = []
+    stored_answer_state = {}
+    current_answers = {}
+    all_questions = []
+
+    async def save_state_to_db():
+        if not project_id or not supabase_service:
             return
+        try:
+            stored_answer_state["chat_answers"] = current_answers.copy()
+            payload = {
+                "conversation_history": conversation_history_records,
+                "stored_answer": stored_answer_state,
+            }
+            await supabase_service.update_project_record(project_id, payload)
+        except Exception as exc:
+            logger.error(f"DB Save Error: {exc}")
+
+    # --- 分析用户意图 (注入历史) ---
+    async def analyze_user_input(history: list, client: httpx.AsyncClient):
+        # 注意：这里的 history 此时已经包含了 [User Message, AI Message]
         
-        model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
-        model_info = model_registry.get("gpt-5.1-chat-latest") or {
-            "id": "gpt-5.1-chat-latest",
-            "provider": "openai",
-            "type": "external",
-        }
+        q_desc, _, _, _ = format_qa_descriptions(all_questions, current_answers)
         
-        # 发送初始提示
-        await websocket.send_json({
-            "event": "ready",
-            "message": "系统已连接，等待您的回答..."
-        })
-        
-        # 生成第一个问题
-        first_question_prompt = f"""
-你是一个友好的项目规划助手。用户刚刚开始填写一个关于"{grant_name or grant_id}"的项目企划。
+        # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
+        system_prompt = f"""
+你是一个专业的数据归档员。
+你的任务是根据**用户和助手的最新对话**，将确认的信息提取并归档到指定字段中。
 
-请用友好、自然的语气提问，帮助用户开始这个过程。
+【字段定义】
+{q_desc}
 
-只输出你要说的一句话或两句话，不要包含任何JSON或结构化数据。例如："你好！我是你的项目规划助手。为了帮助你更好地制定这个计划，我想先了解一下你的核心想法。能告诉我这个项目的主要创意或目标是什么吗？"
-"""
-        
-        # 流式生成第一个问题
-        await websocket.send_json({"event": "chunk_start"})
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            try:
-                async for chunk in llm_service.stream_external_api(
-                    client,
-                    model_info,
-                    [{"role": "user", "content": first_question_prompt}]
-                ):
-                    await websocket.send_json({"event": "chunk", "data": chunk})
-                
-                await websocket.send_json({"event": "done"})
-            except Exception as e:
-                logger.error(f"Initial question error: {e}", exc_info=True)
-                await websocket.send_json({"event": "error", "message": str(e)})
-        
-        # 主对话循环：持续接收用户消息并进行分析
-        while True:
-            try:
-                # 接收用户消息
-                user_data = await websocket.receive_json()
-                user_message = user_data.get("user_message", "").strip()
-                
-                if not user_message:
-                    await websocket.send_json({
-                        "event": "error", 
-                        "message": "请输入有效的消息"
-                    })
-                    continue
-                
-                # 更新当前答案（用户可能在 UI 中更新了）
-                current_answers = user_data.get("current_answers", current_answers)
-                
-                # 构建所有问题的列表描述
-                questions_desc = "\n".join([
-                    f"- {q.get('label', q.get('id'))}: {q.get('prompt', '')}"
-                    for q in all_questions
-                ])
-                
-                answered_desc = "\n".join([
-                    f"- {label}: {value[:100]}..." if len(value) > 100 else f"- {label}: {value}"
-                    for label, value in current_answers.items()
-                    if value and value.strip()
-                ]) or "（无）"
-                
-                unanswered = [
-                    q for q in all_questions
-                    if q.get("id") not in current_answers or not current_answers.get(q.get("id"), "").strip()
-                ]
-                unanswered_desc = "\n".join([
-                    f"- {q.get('label', q.get('id'))}"
-                    for q in unanswered
-                ]) or "（全部已填）"
-                
-                # 第一步：分析用户消息并提取字段
-                analyze_prompt = f"""
-你是一个智能项目规划助手。用户刚刚说了一句话，请分析他的回答对应了哪些字段。
+【分析策略】
+1. 观察用户的输入。
+2. **重点参考助手(Assistant)的回复**。如果助手在回复中确认了某个数值（例如"好的，预算5000已记录"），则该信息可信度极高。
+3. 仅输出 JSON。
 
-【所有可填字段】
-{questions_desc}
-
-【已填字段】
-{answered_desc}
-
-【待填字段】
-{unanswered_desc}
-
-【用户最后说的话】
-{user_message}
-
-请完成以下任务：
-1. 分析用户的话对应了哪些字段（可能是0个、1个或多个）
-2. 提取用户对这些字段的回答内容（直接从用户的话中提取，不要改写）
-3. 决定是否需要追问（如果回答不够详细或不够清楚）
-
-请输出 JSON：
+【输出格式】
 {{
-  "filled_fields": {{
-    "field_id_1": "用户提供的答案内容",
-    "field_id_2": "..."
-  }},
-  "needs_clarification": true or false,
-  "reasoning": "简要说明为什么这样分析"
+  "filled_fields": {{ "field_id": "提取的内容" }}
 }}
 """
-                
-                # 调用 GPT 分析用户消息
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    analysis_response, error = await llm_service.call_external_api(
-                        client,
-                        model_info,
-                        [{"role": "user", "content": analyze_prompt}],
-                        is_json_output=True
-                    )
-                
-                if error or not analysis_response:
-                    logger.error(f"Failed to analyze user message: {error}")
-                    filled_fields = {}
-                    needs_clarification = False
-                else:
-                    try:
-                        import json as json_lib
-                        analysis = json_lib.loads(analysis_response)
-                        filled_fields = analysis.get("filled_fields", {})
-                        needs_clarification = analysis.get("needs_clarification", False)
-                    except Exception as e:
-                        logger.error(f"Failed to parse analysis: {e}")
-                        filled_fields = {}
-                        needs_clarification = False
-                
-                # 发送填充的字段信息
-                await websocket.send_json({
-                    "event": "filled",
-                    "data": filled_fields
-                })
-                
-                # 更新 current_answers 中被识别出来的字段
-                for field_id, value in filled_fields.items():
-                    if value and str(value).strip():
-                        current_answers[field_id] = str(value).strip()
-                
-                # 第二步：生成 AI 的下一句话
-                # 决定下一个要问的字段
-                next_question = None
-                for q in all_questions:
-                    qid = q.get("id")
-                    if qid not in current_answers or not current_answers[qid].strip():
-                        # 如果这个字段没填，检查是否刚刚用户回答了它
-                        if qid not in filled_fields:
-                            next_question = q
-                            break
-                
-                conversation_prompt = f"""
-你是一个友好的项目规划助手。继续和用户自然对话。
+        # 构建 Messages: 取最近的对话记录 (比如最近 4 条足矣: User -> AI -> User -> AI)
+        messages = get_chat_messages(system_prompt, history, limit=6)
 
-【项目信息】
-主题：{grant_name or grant_id}
-模板：{template_name or template_id}
-
-【用户刚才说】
-{user_message}
-
-【已填字段】
-{answered_desc}
-
-【未填字段】
-{unanswered_desc}
-
-{"【接下来应该确认什么】" if needs_clarification else "【接下来应该询问】"}
-{next_question.get("label") if next_question else "（所有字段已填完）"}
-
-请按照以下要求生成回应：
-1. 确认或感谢用户的输入
-2. 如果需要澄清，用友好的方式进行确认，例如："你是说...对吗？"
-3. 如果还有未填字段，自然地过渡到下一个话题
-4. 语气亲切、自然，像是真实的对话，不要提及"字段"、"表单"等
-5. 如果所有字段都已填完，恭喜用户并提示可以生成计划了
-
-只输出你要说的一句话或几句话，不要包含任何JSON或结构化数据。
-"""
-                
-                # 开始流式生成 AI 回复
-                await websocket.send_json({"event": "chunk_start"})
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    try:
-                        async for chunk in llm_service.stream_external_api(
-                            client,
-                            model_info,
-                            [{"role": "user", "content": conversation_prompt}]
-                        ):
-                            await websocket.send_json({"event": "chunk", "data": chunk})
-                        
-                        # 流式结束，发送 done 信号
-                        await websocket.send_json({"event": "done"})
-                    except Exception as e:
-                        logger.error(f"Streaming error: {e}", exc_info=True)
-                        await websocket.send_json({"event": "error", "message": str(e)})
-            
-            except WebSocketDisconnect:
-                logger.info("WebSocket client disconnected during message loop")
-                break
-    
-    except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}", exc_info=True)
+        resp, error = await llm_service.call_external_api(
+            client, model_info, messages, is_json_output=True
+        )
+        
+        if error:
+            logger.error(f"Analysis failed: {error}")
+            return {}
+        
         try:
-            await websocket.send_json({"event": "error", "message": str(e)})
+            data = json.loads(resp)
+            return data.get("filled_fields", {})
         except:
-            pass
-        await websocket.close()
+            return {}
+        
+    # --- 生成回答 (注入历史) ---
+    async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str):
+      
+        _, a_desc, ua_desc, ua_list = format_qa_descriptions(all_questions, current_answers)
+        
+        next_q_label = "（请检查是否还有未填项）"
+        if ua_list:
+            next_q_label = ua_list[0].get("label") or ua_list[0].get("id")
 
+        system_prompt = f"""
+你是一个友好的项目规划助手，正在协助用户填写【{grant_name}】。
+
+【当前系统记录状态】(可能稍微滞后，请以最新对话为准)
+- 已填 (Do NOT ask these)：{a_desc}
+- 待填：{ua_desc}
+
+【重要规则】
+1. **绝对禁止**重复询问【已填数据】中的字段。
+2. 如果【已填数据】中已有内容，请直接基于这些内容，询问【待填字段】中的下一项。
+3. 你的首要目标是推进进度，直接引导到：**{next_q_label}**。
+
+【任务】
+1. 回应用户的最新输入。如果用户提供了信息，请进行确认或总结（例如："好的，已记录..."）。
+2. 如果用户刚刚回答了某个【待填】问题，请自然地继续询问下一个字段：{next_q_label}。
+3. 如果用户的问题不清楚，请追问。
+
+注意：请根据对话历史流畅回应。即使系统显示某字段"待填"，如果用户刚刚在对话里回答了，就当作已填处理。
+"""
+        
+        # 构建 Messages：System -> History -> User
+        # limit=10 表示带上最近 10 句对话作为上下文，让 AI 回答更连贯
+        messages = get_chat_messages(system_prompt, history, last_user_msg=user_msg, limit=10)
+
+        await websocket.send_json({"event": "chunk_start"})
+        
+        full_response = []
+        try:
+            async for chunk in llm_service.stream_external_api(
+                client, model_info, messages
+            ):
+                if chunk:
+                    full_response.append(chunk)
+                    await websocket.send_json({"event": "chunk", "data": chunk})
+            
+            await websocket.send_json({"event": "done"})
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+            await websocket.send_json({"event": "error", "message": str(e)})
+            
+        return "".join(full_response).strip()
+
+    try:
+        init_data = await websocket.receive_json()
+        project_id = init_data.get("project_id", "")
+        grant_name = init_data.get("grant_name", "")
+        all_questions = init_data.get("all_questions", [])
+        # 加载 DB 状态
+        if project_id and supabase_service:
+            try:
+                rec = await supabase_service.get_project_by_id(project_id)
+                if rec:
+                    conversation_history_records = rec.get("conversation_history") or []
+                    stored_answer_state = rec.get("stored_answer") or {}
+                    db_answers = stored_answer_state.get("chat_answers", {})
+                    frontend_answers = init_data.get("current_answers", {})
+                    current_answers = {**db_answers, **frontend_answers}
+            except Exception as e:
+                logger.error(f"Load project error: {e}")
+
+        # 初始化历史
+        if not conversation_history_records:
+            raw_history = init_data.get("history") or []
+            for h in raw_history:
+                if isinstance(h, dict) and h.get("content"):
+                    conversation_history_records.append(build_history_entry(h.get("role"), h.get("content")))
+
+        await websocket.send_json({"event": "ready", "message": "系统就绪"})
+
+
+        # --- 生成开场白 (如果是新对话) ---
+        last_is_assistant = False
+        if conversation_history_records:
+             last_entry = conversation_history_records[-1]
+             if str(last_entry.get("id", "")).startswith("assistant") or last_entry.get("role") == "assistant":
+                 last_is_assistant = True
+
+        if not last_is_assistant:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                first_reply = await stream_ai_reply("（用户刚进入，请根据项目名称开始引导）", conversation_history_records, False, client, grant_name)
+                conversation_history_records.append(build_history_entry("assistant", first_reply))
+                await save_state_to_db()
+
+        # --- 主循环 ---
+        while True:
+            try:
+                # A. 接收用戶消息
+                user_payload = await websocket.receive_json()
+                user_msg = user_payload.get("user_message", "").strip()
+                incoming_answers = user_payload.get("current_answers", {})
+                if incoming_answers:
+                    current_answers.update(incoming_answers)
+
+                if not user_msg:
+                    continue
+
+                # B. 记录用户发言
+                conversation_history_records.append(build_history_entry("user", user_msg))
+                
+                # C. 处理逻辑 (使用同一个 Client)
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    
+                    # --- 步骤 1: 先生成并流式传输回答 (Response First) ---
+                    ai_reply = await stream_ai_reply(
+                        user_msg, 
+                        conversation_history_records, 
+                        False,
+                        client, 
+                        grant_name
+                    )
+                    
+                    # 记录 AI 发言 (这对下一步分析至关重要)
+                    if ai_reply:
+                        conversation_history_records.append(build_history_entry("assistant", ai_reply))
+                    
+                    # --- 步骤 2: 后台分析并提取数据 (Extract Later) ---
+                    # 此时 history 包含了 User 的话 AND AI 的总结
+                    filled = await analyze_user_input(conversation_history_records, client)
+                    
+                    if filled:
+                        logger.info(f"Extracted fields (after reply): {filled}")
+                        clean_filled = normalize_filled_fields(filled, all_questions)
+                    
+                        logger.info(f"Normalized fields: {clean_filled}")
+                        
+                        # 更新到 current_answers
+                        current_answers.update(clean_filled)
+                        
+                    # --- 步骤 3: 统一保存状态 ---
+                    # 此时保存包含了完整的对话记录 + 最新提取的答案
+                    await save_state_to_db()
+
+            except WebSocketDisconnect:
+                logger.info("Client disconnected inside loop")
+                break
+            except Exception as loop_e:
+                logger.error(f"Loop error: {loop_e}", exc_info=True)
+                await websocket.send_json({"event": "error", "message": "Processing error"})
+
+    except Exception as e:
+        logger.error(f"Endpoint error: {e}", exc_info=True)
+        await websocket.close()
 
 @router.post("/generate_synthetic_input", response_model=Dict[str, Any])
 async def generate_synthetic_input(
@@ -949,7 +1108,6 @@ async def field_file_analysis(
                             "content": content_items,
                         }
                     ],
-                    # "modalities": ["text"],
                     "max_output_tokens": 900,
                     "temperature": 0.2,
                     "metadata": {"feature": "field_file_analysis"},
@@ -958,7 +1116,6 @@ async def field_file_analysis(
             responses_resp.raise_for_status()
 
             output_text = _extract_output_text(responses_resp.json())
-            print("Extracted output text:", output_text)
             parsed = json.loads(output_text)
 
     except httpx.HTTPStatusError as e:
