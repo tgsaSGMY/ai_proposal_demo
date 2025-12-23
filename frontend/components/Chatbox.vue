@@ -538,24 +538,6 @@ function upsertAnswerMessage(
     }
     return;
   }
-
-  const payload = {
-    id:
-      index >= 0
-        ? messages.value[index].id
-        : `answer-${questionId}-${Date.now()}`,
-    role: "user",
-    type: "answer",
-    questionId,
-    content: text,
-    source,
-  };
-
-  if (index >= 0) {
-    messages.value[index] = { ...messages.value[index], ...payload };
-  } else {
-    messages.value.push(payload);
-  }
   if (shouldScroll) {
     scrollToBottom();
   }
@@ -610,7 +592,6 @@ watch(
       return;
     }
     lastFinalSnapshot.value = snapshot;
-    buildFinalMessage();
   },
   { deep: true }
 );
@@ -671,7 +652,6 @@ function applyPrefilledAnswers(prefillMap) {
     );
     activeQuestionId.value = null;
   }
-  void askNextQuestion();
 }
 
 function extractPrefillValue(prefillMap, questionId) {
@@ -798,30 +778,18 @@ async function requestGeneration() {
       return;
     }
   }
-  const promptParts = [];
-
-  if (guidedQuestions.length) {
-    const qaText = guidedQuestions
-      .map((question, idx) => {
-        const answer = questionAnswers.value[question.id] || "尚未提供";
-        return `${idx + 1}. ${question.label}\n${answer}`;
-      })
-      .join("\n\n");
-    promptParts.push(`${qaText}`);
-  }
+  const joinedText = Object.entries(questionAnswers.value)
+    .map(([key, value]) => {
+      const text = value.reply ?? value;
+      return `【${key}】\n${text}`;
+    })
+    .join("\n\n");
 
   emit("generatePlan", {
     grantId: props.grantId,
     templateId: props.templateId,
-    prompt: promptParts.join("\n\n"),
+    prompt: joinedText,
   });
-}
-
-function openCandidateSelector() {
-  if (!props.candidatePlan || !Object.keys(props.candidatePlan).length) {
-    return;
-  }
-  isCandidateSelectorVisible.value = true;
 }
 
 function handleCandidateConfirm(payload) {
@@ -830,47 +798,6 @@ function handleCandidateConfirm(payload) {
 
 function buildCandidateMessage() {
   isCandidateSelectorVisible.value = true;
-  messages.value.push({
-    id: `candidates-${Date.now()}`,
-    role: "assistant",
-    type: "candidates",
-    sectionCount: props.sections.length,
-  });
-  scrollToBottom();
-}
-
-async function askNextQuestion() {
-  // 这个函数现在由后端 AI 通过 WebSocket 驱动
-  // 保留以保持兼容性，但实际工作由 WebSocket 消息处理
-  return;
-}
-
-function buildFinalMessage() {
-  const sections = props.sections
-    .map((section) => {
-      const content = props.finalPlan[section.id]?.content;
-      if (!content) {
-        return null;
-      }
-      return {
-        id: section.id,
-        name: section.name,
-        content,
-        html: generateHtmlForFinalSection(section, content),
-      };
-    })
-    .filter(Boolean);
-
-  if (!sections.length) {
-    return;
-  }
-
-  messages.value.push({
-    id: `final-${Date.now()}`,
-    role: "assistant",
-    type: "final",
-    sections,
-  });
   scrollToBottom();
 }
 
@@ -881,28 +808,6 @@ function handleVersionSelect(version) {
 
 async function handleVersionExport(version) {
   emit("requestExport", { version });
-}
-
-function generateHtmlForFinalSection(section, content) {
-  try {
-    return renderPlanToHtml(
-      [
-        {
-          id: section.id,
-          name: section.name || section.title || section.id,
-          json_schema: section.json_schema,
-        },
-      ],
-      {
-        [section.id]: {
-          content,
-        },
-      }
-    );
-  } catch (error) {
-    console.error("無法渲染最終章節", section?.id, error);
-    return "";
-  }
 }
 
 function scrollToBottom() {

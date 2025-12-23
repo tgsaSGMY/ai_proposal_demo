@@ -25,6 +25,7 @@
           :mode="projectRecord?.mode || 'generator'"
           :grant-id="selectedGrantId"
           :template-id="selectedTemplateId"
+          :saved-plan-versions="savedPlanVersions"
           @update:content="handleGeneratorContentUpdate"
           @autoFillComplete="handleGeneratorAutoFill"
           @generateUserInput="handleGeneratorUserInput"
@@ -99,14 +100,13 @@ const emit = defineEmits<{
       grant_id: string | null;
       template_id: string | null;
       stored_answer: Record<string, any> | null;
-      saved_plan: Record<string, any>;
+      // saved_plan: Record<string, any>;
     }
   ];
   candidateConfirmed: [
     payload: {
-      selectedData: Record<string, any>;
-      rejectedData: Record<string, any>;
-      finalPrompt: string;
+      selected: Record<string, any>;
+      rejected: Record<string, any>;
     }
   ];
 }>();
@@ -147,6 +147,14 @@ const projectPlanName = computed(() => {
 const projectPlanSummary = computed(() => {
   const fallback = props.projectRecord?.description;
   return typeof fallback === "string" ? fallback : "";
+});
+
+const savedPlanVersions = computed(() => {
+  const savedPlan = props.projectRecord?.saved_plan;
+  if (Array.isArray(savedPlan)) {
+    return savedPlan;
+  }
+  return [];
 });
 
 // Watchers to keep local state in sync
@@ -269,7 +277,7 @@ async function persistGeneratorState() {
       grant_id: selectedGrantId.value || null,
       template_id: selectedTemplateId.value || null,
       stored_answer: serializeForStorage(nextStoredAnswer),
-      saved_plan: serializeForStorage(finalPlanContent.value) || {},
+      // saved_plan: serializeForStorage(finalPlanContent.value) || {},
     });
   } catch (error) {
     console.warn("Failed to auto-save generator project", error);
@@ -565,9 +573,8 @@ function onCandidateConfirm({
   }
 
   emit("candidateConfirmed", {
-    selectedData: selected,
-    rejectedData: rejected,
-    finalPrompt: lastPrompt,
+    selected: selected,
+    rejected: rejected,
   });
   scheduleGeneratorAutosave();
 }

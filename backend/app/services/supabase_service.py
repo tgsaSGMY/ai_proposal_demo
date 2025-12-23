@@ -624,3 +624,23 @@ class SupabaseService:
             print(f"Error fetching exemplars by IDs {ids} from Supabase: {e}")
             return []
 
+    async def get_commands_by_user_id(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        根據 user_id 獲取所有開啟狀態（is_open = true）的 commands 記錄。
+        """
+        if not user_id:
+            return []
+        
+        try:
+            response = (
+                self.client.from_("commands")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("is_open", True)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Error fetching commands for user {user_id}: {e}", exc_info=True)
+            return []
+

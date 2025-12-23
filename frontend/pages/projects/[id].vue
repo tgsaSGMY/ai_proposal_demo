@@ -95,7 +95,7 @@
         :current-template="currentTemplate"
         :build-final-user-input="buildFinalUserInput"
         @updateProjectRecord="handleGeneratorUpdate"
-        @candidateConfirmed="handleGeneratorCandidateConfirm"
+        @candidateConfirmed="onCandidateConfirm"
       />
 
       <section
@@ -408,15 +408,6 @@ async function handleExportWord(payload?: { version?: any }) {
   }
 }
 
-function scheduleConversationSync() {
-  if (conversationSyncTimer.value) {
-    clearTimeout(conversationSyncTimer.value);
-  }
-  conversationSyncTimer.value = setTimeout(() => {
-    persistConversationHistory();
-  }, 2000);
-}
-
 async function persistConversationHistory() {
   if (!projectRecord.value) return;
   try {
@@ -446,57 +437,19 @@ async function handleGeneratorUpdate(payload: {
   grant_id: string | null;
   template_id: string | null;
   stored_answer: Record<string, any> | null;
-  saved_plan: Record<string, any>;
+  // saved_plan: Record<string, any>;
 }) {
   if (!projectRecord.value) return;
   try {
     await updateProject({
       stored_answer: payload.stored_answer,
-      saved_plan: payload.saved_plan,
+      // saved_plan: payload.saved_plan,
       grant_id: payload.grant_id,
       template_id: payload.template_id,
     });
   } catch (error) {
     console.warn("Failed to persist generator state", error);
   }
-}
-
-async function handleGeneratorCandidateConfirm(payload: {
-  selectedData: Record<string, any>;
-  rejectedData: Record<string, any>;
-  finalPrompt: string;
-}) {
-  lastGenerationPrompt.value = payload.finalPrompt;
-
-  // 创建新版本对象
-  const currentSavedPlan = projectRecord.value?.saved_plan || [];
-  const versionArray = Array.isArray(currentSavedPlan)
-    ? currentSavedPlan
-    : [currentSavedPlan];
-  const versionNumber = versionArray.length + 1;
-
-  const newVersion = {
-    number: versionNumber,
-    title: `版本 ${versionNumber}`,
-    timestamp: new Date().toLocaleString("zh-TW"),
-    data: payload.selectedData,
-  };
-
-  const updatedSavedPlan = [...versionArray, newVersion];
-
-  await persistProjectRecord({
-    savedPlan: updatedSavedPlan,
-    storedAnswer: projectRecord.value?.stored_answer || null,
-  });
-
-  // Save conversation history when version is confirmed
-  await persistConversationHistory();
-
-  savePreferenceData(
-    payload.selectedData,
-    payload.rejectedData,
-    payload.finalPrompt
-  );
 }
 
 async function updateProject(payload: Record<string, any>) {
@@ -572,6 +525,7 @@ async function onCandidateConfirm({
   rejected: Record<string, any>;
 }) {
   // 构建当前版本的内容
+  console.log("Confirmed candidates:", selected, rejected);
   const newPlanContent: Record<string, { content?: string; error?: string }> =
     {};
   Object.entries(selected).forEach(([sectionId, candidate]) => {
@@ -606,6 +560,7 @@ async function onCandidateConfirm({
   success("已選擇方案並填充到結果中！");
 
   // 保存到数据库
+  console.log(updatedSavedPlan);
   await persistProjectRecord({
     savedPlan: updatedSavedPlan,
     storedAnswer: projectRecord.value?.stored_answer || null,

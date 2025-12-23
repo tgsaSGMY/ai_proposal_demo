@@ -5,12 +5,38 @@
     <div
       class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 min-h-0 my-2"
     >
-      <h2 class="text-lg sm:text-2xl font-bold text-gray-800 my-auto">
-        生成結果
-      </h2>
+      <div>
+        <h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-3">
+          生成結果
+        </h2>
+        <!-- 版本選擇 Dropdown -->
+        <div
+          v-if="props.savedPlanVersions && props.savedPlanVersions.length >= 1"
+          class="max-w-xs"
+        >
+          <label
+            class="block text-xs sm:text-sm font-medium text-gray-700 mb-2"
+          >
+            選擇版本:
+          </label>
+          <select
+            v-model.number="selectedVersionIndex"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+          >
+            <option
+              v-for="(version, idx) in props.savedPlanVersions"
+              :key="idx"
+              :value="idx"
+              class="text-gray-700"
+            >
+              {{ version.title }} ({{ version.timestamp }})
+            </option>
+          </select>
+        </div>
+      </div>
       <button
         @click="handleExportToWord"
-        class="flex items-center justify-center gap-2 bg-rose-600 text-white font-medium sm:py-2.5 sm:px-4 rounded-xl shadow-sm hover:bg-rose-700 active:scale-[0.98] transition-all duration-200 text-sm sm:text-base"
+        class="flex items-center justify-center gap-2 bg-rose-600 text-white font-medium sm:py-2.5 sm:px-4 rounded-xl shadow-sm hover:bg-rose-700 active:scale-[0.98] transition-all duration-200 text-sm sm:text-base h-fit"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -73,6 +99,7 @@
             :schema="section.json_schema"
             :modelValue="getSectionContent(section.id)"
             @update:modelValue="updateSectionContent(section.id, $event)"
+            readonly
           />
           <!-- 等待生成狀態 -->
           <div
@@ -88,7 +115,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import JsonSchemaForm from "~/components/JsonSchemaForm.vue";
 import mammoth from "mammoth";
 import { exportPlanToWord } from "@/utils/exportToWord";
@@ -103,9 +130,11 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   grantId: { type: String, required: false },
   templateId: { type: String, required: false },
+  savedPlanVersions: { type: Array, default: () => [] },
 });
 
 const fileInput = ref(null);
+const selectedVersionIndex = ref(-1); // -1表示最新版本
 const { error: errorNotification } = useNotifications();
 const { isLoading } = useLoading();
 const { userId: currentUserId, refreshUser } = useCurrentUser();
@@ -125,7 +154,28 @@ onMounted(async () => {
   } catch (e) {
     console.error("Failed to load pdf.js library:", e);
   }
+
+  // 初始化时选择最新版本
+  if (props.savedPlanVersions && props.savedPlanVersions.length > 0) {
+    selectedVersionIndex.value = props.savedPlanVersions.length - 1;
+  } else {
+    selectedVersionIndex.value = -1;
+  }
 });
+
+// 监听 savedPlanVersions 变化，自动选择最新版本
+watch(
+  () => props.savedPlanVersions,
+  (newVersions) => {
+    if (newVersions && newVersions.length > 0) {
+      // 始终选择最新版本（最后一个）
+      selectedVersionIndex.value = newVersions.length - 1;
+    } else {
+      selectedVersionIndex.value = -1;
+    }
+  },
+  { deep: true }
+);
 
 const emit = defineEmits([
   "update:content",
@@ -141,9 +191,16 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-// 直接返回對象
+// 从选定版本获取内容（只读）
 function getSectionContent(sectionId) {
-  const content = props.planContent[sectionId]?.content;
+  let content;
+
+  // 从选定的版本获取内容
+  const version = props.savedPlanVersions[selectedVersionIndex.value];
+  if (version?.data) {
+    content = version.data[sectionId]?.content;
+  }
+
   // 確保返回的是一個對象
   return typeof content === "object" && content !== null ? content : {};
 }
@@ -159,15 +216,18 @@ async function handleExportToWord() {
   }
   await exportPlanToWord(
     props.sections,
-    props.planContent,
+    props.savedPlanVersions[selectedVersionIndex.value]
+      ? props.savedPlanVersions[selectedVersionIndex.value].data
+      : "",
     props.grantId,
     props.templateId
   );
 }
 
-// 接收對象
+// 禁止所有编辑
 function updateSectionContent(sectionId, newContentObject) {
-  emit("update:content", { sectionId, content: newContentObject });
+  errorNotification("已保存版本不能編輯，請返回當前版本進行修改");
+  return;
 }
 
 function handleFileLoadClick() {

@@ -146,29 +146,85 @@
                     >
                       {{ subField.shortLabel || subField.label || field.title }}
                     </label>
-                    <button
-                      type="button"
-                      class="text-[11px] sm:text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-                      @click.stop="
-                        openFileImportModal(section.sectionId, field, subField)
-                      "
-                    >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        stroke-width="1.5"
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="text-[11px] sm:text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                        @click.stop="
+                          generateFieldWithAI(
+                            section.sectionId,
+                            field,
+                            subField
+                          )
+                        "
+                        :disabled="isGeneratingField"
                       >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
-                        />
-                      </svg>
-                      匯入檔案
-                    </button>
+                        <svg
+                          v-if="!isGeneratingField"
+                          class="w-3.5 h-3.5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                        <svg
+                          v-else
+                          class="animate-spin w-3.5 h-3.5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"
+                          ></circle>
+                          <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                          ></path>
+                        </svg>
+                        AI填寫
+                      </button>
+                      <button
+                        type="button"
+                        class="text-[11px] sm:text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                        @click.stop="
+                          openFileImportModal(
+                            section.sectionId,
+                            field,
+                            subField
+                          )
+                        "
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
+                          />
+                        </svg>
+                        匯入檔案
+                      </button>
+                    </div>
                   </div>
                   <textarea
                     :id="subField.id"
@@ -243,6 +299,7 @@ import {
 } from "~/utils/dynamicSchema";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { useRuntimeConfig } from "#app";
 import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModal.vue";
 
 const modelValue = defineModel();
@@ -269,6 +326,12 @@ const emit = defineEmits([
 ]);
 
 const { success: notifySuccess, error: notifyError } = useNotifications();
+const { userId } = useCurrentUser();
+
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+const isGeneratingField = ref(false);
 
 const displayPlanName = computed(() => {
   const provided = (props.projectTitle || "").trim();
@@ -448,139 +511,6 @@ const emitGeneratePlan = () => {
   emit("generatePlan", { summaries: [] });
 };
 
-function triggerExcelUpload() {
-  if (isImportingFromExcel.value) {
-    return;
-  }
-  const input = excelInputRef.value;
-  if (input) {
-    input.value = "";
-    input.click();
-  }
-}
-
-function triggerWordUpload() {
-  const input = wordInputRef.value;
-  if (input) {
-    input.value = "";
-    input.click();
-  }
-}
-
-async function handleWordFileChange(event) {
-  const input = event?.target;
-  const file = input?.files?.[0];
-  if (input) {
-    input.value = "";
-  }
-  if (!file) {
-    return;
-  }
-
-  const { show: showLoading, hide: hideLoading } = useLoading();
-  showLoading("正在從 Word 檔案中提取內容...");
-
-  try {
-    // 檢查是否選擇了模板
-    if (!selectedTemplateId.value) {
-      notifyError("請先選擇模板，以便我們知道要填充哪些欄位");
-      return;
-    }
-
-    // 提取 Word 檔案中的文本
-    const extractedText = await extractTextFromWord(file);
-
-    const userId = await getUserIdOrNotify();
-    if (!userId) {
-      return;
-    }
-
-    // 準備傳送給後端的資料
-    const payload = {
-      document_text: extractedText,
-      sections: dynamicSections.value.map((s) => ({
-        section_id: s.sectionId,
-        section_name: s.sectionName,
-        json_schema: buildSectionSchema(s),
-      })),
-      user_id: userId,
-    };
-
-    const filledContent = await callAutoFillApi(payload, API_BASE_URL);
-    modelValue.value =
-      filledContent?.main_idea?.content?.project_name_and_summary || "";
-
-    // 處理結果：填入動態欄位
-    processAutoFillResults(
-      filledContent,
-      dynamicSections.value,
-      updateDynamicValue,
-      ensureFieldExpanded
-    );
-
-    notifySuccess("Word 檔案匯入完成！");
-  } catch (error) {
-    console.error("Failed to import Word document", error);
-    const message = error?.message || "匯入過程發生未知錯誤";
-    notifyError(`匯入失敗：${message}`);
-  } finally {
-    hideLoading();
-  }
-}
-
-async function handleExcelFileChange(event) {
-  const input = event?.target;
-  const file = input?.files?.[0];
-  if (input) {
-    input.value = "";
-  }
-  if (!file) {
-    return;
-  }
-
-  isImportingFromExcel.value = true;
-  try {
-    const buffer = await file.arrayBuffer();
-    const rows = extractExcelRows(buffer);
-    const result = applyExcelRows({
-      rows,
-      dynamicSections: dynamicSections.value,
-      replyTargetMap: excelReplyTargetMap.value,
-      onFill: (sectionId, propertyKey, subFieldKey, value) => {
-        updateDynamicValue(sectionId, propertyKey, subFieldKey, value);
-        ensureFieldExpanded(sectionId, propertyKey);
-      },
-    });
-
-    if (result.summaryText) {
-      modelValue.value = result.summaryText;
-    }
-
-    const messageParts = [];
-    if (result.summaryText) {
-      messageParts.push("已更新摘要內容");
-    }
-    if (result.appliedCount > 0) {
-      messageParts.push(`填入 ${result.appliedCount} 個欄位`);
-    }
-    if (result.skippedCount > 0) {
-      messageParts.push(`略過 ${result.skippedCount} 筆未匹配欄位`);
-    }
-
-    if (messageParts.length > 0) {
-      notifySuccess(`Excel 匯入完成：${messageParts.join("、")}`);
-    } else {
-      notifyError("Excel 檔案未包含可匯入的資料");
-    }
-  } catch (error) {
-    console.error("Failed to import Excel data", error);
-    const message = error?.message || "匯入過程發生未知錯誤";
-    notifyError(`匯入失敗：${message}`);
-  } finally {
-    isImportingFromExcel.value = false;
-  }
-}
-
 function ensureFieldExpanded(sectionId, propertyKey) {
   const id = fieldPanelKey(sectionId, propertyKey);
   if (expandedFieldIds.value.has(id)) {
@@ -629,6 +559,70 @@ watch(
     }
   }
 );
+
+async function generateFieldWithAI(sectionId, field, subField) {
+  if (isGeneratingField.value) return;
+
+  isGeneratingField.value = true;
+  try {
+    // 收集已填寫的其他欄位
+    const filledFields = {};
+    const sections = buildDynamicSections(internalDynamicValues.value);
+    sections.forEach((section) => {
+      section.fields.forEach((f) => {
+        f.subFields.forEach((sub) => {
+          if (sub.value && sub.value.trim() !== "") {
+            filledFields[sub.label || f.title] = sub.value;
+          }
+        });
+      });
+    });
+
+    // 调用后端 API
+    const response = await fetch(`${API_BASE_URL}/generate_field_content`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        field_title: field.title,
+        field_description: field.description || "",
+        subfield_label: subField.shortLabel || subField.label || field.title,
+        current_value: subField.value || "",
+        filled_fields: filledFields,
+        plan_name: props.projectTitle || "",
+        plan_summary: props.projectSummary || "",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`服務器錯誤 (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+    const generatedContent = result.generated_content
+      ? "(AI 填寫) " + result.generated_content
+      : "";
+
+    if (generatedContent.trim()) {
+      // 更新欄位內容
+      updateDynamicValue(
+        sectionId,
+        field.propertyKey,
+        subField.key,
+        generatedContent
+      );
+      ensureFieldExpanded(sectionId, field.propertyKey);
+      notifySuccess("AI 已為欄位填寫內容，請檢查並編輯。");
+    } else {
+      notifyError("AI 無法為此欄位生成內容。");
+    }
+  } catch (error) {
+    console.error("AI 填寫失敗:", error);
+    notifyError(`AI 填寫失敗: ${error.message}`);
+  } finally {
+    isGeneratingField.value = false;
+  }
+}
 </script>
 
 <style scoped>

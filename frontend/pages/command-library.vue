@@ -141,7 +141,7 @@
               <h3 class="text-lg font-semibold text-gray-900">
                 {{ command.title }}
               </h3>
-              <p class="text-sm text-gray-500 min-h-[60px]">
+              <p class="text-sm text-gray-500 h-[60px] overflow-hidden">
                 {{ command.description }}
               </p>
             </div>

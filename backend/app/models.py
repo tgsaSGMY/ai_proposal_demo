@@ -180,3 +180,13 @@ class AutoFillRequest(BaseModel):
     document_text: str
     sections: List[SectionSchemaInfo]
     prompt_mode: str = "default"  # "default" 或 "word_import" - word_import 针对从 Word 文件导入进行优化
+
+class GenerateFieldContentRequest(BaseModel):
+    """基於已填寫欄位生成單個欄位內容的請求。"""
+    field_title: str = Field(..., description="欄位名稱")
+    field_description: str = Field("", description="欄位說明")
+    subfield_label: str = Field(..., description="子欄位標籤")
+    current_value: str = Field("", description="欄位當前值")
+    filled_fields: Dict[str, str] = Field(default_factory=dict, description="已填寫的其他欄位（標籤 -> 內容）")
+    plan_name: str = Field("", description="計畫名稱")
+    plan_summary: str = Field("", description="計畫摘要")

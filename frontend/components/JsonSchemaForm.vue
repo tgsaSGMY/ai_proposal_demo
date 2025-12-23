@@ -7,13 +7,13 @@
         {{ propInfo.title || key }}
       </label>
 
-      <!-- 渲染 String 類型的字段 -->
       <template v-if="propInfo.type === 'string'">
         <textarea
           :value="modelValue[key]"
           @input="updateValue(key, $event.target.value)"
+          :disabled="props.readonly"
           rows="5"
-          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
         ></textarea>
       </template>
 
@@ -22,7 +22,8 @@
           type="number"
           :value="modelValue[key]"
           @input="updateValue(key, parseFloat($event.target.value))"
-          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+          :disabled="props.readonly"
+          class="p-2 w-full font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </template>
 
@@ -31,7 +32,8 @@
         <div class="border border-gray-200 rounded-lg bg-gray-50">
           <button
             type="button"
-            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition"
+            :disabled="props.readonly"
+            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
             @click="toggleCollapse(makeBlockKey('object', key))"
           >
             <span class="italic text-gray-400 text-sm">詳細設定</span>
@@ -61,6 +63,7 @@
               <JsonSchemaForm
                 :schema="propInfo"
                 :modelValue="getObjectModel(key)"
+                :readonly="props.readonly"
                 @update:modelValue="(val) => updateValue(key, val)"
               />
             </div>
@@ -77,7 +80,8 @@
         <div class="border border-gray-200 rounded-lg bg-gray-50">
           <button
             type="button"
-            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition"
+            :disabled="props.readonly"
+            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
             @click="toggleCollapse(makeBlockKey('array', key))"
           >
             <span class="italic text-gray-400 text-sm">列表內容</span>
@@ -109,7 +113,8 @@
               >
                 <button
                   type="button"
-                  class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-600 hover:bg-indigo-100 transition"
+                  :disabled="props.readonly"
+                  class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-600 hover:bg-indigo-100 transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
                   @click="
                     toggleCollapse(
                       makeBlockKey('array-item', `${key}-${index}`)
@@ -151,9 +156,11 @@
                     <JsonSchemaForm
                       :schema="propInfo.items"
                       :modelValue="item"
+                      :readonly="props.readonly"
                       @update:modelValue="updateArrayItem(key, index, $event)"
                     />
                     <button
+                      v-if="!props.readonly"
                       @click="removeArrayItem(key, index)"
                       class="absolute top-2 right-2 text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200 text-xs sm:text-base"
                     >
@@ -176,6 +183,7 @@
                 </transition>
               </div>
               <button
+                v-if="!props.readonly"
                 @click="addArrayItem(key, propInfo.items.properties)"
                 class="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
               >
@@ -195,7 +203,8 @@
         <div class="border border-gray-200 rounded-lg bg-gray-50">
           <button
             type="button"
-            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition"
+            :disabled="props.readonly"
+            class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-700 hover:bg-indigo-50 transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
             @click="toggleCollapse(makeBlockKey('array', key))"
           >
             <span class="italic text-gray-400 text-sm">詳細設定</span>
@@ -228,10 +237,12 @@
                 <textarea
                   :value="item"
                   @input="updateArrayItem(key, index, $event.target.value)"
+                  :disabled="props.readonly"
                   rows="3"
-                  class="flex-1 p-2 font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition"
+                  class="flex-1 p-2 font-mono text-xs sm:text-sm bg-gray-100 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 ></textarea>
                 <button
+                  v-if="!props.readonly"
                   @click="removeArrayItem(key, index)"
                   class="text-red-500 hover:text-red-700 p-1 rounded-full bg-red-100 hover:bg-red-200 text-xs sm:text-base"
                 >
@@ -252,6 +263,7 @@
                 </button>
               </div>
               <button
+                v-if="!props.readonly"
                 @click="addArrayStringItem(key)"
                 class="text-xs sm:text-sm font-medium text-indigo-600 hover:text-indigo-800"
               >
@@ -275,6 +287,7 @@ defineOptions({
 const props = defineProps({
   schema: { type: Object, required: true },
   modelValue: { type: Object, required: true },
+  readonly: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["update:modelValue"]);

@@ -360,6 +360,7 @@ class LLMService:
           
             user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
         
+
             # 檢查是否有自定義指令，並將它們附加到 user_content
             if section_details.custom_prompt_list:
                 custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
@@ -377,7 +378,7 @@ class LLMService:
                 error_message = llm_error.get("error")
             else:
                 final_content_json, parse_error = extract_json_block(raw_output, section_id)
-                await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
+                # await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
                 if parse_error:
                     error_message = parse_error.get("error")
                 else:
