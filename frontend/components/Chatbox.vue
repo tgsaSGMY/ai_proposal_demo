@@ -733,7 +733,7 @@ async function handleSend() {
     return;
   }
   const normalizedText = draftMessage.value.trim();
-  const messageContent = normalizedText || "無";
+  const messageContent = normalizedText || "請AI自動幫我填寫";
 
   // 添加用户消息到聊天记录
   const userMsg = {
