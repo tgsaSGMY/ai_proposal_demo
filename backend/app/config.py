@@ -16,6 +16,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 # LLM API 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OLLAMA_BASE_URL = "http://localhost:11434/v1" # Ollama 的預設 API endpoint
 
 # 向量嵌入配置

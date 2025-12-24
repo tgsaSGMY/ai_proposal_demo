@@ -379,7 +379,7 @@ async def generate_plan(
         if commands_text:
             final_user_input = f"{final_user_input}\n\n【來自 Commands 的額外上下文】\n{commands_text}"
 
-    print("Final user input for plan generation:", final_user_input)
+    print("Final model for plan generation:", request_data.selected_model)
     async with httpx.AsyncClient() as client:
         # 每個 section 生成 num_candidates 個候選版本
         tasks = [
@@ -393,6 +393,7 @@ async def generate_plan(
                 user_id=request_data.user_id,
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
+                selected_model=request_data.selected_model,
             )
             for s in sections
             for _ in range(num_candidates)
@@ -619,18 +620,22 @@ async def websocket_chat_guidance(websocket: WebSocket):
         
         # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
         system_prompt = f"""
-你是一个专业的数据归档员。
-你的任务是根据**用户和助手的最新对话**，将确认的信息提取并归档到指定字段中。
+你是一個專業的資料歸檔員。
+你的任務是根據使用者與助理的最新對話，將已確認的資訊提取並歸檔到指定欄位中。
+需要使用繁體中文對話
 
-【字段定义】
+【欄位定義】
 {q_desc}
 
 【分析策略】
-1. 观察用户的输入。
-2. **重点参考助手(Assistant)的回复**。如果助手在回复中确认了某个数值（例如"好的，预算5000已记录"），则该信息可信度极高。
-3. 仅输出 JSON。
 
-【输出格式】
+觀察使用者的輸入。
+
+重點參考助理（Assistant）的回覆。如果助理在回覆中確認了某個數值（例如「好的，預算 5000 已記錄」），則該資訊的可信度極高。
+
+僅輸出 JSON。
+
+【輸出格式】
 {{
   "filled_fields": {{ "field_id": "提取的内容" }}
 }}
@@ -662,23 +667,34 @@ async def websocket_chat_guidance(websocket: WebSocket):
             next_q_label = ua_list[0].get("label") or ua_list[0].get("id")
 
         system_prompt = f"""
-你是一个友好的项目规划助手，正在协助用户填写【{grant_name}】。
+你是一位友善的專案規劃助理，正在協助使用者填寫【{grant_name}】。
 
-【当前系统记录状态】(可能稍微滞后，请以最新对话为准)
-- 已填 (Do NOT ask these)：{a_desc}
-- 待填：{ua_desc}
+【目前系統記錄狀態】
 
-【重要规则】
-1. **绝对禁止**重复询问【已填数据】中的字段。
-2. 如果【已填数据】中已有内容，请直接基于这些内容，询问【待填字段】中的下一项。
-3. 你的首要目标是推进进度，直接引导到：**{next_q_label}**。
+（可能略有延遲，請以最新對話為準）
 
-【任务】
-1. 回应用户的最新输入。如果用户提供了信息，请进行确认或总结（例如："好的，已记录..."）。
-2. 如果用户刚刚回答了某个【待填】问题，请自然地继续询问下一个字段：{next_q_label}。
-3. 如果用户的问题不清楚，请追问。
+已填（Do NOT ask these）：{a_desc}
 
-注意：请根据对话历史流畅回应。即使系统显示某字段"待填"，如果用户刚刚在对话里回答了，就当作已填处理。
+待填：{ua_desc}
+
+【重要規則】
+
+絕對禁止重複詢問【已填資料】中的欄位。
+
+若【已填資料】中已有內容，請直接根據這些內容，詢問【待填欄位】中的下一項。
+
+你的首要目標是推進進度，直接引導至：{next_q_label}。
+
+如果現在詢問的是商業模式運作流程，一定要舉出這個例子：“客戶登入→使用平台→取得反饋→改良產品→行銷推廣”
+
+【任務】
+回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。
+
+若使用者剛剛回答了某個【待填】問題，請自然地接續詢問下一個欄位：{next_q_label}。
+
+若使用者的問題不清楚，請進一步追問以釐清。
+
+注意：請根據對話歷史流暢回應。即使系統顯示某欄位為「待填」，只要使用者剛剛在對話中已回答，請視為已填並繼續流程。
 """
         
         # 构建 Messages：System -> History -> User

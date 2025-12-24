@@ -181,12 +181,40 @@
         </div>
 
         <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
-          <textarea
-            v-model="draftMessage"
-            class="mt-3 h-16 w-full resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-            :placeholder="composerPlaceholder"
-            @keydown.enter.prevent="handleEnter"
-          ></textarea>
+          <div class="relative">
+            <textarea
+              v-model="draftMessage"
+              class="mt-3 h-16 w-full resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 pr-14 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+              :placeholder="composerPlaceholder"
+              @keydown.enter.prevent="handleEnter"
+            ></textarea>
+            <button
+              type="button"
+              class="absolute right-6 top-5 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e4e7ff] bg-white text-[#ff6b6b] shadow hover:bg-[#fff6f6]"
+              @click="openAttachmentModal"
+              title="匯入檔案輔助填寫"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M21 12.79V7.5a4.5 4.5 0 00-9 0v9a3 3 0 006 0v-7.5"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M3 12v5.5a4.5 4.5 0 008.8 1.5"
+                />
+              </svg>
+            </button>
+          </div>
           <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap gap-3">
               <button
@@ -206,14 +234,46 @@
                 由AI自動幫忙填寫
               </button>
             </div>
-            <button
-              type="button"
-              class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="!canRequestPlan || isGenerating"
-              @click="requestGeneration"
-            >
-              {{ isGenerating ? "推演中..." : "輸出完整推演" }}
-            </button>
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2">
+                <select
+                  v-model="selectedModel"
+                  class="rounded-full border border-[#dfe3ff] bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#f4f5ff] focus:border-[#ff4b5c] focus:outline-none"
+                >
+                  <option value="">預設模型</option>
+                  <optgroup label="GPT 模型">
+                    <option value="gpt-5.2">gpt-5.2</option>
+                    <option value="gpt-5.1">gpt-5.1</option>
+                    <option value="gpt-5-mini">
+                      gpt-5-mini（目前内部人員）
+                    </option>
+                    <option value="gpt-5-nano">gpt-5-nano</option>
+                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                    <option value="gpt-4.1-nano">
+                      gpt-4.1-nano(目前外部人員)
+                    </option>
+                  </optgroup>
+                  <optgroup label="Gemini 模型">
+                    <option value="gemini-3-pro-preview">
+                      gemini-3-pro-preview
+                    </option>
+                    <option value="gemini-3-flash-preview">
+                      gemini-3-flash-preview
+                    </option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  </optgroup>
+                </select>
+              </div>
+              <button
+                type="button"
+                class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canRequestPlan || isGenerating"
+                @click="requestGeneration"
+              >
+                {{ isGenerating ? "推演中..." : "輸出完整推演" }}
+              </button>
+            </div>
           </div>
         </footer>
 
@@ -250,6 +310,14 @@
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
     />
+    <FieldFileImportModal
+      v-model:is-open="isFileImportOpen"
+      field-title="聊天輸入"
+      field-description="上傳 PDF/TXT 後可自動擷取內容填入訊息"
+      :sub-field-label="fileImportSubLabel"
+      :sub-field-value="fileImportInitialValue"
+      @confirm="handleFileImportConfirm"
+    />
   </div>
 </template>
 
@@ -266,6 +334,7 @@ import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
 import AnswerEditModal from "~/components/AnswerEditModal.vue";
 import ChatSidebar from "~/components/ChatSidebar.vue";
 import PlanVersionModal from "~/components/PlanVersionModal.vue";
+import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import {
   buildDynamicSections,
@@ -330,6 +399,10 @@ const activeQuestionId = ref(null);
 
 const chatContainer = ref(null);
 const draftMessage = ref("");
+const isFileImportOpen = ref(false);
+const DEFAULT_FILE_IMPORT_LABEL = "聊天輸入";
+const fileImportInitialValue = ref("");
+const fileImportSubLabel = ref(DEFAULT_FILE_IMPORT_LABEL);
 const lastCandidateSnapshot = ref("{}");
 const lastFinalSnapshot = ref("{}");
 const isCandidateSelectorVisible = ref(false);
@@ -344,6 +417,7 @@ const isFetchingNextQuestion = ref(false);
 const projectRealtimeChannel = ref(null);
 const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
+const selectedModel = ref("");
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
@@ -706,6 +780,32 @@ function saveEditedAnswer() {
   cancelEditAnswer();
 }
 
+function getLastAssistantMessageLabel() {
+  for (let idx = messages.value.length - 1; idx >= 0; idx -= 1) {
+    const message = messages.value[idx];
+    if (
+      message.role === "assistant" &&
+      (message.type === "text" || message.type === "answer") &&
+      message.content &&
+      message.content.trim()
+    ) {
+      return message.content.trim();
+    }
+  }
+  return DEFAULT_FILE_IMPORT_LABEL;
+}
+
+function openAttachmentModal() {
+  fileImportInitialValue.value = draftMessage.value || "";
+  fileImportSubLabel.value = getLastAssistantMessageLabel();
+  isFileImportOpen.value = true;
+}
+
+function handleFileImportConfirm(value) {
+  draftMessage.value = value;
+  isFileImportOpen.value = false;
+}
+
 async function handleEnter(event) {
   if (event.shiftKey) {
     return;
@@ -784,11 +884,13 @@ async function requestGeneration() {
       return `【${key}】\n${text}`;
     })
     .join("\n\n");
+  console.log(selectedModel.value, "selected model");
 
   emit("generatePlan", {
     grantId: props.grantId,
     templateId: props.templateId,
     prompt: joinedText,
+    selectedModel: selectedModel.value || undefined,
   });
 }
 

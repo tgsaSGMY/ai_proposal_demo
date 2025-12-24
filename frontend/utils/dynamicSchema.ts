@@ -140,8 +140,7 @@ const RAW_DYNAMIC_SCHEMA: Record<
       },
       商業模式運作流程: {
         title: "3.商業模式運作流程",
-        description:
-          "舉例：客戶登入→使用平台→取得反饋→改良產品→行銷推廣→客戶登入",
+        description: "舉例：客戶登入→使用平台→取得反饋→改良產品→行銷推廣",
       },
     },
   },

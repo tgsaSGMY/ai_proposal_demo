@@ -572,7 +572,10 @@ async function onCandidateConfirm({
   savePreferenceData(selected, rejected, lastGenerationPrompt.value);
 }
 
-async function handleChatPlanGeneration(payload: { prompt: string }) {
+async function handleChatPlanGeneration(payload: {
+  prompt: string;
+  selectedModel?: string;
+}) {
   if (!payload?.prompt || !selectedTemplateId.value || !selectedGrantId.value) {
     notifyError("請先完成基本設定，並輸入至少一則對話訊息。");
     return;
@@ -581,6 +584,7 @@ async function handleChatPlanGeneration(payload: { prompt: string }) {
   finalPlanContent.value = {};
   candidatePlan.value = {};
   lastGenerationPrompt.value = payload.prompt;
+  console.log(payload.selectedModel);
 
   try {
     const sectionsToGenerate = currentSections.value.map((section) => ({
@@ -603,6 +607,7 @@ async function handleChatPlanGeneration(payload: { prompt: string }) {
         num_candidates: 2,
         is_external: useModelType.value === "external",
         sections: sectionsToGenerate,
+        selected_model: payload.selectedModel,
       }),
     });
 

@@ -26,6 +26,15 @@ class LLMService:
         self.max_retries = 3
         self.initial_retry_delay = 1  # 秒
         self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
+    
+    def _get_provider_for_model(self, model_id: str) -> str:
+        """根據 model_id 判斷屬於哪個 provider"""
+        if model_id.startswith("gemini-"):
+            return "gemini"
+        elif model_id.startswith("gpt-") or model_id.startswith("gpt4") or model_id.startswith("gpt-5") or model_id.startswith("gpt-4"):
+            return "openai"
+        else:
+            return "openai"  # Default to openai
 
 
     async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
@@ -98,6 +107,28 @@ class LLMService:
             payload = {"model": model_id, "messages": messages, "stream": False, "options": {"temperature": 0.3}}
             if is_json_output: payload["format"] = "json"
             return url, headers, payload
+        
+        elif provider == "gemini":
+            # Google Gemini API
+            from app.config import GEMINI_API_KEY
+            if not GEMINI_API_KEY: raise ValueError("GEMINI_API_KEY not set.")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={GEMINI_API_KEY}"
+            headers = {"Content-Type": "application/json"}
+            # Convert OpenAI messages format to Gemini format
+            gemini_contents = []
+            for msg in messages:
+                role = msg.get("role")
+                content = msg.get("content")
+                if role == "system":
+                    # System message should be part of the first user message or handled differently
+                    continue
+                gemini_role = "user" if role == "user" else "model"
+                gemini_contents.append({"role": gemini_role, "parts": [{"text": content}]})
+            
+            payload = {"contents": gemini_contents, "generationConfig": {"temperature": 0.3}}
+            if is_json_output:
+                payload["generationConfig"]["responseMimeType"] = "application/json"
+            return url, headers, payload
             
         raise ValueError(f"Unsupported external provider: {provider}")
 
@@ -146,19 +177,31 @@ class LLMService:
             raise
 
     async def call_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict], is_json_output: bool = True) -> Tuple[Optional[str], Optional[Dict]]:
-        """呼叫外部 LLM API (如 OpenAI, Ollama)，並處理重試邏輯和錯誤。"""
+        """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。"""
         async with self.request_semaphore:  # 限制并发请求数
             for attempt in range(self.max_retries): 
                 try:
                     api_url, headers, payload = self._build_api_request(model_info, messages, is_json_output)
                     response = await session.post(api_url, json=payload, headers=headers, timeout=300)
                     response.raise_for_status()
-                    return response.json()["choices"][0]["message"]["content"], None
+                    
+                    # 根據 provider 解析響應
+                    provider = model_info.get("provider")
+                    response_json = response.json()
+                    
+                    if provider == "gemini":
+                        # Gemini 響應格式
+                        content = response_json.get("candidates", [{}])[0].get("content", {})
+                        parts = content.get("parts", [{}])
+                        text = parts[0].get("text", "") if parts else ""
+                        return text, None
+                    else:
+                        # OpenAI/Ollama 響應格式
+                        return response_json["choices"][0]["message"]["content"], None
                     
                 except httpx.HTTPStatusError as e:
                     # 处理 429 速率限制错误
                     if e.response.status_code == 429:
-                        print(e.response.text)
                         if attempt < self.max_retries - 1:
                             # 从响应头获取 Retry-After，如果没有则使用指数退避
                             retry_after = e.response.headers.get("Retry-After")
@@ -179,19 +222,16 @@ class LLMService:
                             return None, {"error": error_msg}
                     
                     # 其他 HTTP 错误
-                    print(e.response.text)
                     error_msg = f"API call failed for model {model_info.get('id')}: {e}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}
                     
                 except ValueError as e:
-                    print(e.response.text)
                     error_msg = f"Configuration error for model {model_info.get('id')}: {e}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}
                     
                 except Exception as e:
-                    print(e.response.text)
                     error_msg = f"An unexpected error occurred during API call: {repr(e)}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}
@@ -313,7 +353,8 @@ class LLMService:
         user_id: str,
         supabase_service: "SupabaseService",
         use_actor_critic: bool = False,
-        is_external: Optional[bool] = None
+        is_external: Optional[bool] = None,
+        selected_model: Optional[str] = None
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
@@ -322,7 +363,19 @@ class LLMService:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 
         # 2. --- 路由与配额检查 ---
-        original_model_info = resolve_model(grant_id, template_id, section_id, app_state, is_external=is_external)
+        # 如果提供了 selected_model，直接创建该模型的 info 对象；否则使用原有的 resolve_model 逻辑
+        if selected_model:
+            # 根据 model_id 判断 provider
+            provider = self._get_provider_for_model(selected_model)
+            original_model_info = {
+                "id": selected_model,
+                "provider": provider,
+                "type": "external"
+            }
+        else:
+            original_model_info = resolve_model(grant_id, template_id, section_id, app_state, is_external=is_external)
+        
+        print("llm service model",original_model_info)
         if not original_model_info:
             return SectionGenerateResponse(section_id=section_id, error="Model routing failed.")
         
@@ -353,7 +406,7 @@ class LLMService:
         final_content_json = None; error_message = None
         
         if model_type == 'external':
-            # --- 流程 A: 外部或基础 Ollama API 调用 ---
+            # --- 流程 A: 外部调用 ---
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
 
             few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
