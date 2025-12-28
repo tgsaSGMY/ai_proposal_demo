@@ -624,7 +624,6 @@ async function onCandidateConfirm({
   rejected: Record<string, any>;
 }) {
   // 构建当前版本的内容
-  console.log("Confirmed candidates:", selected, rejected);
   const newPlanContent: Record<string, { content?: string; error?: string }> =
     {};
   Object.entries(selected).forEach(([sectionId, candidate]) => {
@@ -659,7 +658,6 @@ async function onCandidateConfirm({
   success("已選擇方案並填充到結果中！");
 
   // 保存到数据库
-  console.log(updatedSavedPlan);
   await persistProjectRecord({
     savedPlan: updatedSavedPlan,
     storedAnswer: projectRecord.value?.stored_answer || null,
@@ -683,7 +681,6 @@ async function handleChatPlanGeneration(payload: {
   finalPlanContent.value = {};
   candidatePlan.value = {};
   lastGenerationPrompt.value = payload.prompt;
-  console.log(payload.selectedModel);
 
   try {
     const sectionsToGenerate = currentSections.value.map((section) => ({

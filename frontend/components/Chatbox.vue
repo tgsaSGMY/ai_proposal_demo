@@ -887,7 +887,6 @@ async function requestGeneration() {
       return `【${key}】\n${text}`;
     })
     .join("\n\n");
-  console.log(selectedModel.value, "selected model");
 
   emit("generatePlan", {
     grantId: props.grantId,

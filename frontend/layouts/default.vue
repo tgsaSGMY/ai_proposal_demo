@@ -420,8 +420,6 @@ onMounted(async () => {
 
       // 執行檢查
       isInternal.value = await checkIsInternal();
-
-      console.log("Is Internal User?", isInternal.value);
     }
   });
   authSubscription = subscription;

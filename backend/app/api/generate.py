@@ -380,7 +380,6 @@ async def generate_plan(
         if commands_text:
             final_user_input = f"{final_user_input}\n\n【來自 Commands 的額外上下文】\n{commands_text}"
 
-    print("Final model for plan generation:", request_data.is_external)
     async with httpx.AsyncClient() as client:
         # 每個 section 生成 num_candidates 個候選版本
         tasks = [
