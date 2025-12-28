@@ -252,7 +252,9 @@ const currentSections = computed(() => {
 // --- API Calls ---
 async function fetchData() {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const [configsRes, modelsRes, rulesRes] = await Promise.all([
       fetch(`${API_BASE_URL}/config`, {
@@ -282,6 +284,8 @@ async function fetchData() {
     allConfigs.value = await configsRes.json();
     allModels.value = await modelsRes.json();
     routingRules.value = await rulesRes.json();
+    selectedGrantId.value = "marketing";
+    selectedTemplateId.value = "siir";
   } catch (error) {
     console.error("Data fetching error:", error);
     errorNotification("無法加載配置數據，請檢查後端服務。");
@@ -294,7 +298,9 @@ onMounted(fetchData);
 async function refreshConfigurations() {
   isRefreshing.value = true;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/config/refresh`, {
       method: "POST",
@@ -368,7 +374,9 @@ function closeModal() {
 
 async function handleSaveRule(rulePayload) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/routing-rules`, {
       method: "POST",
@@ -401,7 +409,9 @@ async function handleSaveRule(rulePayload) {
 
 async function handleDeleteRule(ruleId) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/routing-rules/${ruleId}`, {
       method: "DELETE",
@@ -450,7 +460,7 @@ function handleSettingsUpdated(payload) {
 }
 
 watch(availableTemplates, (newTemplates) => {
-  if (newTemplates && newTemplates.length === 1 && !selectedTemplateId.value) {
+  if (newTemplates) {
     selectedTemplateId.value = newTemplates[0].id;
   }
 });

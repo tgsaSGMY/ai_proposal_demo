@@ -119,7 +119,7 @@
                     ? 'border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200'
                     : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
                 "
-                @click.native="handleNavClick"
+                @click="handleNavClick"
               >
                 <div class="flex items-center gap-3">
                   <span
@@ -329,7 +329,153 @@
     </main>
   </div>
 </template>
+<script setup>
+import { ref, onMounted, onBeforeUnmount, watch } from "vue";
+import { supabase } from "~/utils/supabaseClient";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 
+const router = useRouter();
+const route = useRoute();
+
+// UI 狀態
+const showSidebar = ref(false);
+const isAuthenticated = ref(false);
+const isInternal = ref(false); // 權限：是否為內部人員
+const userTotalCost = ref(0);
+
+// 計算屬性或 Watcher 來決定顯示哪種側邊欄
+// 這樣可以確保"側邊欄"永遠跟"當前網址"是對應的
+const isInternalView = ref(false);
+
+// 監聽路由變化，自動切換側邊欄狀態
+watch(
+  () => route.path,
+  (newPath) => {
+    // 如果路徑以 /_builder 開頭，且使用者有權限，則顯示內部視圖
+    if (newPath.startsWith("/_builder") && isInternal.value) {
+      isInternalView.value = true;
+    } else {
+      isInternalView.value = false;
+    }
+  },
+  { immediate: true }
+);
+
+const { userId: currentUserId, refreshUser } = useCurrentUser();
+let authSubscription = null;
+
+// 配置
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+// 處理側邊欄點擊 (移動端關閉菜單)
+function handleNavClick() {
+  if (typeof window !== "undefined" && window.innerWidth < 768) {
+    showSidebar.value = false;
+  }
+}
+
+// 切換視圖功能：只負責跳轉路由，剩下的交給上面的 watch 處理
+async function switchToInternalView() {
+  await router.push("/_builder/model");
+  handleNavClick();
+}
+
+async function switchToExternalView() {
+  await router.push("/");
+  handleNavClick();
+}
+
+// 獲取用量
+async function fetchUserUsage(targetUserId) {
+  if (!targetUserId) {
+    userTotalCost.value = null;
+    return;
+  }
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/user-usage?user_id=${targetUserId}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch usage");
+    const data = await response.json();
+    userTotalCost.value = Number(data.usage).toFixed(2);
+  } catch (e) {
+    userTotalCost.value = null;
+  }
+}
+
+// 登出
+async function handleLogout() {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+
+    // 狀態重置
+    isAuthenticated.value = false;
+    isInternalView.value = false;
+    currentUserId.value = null;
+    userTotalCost.value = null;
+    localStorage.clear();
+
+    await router.push("/login");
+    handleNavClick();
+  } catch (error) {
+    console.error("Logout error:", error);
+  }
+}
+
+// 初始化與監聽
+onMounted(async () => {
+  refreshUser();
+
+  // 1. 獲取初始 Session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  await handleSessionUpdate(session);
+
+  // 2. 監聽 Auth 變化 (包含切換 Tab 時的 Session Refresh)
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    handleSessionUpdate(session);
+  });
+  authSubscription = subscription;
+});
+
+// 統一處理 Session 邏輯
+async function handleSessionUpdate(session) {
+  const sessionUserId = session?.user?.id ?? null;
+  currentUserId.value = sessionUserId;
+  isAuthenticated.value = !!sessionUserId;
+
+  if (!isAuthenticated.value) {
+    isInternal.value = false;
+    userTotalCost.value = null;
+    return;
+  }
+
+  // 獲取用量
+  fetchUserUsage(sessionUserId);
+
+  // 檢查內部權限
+  const { checkIsInternal } = useInternalCheck();
+  isInternal.value = await checkIsInternal();
+
+  // 強制檢查一次路由狀態，確保 isInternalView 正確
+  if (route.path.startsWith("/_builder") && isInternal.value) {
+    isInternalView.value = true;
+  } else {
+    isInternalView.value = false;
+  }
+}
+
+onBeforeUnmount(() => {
+  authSubscription?.unsubscribe();
+});
+</script>
+
+<!-- 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { supabase } from "~/utils/supabaseClient";
@@ -462,4 +608,4 @@ async function fetchUserUsage(targetUserId) {
     userTotalCost.value = null;
   }
 }
-</script>
+</script> -->
