@@ -30,10 +30,10 @@
             d="M12 4v16m8-8H4"
           />
         </svg>
-        {{ isLoading ? "處理中..." : "從文件載入" }}
+        {{ isLoading ? "處理中..." : "載入企劃書" }}
       </button>
 
-      <!-- 反推 User Input -->
+      <!-- 推導使用者輸入 -->
       <button
         v-if="mode === 'golden'"
         @click="$emit('generateUserInput')"
@@ -53,7 +53,7 @@
             d="M4 4v6h6M20 20v-6h-6"
           />
         </svg>
-        反推 User Input
+        推導使用者輸入
       </button>
 
       <!-- 隱藏文件輸入 -->
@@ -84,7 +84,7 @@
             d="M12 4v16m8-8H4"
           />
         </svg>
-        導出為 Word
+        導出企劃書
       </button>
     </div>
 

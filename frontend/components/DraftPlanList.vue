@@ -18,7 +18,7 @@
         <option value="">所有模式</option>
         <option value="synthetic">AI 生成</option>
         <option value="golden">手動標注</option>
-        <option value="internal">生成企劃書</option>
+        <!-- <option value="internal">生成企劃書</option> -->
       </select>
     </div>
 

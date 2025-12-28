@@ -2,7 +2,12 @@
   <ClientOnly>
     <div class="p-4 md:p-8">
       <div class="flex justify-between items-center mb-4 sm:mb-6">
-        <h1 class="text-xl sm:text-2xl font-bold">數據庫管理</h1>
+        <h1 class="text-xl sm:text-2xl font-bold">
+          數據庫管理
+          <p class="text-sm sm:text-md text-gray-400 mb-2 sm:mb-0">
+            當某類企劃書生成效果不好時，能夠將外部資料轉爲生成資料，讓AI學習提升效果。也能夠檢查並移除生成資料，確保數據庫品質。
+          </p>
+        </h1>
         <button
           @click="handleRefreshDatasets"
           :disabled="isRefreshing"
@@ -174,7 +179,17 @@
                 </button>
                 <button
                   @click="handleDelete(item.id)"
-                  class="text-red-600 hover:text-red-900"
+                  :class="
+                    item.source_type === 'golden_samples'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-red-600 hover:text-red-900'
+                  "
+                  :disabled="item.source_type === 'golden_samples'"
+                  :title="
+                    item.source_type === 'golden_samples'
+                      ? '黃金樣本不可刪除'
+                      : '刪除'
+                  "
                 >
                   刪除
                 </button>
@@ -382,7 +397,9 @@ const nameMaps = computed(() => {
 async function handleRefreshDatasets() {
   isRefreshing.value = true;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/refresh-datasets`, {
       method: "POST",
@@ -452,7 +469,9 @@ watch(
 async function initializeDatasets() {
   // get from lifecycle preloaded datasets /datasets-lifecycle
   showLoading("加載數據庫...");
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("請先登入");
   const response = await fetch(`${API_BASE_URL}/datasets-lifecycle`, {
     headers: {
@@ -504,7 +523,9 @@ async function handleSave(updatedData) {
       final_answer: updatedData.final_answer,
     };
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
 
     const response = await fetch(`${API_BASE_URL}/datasets/${updatedData.id}`, {
@@ -541,9 +562,17 @@ async function handleDelete(id) {
   if (!isConfirmed) {
     return; // 如果用戶點擊取消，則直接返回
   }
+  // Prevent deleting golden samples as an extra safety guard
+  const target = allDatasets.value.find((d) => d.id === id);
+  if (target && target.source_type === "golden_samples") {
+    errorNotification("黃金樣本不可刪除。如需更新資料請使用編輯功能。");
+    return;
+  }
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/datasets/${id}`, {
       method: "DELETE",

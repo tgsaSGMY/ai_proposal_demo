@@ -5,27 +5,31 @@
         class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 sm:p-4 rounded-lg shadow-sm gap-3 sm:gap-0"
       >
         <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">
-          數據生產工作室
+          模擬數據生產工作室
+          <p class="text-sm sm:text-md text-gray-400 mb-2 sm:mb-0">
+            當某類企劃書生成效果不好時，可以使用此頁面生成優秀的企劃書讓AI學習。
+          </p>
         </h1>
+
         <div class="flex flex-col sm:flex-row flex-wrap items-center gap-2">
           <button
             @click="isBatchModalVisible = true"
             class="btn-primary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
           >
-            🤖 批量 AI 生成
+            🤖 AI 隨機生成想法
           </button>
           <button
             @click="handleCreateDraft('golden')"
             class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
           >
-            🏆 新建手動標註
+            🏆 導入範例企劃書
           </button>
-          <button
+          <!-- <button
             @click="handleCreateDraft('internal')"
             class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
           >
             📝 新建生成企劃
-          </button>
+          </button> -->
         </div>
       </header>
 
