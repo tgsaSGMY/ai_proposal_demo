@@ -422,7 +422,7 @@ onMounted(async () => {
       isInternal.value = await checkIsInternal();
 
       // 如果使用者是內部人員且當前在 _builder 路徑，切換到內部檢視
-      if (isInternal.value && route.path.startsWith('/_builder')) {
+      if (isInternal.value && route.path.startsWith("/_builder")) {
         isInternalView.value = true;
       }
     }
@@ -433,7 +433,7 @@ onMounted(async () => {
   if (isAuthenticated.value) {
     const { checkIsInternal } = useInternalCheck();
     isInternal.value = await checkIsInternal();
-    if (isInternal.value && route.path.startsWith('/_builder')) {
+    if (isInternal.value && route.path.startsWith("/_builder")) {
       isInternalView.value = true;
     }
   }
