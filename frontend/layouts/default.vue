@@ -403,7 +403,7 @@ async function handleLogout() {
 
 onMounted(async () => {
   refreshUser();
-  checkAuth();
+  await checkAuth();
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -420,9 +420,23 @@ onMounted(async () => {
 
       // 執行檢查
       isInternal.value = await checkIsInternal();
+
+      // 如果使用者是內部人員且當前在 _builder 路徑，切換到內部檢視
+      if (isInternal.value && route.path.startsWith('/_builder')) {
+        isInternalView.value = true;
+      }
     }
   });
   authSubscription = subscription;
+
+  // 初始檢查：若已登入且為內部使用者，且當前路由為 _builder，則打開內部檢視
+  if (isAuthenticated.value) {
+    const { checkIsInternal } = useInternalCheck();
+    isInternal.value = await checkIsInternal();
+    if (isInternal.value && route.path.startsWith('/_builder')) {
+      isInternalView.value = true;
+    }
+  }
 });
 
 onBeforeUnmount(() => {
