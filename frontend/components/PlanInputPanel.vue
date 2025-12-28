@@ -62,7 +62,7 @@
           <div
             class="flex items-center gap-2 self-start sm:self-auto flex-wrap"
           >
-            <button
+            <!-- <button
               v-if="mode === 'synthetic'"
               @click="$emit('generateUserInput')"
               class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors"
@@ -78,7 +78,7 @@
               title="從 Excel 匯入摘要與章節內容"
             >
               {{ isImportingFromExcel ? "匯入中..." : "📥 從 Excel 匯入" }}
-            </button>
+            </button> -->
             <button
               type="button"
               @click="triggerWordUpload"
