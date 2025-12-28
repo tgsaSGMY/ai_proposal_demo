@@ -81,6 +81,7 @@ import {
   getDynamicFieldLabels,
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
+import { supabase } from "~/utils/supabaseClient";
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
@@ -187,9 +188,15 @@ const saveUpdatesToDb = async () => {
       plan_content: planContent.value,
     };
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
+
     const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
 
@@ -269,9 +276,16 @@ async function saveRejectedAnswersToDb(rejected) {
     const payload = {
       rejected_answer: rejectedAnswerData,
     };
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
+    
     const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
 
@@ -356,10 +370,16 @@ async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
   showLoading("正在生成計劃書...", true);
   try {
-    const userId = await getUserIdOrNotify();
-    if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      hideLoading();
+      errorNotification("請先登入");
       return;
     }
+
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries
     );
@@ -369,9 +389,11 @@ async function handleGeneratePlanInModal(outerPayload) {
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        user_id: userId,
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         user_input: finalUserInput,

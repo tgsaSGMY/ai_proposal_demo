@@ -96,7 +96,13 @@
           </div>
           <div>
             <p class="text-lg font-semibold text-gray-900">TGSA企劃引擎</p>
-            <p class="text-xs uppercase tracking-wide text-gray-400">
+            <p
+              v-if="isInternal"
+              class="text-xs uppercase tracking-wide text-gray-400"
+            >
+              PRO ENTERPRISE (内部人員版本)
+            </p>
+            <p v-else class="text-xs uppercase tracking-wide text-gray-400">
               PRO ENTERPRISE
             </p>
           </div>
@@ -271,8 +277,8 @@
           <div v-else class="space-y-3">
             <NuxtLink
               to="/login"
-              class="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white px-5 py-3 text-indigo-500 shadow-sm transition hover:bg-indigo-50"
-              active-class="bg-indigo-500 text-white border-indigo-500"
+              class="flex items-center gap-3 rounded-2xl px-5 py-3 transition border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              active-class="border border-rose-500 bg-rose-500 text-rose-500 shadow-lg shadow-rose-200"
               @click.native="handleNavClick"
             >
               <svg
@@ -287,25 +293,25 @@
                   clip-rule="evenodd"
                 />
               </svg>
-              <span>登入</span>
+              <span class="font-medium">登入</span>
             </NuxtLink>
           </div>
         </nav>
 
         <div v-if="isAuthenticated" class="mt-6 space-y-3">
           <button
-            v-if="!isInternalView"
+            v-if="!isInternalView && isInternal"
             class="w-full rounded-2xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             @click="switchToInternalView"
           >
-            進入內部人員版本
+            進入調整參數界面
           </button>
           <button
-            v-else
+            v-else-if="isInternalView && isInternal"
             class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:-translate-y-0.5 hover:border-gray-300"
             @click="switchToExternalView"
           >
-            返回外部人員版本
+            返回企劃填寫界面
           </button>
 
           <button
@@ -335,6 +341,7 @@ const showSidebar = ref(false);
 const isAuthenticated = ref(false);
 const isInternalView = ref(false);
 const { userId: currentUserId, refreshUser } = useCurrentUser();
+const isInternal = ref(false);
 
 let authSubscription = null;
 
@@ -394,12 +401,12 @@ async function handleLogout() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   refreshUser();
   checkAuth();
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
+  } = supabase.auth.onAuthStateChange(async (event, session) => {
     const sessionUserId = session?.user?.id ?? null;
     currentUserId.value = sessionUserId;
     isAuthenticated.value = !!sessionUserId;
@@ -408,6 +415,13 @@ onMounted(() => {
       userTotalCost.value = null;
     } else {
       fetchUserUsage(sessionUserId);
+
+      const { checkIsInternal } = useInternalCheck();
+
+      // 執行檢查
+      isInternal.value = await checkIsInternal();
+
+      console.log("Is Internal User?", isInternal.value);
     }
   });
   authSubscription = subscription;

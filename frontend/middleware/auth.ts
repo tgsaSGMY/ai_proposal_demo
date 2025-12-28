@@ -1,19 +1,21 @@
 /**
  * Auth Middleware - 保護需要認證的頁面
- * 如果用户未登入，會重新導向到登入頁面
+ * 1. 未登入 -> 導向 /login
+ * 2. 已登入但非內部人員嘗試訪問 /_builder -> 導向 /
  */
 import { supabase } from "~/utils/supabaseClient";
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
-  // 如果要訪問的就是登入或邀請頁面，允許訪問
+  // 1. 公開頁面：如果是登入或註冊頁面，直接允許
   if (to.path === "/login" || to.path === "/signup") {
     return;
   }
 
+  // 避免在 Server 端執行 (保留你原本的設定)
   if (process.server) return;
 
-  // 檢查 Supabase 中的認證狀態
   try {
+    // 2. 檢查登入狀態
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -23,11 +25,35 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       return navigateTo("/login");
     }
 
-    // 如果有有效的 session，允許訪問
+    // ============================================================
+    // 新增邏輯：保護 _builder 路徑
+    // ============================================================
+    if (to.path.startsWith("/_builder")) {
+      // 查詢 whitelist 資料表
+      const { data, error } = await supabase
+        .from("whitelist")
+        .select("role")
+        .eq("email", session.user.email)
+        .maybeSingle(); // 使用 maybeSingle 避免查無資料時報錯
+
+      const isInternal = data?.role === "internal";
+
+      // 如果發生錯誤、找不到資料、或是角色不是 internal
+      if (error || !isInternal) {
+        // console.warn(
+        //   `User ${session.user.email} tried to access builder but is not internal.`
+        // );
+        // 自動返回 home page
+        return navigateTo("/");
+      }
+    }
+    // ============================================================
+
+    // 驗證全部通過，允許訪問
     return;
   } catch (error) {
     console.error("Auth middleware error:", error);
-    // 發生錯誤時也導向到登入頁面
+    // 發生嚴重錯誤時導向到登入頁面
     return navigateTo("/login");
   }
 });

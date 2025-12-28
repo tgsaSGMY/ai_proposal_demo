@@ -1,64 +1,66 @@
 <template>
-  <div class="p-4 sm:p-6 md:p-8">
-    <header
-      class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 sm:p-4 rounded-lg shadow-sm gap-3 sm:gap-0"
-    >
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">
-        數據生產工作室
-      </h1>
-      <div class="flex flex-col sm:flex-row flex-wrap items-center gap-2">
-        <button
-          @click="isBatchModalVisible = true"
-          class="btn-primary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
-        >
-          🤖 批量 AI 生成
-        </button>
-        <button
-          @click="handleCreateDraft('golden')"
-          class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
-        >
-          🏆 新建手動標註
-        </button>
-        <button
-          @click="handleCreateDraft('internal')"
-          class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
-        >
-          📝 新建生成企劃
-        </button>
-      </div>
-    </header>
+  <ClientOnly>
+    <div class="p-4 sm:p-6 md:p-8">
+      <header
+        class="mb-4 sm:mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white p-3 sm:p-4 rounded-lg shadow-sm gap-3 sm:gap-0"
+      >
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">
+          數據生產工作室
+        </h1>
+        <div class="flex flex-col sm:flex-row flex-wrap items-center gap-2">
+          <button
+            @click="isBatchModalVisible = true"
+            class="btn-primary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+          >
+            🤖 批量 AI 生成
+          </button>
+          <button
+            @click="handleCreateDraft('golden')"
+            class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+          >
+            🏆 新建手動標註
+          </button>
+          <button
+            @click="handleCreateDraft('internal')"
+            class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
+          >
+            📝 新建生成企劃
+          </button>
+        </div>
+      </header>
 
-    <DraftPlanList
-      :drafts="drafts"
-      @select="openEditor"
-      @rename="handleRenameDraft"
-      @delete="handleDeleteDraft"
-      class="mt-4 sm:mt-6"
-    />
+      <DraftPlanList
+        :drafts="drafts"
+        @select="openEditor"
+        @rename="handleRenameDraft"
+        @delete="handleDeleteDraft"
+        class="mt-4 sm:mt-6"
+      />
 
-    <BatchSyntheticModal
-      :visible="isBatchModalVisible"
-      :all-configs="allConfigs"
-      @close="isBatchModalVisible = false"
-      @start="handleBatchStart"
-    />
+      <BatchSyntheticModal
+        :visible="isBatchModalVisible"
+        :all-configs="allConfigs"
+        @close="isBatchModalVisible = false"
+        @start="handleBatchStart"
+      />
 
-    <DraftPlanEditorModal
-      v-if="selectedDraft"
-      :draft="selectedDraft"
-      :all-configs="allConfigs"
-      @close="selectedDraft = null"
-      @save-to-dataset="handleSaveToFinalDataset"
-    />
-    <InputPromptModal
-      :visible="isInputModalVisible"
-      :title="inputModalTitle"
-      :message="inputModalMessage"
-      :defaultValue="inputModalDefaultValue"
-      @submit="handleInputModalSubmit"
-      @cancel="handleInputModalCancel"
-    />
-  </div>
+      <DraftPlanEditorModal
+        v-if="selectedDraft"
+        :draft="selectedDraft"
+        :all-configs="allConfigs"
+        @close="selectedDraft = null"
+        @save-to-dataset="handleSaveToFinalDataset"
+      />
+      <InputPromptModal
+        :visible="isInputModalVisible"
+        :title="inputModalTitle"
+        :message="inputModalMessage"
+        :defaultValue="inputModalDefaultValue"
+        @submit="handleInputModalSubmit"
+        @cancel="handleInputModalCancel"
+      />
+    </div>
+  </ClientOnly>
 </template>
 
 <script setup>
@@ -98,11 +100,18 @@ async function handleInputModalSubmit(value) {
     // Rename draft
     if (value === inputModalDraft.name) return;
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("請先登入");
       const response = await fetch(
         `${API_BASE_URL}/draft_plans/${inputModalDraft.id}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ name: value }),
         }
       );
@@ -116,9 +125,16 @@ async function handleInputModalSubmit(value) {
   } else if (inputModalMode === "create" && inputModalDraft) {
     // Create draft
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("請先登入");
       const response = await fetch(`${API_BASE_URL}/draft_plans`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ name: value, mode: inputModalDraft }),
       });
       if (!response.ok)
@@ -192,8 +208,15 @@ async function handleDeleteDraft(draft) {
   }
 
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
     const response = await fetch(`${API_BASE_URL}/draft_plans/${draft.id}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
     if (!response.ok) throw new Error("删除失败: " + (await response.text()));
     success(`企划 "${draft.name}" 已被删除。`);
@@ -240,6 +263,18 @@ onUnmounted(() => {
   }
 });
 
+onMounted(async () => {
+  const { checkIsInternal } = useInternalCheck();
+
+  // 執行檢查
+  const isInternal = await checkIsInternal();
+
+  if (!isInternal) {
+    // 如果不是內部人員，重定向到外部版本頁面
+    window.location.href = "/";
+  }
+});
+
 function openEditor(draft) {
   // Make sure user_input and plan_content are valid objects
   if (!draft.user_input) draft.user_input = {};
@@ -260,6 +295,10 @@ async function handleCreateDraft(mode) {
 
 async function handleBatchStart(payload) {
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
     const payload1 = {
       ...payload,
       dynamic_fields_schema: getAllCompositeKeys(),
@@ -268,7 +307,10 @@ async function handleBatchStart(payload) {
       `${API_BASE_URL}/draft_plans/batch_synthetic`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payload1),
       }
     );
@@ -311,7 +353,20 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   try {
     // 從數據庫獲取最新的 draft 數據，包括 rejected_answer
     showLoading();
-    const draftResponse = await fetch(`${API_BASE_URL}/draft_plans/${draftId}`);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
+    const draftResponse = await fetch(
+      `${API_BASE_URL}/draft_plans/${draftId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
     if (!draftResponse.ok) {
       throw new Error("無法從數據庫獲取最新的草稿數據");
     }
@@ -357,7 +412,10 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
 
     const response = await fetch(`${API_BASE_URL}/datasets`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ entries }),
     });
     if (response.status !== 202)
@@ -366,6 +424,9 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
     success(`企划 "${draftToSave.name}" 已成功保存至最终数据集！`);
     await fetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
     });
     selectedDraft.value = null;
     await fetchDrafts();

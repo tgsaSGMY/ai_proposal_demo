@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from app.models import SaveDatasetRequest, DatasetEntry, DatasetEntry
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_supabase_service
+from .dependencies import get_supabase_service, verify_internal_user
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ async def save_dataset_entries(
     req: SaveDatasetRequest,
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """
     異步保存數據集條目到 Supabase。
@@ -53,6 +54,7 @@ async def get_all_datasets_endpoint(
     section_id: Optional[str] = None,
     source_type: Optional[str] = None,
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """從 Supabase 獲取數據集記錄，支持按 grant, template, section, source_type 進行篩選。"""
     try:
@@ -72,6 +74,7 @@ async def update_dataset_entry(
     dataset_id: int,
     req: DatasetEntry,   
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """
     更新 Supabase 中的一筆數據集條目，並重新計算向量嵌入。
@@ -105,6 +108,7 @@ async def update_dataset_entry(
 async def delete_dataset_entry(
     dataset_id: int, 
     supabase: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """刪除 Supabase 中的數據集紀錄。"""
     try:

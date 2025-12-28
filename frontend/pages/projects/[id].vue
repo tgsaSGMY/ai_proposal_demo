@@ -31,12 +31,38 @@
             >
           </div>
         </div>
-        <NuxtLink
-          to="/"
-          class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
-        >
-          返回首頁
-        </NuxtLink>
+        <div class="flex flex-wrap items-center gap-3">
+          <div
+            v-if="isInternal"
+            class="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2"
+          >
+            <span class="text-xs font-semibold text-gray-600">
+              {{ useModelType === "internal" ? "內部模型" : "外部模型" }}
+            </span>
+            <button
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition"
+              :class="
+                useModelType === 'internal' ? 'bg-rose-500' : 'bg-gray-300'
+              "
+              @click="toggleModel"
+            >
+              <span
+                class="inline-block h-5 w-5 transform rounded-full bg-white transition"
+                :class="
+                  useModelType === 'internal'
+                    ? 'translate-x-5'
+                    : 'translate-x-1'
+                "
+              ></span>
+            </button>
+          </div>
+          <NuxtLink
+            to="/"
+            class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
+          >
+            返回首頁
+          </NuxtLink>
+        </div>
       </header>
 
       <section
@@ -94,6 +120,7 @@
         :current-grant="currentGrant"
         :current-template="currentTemplate"
         :build-final-user-input="buildFinalUserInput"
+        :use-model-type="useModelType"
         @updateProjectRecord="handleGeneratorUpdate"
         @candidateConfirmed="onCandidateConfirm"
       />
@@ -114,7 +141,6 @@
           :template-id="selectedTemplateId"
           :grant-name="grantLabel"
           :template-name="activeTemplateName"
-          :use-model-type="useModelType"
           :prefilled-answers="prefilledChatAnswers"
           :project-id="projectRecord?.id || ''"
           :saved-plan-versions="savedPlanVersions"
@@ -122,7 +148,6 @@
           @generatePlan="handleChatPlanGeneration"
           @finalizeCandidates="onCandidateConfirm"
           @requestExport="handleExportWord"
-          @toggleModel="toggleModel"
           @backToStageOne="router.push('/')"
           @messagesUpdated="handleMessagesUpdated"
           @aiResponseComplete="persistConversationHistory"
@@ -143,6 +168,42 @@ import { useLoading } from "~/composables/useLoading";
 import { exportPlanToWord } from "~/utils/exportToWord";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { mergeIntoEmptyValues } from "~/utils/dynamicSchema";
+import { supabase } from "~/utils/supabaseClient";
+
+const route = useRoute();
+
+const projectRecord = ref<ProjectRecord | null>(null);
+
+const projectTitle = computed(() => {
+  return projectRecord.value?.title || "計畫工作區";
+});
+
+useHead(() => ({
+  title: `${projectTitle.value} - TGSA 企劃引擎`,
+  meta: [
+    {
+      name: "description",
+      content:
+        "進行中的計畫工作區，支援互動模式和生成模式，與 AI 協作完成專業計畫書編輯。",
+    },
+    {
+      name: "keywords",
+      content: "計畫工作區, 計畫編輯, AI 協作, 企劃工具, 計畫生成",
+    },
+    {
+      property: "og:title",
+      content: `${projectTitle.value} - TGSA 企劃引擎`,
+    },
+    {
+      property: "og:description",
+      content: "進行中的計畫工作區，與 AI 協作完成專業計畫書編輯。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "noindex, follow" },
+  ],
+}));
+
+const projectId = computed(() => route.params.id as string);
 
 definePageMeta({
   middleware: "auth",
@@ -173,8 +234,6 @@ interface ProjectRecord {
 }
 
 const router = useRouter();
-const route = useRoute();
-const projectId = computed(() => route.params.id as string);
 
 const { success, info, error: notifyError } = useNotifications();
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
@@ -197,16 +256,23 @@ const {
   fetchAllConfigs,
 } = usePlanGenerator();
 
-const projectRecord = ref<ProjectRecord | null>(null);
 const isProjectLoading = ref(false);
 const loadError = ref("");
 const planMetadata = ref<ProjectMetadata | null>(null);
 const candidatePlan = ref<Record<string, any>>({});
 const chatMessages = ref<any[]>([]);
 const useModelType = ref("external");
+const isInternal = ref(false);
 const lastGenerationPrompt = ref("");
 const isPersistingProject = ref(false);
 const conversationSyncTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+
+onMounted(async () => {
+  const { checkIsInternal } = useInternalCheck();
+
+  // 執行檢查
+  isInternal.value = await checkIsInternal();
+});
 
 const referenceSummaries = computed(
   () => planMetadata.value?.backgroundEntries || []
@@ -329,7 +395,24 @@ async function fetchProject() {
   isProjectLoading.value = true;
   loadError.value = "";
   try {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId.value}`);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/projects/${projectId.value}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || "Failed to load project");
@@ -454,24 +537,40 @@ async function handleGeneratorUpdate(payload: {
 
 async function updateProject(payload: Record<string, any>) {
   if (!projectRecord.value) return null;
-  const response = await fetch(
-    `${API_BASE_URL}/projects/${projectRecord.value.id}`,
-    {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
     }
-  );
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || "更新計畫失敗");
+
+    const response = await fetch(
+      `${API_BASE_URL}/projects/${projectRecord.value.id}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || "更新計畫失敗");
+    }
+    const updated: ProjectRecord = await response.json();
+    projectRecord.value = updated;
+    planMetadata.value = updated.plan_metadata || planMetadata.value;
+    finalPlanContent.value = updated.saved_plan || finalPlanContent.value;
+    hydrateInputStateFromStoredAnswer(updated);
+    return updated;
+  } catch (error: any) {
+    console.error("Failed to update project", error);
+    throw error;
   }
-  const updated: ProjectRecord = await response.json();
-  projectRecord.value = updated;
-  planMetadata.value = updated.plan_metadata || planMetadata.value;
-  finalPlanContent.value = updated.saved_plan || finalPlanContent.value;
-  hydrateInputStateFromStoredAnswer(updated);
-  return updated;
 }
 
 function serializeForStorage<T>(value: T): T | null {
@@ -590,17 +689,23 @@ async function handleChatPlanGeneration(payload: {
     const sectionsToGenerate = currentSections.value.map((section) => ({
       section_id: section.id,
     }));
-    const userId = await getUserIdOrNotify();
-    if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
       hideLoading();
+      notifyError("請先登入");
       return;
     }
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        user_id: userId,
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         user_input: payload.prompt,

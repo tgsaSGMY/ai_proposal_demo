@@ -42,7 +42,6 @@ class SectionGenerateRequest(BaseModel):
 
 class GenerateRequest(BaseModel):
     """發起內容生成流程的請求體。"""
-    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
     grant: str = Field(..., description="目標計畫書的 ID。")
     template: str = Field(..., description="目標模板的 ID。")
     user_input: str = Field(..., description="用戶提供的核心需求或主題。")

@@ -32,7 +32,7 @@ from app.models import (
 )
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_llm_service, get_supabase_service
+from .dependencies import get_llm_service, get_supabase_service, get_current_user_id
 from app.utils.extract_json import extract_json_block  
 from typing import Dict, Any
 from app.config import OPENAI_API_KEY
@@ -329,6 +329,7 @@ async def generate_plan(
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
+    user_id: str = Depends(get_current_user_id),
 ):
     """主功能 -> 生成完整計劃書，可生成多候选版本"""
     
@@ -363,7 +364,7 @@ async def generate_plan(
     num_candidates = request_data.num_candidates
 
     # 獲取該用戶的所有開啟狀態的 commands
-    commands_data = await supabase_service.get_commands_by_user_id(request_data.user_id)
+    commands_data = await supabase_service.get_commands_by_user_id(user_id)
     
     # 組合 commands 資料和 user_input
     final_user_input = request_data.user_input or ""
@@ -379,7 +380,7 @@ async def generate_plan(
         if commands_text:
             final_user_input = f"{final_user_input}\n\n【來自 Commands 的額外上下文】\n{commands_text}"
 
-    print("Final model for plan generation:", request_data.selected_model)
+    print("Final model for plan generation:", request_data.is_external)
     async with httpx.AsyncClient() as client:
         # 每個 section 生成 num_candidates 個候選版本
         tasks = [
@@ -390,7 +391,7 @@ async def generate_plan(
                 section_id=s.id,
                 user_input=final_user_input,
                 app_state=app_state,
-                user_id=request_data.user_id,
+                user_id=user_id,
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
                 selected_model=request_data.selected_model,
@@ -584,8 +585,28 @@ def get_chat_messages(system_prompt: str, history_records: list, last_user_msg: 
 async def websocket_chat_guidance(websocket: WebSocket):
     await websocket.accept()
     
-    llm_service = websocket.app.state.llm_service
+    # Extract user_id from WebSocket query parameter or headers
+    user_id = ""
     supabase_service = getattr(websocket.app.state, "supabase_service", None)
+    
+    # Try to get token from query parameters (passed as ?token=...)
+    token = websocket.query_params.get("token", "")
+    
+    # Fall back to authorization header if not in query params
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    
+    if token and supabase_service:
+        try:
+            user_response = supabase_service.client.auth.get_user(token)
+            if user_response.user:
+                user_id = user_response.user.id
+        except Exception as e:
+            logger.warning(f"Failed to extract user from WebSocket token: {e}")
+    
+    llm_service = websocket.app.state.llm_service
     model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
     model_info = model_registry.get("gpt-5.1-chat-latest") or {
         "id": "gpt-5.1-chat-latest",
@@ -608,7 +629,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                 "conversation_history": conversation_history_records,
                 "stored_answer": stored_answer_state,
             }
-            await supabase_service.update_project_record(project_id, payload)
+            await supabase_service.update_project_record(project_id, user_id, payload)
         except Exception as exc:
             logger.error(f"DB Save Error: {exc}")
 

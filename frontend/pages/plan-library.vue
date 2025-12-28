@@ -268,6 +268,7 @@ import PlanLibraryEditModal from "~/components/PlanLibraryEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { supabase } from "~/utils/supabaseClient";
 
 interface Accent {
   tagBg: string;
@@ -368,12 +369,32 @@ function decorateProject(
   index: number,
   accentOverride?: Accent
 ): ProjectCard {
-  const accent = accentOverride || accentPalette[index % accentPalette.length];
-  const savedPlanFilled =
-    record.saved_plan && Object.keys(record.saved_plan).length > 0;
-  const storedAnswerFilled =
-    record.stored_answer && Object.keys(record.stored_answer).length > 0;
-  const completeness = savedPlanFilled ? 100 : storedAnswerFilled ? 70 : 25;
+  const accent = accentOverride || accentPalette[index % accentPalette.length]!;
+
+  let completeness = 0;
+
+  if (record.mode === "generator") {
+    // 生成模式：计算 stored_answer.user_input.dynamic_fields 中有 value 的数量 / 24
+    if (record.stored_answer?.user_input?.dynamic_fields) {
+      const dynamicFields = record.stored_answer.user_input.dynamic_fields;
+      const filledCount = Object.values(dynamicFields).filter(
+        (field: any) => field
+      ).length;
+      completeness = Math.round((filledCount / 24) * 100);
+    } else {
+      completeness = 0;
+    }
+  } else {
+    // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / 24
+    if (record.stored_answer && record.stored_answer.chat_answers) {
+      const allKeys = Object.keys(record.stored_answer.chat_answers);
+      const filledCount = allKeys.filter((key) => key !== "main_idea").length;
+      completeness = Math.round((filledCount / 24) * 100);
+    } else {
+      completeness = 0;
+    }
+  }
+
   const modeLabel = record.mode === "generator" ? "生成模式" : "互動模式";
   const lastUpdateSource = record.updated_at || record.created_at;
   const lastUpdate = dateFormatter.format(new Date(lastUpdateSource));
@@ -399,7 +420,21 @@ async function fetchProjects() {
   isLoadingProjects.value = true;
   loadError.value = "";
   try {
-    const response = await fetch(`${API_BASE_URL}/projects?user_id=${userId}`);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/projects`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+    });
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || "Failed to load projects");
@@ -442,9 +477,20 @@ async function handleSave(payload: {
 }) {
   if (!payload.id) return;
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
     const response = await fetch(`${API_BASE_URL}/projects/${payload.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         title: payload.title,
         description: payload.description,
@@ -482,8 +528,20 @@ async function handleDelete(project: ProjectCard) {
   if (!confirmed) return;
 
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
     const response = await fetch(`${API_BASE_URL}/projects/${project.id}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
     });
     if (!response.ok && response.status !== 204) {
       const detail = await response.text();

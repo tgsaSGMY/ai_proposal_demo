@@ -1,323 +1,327 @@
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
-    <div class="mx-auto max-w-6xl space-y-6">
-      <p
-        class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
-      >
-        <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
-        <span class="text-gray-300">></span>
-        <span class="text-gray-600">計劃書生成精靈</span>
-      </p>
-      <!-- Stage 1: 選擇計畫類型 -->
-      <section
-        v-if="currentStage === 1"
-        class="rounded-[32px] px-6 py-8 lg:px-10"
-      >
-        <div class="text-center">
-          <p
-            class="text-3xl font-semibold uppercase tracking-[0.35em] text-rose-500"
-          >
-            請選擇目標補助計畫
-          </p>
-          <p class="mt-2 text-sm text-[#5f6c96]">
-            系統會依照類型載入對應的模型與模板組態
-          </p>
-        </div>
-
-        <div class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <button
-            v-for="plan in planTypes"
-            :key="plan.id"
-            class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
-            :class="
-              selectedPlanType?.id === plan.id
-                ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
-                : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
-            "
-            @click="selectPlanType(plan)"
-          >
-            <span
-              class="inline-flex h-12 w-12 items-center justify-center rounded-2xl"
-              :class="plan.iconBg"
-            >
-              <Icon
-                :name="plan.icon"
-                class="h-6 w-6"
-                :style="{ color: plan.iconColor }"
-              />
-            </span>
+  <ClientOnly>
+    <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
+      <div class="mx-auto max-w-6xl space-y-6">
+        <p
+          class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
+        >
+          <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
+          <span class="text-gray-300">></span>
+          <span class="text-gray-600">計劃書生成精靈</span>
+        </p>
+        <!-- Stage 1: 選擇計畫類型 -->
+        <section
+          v-if="currentStage === 1"
+          class="rounded-[32px] px-6 py-8 lg:px-10"
+        >
+          <div class="text-center">
             <p
-              class="mt-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-[#8a94c1]"
+              class="text-3xl font-semibold uppercase tracking-[0.35em] text-rose-500"
             >
-              {{ plan.category }}
+              請選擇目標補助計畫
             </p>
-            <h3 class="mt-1 text-xl font-semibold text-[#111b3f]">
-              {{ plan.title }}
-            </h3>
-            <p class="mt-3 text-sm font-semibold text-[#7d86ad]">
-              {{ plan.subtitle }}
+            <p class="mt-2 text-sm text-[#5f6c96]">
+              系統會依照類型載入對應的模型與模板組態
             </p>
-            <p class="mt-1 text-xs text-[#8f98be]">
-              {{ plan.description }}
-            </p>
-            <div
-              class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-[#97a0c7]"
+          </div>
+
+          <div class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <button
+              v-for="plan in planTypes"
+              :key="plan.id"
+              class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
+              :class="
+                selectedPlanType?.id === plan.id
+                  ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
+                  : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
+              "
+              @click="selectPlanType(plan)"
             >
               <span
-                v-for="tag in plan.tags"
-                :key="tag"
-                class="rounded-full border border-[#e6e9fb] bg-white px-3 py-1"
+                class="inline-flex h-12 w-12 items-center justify-center rounded-2xl"
+                :class="plan.iconBg"
               >
-                {{ tag }}
+                <Icon
+                  :name="plan.icon"
+                  class="h-6 w-6"
+                  :style="{ color: plan.iconColor }"
+                />
               </span>
-            </div>
-          </button>
-        </div>
-
-        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <button
-            class="rounded-2xl border border-[#d9def5] px-6 py-2 text-sm font-semibold text-[#6974a8] transition hover:border-[#c5cced]"
-            type="button"
-            @click="router.push('/')"
-          >
-            取消
-          </button>
-          <button
-            class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
-            type="button"
-            :disabled="!canConfirmPlanType"
-            :class="{ 'opacity-60 cursor-not-allowed': !canConfirmPlanType }"
-            @click="handlePlanTypeConfirm"
-          >
-            下一步
-          </button>
-        </div>
-      </section>
-
-      <!-- Stage 2: 填寫簡報資訊 -->
-      <section
-        v-else-if="currentStage === 2"
-        class="rounded-3xl bg-white p-6 shadow-lg lg:p-8"
-      >
-        <header class="flex flex-wrap items-start justify-between gap-4">
-          <div class="space-y-2">
-            <p
-              class="text-xs font-semibold uppercase tracking-widest text-rose-500"
-            >
-              第二步 · 自訂溝通模式與背景
-            </p>
-            <h2 class="text-2xl font-semibold text-slate-900">
-              為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬企劃
-            </h2>
-            <p class="text-sm text-slate-500">
-              這些資訊會作為進入 Chatbox 前的基礎情境，AI 會優先引用這些內容。
-            </p>
-          </div>
-          <button
-            class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500"
-            type="button"
-            @click="backToStage(1)"
-          >
-            重新選擇類型
-          </button>
-        </header>
-
-        <div class="mt-6 grid gap-4 md:grid-cols-2">
-          <button
-            v-for="mode in modeOptions"
-            :key="mode.id"
-            class="flex h-full flex-col rounded-3xl border p-5 text-left transition"
-            :class="
-              selectedMode === mode.id
-                ? 'border-rose-400 bg-rose-50 shadow-md'
-                : 'border-slate-100 bg-slate-50 shadow-sm hover:border-rose-200 hover:bg-white'
-            "
-            @click="selectedMode = mode.id"
-          >
-            <p
-              class="text-xs font-semibold uppercase tracking-widest text-slate-400"
-            >
-              {{ mode.badge }}
-            </p>
-            <h3 class="mt-2 text-xl font-semibold text-slate-900">
-              {{ mode.title }}
-            </h3>
-            <p class="mt-2 text-sm text-slate-500">
-              {{ mode.description }}
-            </p>
-          </button>
-        </div>
-
-        <div class="mt-6 space-y-4">
-          <label class="block space-y-2">
-            <span class="text-sm font-semibold text-slate-700"
-              >計畫名稱 <span class="text-red-500">*</span></span
-            >
-            <input
-              v-model="planName"
-              type="text"
-              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
-              placeholder="例：2025 智慧服務輸出 SIIR 計畫"
-            />
-          </label>
-          <label class="block space-y-2">
-            <span class="text-sm font-semibold text-slate-700"
-              >計畫摘要 <span class="text-red-500">*</span></span
-            >
-            <textarea
-              v-model="planSummary"
-              rows="4"
-              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
-              placeholder="用 2-3 句描述計畫目標、受惠對象與成果。"
-            ></textarea>
-          </label>
-          <label class="block space-y-2">
-            <span class="text-sm font-semibold text-slate-700"
-              >專屬背景資料</span
-            >
-          </label>
-          <div
-            class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-xs text-slate-500">
-                  支援 Word (.docx) 與 PDF 檔案，系統會將文字內容轉為摘要供 AI
-                  優先引用。
-                </p>
-              </div>
-              <button
-                v-if="backgroundFiles.length"
-                type="button"
-                class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
-                @click="clearBackgroundAttachments"
-              >
-                清空附件
-              </button>
-            </div>
-            <div
-              class="rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-6 text-center transition"
-              :class="
-                isDraggingBackground
-                  ? 'border-rose-400 bg-white shadow-inner'
-                  : 'hover:border-rose-300'
-              "
-              @dragover.prevent="isDraggingBackground = true"
-              @dragleave.prevent="isDraggingBackground = false"
-              @drop.prevent="handleBackgroundDrop"
-            >
-              <div
-                class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500"
-              >
-                <Icon name="ph:paperclip-light" class="h-6 w-6" />
-              </div>
-              <p class="mt-3 text-sm font-semibold text-slate-800">
-                {{
-                  isProcessingBackground
-                    ? "正在解析附件..."
-                    : "拖曳 Word / PDF 檔案到此處"
-                }}
-              </p>
-              <p class="mt-1 text-xs text-slate-500">
-                或
-                <button
-                  type="button"
-                  class="font-semibold text-rose-500 underline decoration-rose-200 decoration-2 underline-offset-4"
-                  @click="triggerBackgroundUpload"
-                  :disabled="isProcessingBackground"
-                >
-                  點此選擇檔案
-                </button>
-              </p>
               <p
-                class="mt-1 text-[11px] uppercase tracking-[0.3em] text-slate-400"
+                class="mt-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-[#8a94c1]"
               >
-                目前已加入 {{ backgroundFiles.length }} 份附件
+                {{ plan.category }}
               </p>
-            </div>
-            <input
-              ref="backgroundFileInputRef"
-              type="file"
-              accept=".docx,.pdf"
-              class="hidden"
-              multiple
-              @change="handleBackgroundFileChange"
-            />
-            <ul v-if="backgroundFiles.length" class="space-y-3">
-              <li
-                v-for="file in backgroundFiles"
-                :key="file.id"
-                class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+              <h3 class="mt-1 text-xl font-semibold text-[#111b3f]">
+                {{ plan.title }}
+              </h3>
+              <p class="mt-3 text-sm font-semibold text-[#7d86ad]">
+                {{ plan.subtitle }}
+              </p>
+              <p class="mt-1 text-xs text-[#8f98be]">
+                {{ plan.description }}
+              </p>
+              <div
+                class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-[#97a0c7]"
               >
-                <div class="flex items-start gap-3">
-                  <span
-                    class="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold"
-                    :class="
-                      file.type === 'word'
-                        ? 'bg-rose-50 text-rose-500'
-                        : 'bg-slate-100 text-slate-600'
-                    "
-                  >
-                    {{ file.type === "word" ? "DOC" : "PDF" }}
-                  </span>
-                  <div>
-                    <p class="text-sm font-semibold text-slate-800">
-                      {{ file.name }}
-                    </p>
-                    <p class="mt-1 text-xs text-slate-500 sm:max-w-md">
-                      {{ file.snippet || "未偵測到可用文字內容" }}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="self-start rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
-                  @click="removeBackgroundAttachment(file.id)"
+                <span
+                  v-for="tag in plan.tags"
+                  :key="tag"
+                  class="rounded-full border border-[#e6e9fb] bg-white px-3 py-1"
                 >
-                  移除
-                </button>
-              </li>
-            </ul>
+                  {{ tag }}
+                </span>
+              </div>
+            </button>
           </div>
-        </div>
 
-        <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <p class="text-sm text-slate-400">
-            將以 {{ resolvedTemplateName || "預設模板" }} 啟動 Chatbox。
-          </p>
-          <div class="flex gap-3">
+          <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
-              class="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-500"
+              class="rounded-2xl border border-[#d9def5] px-6 py-2 text-sm font-semibold text-[#6974a8] transition hover:border-[#c5cced]"
               type="button"
-              @click="backToStage(1)"
+              @click="router.push('/')"
             >
-              上一步
+              取消
             </button>
             <button
               class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
               type="button"
-              :disabled="
-                !canEnterChat || isProcessingBackground || isCreatingProject
-              "
-              :class="{
-                'opacity-60 cursor-not-allowed':
-                  !canEnterChat || isProcessingBackground || isCreatingProject,
-              }"
-              @click="enterChatStage"
+              :disabled="!canConfirmPlanType"
+              :class="{ 'opacity-60 cursor-not-allowed': !canConfirmPlanType }"
+              @click="handlePlanTypeConfirm"
             >
-              {{
-                isProcessingBackground
-                  ? "解析附件中..."
-                  : isCreatingProject
-                  ? "建立工作區..."
-                  : "進入工作區"
-              }}
+              下一步
             </button>
           </div>
-        </div>
-      </section>
+        </section>
+
+        <!-- Stage 2: 填寫簡報資訊 -->
+        <section
+          v-else-if="currentStage === 2"
+          class="rounded-3xl bg-white p-6 shadow-lg lg:p-8"
+        >
+          <header class="flex flex-wrap items-start justify-between gap-4">
+            <div class="space-y-2">
+              <p
+                class="text-xs font-semibold uppercase tracking-widest text-rose-500"
+              >
+                第二步 · 自訂溝通模式與背景
+              </p>
+              <h2 class="text-2xl font-semibold text-slate-900">
+                為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬企劃
+              </h2>
+              <p class="text-sm text-slate-500">
+                這些資訊會作為進入 Chatbox 前的基礎情境，AI 會優先引用這些內容。
+              </p>
+            </div>
+            <button
+              class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500"
+              type="button"
+              @click="backToStage(1)"
+            >
+              重新選擇類型
+            </button>
+          </header>
+
+          <div class="mt-6 grid gap-4 md:grid-cols-2">
+            <button
+              v-for="mode in modeOptions"
+              :key="mode.id"
+              class="flex h-full flex-col rounded-3xl border p-5 text-left transition"
+              :class="
+                selectedMode === mode.id
+                  ? 'border-rose-400 bg-rose-50 shadow-md'
+                  : 'border-slate-100 bg-slate-50 shadow-sm hover:border-rose-200 hover:bg-white'
+              "
+              @click="selectedMode = mode.id"
+            >
+              <p
+                class="text-xs font-semibold uppercase tracking-widest text-slate-400"
+              >
+                {{ mode.badge }}
+              </p>
+              <h3 class="mt-2 text-xl font-semibold text-slate-900">
+                {{ mode.title }}
+              </h3>
+              <p class="mt-2 text-sm text-slate-500">
+                {{ mode.description }}
+              </p>
+            </button>
+          </div>
+
+          <div class="mt-6 space-y-4">
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-slate-700"
+                >計畫名稱 <span class="text-red-500">*</span></span
+              >
+              <input
+                v-model="planName"
+                type="text"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
+                placeholder="例：2025 智慧服務輸出 SIIR 計畫"
+              />
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-slate-700"
+                >計畫摘要 <span class="text-red-500">*</span></span
+              >
+              <textarea
+                v-model="planSummary"
+                rows="4"
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
+                placeholder="用 2-3 句描述計畫目標、受惠對象與成果。"
+              ></textarea>
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-semibold text-slate-700"
+                >專屬背景資料</span
+              >
+            </label>
+            <div
+              class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs text-slate-500">
+                    支援 Word (.docx) 與 PDF 檔案，系統會將文字內容轉為摘要供 AI
+                    優先引用。
+                  </p>
+                </div>
+                <button
+                  v-if="backgroundFiles.length"
+                  type="button"
+                  class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
+                  @click="clearBackgroundAttachments"
+                >
+                  清空附件
+                </button>
+              </div>
+              <div
+                class="rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-6 text-center transition"
+                :class="
+                  isDraggingBackground
+                    ? 'border-rose-400 bg-white shadow-inner'
+                    : 'hover:border-rose-300'
+                "
+                @dragover.prevent="isDraggingBackground = true"
+                @dragleave.prevent="isDraggingBackground = false"
+                @drop.prevent="handleBackgroundDrop"
+              >
+                <div
+                  class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500"
+                >
+                  <Icon name="ph:paperclip-light" class="h-6 w-6" />
+                </div>
+                <p class="mt-3 text-sm font-semibold text-slate-800">
+                  {{
+                    isProcessingBackground
+                      ? "正在解析附件..."
+                      : "拖曳 Word / PDF 檔案到此處"
+                  }}
+                </p>
+                <p class="mt-1 text-xs text-slate-500">
+                  或
+                  <button
+                    type="button"
+                    class="font-semibold text-rose-500 underline decoration-rose-200 decoration-2 underline-offset-4"
+                    @click="triggerBackgroundUpload"
+                    :disabled="isProcessingBackground"
+                  >
+                    點此選擇檔案
+                  </button>
+                </p>
+                <p
+                  class="mt-1 text-[11px] uppercase tracking-[0.3em] text-slate-400"
+                >
+                  目前已加入 {{ backgroundFiles.length }} 份附件
+                </p>
+              </div>
+              <input
+                ref="backgroundFileInputRef"
+                type="file"
+                accept=".docx,.pdf"
+                class="hidden"
+                multiple
+                @change="handleBackgroundFileChange"
+              />
+              <ul v-if="backgroundFiles.length" class="space-y-3">
+                <li
+                  v-for="file in backgroundFiles"
+                  :key="file.id"
+                  class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div class="flex items-start gap-3">
+                    <span
+                      class="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold"
+                      :class="
+                        file.type === 'word'
+                          ? 'bg-rose-50 text-rose-500'
+                          : 'bg-slate-100 text-slate-600'
+                      "
+                    >
+                      {{ file.type === "word" ? "DOC" : "PDF" }}
+                    </span>
+                    <div>
+                      <p class="text-sm font-semibold text-slate-800">
+                        {{ file.name }}
+                      </p>
+                      <p class="mt-1 text-xs text-slate-500 sm:max-w-md">
+                        {{ file.snippet || "未偵測到可用文字內容" }}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="self-start rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
+                    @click="removeBackgroundAttachment(file.id)"
+                  >
+                    移除
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-slate-400">
+              將以 {{ resolvedTemplateName || "預設模板" }} 啟動 Chatbox。
+            </p>
+            <div class="flex gap-3">
+              <button
+                class="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-500"
+                type="button"
+                @click="backToStage(1)"
+              >
+                上一步
+              </button>
+              <button
+                class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
+                type="button"
+                :disabled="
+                  !canEnterChat || isProcessingBackground || isCreatingProject
+                "
+                :class="{
+                  'opacity-60 cursor-not-allowed':
+                    !canEnterChat ||
+                    isProcessingBackground ||
+                    isCreatingProject,
+                }"
+                @click="enterChatStage"
+              >
+                {{
+                  isProcessingBackground
+                    ? "解析附件中..."
+                    : isCreatingProject
+                    ? "建立工作區..."
+                    : "進入工作區"
+                }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
-  </div>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -327,6 +331,32 @@ import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
+
+useHead({
+  title: "計劃書生成精靈 - TGSA 企劃引擎",
+  meta: [
+    {
+      name: "description",
+      content:
+        "AI 驅動的計劃書生成工具，支援 SIIR、IMDP、CITD 等多種補助計畫類型，一鍵生成專業計畫書草稿。",
+    },
+    {
+      name: "keywords",
+      content: "計劃書生成, AI 企劃, 政府補助, SIIR, IMDP, CITD, 智能寫作",
+    },
+    {
+      property: "og:title",
+      content: "計劃書生成精靈 - TGSA 企劃引擎",
+    },
+    {
+      property: "og:description",
+      content:
+        "AI 驅動的計劃書生成工具，支援多種補助計畫類型，一鍵生成專業計畫書草稿。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "index, follow" },
+  ],
+});
 import {
   callAutoFillApi,
   buildSectionSchema,
@@ -908,11 +938,21 @@ async function enterChatStage() {
       }
     }
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
     const response = await fetch(`${API_BASE_URL}/projects`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        user_id: userId,
         mode: selectedMode.value || "interactive",
         title:
           planName.value.trim() ||

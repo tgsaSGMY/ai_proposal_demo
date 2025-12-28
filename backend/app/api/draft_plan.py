@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
 from app.models import DynamicFieldSchema
-from app.api.dependencies import get_supabase_service, get_llm_service
+from app.api.dependencies import get_supabase_service, get_llm_service, verify_internal_user
 
 
 # 導入重構後的核心邏輯
@@ -111,18 +111,18 @@ async def run_synthetic_idea_generation_task(
 # --- API 端点 ---
 
 @router.get("", response_model=List[Dict[str, Any]], summary="获取所有企划草稿")
-async def get_all_drafts(supabase_service: SupabaseService = Depends(get_supabase_service)):
+async def get_all_drafts(supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     return await supabase_service.get_all_draft_plans()
 
 @router.get("/{draft_id}", response_model=Dict[str, Any], summary="获取单个企划草稿")
-async def get_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service)):
+async def get_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     draft = await supabase_service.get_draft_plan_by_id(draft_id)
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
     return draft
 
 @router.post("", response_model=Dict[str, Any], status_code=201, summary="创建单个企划草稿")
-async def create_single_draft(req: CreateDraftRequest, supabase_service: SupabaseService = Depends(get_supabase_service)):
+async def create_single_draft(req: CreateDraftRequest, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     draft = await supabase_service.create_draft_plan(
         name=req.name, mode=req.mode, grant_id=req.grant_id, template_id=req.template_id
     )
@@ -137,6 +137,7 @@ async def create_batch_synthetic_drafts(
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
+    _=Depends(verify_internal_user),
 ):
     created_draft_ids = []
     for i in range(req.count):
@@ -160,14 +161,14 @@ async def create_batch_synthetic_drafts(
     return {"message": f"Started generating ideas for {len(created_draft_ids)} drafts.", "draft_ids": created_draft_ids}
 
 @router.put("/{draft_id}", response_model=Dict[str, Any], summary="更新一个企划草稿")
-async def update_draft(draft_id: str, req: DraftPlanUpdateRequest, supabase_service: SupabaseService = Depends(get_supabase_service)):
+async def update_draft(draft_id: str, req: DraftPlanUpdateRequest, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     updated_draft = await supabase_service.update_draft_plan(draft_id, req.dict(exclude_unset=True))
     if not updated_draft:
         raise HTTPException(status_code=404, detail="Draft not found.")
     return updated_draft
 
 @router.delete("/{draft_id}", status_code=204, summary="删除一个企划草稿")
-async def delete_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service)):
+async def delete_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     success = await supabase_service.delete_draft_plan(draft_id)
     if not success:
         raise HTTPException(status_code=404, detail="Draft not found.")

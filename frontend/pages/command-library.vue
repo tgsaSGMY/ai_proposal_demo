@@ -265,6 +265,32 @@ import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { supabase } from "~/utils/supabaseClient";
 
+useHead({
+  title: "我的指令庫 - TGSA 企劃引擎",
+  meta: [
+    {
+      name: "description",
+      content:
+        "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。管理系統規則和企業專屬指令。",
+    },
+    {
+      name: "keywords",
+      content: "指令庫, 模型參數, AI 配置, 企業 DNA, 提示詞管理",
+    },
+    {
+      property: "og:title",
+      content: "我的指令庫 - 模型參數與配置管理 - TGSA 企劃引擎",
+    },
+    {
+      property: "og:description",
+      content:
+        "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "index, follow" },
+  ],
+});
+
 interface CommandItem {
   id: string;
   title: string;

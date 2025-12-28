@@ -689,16 +689,23 @@ async function handleGeneratePlan(payload) {
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
     }));
-    const userId = await getUserIdOrNotify();
-    if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      hideLoading();
+      errorNotification("請先登入");
       return;
     }
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
-        user_id: userId,
         grant: selectedGrantId.value,
         template: selectedTemplateId.value,
         user_input: payload.prompt,

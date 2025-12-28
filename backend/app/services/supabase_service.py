@@ -5,7 +5,7 @@ import json
 from typing import List, Dict, Any, Optional
 from fastapi import Request
 from supabase import create_client, Client
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text 
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 import asyncio 
@@ -290,16 +290,18 @@ class SupabaseService:
         )
         return response.data[0] if response.data else None
 
-    async def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """取得單一專案。"""
+    async def get_project_by_id(self, project_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """取得單一專案。若提供 user_id，則只返回該使用者擁有的專案。"""
         try:
-            response = (
+            query = (
                 self.client.from_("projects")
                 .select("*")
                 .eq("id", project_id)
-                .single()
-                .execute()
             )
+            if user_id:
+                query = query.eq("user_id", user_id)
+            
+            response = query.single().execute()
             return response.data if response.data else None
         except Exception as error:
             logger.error("Failed to fetch project %s: %s", project_id, error, exc_info=True)
@@ -316,19 +318,20 @@ class SupabaseService:
         )
         return response.data if response.data else []
 
-    async def update_project_record(self, project_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """更新指定專案。"""
+    async def update_project_record(self, project_id: str, user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新指定專案（只有擁有者能更新）。"""
         response = (
             self.client.from_("projects")
             .update({k: v for k, v in data.items() if v is not None})
             .eq("id", project_id)
+            .eq("user_id", user_id)
             .execute()
         )
         return response.data[0] if response.data else None
 
-    async def delete_project_record(self, project_id: str) -> bool:
+    async def delete_project_record(self, project_id: str, user_id: str) -> bool:
         """刪除指定專案。"""
-        response = self.client.from_("projects").delete().eq("id", project_id).execute()
+        response = self.client.from_("projects").delete().eq("id", project_id).eq("user_id", user_id).execute()
         return len(response.data) > 0
 
     async def get_all_models(self) -> List[Dict[str, Any]]:

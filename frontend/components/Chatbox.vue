@@ -356,7 +356,6 @@ const props = defineProps({
   templateId: { type: String, default: "" },
   grantName: { type: String, default: "" },
   templateName: { type: String, default: "" },
-  useModelType: { type: String, default: "external" },
   prefilledAnswers: { type: Object, default: () => ({}) },
   projectId: { type: String, default: "" },
   savedPlanVersions: { type: Array, default: () => [] },
@@ -366,14 +365,12 @@ const props = defineProps({
 const isGenerating = computed(() => props.isGenerating);
 const showSidebar = computed(() => Boolean(props.showSidebar));
 
-const useModelType = computed(() => props.useModelType);
 const { confirm } = useConfirm();
 
 const emit = defineEmits([
   "generatePlan",
   "finalizeCandidates",
   "requestExport",
-  "toggleModel",
   "backToStageOne",
   "messagesUpdated",
   "questionAnswersUpdated",
@@ -499,9 +496,15 @@ async function streamAIGuidanceMessage(question) {
   const wsProtocol = config.public.apiBaseUrl.startsWith("https")
     ? "wss"
     : "ws";
+
+  // Get access token for WebSocket authentication
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token || "";
   const wsUrl = `${wsProtocol}://${
     config.public.apiBaseUrl.split("://")[1]
-  }/api/ws/chat_guidance`;
+  }/api/ws/chat_guidance${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 
   // 如果是初始化阶段，只建立连接，不创建 AI 消息
   if (question.id === "init") {
@@ -1060,11 +1063,11 @@ onBeforeUnmount(() => {
 
 function buildGuidedQuestionList() {
   const base = [
-    {
-      id: "main-idea",
-      label: "核心構想",
-      prompt: "請先描述計畫的主要想法、產品或服務摘要。",
-    },
+    // {
+    //   id: "项目形容"",
+    //   label: "核心構想",
+    //   prompt: "請先描述計畫的主要想法、產品或服務摘要。",
+    // },
   ];
 
   const sections = buildDynamicSections(createEmptyDynamicValues());

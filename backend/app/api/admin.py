@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.models import RoutingRule, UpdateSectionSettingsRequest,ScrapeRequest
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_supabase_service,get_llm_service
+from .dependencies import get_supabase_service,get_llm_service,verify_internal_user
 from app.services.llm_service import LLMService
 from app.utils.scrape_website_text import scrape_website_text
 import httpx
@@ -40,6 +40,7 @@ async def set_routing_rule(
     rule: RoutingRule,
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """新增或更新一個路由規則"""
     try:
@@ -59,6 +60,7 @@ async def delete_routing_rule(
     rule_id: str,
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """刪除指定 ID 的路由規則"""
     try:
@@ -78,7 +80,8 @@ async def update_section_prompts_endpoint(
     request: Request,
     section_id: str, 
     request_data: UpdateSectionSettingsRequest,
-    supabase_service: SupabaseService = Depends(get_supabase_service)
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _=Depends(verify_internal_user),
 ):
     """更新指定章節的自定義提示詞列表。"""
     if not request_data.grant_id or not request_data.template_id:

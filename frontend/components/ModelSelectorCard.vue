@@ -187,6 +187,7 @@
 
 <script setup>
 import { ref } from "vue";
+import { supabase } from "~/utils/supabaseClient";
 import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
 
 const props = defineProps({
@@ -294,11 +295,19 @@ async function handleSaveSettings(updatedSettings) {
 
   isSavingSettings.value = true;
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
+
     const response = await fetch(
       `${API_BASE_URL}/sections/${props.section.id}/prompts`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           ...updatedSettings,
           grant_id: props.grantId,
