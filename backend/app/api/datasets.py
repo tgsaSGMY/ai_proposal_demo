@@ -20,7 +20,6 @@ async def save_dataset_entries(
     req: SaveDatasetRequest,
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
-    _=Depends(verify_internal_user),
 ):
     """
     異步保存數據集條目到 Supabase。

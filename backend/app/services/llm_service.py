@@ -375,7 +375,6 @@ class LLMService:
         else:
             original_model_info = resolve_model(grant_id, template_id, section_id, app_state, is_external=is_external)
         
-        print("llm service model",original_model_info)
         if not original_model_info:
             return SectionGenerateResponse(section_id=section_id, error="Model routing failed.")
         

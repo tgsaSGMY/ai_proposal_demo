@@ -356,6 +356,8 @@ const props = defineProps({
   templateId: { type: String, default: "" },
   grantName: { type: String, default: "" },
   templateName: { type: String, default: "" },
+  projectTitle: { type: String, default: "" },
+  projectSummary: { type: String, default: "" },
   prefilledAnswers: { type: Object, default: () => ({}) },
   projectId: { type: String, default: "" },
   savedPlanVersions: { type: Array, default: () => [] },
@@ -888,10 +890,22 @@ async function requestGeneration() {
     })
     .join("\n\n");
 
+  // Compose final input including project title and summary (same format as GeneratorModeWorkspace)
+  const projectPlanName = props.projectTitle || "";
+  const projectPlanSummary = props.projectSummary || "";
+  const userInput = joinedText;
+  const finalUserInput =
+    "計劃名稱: " +
+    projectPlanName +
+    "\n\n計劃摘要: " +
+    projectPlanSummary +
+    "\n\n" +
+    userInput;
+
   emit("generatePlan", {
     grantId: props.grantId,
     templateId: props.templateId,
-    prompt: joinedText,
+    prompt: finalUserInput,
     selectedModel: selectedModel.value || undefined,
   });
 }

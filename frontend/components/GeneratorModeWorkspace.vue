@@ -108,6 +108,7 @@ const emit = defineEmits<{
     payload: {
       selected: Record<string, any>;
       rejected: Record<string, any>;
+      finalPrompt?: string;
     }
   ];
 }>();
@@ -125,6 +126,7 @@ const generatorAutosaveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const isGeneratingPlan = ref(false);
 let isHydratingDynamicFieldState = false;
 let isHydratingMainIdeaState = false;
+const lastFinalUserInput = ref("");
 
 // Reactive copies for v-model
 const userInput = ref(props.userInput);
@@ -364,6 +366,9 @@ async function handleGeneratorPlanRequest(outerPayload?: {
       "\n\n" +
       userInput;
 
+    // 保存最後使用的生成輸入，以便父層在確認候選時取得
+    lastFinalUserInput.value = finalUserInput;
+
     finalPlanContent.value = {};
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
@@ -583,6 +588,7 @@ function onCandidateConfirm({
   emit("candidateConfirmed", {
     selected: selected,
     rejected: rejected,
+    finalPrompt: lastFinalUserInput.value,
   });
   scheduleGeneratorAutosave();
 }

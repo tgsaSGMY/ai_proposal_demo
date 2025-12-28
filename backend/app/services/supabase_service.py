@@ -545,7 +545,9 @@ class SupabaseService:
         """根據 ID 更新 datasets 表中的記錄，並同步更新向量嵌入"""
         if "prompt" in data and data["prompt"]:
             try:
-                query_embedding = self.embedding_model.encode(data["prompt"]).tolist()
+                prompt_embedding_ndarray = list(self.embedding_model.embed(data["prompt"]))[0]
+                query_embedding = prompt_embedding_ndarray.tolist()
+
                 data["embedding"] = query_embedding
             except Exception as e:
                 logger.error(f"Failed to regenerate embedding for dataset {dataset_id}: {e}", exc_info=True)

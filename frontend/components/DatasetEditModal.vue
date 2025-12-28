@@ -1,119 +1,226 @@
 <template>
   <div
     v-if="show"
-    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center p-2 sm:p-0"
+    class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center p-4 sm:p-6"
     @click.self="$emit('close')"
   >
     <div
-      class="bg-white rounded-2xl shadow-2xl w-full max-w-xs sm:max-w-2xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-200"
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200"
     >
       <!-- Header -->
       <header
-        class="p-3 sm:p-5 border-b bg-gradient-to-r from-indigo-50 to-white flex items-center justify-between"
+        class="p-4 sm:p-5 border-b bg-gradient-to-r from-indigo-50 to-white flex items-center justify-between flex-shrink-0"
       >
-        <h2
-          class="text-base sm:text-lg font-semibold text-gray-800 break-words max-w-[70vw] sm:max-w-none"
+        <div>
+          <h2
+            class="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2"
+          >
+            <span>👁️ 檢視數據點</span>
+            <span
+              class="px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-500 font-mono"
+              >#{{ dataset.id }}</span
+            >
+          </h2>
+          <p class="text-xs text-gray-400 mt-1">
+            此模式下僅允許修改數據來源分類
+          </p>
+        </div>
+        <button
+          @click="$emit('close')"
+          class="text-gray-400 hover:text-gray-600 transition"
         >
-          ✏️ 編輯數據點 #{{ dataset.id }}
-        </h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
       </header>
 
       <!-- Main content -->
-      <main
-        class="p-3 sm:p-6 space-y-3 sm:space-y-5 overflow-y-auto text-gray-700 bg-gray-50/60"
-      >
-        <!-- Source Type -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2"
-            >數據來源</label
+      <main class="flex-1 flex flex-col min-h-0 bg-gray-50/50">
+        <!-- Top: Source Type Selection -->
+        <div class="p-4 sm:p-6 bg-white border-b border-gray-100 flex-shrink-0">
+          <label
+            class="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3"
           >
-          <select
-            v-model="editableData.source_type"
-            class="border border-4 p-2 w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 text-sm sm:text-base transition-all duration-150"
-          >
-            <option value="golden_samples">黃金樣本</option>
-            <option value="synthetic_data">生成資料</option>
-            <option value="external_direct">外部資料</option>
-          </select>
-        </div>
+            數據來源設定
+          </label>
 
-        <!-- Prompt -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2"
-            >用戶輸入</label
-          >
-          <textarea
-            v-model="editableData.prompt"
-            rows="4"
-            class="border border-4 p-2 w-full rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 text-sm sm:text-base transition-all duration-150"
-          ></textarea>
-        </div>
-
-        <!-- Final Answer -->
-        <div>
-          <div class="flex justify-between items-center mb-2">
-            <label class="block text-sm font-medium text-gray-700"
-              >輸出結果</label
+          <div class="flex items-center gap-4">
+            <!-- Label Left -->
+            <span
+              class="text-sm font-medium transition-colors"
+              :class="!isAiReference ? 'text-gray-900' : 'text-gray-400'"
             >
-            <!-- 模式切換按鈕 -->
+              不作為 AI 參考
+              <span class="block text-[10px] text-gray-400 font-normal"
+                >(外部資料)</span
+              >
+            </span>
+
+            <!-- Toggle Button -->
             <button
-              @click="toggleEditMode"
-              class="px-2 py-1 text-xs bg-gray-200 rounded-md hover:bg-gray-300 transition"
+              type="button"
+              @click="toggleSourceType"
+              :disabled="isGoldenSample"
+              class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
+              :class="[
+                isAiReference ? 'bg-indigo-600' : 'bg-gray-200',
+                isGoldenSample ? 'opacity-60 cursor-not-allowed' : '',
+              ]"
             >
-              {{ isRawJsonMode ? "切換為欄位模式" : "切換為原始 JSON" }}
+              <span class="sr-only">切換 AI 參考狀態</span>
+              <!-- Knob -->
+              <span
+                aria-hidden="true"
+                class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out flex items-center justify-center"
+                :class="isAiReference ? 'translate-x-5' : 'translate-x-0'"
+              >
+                <!-- Lock Icon for Golden Sample -->
+                <svg
+                  v-if="isGoldenSample"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="w-3 h-3 text-gray-400"
+                >
+                  <path
+                    fill-rule="evenodd"
+                    d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </span>
             </button>
-          </div>
 
-          <!-- 原始 JSON 模式 -->
-          <div v-if="isRawJsonMode">
-            <textarea
-              v-model="editableData.final_answer_str"
-              rows="8"
-              class="border border-4 p-2 w-full font-mono text-xs sm:text-sm rounded-xl border-gray-300 bg-white shadow-sm hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300 transition-all duration-150"
-              :class="{ 'border-red-500 ring-2 ring-red-400': jsonError }"
-            ></textarea>
+            <!-- Label Right -->
+            <span
+              class="text-sm font-medium transition-colors"
+              :class="isAiReference ? 'text-indigo-700' : 'text-gray-400'"
+            >
+              作為 AI 參考
+              <span
+                class="block text-[10px] font-normal"
+                :class="isAiReference ? 'text-indigo-500' : 'text-gray-400'"
+              >
+                <span v-if="isGoldenSample">✨ 黃金樣本 (鎖定)</span>
+                <span v-else>(生成資料)</span>
+              </span>
+            </span>
           </div>
+        </div>
 
-          <!-- 欄位模式 -->
+        <!-- Bottom: Split View -->
+        <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+          <!-- Left: User Input (Prompt) -->
           <div
-            v-else
-            class="border p-1 sm:p-3 rounded-xl bg-white/50 max-h-[50vh] overflow-y-auto"
+            class="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 min-h-0"
           >
-            <PlanOutputPanel
-              v-if="computedSections.length > 0"
-              :sections="computedSections"
-              :plan-content="computedPlanContent"
-              mode="dataset-edit"
-              :is-loading="false"
-              @update:content="handlePlanUpdate"
-            />
-            <p v-else class="text-center text-sm text-gray-500 p-4">
-              找不到此數據點對應的 Schema，無法渲染表單。
-            </p>
+            <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
+              <span
+                class="text-xs font-bold text-indigo-600 uppercase tracking-wider"
+                >用戶輸入 (Prompt)</span
+              >
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-white">
+              <div
+                class="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed font-sans"
+              >
+                {{ editableData.prompt || "無輸入內容" }}
+              </div>
+            </div>
           </div>
 
-          <p v-if="jsonError" class="mt-1 text-xs text-red-600">
-            {{ jsonError }}
-          </p>
+          <!-- Right: User Output (Rendered HTML) -->
+          <div class="flex-1 flex flex-col min-h-0">
+            <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
+              <span
+                class="text-xs font-bold text-emerald-600 uppercase tracking-wider"
+                >輸出結果 (Preview)</span
+              >
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-white relative">
+              <!-- 渲染內容 -->
+              <div
+                v-if="renderedHtml"
+                class="prose prose-sm prose-slate max-w-none"
+              >
+                <div v-html="renderedHtml"></div>
+              </div>
+
+              <!-- 錯誤或空狀態提示 -->
+              <div
+                v-else
+                class="flex h-full flex-col items-center justify-center text-gray-400"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-10 w-10 mb-2 opacity-50"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <p class="text-sm">無法預覽內容 (缺少 Schema 或數據)</p>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
       <!-- Footer -->
       <footer
-        class="flex-shrink-0 p-3 sm:p-4 bg-gradient-to-r from-gray-100 to-gray-50 border-t flex flex-col sm:flex-row justify-end gap-2 sm:gap-3"
+        class="flex-shrink-0 p-4 bg-gray-50 border-t flex justify-end gap-3"
       >
         <button
           @click="$emit('close')"
-          class="px-3 sm:px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm sm:text-base transition-all duration-150"
+          class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition shadow-sm"
         >
           取消
         </button>
         <button
           @click="handleSave"
           :disabled="isSaving"
-          class="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 flex items-center gap-2 text-sm sm:text-base transition-all duration-150 shadow-sm"
+          class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium transition shadow-sm flex items-center gap-2"
         >
-          {{ isSaving ? "保存中..." : "保存更改" }}
+          <svg
+            v-if="isSaving"
+            class="animate-spin h-4 w-4 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          {{ isSaving ? "保存中..." : "確認修改" }}
         </button>
       </footer>
     </div>
@@ -121,8 +228,8 @@
 </template>
 
 <script setup>
-import { ref, watch, reactive } from "vue";
-import PlanOutputPanel from "./PlanOutputPanel.vue";
+import { watch, reactive, computed } from "vue";
+import { renderPlanToHtml } from "~/utils/exportToWord"; // 確保這個路徑正確
 
 const props = defineProps({
   show: Boolean,
@@ -136,13 +243,11 @@ const emit = defineEmits(["close", "save"]);
 const editableData = reactive({
   id: null,
   prompt: "",
-  final_answer_str: "",
   source_type: "synthetic_data",
-  final_answer_obj: {},
+  final_answer_obj: {}, // 這是唯讀的，用於渲染
 });
-const jsonError = ref(null);
-const isRawJsonMode = ref(false);
 
+// 當 dataset 改變時更新本地數據
 watch(
   () => props.dataset,
   (newVal) => {
@@ -150,115 +255,115 @@ watch(
       editableData.id = newVal.id;
       editableData.prompt = newVal.prompt || "";
       editableData.source_type = newVal.source_type || "synthetic_data";
-      editableData.final_answer_str = JSON.stringify(
-        newVal.final_answer,
-        null,
-        2
-      );
-      // 做一個淺拷貝，避免直接修改 props 裡的物件
-      editableData.final_answer_obj = { ...(newVal.final_answer || {}) };
-
-      jsonError.value = null;
-      isRawJsonMode.value = false;
+      // 深拷貝以防萬一，雖然我們不編輯它
+      editableData.final_answer_obj = newVal.final_answer
+        ? JSON.parse(JSON.stringify(newVal.final_answer))
+        : {};
     }
   },
   { immediate: true, deep: true }
 );
 
-const computedSections = computed(() => {
-  if (!props.dataset || !props.allConfigs) return [];
+// 計算渲染後的 HTML
+const renderedHtml = computed(() => {
+  if (!props.dataset || !props.allConfigs) return "";
 
   const { grant_id, template_id, section_id } = props.dataset;
-  if (!grant_id || !template_id || !section_id) return [];
+  if (!grant_id || !template_id || !section_id) return "";
 
+  // 1. 查找對應的 Schema Config
   const grant = props.allConfigs.find((g) => g.id === grant_id);
   const template = grant?.templates.find((t) => t.id === template_id);
   const section = template?.sections.find((s) => s.id === section_id);
 
-  if (section) {
-    // 返回 PlanOutputPanel 期望的格式
-    return [section];
-  }
-  return [];
-});
+  if (!section) return "";
 
-const computedPlanContent = computed(() => {
-  if (!props.dataset || !props.dataset.section_id) return {};
-
-  // 返回 PlanOutputPanel 期望的格式
-  return {
-    [props.dataset.section_id]: {
-      content: editableData.final_answer_obj,
-      // 如果有錯誤也可以傳遞
-      // error: null
-    },
-  };
-});
-
-// 3. 創建事件處理函數
-function handlePlanUpdate({ sectionId, content }) {
-  // 當 PlanOutputPanel 內部更新時，同步回我們的 editableData
-  if (sectionId === props.dataset.section_id) {
-    editableData.final_answer_obj = content;
-  }
-}
-
-function toggleEditMode() {
-  jsonError.value = null; // 切換時清除舊錯誤
-
-  if (isRawJsonMode.value) {
-    // ---- 從「原始 JSON」切換到「欄位」 ----
-    try {
-      const parsed = JSON.parse(editableData.final_answer_str);
-      // 確保解析出來的是一個物件，而不是陣列或純文字
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        !Array.isArray(parsed)
-      ) {
-        editableData.final_answer_obj = parsed;
-        isRawJsonMode.value = false; // 切換成功
-      } else {
-        jsonError.value = "必須是一個有效的 JSON 物件才能切換到欄位模式。";
+  try {
+    // 2. 使用 exportToWord 中的 renderPlanToHtml 進行渲染
+    // 參數1: 章節定義陣列
+    // 參數2: 數據內容 (Key 是 section_id)
+    return renderPlanToHtml(
+      [
+        {
+          id: section.id,
+          name: section.name || "預覽內容",
+          json_schema: section.json_schema,
+        },
+      ],
+      {
+        [section.id]: {
+          content: editableData.final_answer_obj || "",
+        },
       }
-    } catch (error) {
-      jsonError.value = "JSON 格式無效，請修正後再切換模式。";
-    }
-  } else {
-    // ---- 從「欄位」切換到「原始 JSON」 ----
-    // 這個方向總是安全的
-    editableData.final_answer_str = JSON.stringify(
-      editableData.final_answer_obj,
-      null,
-      2
     );
-    isRawJsonMode.value = true;
+  } catch (error) {
+    console.error("HTML Render Error:", error);
+    return `<div class="text-red-500 text-sm">渲染錯誤: ${error.message}</div>`;
   }
-}
+});
 
 function handleSave() {
-  let finalAnswerObject;
-
-  if (isRawJsonMode.value) {
-    // 如果在原始模式，需要解析
-    try {
-      finalAnswerObject = JSON.parse(editableData.final_answer_str);
-      jsonError.value = null;
-    } catch (error) {
-      jsonError.value = "JSON 格式無效，請檢查。";
-      return; // 中斷保存
-    }
-  } else {
-    // 如果在欄位模式，物件已經是最新且有效的
-    finalAnswerObject = editableData.final_answer_obj;
-  }
-
-  // 發送的資料結構不變
+  // 只回傳可能被修改的 source_type，以及必要的 id
+  // prompt 和 final_answer 保持原樣回傳，或者後端不更新它們
   emit("save", {
     id: editableData.id,
-    prompt: editableData.prompt,
-    final_answer: finalAnswerObject, // 使用最終確定的物件
-    source_type: editableData.source_type,
+    prompt: editableData.prompt, // 雖不編輯但保持數據完整性
+    final_answer: editableData.final_answer_obj, // 雖不編輯但保持數據完整性
+    source_type: editableData.source_type, // 這是主要修改的欄位
   });
 }
+
+// 判斷目前是否屬於「作為 AI 參考」的類別
+const isAiReference = computed(() => {
+  return ["golden_samples", "synthetic_data"].includes(
+    editableData.source_type
+  );
+});
+
+// 判斷是否為黃金樣本 (鎖定狀態)
+const isGoldenSample = computed(() => {
+  return editableData.source_type === "golden_samples";
+});
+
+// 切換邏輯
+function toggleSourceType() {
+  // 如果是黃金樣本，禁止切換
+  if (isGoldenSample.value) return;
+
+  if (isAiReference.value) {
+    // 當前是 AI 參考 (synthetic_data) -> 切換為 不參考 (external_direct)
+    editableData.source_type = "external_direct";
+  } else {
+    // 當前是不參考 (external_direct) -> 切換為 AI 參考 (synthetic_data)
+    editableData.source_type = "synthetic_data";
+  }
+}
 </script>
+
+<style scoped>
+/* 確保渲染出的 HTML 樣式正確 */
+.prose {
+  max-width: none;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.prose :deep(h1),
+.prose :deep(h2),
+.prose :deep(h3) {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  color: #1f2937;
+}
+.prose :deep(p) {
+  margin-bottom: 0.75em;
+}
+.prose :deep(ul) {
+  list-style-type: disc;
+  padding-left: 1.5em;
+}
+.prose :deep(ol) {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+}
+</style>

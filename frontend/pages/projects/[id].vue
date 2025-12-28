@@ -141,6 +141,8 @@
           :template-id="selectedTemplateId"
           :grant-name="grantLabel"
           :template-name="activeTemplateName"
+          :project-title="projectRecord?.title"
+          :project-summary="projectRecord?.description || ''"
           :prefilled-answers="prefilledChatAnswers"
           :project-id="projectRecord?.id || ''"
           :saved-plan-versions="savedPlanVersions"
@@ -619,10 +621,15 @@ async function persistProjectRecord(options: {
 async function onCandidateConfirm({
   selected,
   rejected,
+  finalPrompt,
 }: {
   selected: Record<string, any>;
   rejected: Record<string, any>;
+  finalPrompt?: string;
 }) {
+  if (finalPrompt) {
+    lastGenerationPrompt.value = finalPrompt;
+  }
   // 构建当前版本的内容
   const newPlanContent: Record<string, { content?: string; error?: string }> =
     {};
@@ -755,10 +762,8 @@ async function savePreferenceData(
             template_id: selectedTemplateId.value,
             section_id: section.id,
             prompt: finalPrompt,
-            final_answer: { content: chosen.content },
-            rejected_answer: rejected?.content
-              ? { content: rejected.content }
-              : null,
+            final_answer: chosen.content,
+            rejected_answer: rejected?.content ? rejected.content : null,
           };
         }
         return null;
