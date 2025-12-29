@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 import logging
 import json
 from uuid import uuid4
+import re
 from pathlib import Path
 
 from app.models import (
@@ -426,36 +427,49 @@ def build_history_entry(role: str, content: str):
 
 def normalize_filled_fields(filled_data: dict, all_questions: list) -> dict:
     """
-    将 LLM 提取的 Key (通常是 Label) 强制转换为 all_questions 中定义的标准 ID。
-    策略：忽略所有空格进行匹配。
+    將 LLM 提取的 Key (通常是 Label) 強制轉換為 all_questions 中定義的標準 ID。
+    策略：忽略空格，並允許忽略 Label 中的說明性括號內容 (【, (, [)。
     """
-    # 1. 建立 "指纹" -> "标准 ID" 的映射表
-    # 指纹 = 字符串去除所有空格后的样子
+    # 1. 建立 "指紋" -> "標準 ID" 的映射表
     fingerprint_map = {}
     
+    # 定義需要切割的括號符號 (包含全形與半形)
+    # 用於移除如 "【說明】", "(備註)" 等後綴
+    split_pattern = r'[【\[(（]' 
+    
     for q in all_questions:
-        real_id = q.get('id')         # e.g. "七、可行性分析::過往研究成果"
-        label = q.get('label')        # e.g. "七、可行性分析｜3.有無過往參展..."
+        real_id = q.get('id')         # e.g. "十、經費::材料費"
+        label = q.get('label')        # e.g. "十、經費｜2.每月研發材料費【研發所需...】"
         
         if not real_id:
             continue
             
-        # 存 ID 本身 (以防 LLM 偶尔真的吐出了 ID)
+        # 1. 存 ID 本身
         fingerprint_map[real_id.replace(" ", "")] = real_id
         
-        # 存 Label -> ID 的映射 (这是最关键的)
         if label:
-            # 只要 LLM 输出的内容去掉空格后 = Label 去掉空格后，就映射回 real_id
-            fingerprint_map[label.replace(" ", "")] = real_id
+            # 2. 存完整 Label (去掉空格)
+            clean_label = label.replace(" ", "")
+            fingerprint_map[clean_label] = real_id
+            
+            # 3. 存 "簡化版" Label (去掉括號後的說明文字)
+            # 例如: "題目【說明】" -> 映射為 "題目"
+            # 使用 re.split 切割，只取第一部分
+            short_label = re.split(split_pattern, label)[0]
+            clean_short_label = short_label.replace(" ", "")
+            
+            # 如果簡化版與原版不同，且不為空，則加入映射
+            if clean_short_label and clean_short_label != clean_label:
+                fingerprint_map[clean_short_label] = real_id
 
-    # 2. 清洗 filled_data 并映射
+    # 2. 清洗 filled_data 並映射
     normalized = {}
     
     for key, value in filled_data.items():
-        # 1. 预处理 Key：去掉 ::reply，去掉两端空白
+        # 1. 預處理 Key
         clean_key = key.replace("::reply", "").strip()
         
-        # 2. 制作指纹：去掉所有空格 (解决 "之 纪录" vs "之纪录" 的问题)
+        # 2. 製作指紋 (去掉所有空格)
         key_fingerprint = clean_key.replace(" ", "")
         
         # 3. 查找映射
@@ -463,10 +477,16 @@ def normalize_filled_fields(filled_data: dict, all_questions: list) -> dict:
             standard_id = fingerprint_map[key_fingerprint]
             normalized[standard_id] = value
         else:
-            # 如果真的找不到 (比如 LLM 编造了一个不存在的字段名)
-            # 记录原始 key，或者你可以选择丢弃
-            logger.warning(f"Field mismatch: '{key}' maps to nothing. Kept original.")
-            normalized[clean_key] = value
+            # 進階容錯：如果 LLM 回傳的 Key 自己也帶有括號，嘗試去掉括號後再匹配一次
+            # (雖然這種情況較少，但以防萬一)
+            short_key_fingerprint = re.split(split_pattern, key_fingerprint)[0]
+            
+            if short_key_fingerprint in fingerprint_map:
+                standard_id = fingerprint_map[short_key_fingerprint]
+                normalized[standard_id] = value
+            else:
+                logger.warning(f"Field mismatch: '{key}' maps to nothing. Kept original.")
+                normalized[clean_key] = value
             
     return normalized
 
@@ -652,6 +672,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
 觀察使用者的輸入。
 
 重點參考助理（Assistant）的回覆。如果助理在回覆中確認了某個數值（例如「好的，預算 5000 已記錄」），則該資訊的可信度極高。
+如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
 
 僅輸出 JSON。
 
@@ -705,7 +726,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
 你的首要目標是推進進度，直接引導至：{next_q_label}。
 
-如果現在詢問的是商業模式運作流程，一定要舉出這個例子：“客戶登入→使用平台→取得反饋→改良產品→行銷推廣”
+如果現在詢問的是商業模式運作流程, 模型一定要舉出這個示例幫助用戶理解問題：“客戶登入→使用平台→取得反饋→改良產品→行銷推廣”
 
 【任務】
 回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。

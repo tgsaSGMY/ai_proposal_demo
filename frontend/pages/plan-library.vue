@@ -388,12 +388,20 @@ function decorateProject(
     // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / 24
     if (record.stored_answer && record.stored_answer.chat_answers) {
       const allKeys = Object.keys(record.stored_answer.chat_answers);
-      const filledCount = allKeys.filter((key) => key !== "main_idea").length;
+      const filledCount = new Set(
+        allKeys
+          .filter(
+            (key) =>
+              key.includes("::") && key !== "main_idea" && key !== "main-idea"
+          )
+          .map((key) => key.split("::").slice(0, 2).join("::"))
+      ).size;
       completeness = Math.round((filledCount / 24) * 100);
     } else {
       completeness = 0;
     }
   }
+  completeness = Math.min(Math.max(completeness, 0), 100);
 
   const modeLabel = record.mode === "generator" ? "生成模式" : "互動模式";
   const lastUpdateSource = record.updated_at || record.created_at;
