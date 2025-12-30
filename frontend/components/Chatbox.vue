@@ -1181,7 +1181,7 @@ function applyProjectState(record = {}) {
     return;
   }
   const historyEntries = normalizeStoredMessages(record.conversation_history);
-  if (historyEntries.length) {
+  if (historyEntries.length && !messages.value.length) {
     messages.value = historyEntries;
     scrollToBottom();
   }

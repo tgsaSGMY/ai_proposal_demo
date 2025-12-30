@@ -223,7 +223,7 @@
               本月 AI 生成次數
             </p>
             <div class="mt-1 flex items-end gap-2">
-              <span class="text-xl font-semibold text-gray-900">1,204 次</span>
+              <span class="text-xl font-semibold text-gray-900">暫不計算</span>
             </div>
           </div>
         </div>
@@ -380,7 +380,7 @@ function decorateProject(
       const filledCount = Object.values(dynamicFields).filter(
         (field: any) => field
       ).length;
-      completeness = Math.round((filledCount / 24) * 100);
+      completeness = Math.round((filledCount / 20) * 100);
     } else {
       completeness = 0;
     }
@@ -396,7 +396,7 @@ function decorateProject(
           )
           .map((key) => key.split("::").slice(0, 2).join("::"))
       ).size;
-      completeness = Math.round((filledCount / 24) * 100);
+      completeness = Math.round((filledCount / 20) * 100);
     } else {
       completeness = 0;
     }

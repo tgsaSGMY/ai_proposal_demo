@@ -559,9 +559,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
 觀察使用者的輸入。
 
-重點參考助理（Assistant）的回覆。如果助理在回覆中確認了某個數值（例如「好的，預算 5000 已記錄」），則該資訊的可信度極高。
-如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
-如果用戶輸入的是“無”，并且助理沒追問下去，那麽那個待填的欄位的答案就是無。
+重點參考助理（Assistant）的回覆。如果助理在回覆中確認了欄位的答案，則該資訊一定要被提取。
+如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。
+不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
+如果用戶輸入的是“無”，并且助理沒追問下去，那麽那個待填的欄位的答案就是無。然後依照助理的回覆接著往下填下一個欄位。
+你也需要檢查前幾個聊天記錄中是否有相關資訊或欄位答案未被提取，記得一併提取。
 
 僅輸出 JSON。
 
@@ -600,6 +602,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
         proj_title_label = project_title or "(未提供專案名稱)"
         proj_summary_label = project_summary or "(未提供專案摘要)"
 
+        unanswered_count = len(ua_list)
         system_prompt = f"""
     你是一位友善的專案規劃助理，正在協助使用者填寫【{grant_name}】。
 
@@ -610,6 +613,9 @@ async def websocket_chat_guidance(websocket: WebSocket):
     (可能略有延遲，請以最新對話為準)
     已填（Do NOT ask these）：{a_desc}
     待填：{ua_desc}
+    尚未填寫題數：{unanswered_count} 題
+    總題數：{len(all_questions)} 題 
+    完成百分比：{len(a_desc.splitlines())} / {len(all_questions)}
 
     【重要規則】
     只負責幫忙填寫和完善欄位至可送件水準，不負責生成完整計劃書文本。
@@ -621,11 +627,13 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
     【任務】
     回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。
+    摘要或者幫忙填寫的欄位内容請確保在一個段落以内，不要列點導致太長。
     若使用者剛剛回答了某個【待填】問題，請自然地接續詢問下一個欄位：{next_q_label}。
     若使用者的問題不清楚，請進一步追問以釐清。
     每詢問一個問題的時候，可以根據上下文生成建議性的答案輔助用戶。
-    需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄,不要説進度百分比。
+    需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄。
     在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計劃書內容。
+    完成後，推薦用戶點擊右下角的「輸出完整推演」按鈕來產出完整計劃書文本，不需要推薦幫忙其他東西了，因爲你負責的是完善欄位，而這時候你的任務完成了。
     排版不要那麽鬆散，盡量維持緊凑。
     如果是重點内容，請使用「粗體」標記。
     可以多放一點icon或者表情符號讓對話更有趣，不然用戶會一次看到太多文字信息覺得疲勞。例如：💡、✅、🚀、🔍、📌 等等。
@@ -793,7 +801,6 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     # Background extraction
                     filled = await analyze_user_input(conversation_history_records, client)
                     if filled:
-                        logger.info(f"Extracted fields (after reply): {filled}")
                         clean_filled = normalize_filled_fields(filled, all_questions)
                         logger.info(f"Normalized fields: {clean_filled}")
                         current_answers.update(clean_filled)
