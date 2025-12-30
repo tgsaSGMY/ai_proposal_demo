@@ -3,7 +3,7 @@
     <Transition name="modal-fade">
       <div
         v-if="isOpenModel"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4 py-6 overflow-y-auto"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4 overflow-y-auto"
         @click.self="handleClose"
       >
         <div
@@ -52,12 +52,12 @@
             <div v-if="loading" class="flex items-center justify-center py-12">
               <div class="text-sm text-slate-500">正在產生建議名稱...</div>
             </div>
-            <div v-else class="space-y-4">
+            <div v-else>
               <div v-if="options && options.length" class="grid gap-3">
                 <div v-for="(opt, idx) in options" :key="`opt-${idx}`">
                   <label
                     :for="`opt-${idx}`"
-                    class="flex items-center justify-between gap-4 rounded-xl border px-4 py-3 hover:shadow-md transition-shadow cursor-pointer"
+                    class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 hover:shadow-sm transition-shadow cursor-pointer"
                     :class="
                       selected === opt
                         ? 'border-rose-400 bg-rose-50 shadow-md'
@@ -73,7 +73,7 @@
                         class="hidden"
                       />
                       <div
-                        class="flex h-8 w-8 items-center justify-center rounded-full border"
+                        class="flex h-6 w-6 items-center justify-center rounded-full border"
                         :class="
                           selected === opt
                             ? 'bg-rose-500 border-rose-500 text-white'
@@ -83,7 +83,7 @@
                         <svg
                           v-if="selected === opt"
                           xmlns="http://www.w3.org/2000/svg"
-                          class="h-4 w-4"
+                          class="h-3 w-3"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -98,7 +98,7 @@
                         <svg
                           v-else
                           xmlns="http://www.w3.org/2000/svg"
-                          class="h-4 w-4"
+                          class="h-3 w-3"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -122,7 +122,7 @@
               <div class="pt-3">
                 <label
                   for="original"
-                  class="flex items-center gap-3 cursor-pointer rounded-xl border px-4 py-3 hover:shadow-sm transition-shadow"
+                  class="flex items-center gap-2 cursor-pointer rounded-lg border px-3 py-2 hover:shadow-sm transition-shadow"
                   :class="
                     selected === originalName
                       ? 'border-rose-400 bg-rose-50'
@@ -136,9 +136,9 @@
                     v-model="selected"
                     class="hidden"
                   />
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-2">
                     <div
-                      class="flex h-8 w-8 items-center justify-center rounded-full border"
+                      class="flex h-6 w-6 items-center justify-center rounded-full border"
                       :class="
                         selected === originalName
                           ? 'bg-rose-500 border-rose-500 text-white'
@@ -148,7 +148,7 @@
                       <svg
                         v-if="selected === originalName"
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-4 w-4"
+                        class="h-3 w-3"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -163,7 +163,7 @@
                       <svg
                         v-else
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-4 w-4"
+                        class="h-3 w-3"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -185,7 +185,7 @@
               <div class="pt-3">
                 <label
                   for="custom"
-                  class="flex items-start gap-3 cursor-pointer rounded-xl border px-4 py-3 hover:shadow-sm transition-shadow"
+                  class="flex items-start gap-2 cursor-pointer rounded-lg border px-3 py-2 hover:shadow-sm transition-shadow"
                   :class="
                     selected === customName
                       ? 'border-rose-400 bg-rose-50'
