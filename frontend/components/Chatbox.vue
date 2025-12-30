@@ -401,6 +401,7 @@ const { confirm } = useConfirm();
 
 const emit = defineEmits([
   "generatePlan",
+  "updateProjectTitle",
   "finalizeCandidates",
   "requestExport",
   "backToStageOne",
