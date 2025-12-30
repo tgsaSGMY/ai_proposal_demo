@@ -588,6 +588,19 @@ async function handleToggle(commandId: string) {
   const target = commands.value.find((item) => item.id === commandId);
   if (!target) return;
   const nextState = !target.isOpen;
+
+  // If enabling, ensure the command has non-empty title and description
+  if (nextState) {
+    const title = (target.title || "").trim();
+    const desc = (target.description || "").trim();
+    if (!title || !desc) {
+      notifyWarning("無法啟用空白的指令內容，請先編輯並填寫標題與描述");
+      // Open edit modal so user can fill required fields
+      openEdit(target);
+      return;
+    }
+  }
+
   const timestamp = new Date().toISOString();
   const { error } = await supabase
     .from("commands")
