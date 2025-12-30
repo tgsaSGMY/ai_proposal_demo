@@ -102,11 +102,6 @@
         >
           <header class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-2">
-              <p
-                class="text-xs font-semibold uppercase tracking-widest text-rose-500"
-              >
-                第二步 · 自訂溝通模式與背景
-              </p>
               <h2 class="text-2xl font-semibold text-slate-900">
                 為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬企劃
               </h2>
