@@ -180,6 +180,38 @@
                   </div>
                 </label>
               </div>
+
+              <!-- custom name input -->
+              <div class="pt-3">
+                <label
+                  for="custom"
+                  class="flex items-start gap-3 cursor-pointer rounded-xl border px-4 py-3 hover:shadow-sm transition-shadow"
+                  :class="
+                    selected === customName
+                      ? 'border-rose-400 bg-rose-50'
+                      : 'border-slate-200 bg-white'
+                  "
+                >
+                  <input
+                    type="radio"
+                    id="custom"
+                    :value="customName"
+                    v-model="selected"
+                    class="hidden"
+                  />
+                  <div class="flex-1">
+                    <div class="text-sm text-slate-700 font-medium mb-1">
+                      自訂名稱
+                    </div>
+                    <input
+                      v-model="customName"
+                      @input="onCustomInput"
+                      placeholder="輸入自訂名稱（例如：我的專案名）"
+                      class="w-full rounded-md border px-3 py-2 text-sm"
+                    />
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -224,6 +256,7 @@ const isOpenModel = defineModel("isOpen", { type: Boolean, default: false });
 
 const options = ref<string[]>(props.suggestions || []);
 const selected = ref(props.originalName || "");
+const customName = ref("");
 
 watch(
   () => props.suggestions,
@@ -238,8 +271,28 @@ watch(
   }
 );
 
+// typing a custom name should select it
+function onCustomInput() {
+  const v = (customName.value || "").trim();
+  if (v) {
+    selected.value = v;
+  }
+}
+
+// when selection changes, if it's one of the suggestions or the original name, clear customName
+watch(selected, (v) => {
+  if (!v) return;
+  if (options.value.includes(v) || v === props.originalName) {
+    if (customName.value) customName.value = "";
+  } else {
+    if (customName.value !== v) customName.value = v;
+  }
+});
+
 function confirmSelection() {
-  emit("confirm", selected.value || "");
+  const pick = (selected.value || "").trim();
+  if (!pick) return;
+  emit("confirm", pick);
   isOpenModel.value = false;
 }
 function handleClose() {
