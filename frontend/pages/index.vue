@@ -35,7 +35,7 @@
                   ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
                   : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
               "
-              @click="selectPlanType(plan)"
+              @click="handlePlanClick(plan)"
             >
               <span
                 class="inline-flex h-12 w-12 items-center justify-center rounded-2xl"
@@ -551,6 +551,43 @@ const isDraggingBackground = ref(false);
 const isProcessingBackground = ref(false);
 const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
 const isCreatingProject = ref(false);
+
+// Double-click tracking for plan buttons: two clicks within this threshold
+const lastClickedPlanId = ref<string | null>(null);
+const lastClickTime = ref<number>(0);
+const DOUBLE_CLICK_THRESHOLD = 600; // ms
+
+function handlePlanClick(plan: PlanTypeOption) {
+  const now = Date.now();
+  if (
+    lastClickedPlanId.value === plan.id &&
+    now - lastClickTime.value <= DOUBLE_CLICK_THRESHOLD
+  ) {
+    // treat as double-click: ensure selected and advance
+    selectedPlanType.value = plan;
+    // reset tracking
+    lastClickedPlanId.value = null;
+    lastClickTime.value = 0;
+    // proceed to next step
+    handlePlanTypeConfirm();
+    return;
+  }
+
+  // single click: select and record timestamp
+  selectedPlanType.value = plan;
+  lastClickedPlanId.value = plan.id;
+  lastClickTime.value = now;
+  // clear tracking after threshold to avoid stale state
+  setTimeout(() => {
+    if (
+      lastClickedPlanId.value === plan.id &&
+      Date.now() - lastClickTime.value >= DOUBLE_CLICK_THRESHOLD
+    ) {
+      lastClickedPlanId.value = null;
+      lastClickTime.value = 0;
+    }
+  }, DOUBLE_CLICK_THRESHOLD + 50);
+}
 
 const { extractTextFromFile } = useFileExtractor();
 

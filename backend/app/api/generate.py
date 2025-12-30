@@ -211,119 +211,6 @@ def _extract_output_text(payload: Dict[str, Any]) -> str:
     raise ValueError("OpenAI Responses payload did not include text output.")
 
 
-@router.post(
-    "/chat_guidance",
-    response_model=ChatGuidanceResponse,
-    summary="產生對話式引導問題",
-)
-async def generate_chat_guidance_message(
-    request_data: ChatGuidanceRequest,
-    request: Request,
-    llm_service: LLMService = Depends(get_llm_service),
-):
-    """使用 GPT-4o-mini 生成更自然的提問內容，協助蒐集欄位答案。"""
-
-    model_registry = getattr(request.app.state, "model_registry", {}) or {}
-    model_info = model_registry.get("gpt-4o-mini")
-    if not model_info:
-        model_info = {
-            "id": "gpt-4o-mini",
-            "provider": "openai",
-            "type": "external",
-        }
-
-    answer_lines = [
-        f"- {label}: {value.strip()}"
-        for label, value in (request_data.answers or {}).items()
-        if value and value.strip()
-    ]
-    answers_summary = (
-        "\n".join(answer_lines) if answer_lines else "尚未收集到其他欄位的答案。"
-    )
-
-    history_lines = []
-    for entry in request_data.history[-8:]:
-        content = (entry.content or "").strip()
-        if not content:
-            continue
-        role_label = "使用者" if entry.role == "user" else "AI"
-        history_lines.append(f"{role_label}: {content}")
-    history_summary = (
-        "\n".join(history_lines) if history_lines else "尚未開始任何對話。"
-    )
-
-    system_prompt = (
-        "You are a proposal-planning coach that interviews the user field by field. "
-        "Respond in Traditional Chinese, keep the tone friendly and concise, and always conclude with a single open question. "
-        "Reference prior context when useful, but never invent information or ask about multiple fields at once."
-    )
-
-    user_prompt = f"""
-專案主題：{request_data.grant_name or request_data.grant_id}
-模板：{request_data.template_name or request_data.template_id}
-
-目前要蒐集的欄位：
-- ID: {request_data.question.id}
-- 名稱: {request_data.question.label}
-- 引導說明: {request_data.question.prompt}
-
-已完成的其他欄位答案：
-{answers_summary}
-
-最近的對話摘要：
-{history_summary}
-
-請根據上述資訊產生下一句 AI 要說的話。語氣親切自然，先銜接上一則內容，再清楚請求使用者補充與該欄位相關的細節，最後用一個問題作結。僅詢問單一欄位。
-請以 JSON 物件輸出：
-{{
-  "message": "<AI 要說的繁體中文句子>"
-}}
-    """.strip()
-
-    try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            raw_output, llm_error = await llm_service.call_external_api(
-                client,
-                model_info,
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                is_json_output=True,
-            )
-    except Exception as exc:
-        logger.error("Chat guidance request failed: %s", exc, exc_info=True)
-        raw_output, llm_error = None, {"error": str(exc)}
-
-    if llm_error or not raw_output:
-        fallback_message = (
-            request_data.question.prompt.strip()
-            if request_data.question.prompt
-            else "請分享更多細節，協助我理解。"
-        )
-        return ChatGuidanceResponse(
-            question_id=request_data.question.id,
-            message=fallback_message,
-        )
-
-    try:
-        parsed = json.loads(raw_output)
-        ai_message = (parsed.get("message") or "").strip()
-    except json.JSONDecodeError:
-        ai_message = (raw_output or "").strip()
-
-    if not ai_message:
-        ai_message = (
-            request_data.question.prompt.strip()
-            if request_data.question.prompt
-            else "請分享更多細節，協助我理解。"
-        )
-
-    return ChatGuidanceResponse(
-        question_id=request_data.question.id,
-        message=ai_message,
-    )
-
 @router.post("/generate_plan")
 async def generate_plan( 
     request_data: GenerateRequest,
@@ -638,6 +525,8 @@ async def websocket_chat_guidance(websocket: WebSocket):
     stored_answer_state = {}
     current_answers = {}
     all_questions = []
+    project_title = ""
+    project_summary = ""
 
     async def save_state_to_db():
         if not project_id or not supabase_service:
@@ -707,36 +596,38 @@ async def websocket_chat_guidance(websocket: WebSocket):
         if ua_list:
             next_q_label = ua_list[0].get("label") or ua_list[0].get("id")
 
+        # Include project title/summary in system prompt to provide context to the model
+        proj_title_label = project_title or "(未提供專案名稱)"
+        proj_summary_label = project_summary or "(未提供專案摘要)"
+
         system_prompt = f"""
-你是一位友善的專案規劃助理，正在協助使用者填寫【{grant_name}】。
+    你是一位友善的專案規劃助理，正在協助使用者填寫【{grant_name}】。
 
-【目前系統記錄狀態】
+    專案名稱：{proj_title_label}
+    專案摘要：{proj_summary_label}
 
-（可能略有延遲，請以最新對話為準）
+    【目前系統記錄狀態】
+    (可能略有延遲，請以最新對話為準)
+    已填（Do NOT ask these）：{a_desc}
+    待填：{ua_desc}
 
-已填（Do NOT ask these）：{a_desc}
+    【重要規則】
+    絕對禁止重複詢問【已填資料】中的欄位。
+    若【已填資料】中已有內容，請直接根據這些內容，詢問【待填欄位】中的下一項。
+    你的首要目標是推進進度，直接引導至：{next_q_label}
+    如果現在詢問的是商業模式運作流程, 模型一定要舉出這個示例幫助用戶理解問題：“客戶登入→使用平台→取得反饋→改良產品→行銷推廣”
+    若從上下文分析這專案無硬體需求，在"硬體標的規格"欄位能夠不詢問，提醒用戶類似“根據分析，此專案無硬體需求，因此欄位已自動填寫”，然後自動跳下一題。
 
-待填：{ua_desc}
+    【任務】
+    回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。
+    若使用者剛剛回答了某個【待填】問題，請自然地接續詢問下一個欄位：{next_q_label}。
+    若使用者的問題不清楚，請進一步追問以釐清。
+    需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄。
+    排版不要那麽鬆散，盡量維持緊凑。
+    如果是重點内容，請使用「粗體」標記。
 
-【重要規則】
-
-絕對禁止重複詢問【已填資料】中的欄位。
-
-若【已填資料】中已有內容，請直接根據這些內容，詢問【待填欄位】中的下一項。
-
-你的首要目標是推進進度，直接引導至：{next_q_label}。
-
-如果現在詢問的是商業模式運作流程, 模型一定要舉出這個示例幫助用戶理解問題：“客戶登入→使用平台→取得反饋→改良產品→行銷推廣”
-
-【任務】
-回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。
-
-若使用者剛剛回答了某個【待填】問題，請自然地接續詢問下一個欄位：{next_q_label}。
-
-若使用者的問題不清楚，請進一步追問以釐清。
-
-注意：請根據對話歷史流暢回應。即使系統顯示某欄位為「待填」，只要使用者剛剛在對話中已回答，請視為已填並繼續流程。
-"""
+    注意：請根據對話歷史流暢回應。即使系統顯示某欄位為「待填」，只要使用者剛剛在對話中已回答，請視為已填並繼續流程。
+    """
         
         # 构建 Messages：System -> History -> User
         # limit=10 表示带上最近 10 句对话作为上下文，让 AI 回答更连贯
@@ -763,6 +654,8 @@ async def websocket_chat_guidance(websocket: WebSocket):
     try:
         init_data = await websocket.receive_json()
         project_id = init_data.get("project_id", "")
+        project_title = init_data.get("project_title", "")
+        project_summary = init_data.get("project_summary", "")
         grant_name = init_data.get("grant_name", "")
         all_questions = init_data.get("all_questions", [])
         # 加载 DB 状态
@@ -797,7 +690,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
         if not last_is_assistant:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                first_reply = await stream_ai_reply("（用户刚进入，请根据项目名称开始引导）", conversation_history_records, False, client, grant_name)
+                first_reply = await stream_ai_reply("（用户刚进入，请根据项目名称和項目描述开始引导）", conversation_history_records, False, client, grant_name)
                 conversation_history_records.append(build_history_entry("assistant", first_reply))
                 await save_state_to_db()
 

@@ -71,9 +71,10 @@
                           : 'border border-[#f0f2ff] bg-white text-slate-700',
                       ]"
                     >
-                      <p class="text-sm leading-relaxed whitespace-pre-line">
-                        {{ message.content }}
-                      </p>
+                      <p
+                        class="text-sm leading-relaxed"
+                        v-html="formatMessageForDisplay(message.content)"
+                      ></p>
                     </article>
                   </template>
 
@@ -420,6 +421,25 @@ const selectedModel = ref("");
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
+function escapeHtml(unsafe) {
+  return String(unsafe || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatMessageForDisplay(raw) {
+  const text = raw == null ? "" : String(raw);
+  // escape HTML first
+  let out = escapeHtml(text);
+  // convert **bold** to <strong> — support multiline inside ** **
+  out = out.replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>");
+  // preserve line breaks
+  out = out.replace(/\r\n|\n/g, "<br/>");
+  return out;
+}
 
 const composerPlaceholder = computed(() => {
   if (!props.grantId || !props.templateId) {
@@ -528,6 +548,8 @@ async function streamAIGuidanceMessage(question) {
         grant_name: props.grantName || "",
         template_name: props.templateName || "",
         project_id: props.projectId || "",
+        project_title: props.projectTitle || "",
+        project_summary: props.projectSummary || "",
         all_questions: guidedQuestions,
         current_answers: questionAnswers.value,
         history: buildConversationHistoryPayload(),
@@ -859,6 +881,8 @@ async function handleSend(useAIFill = false) {
     const userPayload = {
       user_message: messageContent,
       current_answers: questionAnswers.value,
+      project_title: props.projectTitle || "",
+      project_summary: props.projectSummary || "",
     };
     isFetchingNextQuestion.value = true;
     window.chatWebSocket.send(JSON.stringify(userPayload));
