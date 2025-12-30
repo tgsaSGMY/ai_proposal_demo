@@ -12,11 +12,41 @@
           :key="item.id"
           class="rounded-2xl bg-slate-50 p-3"
         >
-          <p
-            class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff7a5b]"
-          >
-            {{ item.questionLabel }}
-          </p>
+          <div class="flex items-start justify-between">
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff7a5b]"
+            >
+              {{ item.questionLabel }}
+            </p>
+            <button
+              type="button"
+              class="ml-2 inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              :title="`編輯 ${item.questionLabel}`"
+              @click="
+                $emit('editQuestion', {
+                  questionId: item.id,
+                  questionLabel: item.questionLabel,
+                  answer: item.answer,
+                })
+              "
+            >
+              <!-- pencil icon -->
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15.232 5.232l3.536 3.536M4 20h4.586a1 1 0 00.707-.293l9.414-9.414a1 1 0 000-1.414l-3.293-3.293a1 1 0 00-1.414 0L4.293 15.293A1 1 0 004 15.999V20z"
+                />
+              </svg>
+            </button>
+          </div>
           <p class="mt-2 text-xs text-slate-600">
             {{ item.answer || "（待回答）" }}
           </p>
@@ -94,7 +124,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["selectVersion"]);
+const emit = defineEmits(["selectVersion", "editQuestion"]);
 
 const qaItems = computed(() => {
   const items: QAItem[] = [];

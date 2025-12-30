@@ -153,6 +153,7 @@
           @backToStageOne="router.push('/')"
           @messagesUpdated="handleMessagesUpdated"
           @aiResponseComplete="persistConversationHistory"
+          @updateProjectTitle="handleUpdateProjectTitle"
         />
       </section>
     </div>
@@ -534,6 +535,17 @@ async function handleGeneratorUpdate(payload: {
     });
   } catch (error) {
     console.warn("Failed to persist generator state", error);
+  }
+}
+
+async function handleUpdateProjectTitle(newTitle: string) {
+  if (!projectRecord.value) return;
+  try {
+    await updateProject({ title: newTitle });
+    success("已更新專案名稱");
+  } catch (err) {
+    console.error("Failed to update project title", err);
+    notifyError("更新專案名稱失敗，請稍後再試");
   }
 }
 

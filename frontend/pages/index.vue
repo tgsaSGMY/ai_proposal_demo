@@ -123,7 +123,7 @@
             </button>
           </header>
 
-          <div class="mt-6 grid gap-4 md:grid-cols-2">
+          <!-- <div class="mt-6 grid gap-4 md:grid-cols-2">
             <button
               v-for="mode in modeOptions"
               :key="mode.id"
@@ -147,7 +147,7 @@
                 {{ mode.description }}
               </p>
             </button>
-          </div>
+          </div> -->
 
           <div class="mt-6 space-y-4">
             <label class="block space-y-2">
@@ -543,7 +543,7 @@ const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
 const currentStage = ref(1);
 const selectedPlanType = ref<PlanTypeOption | null>(null);
 const selectedMode = ref<ModeOption["id"] | null>("interactive");
-const planName = ref("");
+const planName = ref("計劃草稿");
 const planSummary = ref("");
 const planBackground = ref("");
 const backgroundFiles = ref<BackgroundAttachment[]>([]);
@@ -923,7 +923,7 @@ function handlePlanTypeConfirm() {
     return;
   }
   onSelectionChange(configSelection);
-  planName.value = selectedPlanType.value.title;
+  // planName.value = selectedPlanType.value.title;
   currentStage.value = 2;
 }
 

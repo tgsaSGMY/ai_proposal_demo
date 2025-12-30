@@ -438,17 +438,16 @@ def format_qa_descriptions(all_questions, current_answers):
 
     # 生成文本
     questions_desc = "\n".join([
-        f"- {q.get('label', q.get('id'))}: {q.get('prompt', '')}" 
+        f"- {q.get('id', q.get('label'))}: {q.get('prompt', '')}" 
         for q in all_questions
     ])
     
     answered_desc = "\n".join(answered_list) or "（無）"
     
     unanswered_desc = "\n".join([
-        f"- {q.get('label', q.get('id'))}"
+        f"- {q.get('id', q.get('label'))}"
         for q in unanswered_list
     ]) or "（全部已填）"
-
     return questions_desc, answered_desc, unanswered_desc, unanswered_list
 
 # --- 新增：历史记录注入工具 ---
@@ -562,6 +561,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
 重點參考助理（Assistant）的回覆。如果助理在回覆中確認了某個數值（例如「好的，預算 5000 已記錄」），則該資訊的可信度極高。
 如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
+如果用戶輸入的是“無”，并且助理沒追問下去，那麽那個待填的欄位的答案就是無。
 
 僅輸出 JSON。
 
@@ -588,13 +588,13 @@ async def websocket_chat_guidance(websocket: WebSocket):
             return {}
         
     # --- 生成回答 (注入历史) ---
-    async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str):
+    async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str, paused_flag: dict):
       
         _, a_desc, ua_desc, ua_list = format_qa_descriptions(all_questions, current_answers)
         
         next_q_label = "（请检查是否还有未填项）"
         if ua_list:
-            next_q_label = ua_list[0].get("label") or ua_list[0].get("id")
+            next_q_label = ua_list[0].get("id") or ua_list[0].get("label")
 
         # Include project title/summary in system prompt to provide context to the model
         proj_title_label = project_title or "(未提供專案名稱)"
@@ -612,6 +612,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
     待填：{ua_desc}
 
     【重要規則】
+    只負責幫忙填寫和完善欄位至可送件水準，不負責生成完整計劃書文本。
     絕對禁止重複詢問【已填資料】中的欄位。
     若【已填資料】中已有內容，請直接根據這些內容，詢問【待填欄位】中的下一項。
     你的首要目標是推進進度，直接引導至：{next_q_label}
@@ -622,9 +623,12 @@ async def websocket_chat_guidance(websocket: WebSocket):
     回應使用者的最新輸入。若使用者提供了資訊，請進行確認或摘要（例如：「好的，已記錄……」）。
     若使用者剛剛回答了某個【待填】問題，請自然地接續詢問下一個欄位：{next_q_label}。
     若使用者的問題不清楚，請進一步追問以釐清。
-    需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄。
+    每詢問一個問題的時候，可以根據上下文生成建議性的答案輔助用戶。
+    需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄,不要説進度百分比。
+    在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計劃書內容。
     排版不要那麽鬆散，盡量維持緊凑。
     如果是重點内容，請使用「粗體」標記。
+    可以多放一點icon或者表情符號讓對話更有趣，不然用戶會一次看到太多文字信息覺得疲勞。例如：💡、✅、🚀、🔍、📌 等等。
 
     注意：請根據對話歷史流暢回應。即使系統顯示某欄位為「待填」，只要使用者剛剛在對話中已回答，請視為已填並繼續流程。
     """
@@ -634,21 +638,33 @@ async def websocket_chat_guidance(websocket: WebSocket):
         messages = get_chat_messages(system_prompt, history, last_user_msg=user_msg, limit=10)
 
         await websocket.send_json({"event": "chunk_start"})
-        
+
         full_response = []
         try:
             async for chunk in llm_service.stream_external_api(
                 client, model_info, messages
             ):
+                # If paused_flag is set, cancel the current streaming reply
+                if paused_flag.get("value"):
+                    try:
+                        await websocket.send_json({
+                            "event": "cancelled",
+                            "restore_user_message": user_msg,
+                            "message": "stream_cancelled_by_user",
+                        })
+                    except Exception:
+                        pass
+                    return ""
+
                 if chunk:
                     full_response.append(chunk)
                     await websocket.send_json({"event": "chunk", "data": chunk})
-            
+
             await websocket.send_json({"event": "done"})
         except Exception as e:
             logger.error(f"Stream error: {e}")
             await websocket.send_json({"event": "error", "message": str(e)})
-            
+
         return "".join(full_response).strip()
 
     try:
@@ -688,67 +704,106 @@ async def websocket_chat_guidance(websocket: WebSocket):
              if str(last_entry.get("id", "")).startswith("assistant") or last_entry.get("role") == "assistant":
                  last_is_assistant = True
 
+        # control flag for cancelling ongoing streams
+        paused_flag = {"value": False}
+
         if not last_is_assistant:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                first_reply = await stream_ai_reply("（用户刚进入，请根据项目名称和項目描述开始引导）", conversation_history_records, False, client, grant_name)
-                conversation_history_records.append(build_history_entry("assistant", first_reply))
-                await save_state_to_db()
+                first_reply = await stream_ai_reply(
+                    "（用户刚进入，请根据项目名称和項目描述开始引导）",
+                    conversation_history_records,
+                    False,
+                    client,
+                    grant_name,
+                    paused_flag,
+                )
+                if first_reply:
+                    conversation_history_records.append(build_history_entry("assistant", first_reply))
+                    await save_state_to_db()
 
         # --- 主循环 ---
-        while True:
+        # Use a single websocket reader task that dispatches incoming payloads into an asyncio.Queue
+        incoming_user_queue: asyncio.Queue = asyncio.Queue()
+
+        async def websocket_reader():
             try:
-                # A. 接收用戶消息
-                user_payload = await websocket.receive_json()
-                user_msg = user_payload.get("user_message", "").strip()
-                incoming_answers = user_payload.get("current_answers", {})
+                while True:
+                    payload = await websocket.receive_json()
+                    # Control action
+                    if payload.get("action") == "pause":
+                        # Set paused flag so any ongoing stream can detect it
+                        paused_flag["value"] = True
+                        try:
+                            await websocket.send_json({"event": "paused_ack"})
+                        except Exception:
+                            pass
+                        # do not enqueue pause as a user message
+                        continue
+
+                    # Normal user payloads go to the queue
+                    await incoming_user_queue.put(payload)
+            except WebSocketDisconnect:
+                await incoming_user_queue.put({"_disconnect": True})
+            except Exception as e:
+                logger.error(f"Reader error: {e}")
+                await incoming_user_queue.put({"_disconnect": True})
+
+        reader_task = asyncio.create_task(websocket_reader())
+
+        try:
+            while True:
+                payload = await incoming_user_queue.get()
+                if payload.get("_disconnect"):
+                    logger.info("Client disconnected (from queue)")
+                    break
+
+                user_msg = payload.get("user_message", "").strip()
+                incoming_answers = payload.get("current_answers", {})
                 if incoming_answers:
                     current_answers.update(incoming_answers)
 
                 if not user_msg:
                     continue
 
-                # B. 记录用户发言
-                conversation_history_records.append(build_history_entry("user", user_msg))
-                
-                # C. 处理逻辑 (使用同一个 Client)
+                # prepare user entry but DO NOT append yet — only persist if stream completes
+                user_entry = build_history_entry("user", user_msg)
+
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    
-                    # --- 步骤 1: 先生成并流式传输回答 (Response First) ---
                     ai_reply = await stream_ai_reply(
-                        user_msg, 
-                        conversation_history_records, 
+                        user_msg,
+                        conversation_history_records,
                         False,
-                        client, 
-                        grant_name
+                        client,
+                        grant_name,
+                        paused_flag,
                     )
-                    
-                    # 记录 AI 发言 (这对下一步分析至关重要)
+
+                    # If paused_flag was triggered during streaming, the stream has been cancelled
+                    if paused_flag.get("value"):
+                        # reset the flag and skip saving this user/assistant exchange
+                        paused_flag["value"] = False
+                        continue
+
+                    # append the user's message now that the stream completed
+                    conversation_history_records.append(user_entry)
+
                     if ai_reply:
                         conversation_history_records.append(build_history_entry("assistant", ai_reply))
-                    
-                    # --- 步骤 2: 后台分析并提取数据 (Extract Later) ---
-                    # 此时 history 包含了 User 的话 AND AI 的总结
+
+                    # Background extraction
                     filled = await analyze_user_input(conversation_history_records, client)
-                    
                     if filled:
                         logger.info(f"Extracted fields (after reply): {filled}")
                         clean_filled = normalize_filled_fields(filled, all_questions)
-                    
                         logger.info(f"Normalized fields: {clean_filled}")
-                        
-                        # 更新到 current_answers
                         current_answers.update(clean_filled)
-                        
-                    # --- 步骤 3: 统一保存状态 ---
-                    # 此时保存包含了完整的对话记录 + 最新提取的答案
+
                     await save_state_to_db()
 
-            except WebSocketDisconnect:
-                logger.info("Client disconnected inside loop")
-                break
-            except Exception as loop_e:
-                logger.error(f"Loop error: {loop_e}", exc_info=True)
-                await websocket.send_json({"event": "error", "message": "Processing error"})
+        finally:
+            # ensure reader task is cleaned up
+            if not reader_task.done():
+                reader_task.cancel()
 
     except Exception as e:
         logger.error(f"Endpoint error: {e}", exc_info=True)
@@ -914,6 +969,80 @@ async def generate_synthetic_input(
         logger.error(f"Error in generate_synthetic_input: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating synthetic input: {str(e)}")
       
+@router.post("/recommend_project_names", summary="根據已填寫的欄位推薦五個專案名稱")
+async def recommend_project_names(
+    payload: Dict[str, Any],
+    request: Request,
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
+    model_registry = request.app.state.model_registry or {}
+    model_info = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.1-mini")
+    if not model_info:
+        raise HTTPException(status_code=500, detail="Model not configured for recommendation.")
+
+    current_answers = payload.get("current_answers", {}) or {}
+    project_title = payload.get("project_title", "") or ""
+    grant_name = payload.get("grant_name", "") or ""
+
+    # build a compact context
+    filled_items = []
+    for k, v in current_answers.items():
+        if v and str(v).strip():
+            filled_items.append(f"- {k}: {str(v)[:150]}")
+    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"
+
+    system_prompt = "你是一位中文（繁體）政府企劃案命名專家。幫助使用者為專案取短而容易記憶的名稱。"
+
+    user_prompt = f"""
+請根據下列已填寫的欄位資訊，生成最多 5 個中文（繁體）專案名稱，名稱應簡潔、具描述性、適合用作計畫標題。
+如有需要，可將主題或關鍵字濃縮成 2~6 個字的名稱。請不要包含說明或額外文字。
+
+專案目前名稱（可做參考）：{project_title}
+補助主題：{grant_name}
+已填欄位：
+{filled_text}
+
+請以純 JSON 回傳，格式如下：
+{{"names": ["名稱一", "名稱二", "名稱三", ...]}}
+"""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            response, error = await llm_service.call_external_api(
+                client, model_info, messages, is_json_output=True
+            )
+
+            if error:
+                logger.error(f"Recommend names failed: {error}")
+                raise HTTPException(status_code=502, detail="Recommendation service error")
+
+            try:
+                data = json.loads(response)
+                names = data.get("names") or []
+                # ensure unique & trimmed & up to 5
+                cleaned = []
+                for n in names:
+                    if not n:
+                        continue
+                    s = str(n).strip()
+                    if s and s not in cleaned:
+                        cleaned.append(s)
+                    if len(cleaned) >= 5:
+                        break
+                return {"names": cleaned}
+            except Exception as ex:
+                logger.error(f"Failed to parse recommendation response: {ex}")
+                raise HTTPException(status_code=500, detail="Failed to parse recommendation response")
+    except Exception as e:
+        logger.error(f"Error in recommend_project_names: {e}")
+        raise HTTPException(status_code=500, detail="Recommendation service error")
+
+
 @router.post("/autofill_from_document", summary="從文檔自動填充計劃書內容")
 async def autofill_from_document(
     request_data: AutoFillRequest,

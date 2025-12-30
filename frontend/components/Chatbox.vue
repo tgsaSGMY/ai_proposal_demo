@@ -184,6 +184,7 @@
         <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
           <div class="relative">
             <textarea
+              ref="composerRef"
               v-model="draftMessage"
               class="mt-3 h-16 w-full resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 pr-14 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
               :placeholder="composerPlaceholder"
@@ -274,6 +275,15 @@
               >
                 {{ isGenerating ? "推演中..." : "輸出完整推演" }}
               </button>
+              <button
+                v-if="isFetchingNextQuestion"
+                type="button"
+                class="ml-2 rounded-full border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                @click="handlePause"
+                title="停止/取消目前的 AI 回覆"
+              >
+                停止/取消
+              </button>
             </div>
           </div>
         </footer>
@@ -301,6 +311,7 @@
         :versions="props.savedPlanVersions"
         :question-answers="questionAnswers"
         @selectVersion="handleVersionSelect"
+        @editQuestion="handleEditQuestion"
       />
     </div>
 
@@ -319,6 +330,22 @@
       :sub-field-value="fileImportInitialValue"
       @confirm="handleFileImportConfirm"
     />
+
+    <EditFieldModal
+      v-model:is-open="isEditFieldModalOpen"
+      title="編輯欄位"
+      :label="editFieldLabel"
+      :initial-value="editFieldInitialValue"
+      @confirm="handleEditConfirm"
+    />
+
+    <RecommendNameModal
+      v-model:is-open="isRecommendModalOpen"
+      :original-name="props.projectTitle"
+      :suggestions="recommendOptions"
+      :loading="isFetchingRecommend"
+      @confirm="handleRecommendConfirm"
+    />
   </div>
 </template>
 
@@ -336,6 +363,8 @@ import AnswerEditModal from "~/components/AnswerEditModal.vue";
 import ChatSidebar from "~/components/ChatSidebar.vue";
 import PlanVersionModal from "~/components/PlanVersionModal.vue";
 import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModal.vue";
+import EditFieldModal from "~/components/editor/helper/EditFieldModal.vue";
+import RecommendNameModal from "~/components/editor/helper/RecommendNameModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import {
   buildDynamicSections,
@@ -382,6 +411,7 @@ const emit = defineEmits([
 ]);
 
 const messages = ref([]);
+const lastSentUserIndex = ref(null);
 
 const guidedQuestions = buildGuidedQuestionList();
 const totalQuestions = guidedQuestions.length;
@@ -399,10 +429,22 @@ const activeQuestionId = ref(null);
 
 const chatContainer = ref(null);
 const draftMessage = ref("");
+const composerRef = ref(null);
 const isFileImportOpen = ref(false);
 const DEFAULT_FILE_IMPORT_LABEL = "聊天輸入";
 const fileImportInitialValue = ref("");
 const fileImportSubLabel = ref(DEFAULT_FILE_IMPORT_LABEL);
+
+// Edit-field modal state
+const isEditFieldModalOpen = ref(false);
+const editFieldLabel = ref("");
+const editFieldInitialValue = ref("");
+const editFieldQuestionId = ref(null);
+
+// Recommend name modal state
+const isRecommendModalOpen = ref(false);
+const recommendOptions = ref([]);
+const isFetchingRecommend = ref(false);
 const lastCandidateSnapshot = ref("{}");
 const lastFinalSnapshot = ref("{}");
 const isCandidateSelectorVisible = ref(false);
@@ -572,6 +614,15 @@ async function streamAIGuidanceMessage(question) {
             isStreaming: true,
           };
           messages.value.push(aiMsg);
+          // ensure we have a recorded last user index (in case it wasn't set)
+          if (lastSentUserIndex.value === null) {
+            for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+              if (messages.value[i].role === "user") {
+                lastSentUserIndex.value = i;
+                break;
+              }
+            }
+          }
           scrollToBottom();
         } else if (msg.event === "chunk") {
           // 追加到最后一个 AI 消息
@@ -588,6 +639,8 @@ async function streamAIGuidanceMessage(question) {
                 ...questionAnswers.value,
                 [fieldId]: String(value).trim(),
               };
+              // clear last sent user index when done
+              lastSentUserIndex.value = null;
             }
           });
         } else if (msg.event === "done") {
@@ -595,9 +648,51 @@ async function streamAIGuidanceMessage(question) {
           if (lastMsg && lastMsg.isStreaming) {
             lastMsg.isStreaming = false;
           }
+          lastSentUserIndex.value = null;
           isFetchingNextQuestion.value = false;
           // Emit event to trigger save after AI response completes
           emit("aiResponseComplete");
+        } else if (msg.event === "cancelled") {
+          // Remove streaming AI message and restore user message into draft
+          try {
+            // remove last streaming assistant message
+            for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+              const m = messages.value[i];
+              if (m.role === "assistant" && m.isStreaming) {
+                messages.value.splice(i, 1);
+                break;
+              }
+            }
+            // remove the user's message that triggered this stream if we tracked it
+            if (lastSentUserIndex.value !== null) {
+              const idx = lastSentUserIndex.value;
+              if (messages.value[idx] && messages.value[idx].role === "user") {
+                messages.value.splice(idx, 1);
+              }
+            } else if (msg.restore_user_message) {
+              // fallback: remove the last user message that matches the restored content
+              for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+                const m = messages.value[i];
+                if (
+                  m.role === "user" &&
+                  m.content === msg.restore_user_message
+                ) {
+                  messages.value.splice(i, 1);
+                  break;
+                }
+              }
+            }
+
+            // restore user's message into draft
+            if (msg.restore_user_message) {
+              draftMessage.value = msg.restore_user_message;
+            }
+            // clear tracker
+            lastSentUserIndex.value = null;
+          } catch (e) {
+            console.error("Error handling cancelled event", e);
+          }
+          isFetchingNextQuestion.value = false;
         } else if (msg.event === "error") {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.isStreaming) {
@@ -849,10 +944,8 @@ async function handleSend(useAIFill = false) {
   if (!props.grantId || !props.templateId) {
     return;
   }
-  const normalizedText = draftMessage.value.trim();
-  const messageContent = useAIFill
-    ? "請AI自動幫我填寫"
-    : normalizedText || "無";
+  const normalizedText = draftMessage.value.trim() || "無";
+  const messageContent = useAIFill ? "請AI自動幫我填寫" : normalizedText;
 
   // 添加用户消息到聊天记录
   const userMsg = {
@@ -862,6 +955,8 @@ async function handleSend(useAIFill = false) {
     content: messageContent,
   };
   messages.value.push(userMsg);
+  // remember index so we can remove it if the stream is cancelled
+  lastSentUserIndex.value = messages.value.length - 1;
   scrollToBottom();
 
   // 如果有当前的活动问题，更新答案
@@ -891,6 +986,19 @@ async function handleSend(useAIFill = false) {
   draftMessage.value = "";
 }
 
+function handlePause() {
+  if (
+    window.chatWebSocket &&
+    window.chatWebSocket.readyState === WebSocket.OPEN
+  ) {
+    try {
+      window.chatWebSocket.send(JSON.stringify({ action: "pause" }));
+    } catch (e) {
+      console.error("Failed to send pause action", e);
+    }
+  }
+}
+
 async function requestGeneration() {
   if (!canRequestPlan.value) {
     return;
@@ -907,6 +1015,45 @@ async function requestGeneration() {
       return;
     }
   }
+
+  // Fetch recommendations and show modal instead of directly generating
+  isFetchingRecommend.value = true;
+  isRecommendModalOpen.value = true;
+  recommendOptions.value = [];
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/recommend_project_names`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_answers: questionAnswers.value,
+        project_title: props.projectTitle || "",
+        grant_name: props.grantName || "",
+      }),
+    });
+    const data = await resp.json().catch(() => null);
+    if (resp.ok && data?.names) {
+      recommendOptions.value = data.names;
+    } else {
+      // fallback: empty list, UI will show original name option
+      recommendOptions.value = [];
+    }
+  } catch (e) {
+    console.error("Failed to fetch recommendations", e);
+    recommendOptions.value = [];
+  } finally {
+    isFetchingRecommend.value = false;
+  }
+}
+
+// Called when user confirms the selected project name
+async function handleRecommendConfirm(selectedName) {
+  if (!selectedName) return;
+
+  // Emit update for parent to change project title
+  emit("updateProjectTitle", selectedName);
+
+  // Now proceed to generate the full plan with the selected name
   const joinedText = Object.entries(questionAnswers.value)
     .map(([key, value]) => {
       const text = value.reply ?? value;
@@ -914,8 +1061,7 @@ async function requestGeneration() {
     })
     .join("\n\n");
 
-  // Compose final input including project title and summary (same format as GeneratorModeWorkspace)
-  const projectPlanName = props.projectTitle || "";
+  const projectPlanName = selectedName || props.projectTitle || "";
   const projectPlanSummary = props.projectSummary || "";
   const userInput = joinedText;
   const finalUserInput =
@@ -946,6 +1092,33 @@ function buildCandidateMessage() {
 function handleVersionSelect(version) {
   selectedVersion.value = version;
   isVersionModalVisible.value = true;
+}
+
+function handleEditQuestion(payload) {
+  try {
+    const qId = payload?.questionId ?? null;
+    const qLabel = payload?.questionLabel || "";
+    const ans = payload?.answer || "";
+    editFieldQuestionId.value = qId;
+    editFieldLabel.value = qLabel;
+    editFieldInitialValue.value = ans;
+    isEditFieldModalOpen.value = true;
+  } catch (e) {
+    console.error("handleEditQuestion error", e);
+  }
+}
+
+async function handleEditConfirm(value) {
+  try {
+    const qLabel = editFieldLabel.value || "";
+    const updated = value || "";
+    // Construct the message in required format and send immediately
+    draftMessage.value = `幫我更改\n${qLabel}\n至\n${updated}`;
+    isEditFieldModalOpen.value = false;
+    await handleSend();
+  } catch (e) {
+    console.error("handleEditConfirm error", e);
+  }
 }
 
 async function handleVersionExport(version) {
