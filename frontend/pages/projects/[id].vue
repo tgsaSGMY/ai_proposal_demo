@@ -1,163 +1,169 @@
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
-    <div class="mx-auto max-w-6xl space-y-6">
-      <header class="flex flex-wrap items-center justify-between gap-4">
-        <div class="space-y-2">
-          <p
-            class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
-          >
-            <NuxtLink to="/plan-library" class="hover:text-gray-600"
-              >我的計畫庫</NuxtLink
+  <ClientOnly>
+    <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
+      <div class="mx-auto max-w-6xl space-y-6">
+        <header class="flex flex-wrap items-center justify-between gap-4">
+          <div class="space-y-2">
+            <p
+              class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
             >
-            <span class="text-gray-300">></span>
-            <span class="text-gray-600">{{
-              projectRecord?.title || "計畫工作區"
-            }}</span>
-          </p>
-          <h1 class="text-3xl font-semibold text-gray-900">
-            {{ projectRecord?.title || "計畫工作區" }}
-          </h1>
-          <p class="text-sm text-gray-500">
-            {{ projectRecord?.description || "尚未提供計畫摘要" }}
-          </p>
-          <div class="flex flex-wrap items-center gap-3 text-xs text-gray-400">
-            <span
-              class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-500"
-            >
-              {{ modeLabel }}
-            </span>
-            <span v-if="lastUpdatedDisplay"
-              >最後更新：{{ lastUpdatedDisplay }}</span
-            >
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-3">
-          <div
-            v-if="isInternal"
-            class="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2"
-          >
-            <span class="text-xs font-semibold text-gray-600">
-              {{ useModelType === "internal" ? "內部模型" : "外部模型" }}
-            </span>
-            <button
-              class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-              :class="
-                useModelType === 'internal' ? 'bg-rose-500' : 'bg-gray-300'
-              "
-              @click="toggleModel"
+              <NuxtLink to="/plan-library" class="hover:text-gray-600"
+                >我的計畫庫</NuxtLink
+              >
+              <span class="text-gray-300">></span>
+              <span class="text-gray-600">{{
+                projectRecord?.title || "計畫工作區"
+              }}</span>
+            </p>
+            <h1 class="text-3xl font-semibold text-gray-900">
+              {{ projectRecord?.title || "計畫工作區" }}
+            </h1>
+            <p class="text-sm text-gray-500">
+              {{ projectRecord?.description || "尚未提供計畫摘要" }}
+            </p>
+            <div
+              class="flex flex-wrap items-center gap-3 text-xs text-gray-400"
             >
               <span
-                class="inline-block h-5 w-5 transform rounded-full bg-white transition"
-                :class="
-                  useModelType === 'internal'
-                    ? 'translate-x-5'
-                    : 'translate-x-1'
-                "
-              ></span>
-            </button>
+                class="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-500"
+              >
+                {{ modeLabel }}
+              </span>
+              <span v-if="lastUpdatedDisplay"
+                >最後更新：{{ lastUpdatedDisplay }}</span
+              >
+            </div>
           </div>
-          <NuxtLink
-            to="/"
-            class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
+          <div class="flex flex-wrap items-center gap-3">
+            <div
+              v-if="isInternal"
+              class="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2"
+            >
+              <span class="text-xs font-semibold text-gray-600">
+                {{ useModelType === "internal" ? "內部模型" : "外部模型" }}
+              </span>
+              <button
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition"
+                :class="
+                  useModelType === 'internal' ? 'bg-rose-500' : 'bg-gray-300'
+                "
+                @click="toggleModel"
+              >
+                <span
+                  class="inline-block h-5 w-5 transform rounded-full bg-white transition"
+                  :class="
+                    useModelType === 'internal'
+                      ? 'translate-x-5'
+                      : 'translate-x-1'
+                  "
+                ></span>
+              </button>
+            </div>
+            <NuxtLink
+              to="/"
+              class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
+            >
+              返回首頁
+            </NuxtLink>
+          </div>
+        </header>
+
+        <section
+          v-if="isProjectLoading"
+          class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-gray-500"
+        >
+          <span class="text-sm font-semibold tracking-wide"
+            >正在載入計畫...</span
           >
-            返回首頁
-          </NuxtLink>
-        </div>
-      </header>
+          <span class="mt-2 text-xs text-gray-400">請稍候片刻</span>
+        </section>
 
-      <section
-        v-if="isProjectLoading"
-        class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-gray-500"
-      >
-        <span class="text-sm font-semibold tracking-wide">正在載入計畫...</span>
-        <span class="mt-2 text-xs text-gray-400">請稍候片刻</span>
-      </section>
+        <section
+          v-else-if="loadError"
+          class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-rose-100 bg-white p-8 text-center"
+        >
+          <p class="text-base font-semibold text-rose-500">{{ loadError }}</p>
+          <p class="mt-2 text-sm text-gray-500">
+            無法載入專案，請重新整理或返回計畫庫。
+          </p>
+          <div class="mt-4 flex gap-3">
+            <button
+              class="rounded-2xl bg-rose-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-rose-600"
+              @click="fetchProject"
+            >
+              重新嘗試
+            </button>
+            <NuxtLink
+              to="/plan-library"
+              class="rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 hover:border-rose-200 hover:text-rose-500"
+            >
+              返回計畫庫
+            </NuxtLink>
+          </div>
+        </section>
 
-      <section
-        v-else-if="loadError"
-        class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-rose-100 bg-white p-8 text-center"
-      >
-        <p class="text-base font-semibold text-rose-500">{{ loadError }}</p>
-        <p class="mt-2 text-sm text-gray-500">
-          無法載入專案，請重新整理或返回計畫庫。
-        </p>
-        <div class="mt-4 flex gap-3">
-          <button
-            class="rounded-2xl bg-rose-500 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-rose-600"
-            @click="fetchProject"
-          >
-            重新嘗試
-          </button>
-          <NuxtLink
-            to="/plan-library"
-            class="rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 hover:border-rose-200 hover:text-rose-500"
-          >
-            返回計畫庫
-          </NuxtLink>
-        </div>
-      </section>
+        <section
+          v-else-if="!workspaceReady"
+          class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white/90 p-10 text-center"
+        >
+          <p class="text-lg font-semibold text-gray-800">尚未完成配置載入</p>
+          <p class="mt-2 text-sm text-gray-500">
+            正在同步模板設定，完成後即可繼續對話式編輯。
+          </p>
+        </section>
 
-      <section
-        v-else-if="!workspaceReady"
-        class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white/90 p-10 text-center"
-      >
-        <p class="text-lg font-semibold text-gray-800">尚未完成配置載入</p>
-        <p class="mt-2 text-sm text-gray-500">
-          正在同步模板設定，完成後即可繼續對話式編輯。
-        </p>
-      </section>
-
-      <GeneratorModeWorkspace
-        v-if="isGeneratorMode"
-        :all-configs="allConfigs"
-        :selected-grant-id="selectedGrantId"
-        :selected-template-id="selectedTemplateId"
-        :user-input="userInput"
-        :dynamic-field-values="dynamicFieldValues"
-        :final-plan-content="finalPlanContent"
-        :current-sections="currentSections"
-        :project-record="projectRecord"
-        :current-grant="currentGrant"
-        :current-template="currentTemplate"
-        :build-final-user-input="buildFinalUserInput"
-        :use-model-type="useModelType"
-        @updateProjectRecord="handleGeneratorUpdate"
-        @candidateConfirmed="onCandidateConfirm"
-      />
-
-      <section
-        v-else-if="!isGeneratorMode && workspaceReady"
-        class="min-h-[80vh] rounded-3xl p-0"
-      >
-        <Chatbox
-          :key="projectRecord?.id"
-          class="h-full"
-          :sections="currentSections"
-          :reference-summaries="referenceSummaries"
-          :candidate-plan="candidatePlan"
-          :final-plan="finalPlanContent"
-          :is-generating="isLoading"
-          :grant-id="selectedGrantId"
-          :template-id="selectedTemplateId"
-          :grant-name="grantLabel"
-          :template-name="activeTemplateName"
-          :project-title="projectRecord?.title"
-          :project-summary="projectRecord?.description || ''"
-          :prefilled-answers="prefilledChatAnswers"
-          :project-id="projectRecord?.id || ''"
-          :saved-plan-versions="savedPlanVersions"
-          show-sidebar
-          @generatePlan="handleChatPlanGeneration"
-          @finalizeCandidates="onCandidateConfirm"
-          @requestExport="handleExportWord"
-          @backToStageOne="router.push('/')"
-          @messagesUpdated="handleMessagesUpdated"
-          @aiResponseComplete="persistConversationHistory"
-          @updateProjectTitle="handleUpdateProjectTitle"
+        <GeneratorModeWorkspace
+          v-if="isGeneratorMode"
+          :all-configs="allConfigs"
+          :selected-grant-id="selectedGrantId"
+          :selected-template-id="selectedTemplateId"
+          :user-input="userInput"
+          :dynamic-field-values="dynamicFieldValues"
+          :final-plan-content="finalPlanContent"
+          :current-sections="currentSections"
+          :project-record="projectRecord"
+          :current-grant="currentGrant"
+          :current-template="currentTemplate"
+          :build-final-user-input="buildFinalUserInput"
+          :use-model-type="useModelType"
+          @updateProjectRecord="handleGeneratorUpdate"
+          @candidateConfirmed="onCandidateConfirm"
         />
-      </section>
+
+        <section
+          v-else-if="!isGeneratorMode && workspaceReady"
+          class="min-h-[80vh] rounded-3xl p-0"
+        >
+          <Chatbox
+            :key="projectRecord?.id"
+            class="h-full"
+            :sections="currentSections"
+            :reference-summaries="referenceSummaries"
+            :candidate-plan="candidatePlan"
+            :final-plan="finalPlanContent"
+            :is-generating="isLoading"
+            :grant-id="selectedGrantId"
+            :template-id="selectedTemplateId"
+            :grant-name="grantLabel"
+            :template-name="activeTemplateName"
+            :project-title="projectRecord?.title"
+            :project-summary="projectRecord?.description || ''"
+            :prefilled-answers="prefilledChatAnswers"
+            :project-id="projectRecord?.id || ''"
+            :saved-plan-versions="savedPlanVersions"
+            show-sidebar
+            @generatePlan="handleChatPlanGeneration"
+            @finalizeCandidates="onCandidateConfirm"
+            @requestExport="handleExportWord"
+            @backToStageOne="router.push('/')"
+            @messagesUpdated="handleMessagesUpdated"
+            @aiResponseComplete="persistConversationHistory"
+            @updateProjectTitle="handleUpdateProjectTitle"
+          />
+        </section>
+      </div>
     </div>
-  </div>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
