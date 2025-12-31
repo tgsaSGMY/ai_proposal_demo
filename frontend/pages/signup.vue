@@ -315,15 +315,13 @@ const handleSignUp = async () => {
   successMessage.value = "";
 
   try {
-    // 步驟 1: 檢查 Email 是否在白名單中
-    const { data: whitelistEntry, error: whitelistError } = await supabase
-      .from("whitelist")
-      .select("email")
-      .eq("email", email.value)
-      .maybeSingle();
-
-    // 如果查詢出錯或 Email 不在白名單中
-    if (whitelistError || !whitelistEntry) {
+    // 步驟 1: 使用 RPC 檢查 Email 是否在白名單中（回傳 boolean）
+    const { data: isWhitelisted, error: whitelistError } = await supabase.rpc(
+      "is_whitelisted",
+      { email: email.value }
+    );
+    // 如果呼叫失敗或回傳 false（未被授權）
+    if (whitelistError || !isWhitelisted) {
       errorMessage.value = "此電子郵件未被授權註冊。";
       loading.value = false;
       return;
