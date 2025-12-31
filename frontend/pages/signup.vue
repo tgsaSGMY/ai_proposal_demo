@@ -320,7 +320,7 @@ const handleSignUp = async () => {
       .from("whitelist")
       .select("email")
       .eq("email", email.value)
-      .single();
+      .maybeSingle();
 
     // 如果查詢出錯或 Email 不在白名單中
     if (whitelistError || !whitelistEntry) {
