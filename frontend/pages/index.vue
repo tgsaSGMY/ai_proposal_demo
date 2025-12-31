@@ -38,12 +38,19 @@
               @click="handlePlanClick(plan)"
             >
               <span
-                class="inline-flex h-12 w-12 items-center justify-center rounded-2xl"
+                class="inline-flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden"
                 :class="plan.iconBg"
               >
+                <img
+                  v-if="plan.image"
+                  :src="plan.image"
+                  alt=""
+                  class="max-h-full max-w-full object-contain p-2"
+                />
                 <Icon
+                  v-else
                   :name="plan.icon"
-                  class="h-6 w-6"
+                  class="h-10 w-10"
                   :style="{ color: plan.iconColor }"
                 />
               </span>
@@ -383,6 +390,7 @@ interface PlanTypeOption {
   icon: string;
   iconBg: string;
   iconColor: string;
+  image?: string;
 }
 
 interface ModeOption {
@@ -427,8 +435,9 @@ const planTypes: PlanTypeOption[] = [
     grantName: "SIIR",
     templateHint: "內銷",
     icon: "ph:lightbulb-duotone",
-    iconBg: "bg-[#fff2e6]",
+    iconBg: "bg-[#fff0eb]",
     iconColor: "#ff8c55",
+    image: "/icons/SIIR.png",
   },
   {
     id: "imdp-export",
@@ -443,6 +452,7 @@ const planTypes: PlanTypeOption[] = [
     icon: "ph:storefront-duotone",
     iconBg: "bg-[#eef2ff]",
     iconColor: "#4b63ff",
+    image: "/icons/IMDP.png",
   },
   {
     id: "citd-rnd",
@@ -457,6 +467,7 @@ const planTypes: PlanTypeOption[] = [
     icon: "ph:factory-duotone",
     iconBg: "bg-[#e9f7ef]",
     iconColor: "#22c55e",
+    image: "/icons/CITD.png",
   },
   {
     id: "rnd-transform-small",
@@ -497,8 +508,9 @@ const planTypes: PlanTypeOption[] = [
     grantName: "SBIR",
     templateHint: "地方",
     icon: "ph:map-pin-duotone",
-    iconBg: "bg-[#ffeef4]",
+    iconBg: "bg-[#f0f7ff]",
     iconColor: "#e11d48",
+    image: "/icons/SBIR__local.png",
   },
 ];
 
