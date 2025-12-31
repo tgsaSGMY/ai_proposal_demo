@@ -2,41 +2,32 @@ import { supabase } from "~/utils/supabaseClient";
 
 export const useInternalCheck = () => {
   /**
-   * 檢查當前使用者是否為內部人員 (role === 'internal')
+   * 透過資料庫函數檢查當前使用者是否為內部人員
+   * 不需要開放 whitelist table 的 select 權限
    */
   const checkIsInternal = async (): Promise<boolean> => {
     try {
-      // 1. 獲取當前登入的使用者資訊
+      // 1. 雖然 RPC 會自動帶 Token，但先檢查有沒有登入可以省一次網路請求
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      // 如果沒登入或沒 email，直接回傳 false
-      if (!user || !user.email) {
-        console.warn("User not logged in or email missing.");
+      if (!session) {
+        console.warn("User not logged in.");
         return false;
       }
 
-      // 2. 查詢 whitelist 表
-      // 根據截圖：table 名稱是 'whitelist'，欄位是 'email' 和 'role'
-      const { data, error } = await supabase
-        .from("whitelist")
-        .select("role")
-        .eq("email", user.email)
-        .maybeSingle(); // 使用 maybeSingle 避免找不到資料時噴錯 (回傳 null)
+      // 2. 呼叫 Supabase RPC (Remote Procedure Call)
+      // is_internal 函數內部會自動讀取 auth.jwt() 裡的 email，不需要從前端傳參數
+      const { data, error } = await supabase.rpc("is_internal");
 
       if (error) {
-        console.error("Check internal error:", error.message);
+        console.error("RPC check internal error:", error.message);
         return false;
       }
 
-      // 3. 驗證 role 是否為 'internal'
-      // 確保 data 存在且 role 欄位內容吻合
-      if (data && data.role === "internal") {
-        return true;
-      }
-
-      return false;
+      // 3. RPC 直接回傳 true 或 false
+      return !!data;
     } catch (e) {
       console.error("Unexpected error in checkIsInternal:", e);
       return false;
