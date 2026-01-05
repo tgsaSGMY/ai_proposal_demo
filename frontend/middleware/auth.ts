@@ -25,24 +25,15 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       return navigateTo("/login");
     }
 
-    // ============================================================
-    // 新增邏輯：保護 _builder 路徑
-    // ============================================================
+    // 3. 內部人員檢查：如果訪問的是 /_builder 路徑
     if (to.path.startsWith("/_builder")) {
       // 查詢 whitelist 資料表
-      const { data, error } = await supabase
-        .from("whitelist")
-        .select("role")
-        .eq("email", session.user.email)
-        .maybeSingle(); // 使用 maybeSingle 避免查無資料時報錯
+      const { data, error } = await supabase.rpc("is_internal");
 
-      const isInternal = data?.role === "internal";
+      const isInternal = data;
 
       // 如果發生錯誤、找不到資料、或是角色不是 internal
       if (error || !isInternal) {
-        // console.warn(
-        //   `User ${session.user.email} tried to access builder but is not internal.`
-        // );
         // 自動返回 home page
         return navigateTo("/");
       }
