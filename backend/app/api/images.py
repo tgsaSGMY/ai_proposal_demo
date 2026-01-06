@@ -249,3 +249,114 @@ async def enrich_prompt(
     except Exception as e:
         logger.error(f"Failed to enrich prompt for project {request.project_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to enrich prompt")
+
+
+# Models for image generation
+class GenerateImageRequest(BaseModel):
+    project_id: str
+    prompt: str
+
+
+class GenerateImageResponse(BaseModel):
+    id: str
+    project_id: str
+    placeholder_text: str
+    public_url: str
+    signed_url: str
+
+
+@router.post("/generate", response_model=GenerateImageResponse, summary="立即生成圖片")
+async def generate_image(
+    request: GenerateImageRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    llm_service: LLMService = Depends(get_llm_service),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    根據提示詞立即生成一張圖片。
+    將圖片上傳到 Storage 並記錄到資料庫。
+    """
+    try:
+        # 1) 驗證使用者是否為該 project 的擁有者
+        project = await supabase_service.get_project_by_id(request.project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=403, detail="Project not found or access denied")
+
+        # 2) 優化提示詞
+        optimized_prompt = llm_service._optimize_image_prompt(request.prompt)
+
+        # 3) 調用圖片生成 API
+        image_bytes, api_error = await llm_service._generate_image_from_api(
+            prompt=optimized_prompt
+        )
+
+        if api_error:
+            logger.error(f"Image generation failed: {api_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Image generation failed: {api_error}"
+            )
+
+        if not image_bytes:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate image"
+            )
+
+        # 4) 上傳到 Storage
+        public_url, storage_path = await supabase_service.upload_image_bytes(
+            request.project_id, image_bytes, "image/png"
+        )
+
+        if not public_url:
+            logger.error(f"Failed to upload image for project {request.project_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to upload image to storage"
+            )
+
+        # 5) 記錄到資料庫
+        image_id = await supabase_service.create_image_record(
+            project_id=request.project_id,
+            placeholder_text=request.prompt,
+            storage_path=storage_path,
+            public_url=public_url
+        )
+
+        logger.info(f"Image generated and stored: {image_id}")
+
+        # 6) 生成 signed URL
+        signed_url = None
+        try:
+            signed_response = supabase_service.client.storage.from_(
+                supabase_service.bucket_name
+            ).create_signed_url(storage_path, expires_in=3600)
+
+            if isinstance(signed_response, dict):
+                signed_url = (
+                    signed_response.get("signedURL")
+                    or signed_response.get("signedUrl")
+                    or signed_response.get("signedurl")
+                )
+            elif isinstance(signed_response, str):
+                signed_url = signed_response
+
+            if not signed_url:
+                signed_url = public_url
+        except Exception as e:
+            logger.warning(f"Failed to create signed URL: {e}")
+            signed_url = public_url
+
+        return GenerateImageResponse(
+            id=image_id['id'],
+            project_id=request.project_id,
+            placeholder_text=request.prompt,
+            public_url=public_url,
+            signed_url=signed_url or public_url
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate image for project {request.project_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate image")

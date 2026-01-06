@@ -736,33 +736,6 @@ class SupabaseService:
             logger.error(f"Failed to create image record: {e}", exc_info=True)
             return None
     
-    async def get_image_by_project_and_placeholder(
-        self,
-        project_id: str,
-        placeholder_text: str
-    ) -> Optional[Dict[str, Any]]:
-        """
-        根據 project_id 和 placeholder_text 查詢最新的圖片記錄。
-        """
-        try:
-            response = (
-                self.client.from_("images")
-                .select("*")
-                .eq("project_id", project_id)
-                .eq("placeholder_text", placeholder_text)
-                .order("created_at", desc=True)
-                .limit(1)
-                .execute()
-            )
-            
-            if response.data:
-                return response.data[0]
-            return None
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch image record: {e}", exc_info=True)
-            return None
-    
     async def get_images_by_project(
         self,
         project_id: str

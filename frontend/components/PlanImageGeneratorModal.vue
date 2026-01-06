@@ -649,11 +649,41 @@ async function handleGenerate() {
 
   isGenerating.value = true;
   try {
-    emit("generate", prompt.value);
-    success("圖片生成請求已送出");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入");
+    }
+
+    // 調用後端 API 生成圖片
+    const response = await fetch(`${API_BASE_URL}/images/generate`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        project_id: props.projectId,
+        prompt: prompt.value,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || "圖片生成失敗");
+    }
+
+    const data = await response.json();
+    success("圖片生成成功");
     prompt.value = "";
+
     // 重新載入圖片列表
     await fetchImages();
+
+    // 發出事件供外部使用
+    emit("generate", prompt.value);
   } catch (error: any) {
     console.error("Failed to generate image", error);
     notifyError(error?.message || "圖片生成失敗，請稍後再試");
