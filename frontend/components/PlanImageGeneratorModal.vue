@@ -448,7 +448,9 @@
             @click.stop
           >
             <!-- Image Container -->
-            <div class="relative flex-1 overflow-auto bg-gray-900 flex items-center justify-center">
+            <div
+              class="relative flex-1 overflow-auto bg-gray-900 flex items-center justify-center"
+            >
               <img
                 :src="selectedImage.signed_url || selectedImage.public_url"
                 :alt="selectedImage.placeholder_text"
@@ -458,7 +460,9 @@
 
             <!-- Info Section -->
             <div class="border-t border-gray-200 bg-white p-6">
-              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              <p
+                class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"
+              >
                 生成提示詞
               </p>
               <p class="text-base text-gray-700 leading-relaxed mb-4">
@@ -483,20 +487,16 @@
                   <path
                     d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"
                   />
-                  <rect
-                    x="8"
-                    y="2"
-                    width="8"
-                    height="4"
-                    rx="1"
-                    ry="1"
-                  />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                 </svg>
                 複製提示詞
               </button>
               <button
                 class="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-600"
-                @click="downloadImage(selectedImage); selectedImage = null"
+                @click="
+                  downloadImage(selectedImage);
+                  selectedImage = null;
+                "
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
