@@ -255,6 +255,8 @@ async def enrich_prompt(
 class GenerateImageRequest(BaseModel):
     project_id: str
     prompt: str
+    reference_image_id: str | None = None
+    reference_prompt: str | None = None
 
 
 class GenerateImageResponse(BaseModel):
@@ -275,6 +277,7 @@ async def generate_image(
     """
     根據提示詞立即生成一張圖片。
     將圖片上傳到 Storage 並記錄到資料庫。
+    支援微調模式：如果提供了參考圖片，會記錄參考信息。
     """
     try:
         # 1) 驗證使用者是否為該 project 的擁有者
@@ -282,12 +285,61 @@ async def generate_image(
         if not project:
             raise HTTPException(status_code=403, detail="Project not found or access denied")
 
-        # 2) 優化提示詞
-        optimized_prompt = llm_service._optimize_image_prompt(request.prompt)
+        # 2) 如果有參考圖片，驗證參考圖片所有權
+        if request.reference_image_id:
+            try:
+                reference_image = (
+                    supabase_service.client.from_("images")
+                    .select("id, project_id")
+                    .eq("id", request.reference_image_id)
+                    .single()
+                    .execute()
+                )
+                if not reference_image.data or reference_image.data["project_id"] != request.project_id:
+                    logger.warning(f"Reference image validation failed: {request.reference_image_id}")
+                    # 如果參考圖片無效，繼續處理（不中斷）
+                    request.reference_image_id = None
+            except Exception as e:
+                logger.warning(f"Failed to validate reference image: {e}")
+                request.reference_image_id = None
 
-        # 3) 調用圖片生成 API
+        # 3) 優化提示詞
+        # 組合原始 prompt 和改進後的 prompt
+        if request.reference_prompt:
+            combined_prompt = f"原始：{request.reference_prompt}\n改進：{request.prompt}"
+            optimized_prompt = combined_prompt
+            logger.info(f"Generating image with reference prompt - ID: {request.reference_image_id}")
+        else:
+            optimized_prompt = llm_service._optimize_image_prompt(request.prompt)
+
+        # 4) 如果有參考圖片，取得參考圖片的內容
+        reference_image_data = None
+        if request.reference_image_id:
+            try:
+                # 取得參考圖片的 storage_path
+                ref_img = (
+                    supabase_service.client.from_("images")
+                    .select("storage_path")
+                    .eq("id", request.reference_image_id)
+                    .single()
+                    .execute()
+                )
+                if ref_img.data and ref_img.data.get("storage_path"):
+                    # 從 storage 下載圖片
+                    response = supabase_service.client.storage.from_(
+                        supabase_service.bucket_name
+                    ).download(ref_img.data["storage_path"])
+                    reference_image_data = response
+                    logger.info(f"Retrieved reference image: {ref_img.data['storage_path']}")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve reference image: {e}")
+                reference_image_data = None
+
+        # 5) 調用圖片生成 API，如果有參考圖片則傳過去
+        print("reference image data:", reference_image_data)
         image_bytes, api_error = await llm_service._generate_image_from_api(
-            prompt=optimized_prompt
+            prompt=optimized_prompt,
+            image=reference_image_data
         )
 
         if api_error:
@@ -324,6 +376,15 @@ async def generate_image(
         )
 
         logger.info(f"Image generated and stored: {image_id}")
+        
+        # 如果有參考圖片，記錄微調信息
+        if request.reference_image_id and request.reference_prompt:
+            logger.info(
+                f"Image refinement: "
+                f"reference_id={request.reference_image_id}, "
+                f"reference_prompt={request.reference_prompt[:50]}..., "
+                f"new_prompt={request.prompt[:50]}..."
+            )
 
         # 6) 生成 signed URL
         signed_url = None

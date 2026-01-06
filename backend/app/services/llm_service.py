@@ -16,6 +16,8 @@ from app.utils.formatting import format_section_output
 import base64
 from openai import OpenAI
 from google import genai
+import io
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -347,45 +349,33 @@ class LLMService:
     async def _generate_image_from_api(
         self,
         prompt: str,
-        model_name: str = IMAGE_MODEL,
-        size: str = "1024x1024"
+        image=None,
     ) -> tuple[Optional[bytes], Optional[str]]:
         """使用 Google Gemini API 呼叫圖片生成（imagen-4.0-generate-001）"""
         try:
-            # from google.genai import types
             if not GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY not set")
             
-            # # 創建 Gemini 客戶端
+            # 創建 Gemini 客戶端
             client = genai.Client(api_key=GEMINI_API_KEY)
-            
-            # response = client.models.generate_images(
-            #     model='gemini-3-pro-image-preview',
-            #     prompt=prompt,
-            #     config=types.GenerateImagesConfig(
-            #         number_of_images= 1,
-            #     )
-            # )
 
-            # if response.generated_images:
-            #     image_bytes = response.generated_images[0].image.image_bytes
-            #     print(f"成功生成圖片，大小: {len(image_bytes)} bytes")
-            #     return image_bytes, None
-            # else:
-            #     return None, "未生成圖片"
+            # 構建 contents 列表：[prompt, image]
+            contents = [prompt]
+            if image is not None:
+                pil_image = Image.open(io.BytesIO(image))
+                contents.append(pil_image)
 
-            #使用 Gemini 的內容生成 API
+            # 使用 Gemini 的內容生成 API
             response = client.models.generate_content(
                 model="gemini-3-pro-image-preview",
-                contents=[prompt]
+                contents=contents
             )
             
-            #從生成結果中獲取圖像
+            # 從生成結果中獲取圖像
             image_bytes = None
             for part in response.parts:
                 print(part)
                 if part.inline_data is not None:
-
                     image_bytes = part.inline_data.data
                     print(f"Generated image of size: {len(image_bytes)} bytes")
                     break

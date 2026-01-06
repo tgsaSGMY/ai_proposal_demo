@@ -90,6 +90,45 @@
                   </h3>
                 </div>
 
+                <!-- Reference Image Display -->
+                <div
+                  v-if="referenceImage"
+                  class="rounded-2xl border-2 border-blue-300 bg-blue-50 p-4"
+                >
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                      <p
+                        class="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2"
+                      >
+                        參考圖片
+                      </p>
+                      <p
+                        class="text-sm text-blue-700 line-clamp-3 leading-relaxed"
+                      >
+                        {{ referenceImage.placeholder_text }}
+                      </p>
+                    </div>
+                    <div class="flex-shrink-0">
+                      <img
+                        v-if="
+                          referenceImage.signed_url || referenceImage.public_url
+                        "
+                        :src="
+                          referenceImage.signed_url || referenceImage.public_url
+                        "
+                        :alt="referenceImage.placeholder_text"
+                        class="h-24 w-24 rounded-lg object-cover border border-blue-200"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    class="mt-3 text-xs font-medium text-blue-600 hover:text-blue-700 transition"
+                    @click="referenceImage = null"
+                  >
+                    ✕ 清除參考
+                  </button>
+                </div>
+
                 <div>
                   <label
                     for="prompt"
@@ -236,6 +275,27 @@
                         </p>
                       </div>
                       <div class="mt-3 flex items-center gap-2">
+                        <button
+                          class="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100"
+                          @click="adjustImage(image)"
+                          title="使用此圖片作為參考進行微調"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            class="h-3.5 w-3.5"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          微調
+                        </button>
                         <button
                           class="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-200"
                           @click="copyPrompt(image.placeholder_text)"
@@ -576,6 +636,7 @@ const isEnriching = ref(false);
 const isLoadingImages = ref(false);
 const images = ref<ImageRecord[]>([]);
 const selectedImage = ref<ImageRecord | null>(null);
+const referenceImage = ref<ImageRecord | null>(null);
 const { success, error: notifyError } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
@@ -667,6 +728,10 @@ async function handleGenerate() {
       body: JSON.stringify({
         project_id: props.projectId,
         prompt: prompt.value,
+        ...(referenceImage.value && {
+          reference_image_id: referenceImage.value.id,
+          reference_prompt: referenceImage.value.placeholder_text,
+        }),
       }),
     });
 
@@ -678,6 +743,7 @@ async function handleGenerate() {
     const data = await response.json();
     success("圖片生成成功");
     prompt.value = "";
+    referenceImage.value = null;
 
     // 重新載入圖片列表
     await fetchImages();
@@ -802,5 +868,11 @@ async function downloadImage(image: ImageRecord) {
     console.error("Failed to download image", error);
     notifyError(error?.message || "下載圖片失敗");
   }
+}
+
+function adjustImage(image: ImageRecord) {
+  referenceImage.value = image;
+  // 滾動到最上方
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 </script>
