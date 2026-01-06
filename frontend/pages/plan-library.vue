@@ -133,6 +133,12 @@
                 >
                   <button
                     class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                    @click="openGenerateImage(project)"
+                  >
+                    <span>生成圖片</span>
+                  </button>
+                  <button
+                    class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
                     @click="openEdit(project)"
                   >
                     <span>編輯計畫案</span>
@@ -258,6 +264,13 @@
       @save="handleSave"
       @close="closeEditModal"
     />
+
+    <PlanImageGeneratorModal
+      v-model:model-value="isImageGeneratorOpen"
+      :project-id="selectedProjectForImage?.id"
+      @generate="handleImageGenerate"
+      @close="closeImageGeneratorModal"
+    />
   </div>
 </template>
 
@@ -265,6 +278,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import PlanLibraryEditModal from "~/components/PlanLibraryEditModal.vue";
+import PlanImageGeneratorModal from "~/components/PlanImageGeneratorModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
@@ -331,6 +345,8 @@ const loadError = ref("");
 const menuOpenId = ref<string | null>(null);
 const isEditModalOpen = ref(false);
 const editingProject = ref<ProjectCard | null>(null);
+const isImageGeneratorOpen = ref(false);
+const selectedProjectForImage = ref<ProjectCard | null>(null);
 
 const router = useRouter();
 const { confirm } = useConfirm();
@@ -473,9 +489,39 @@ function openEdit(project: ProjectCard) {
   menuOpenId.value = null;
 }
 
+function openGenerateImage(project: ProjectCard) {
+  selectedProjectForImage.value = project;
+  isImageGeneratorOpen.value = true;
+  menuOpenId.value = null;
+}
+
 function closeEditModal() {
   isEditModalOpen.value = false;
   editingProject.value = null;
+}
+
+function closeImageGeneratorModal() {
+  isImageGeneratorOpen.value = false;
+  selectedProjectForImage.value = null;
+}
+
+async function handleImageGenerate(prompt: string) {
+  if (!selectedProjectForImage.value) return;
+
+  try {
+    const project = selectedProjectForImage.value;
+    console.log(
+      `Generating image for project "${project.title}" with prompt: "${prompt}"`
+    );
+
+    // TODO: 連接到實際的圖片生成 API
+    // const imageUrl = await generateImage(project.id, prompt);
+
+    success(`圖片生成請求已提交：${prompt}`);
+  } catch (error: any) {
+    console.error("Failed to generate image", error);
+    notifyError(error?.message || "圖片生成失敗，請稍後再試");
+  }
 }
 
 async function handleSave(payload: {

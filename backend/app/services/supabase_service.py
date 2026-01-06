@@ -649,3 +649,139 @@ class SupabaseService:
             logger.error(f"Error fetching commands for user {user_id}: {e}", exc_info=True)
             return []
 
+    # ========== Image Generation & Storage Methods ==========
+    
+    async def upload_image_bytes(
+        self,
+        project_id: str,
+        img_bytes: bytes,
+        content_type: str = "image/png"
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        上傳圖片到 Supabase Storage，返回 (public_url, storage_path)。
+        若直接取得 public url 失敗，會嘗試建立 signed url 作為 fallback。
+        """
+        try:
+            from uuid import uuid4
+            filename = f"{uuid4().hex}.png"
+            path = f"images/projects/{project_id}/{filename}"
+
+            # 上傳（注意：upload 可能回傳 dict/error -> 但不一定有統一格式）
+            upload_resp = self.client.storage.from_(self.bucket_name).upload(
+                path,
+                img_bytes,
+                {"content-type": content_type}
+            )
+            logger.debug(f"Supabase upload response: {upload_resp}")
+
+            # 嘗試以不同方式解析 public url（兼容不同 SDK 版本）
+            public_resp = self.client.storage.from_(self.bucket_name).get_public_url(path)
+            logger.debug(f"Supabase get_public_url raw response: {public_resp}")
+
+            public_url = None
+            if isinstance(public_resp, dict):
+                public_url = public_resp.get("publicURL") or public_resp.get("publicUrl") or public_resp.get("publicurl")
+            elif isinstance(public_resp, str):
+                public_url = public_resp
+            else:
+                public_url = None
+
+            # 若沒拿到 public_url（例如 bucket 是 private），嘗試 signed url 作為 fallback
+            if not public_url:
+                try:
+                    signed_resp = self.client.storage.from_(self.bucket_name).create_signed_url(path, expires_in=3600)
+                    logger.debug(f"Signed url response: {signed_resp}")
+                    if isinstance(signed_resp, dict):
+                        public_url = signed_resp.get("signedURL") or signed_resp.get("signedUrl") or signed_resp.get("signedurl")
+                    elif isinstance(signed_resp, str):
+                        public_url = signed_resp
+                except Exception as e:
+                    logger.warning(f"Failed to create signed URL for {path}: {e}", exc_info=True)
+
+            if not public_url:
+                logger.error(f"Could not obtain public_url or signed URL for uploaded image at {path}")
+                return None, None
+
+            logger.info(f"Image uploaded successfully: {path}, url: {public_url}")
+            return public_url, path
+
+        except Exception as e:
+            logger.error(f"Failed to upload image for project {project_id}: {e}", exc_info=True)
+            return None, None
+        
+    async def create_image_record(
+        self,
+        project_id: str,
+        placeholder_text: str,
+        storage_path: str,
+        public_url: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        在 images 表中新增一筆記錄。
+        """
+        try:
+            response = self.client.from_("images").insert({
+                "project_id": project_id,
+                "placeholder_text": placeholder_text,
+                "storage_path": storage_path,
+                "public_url": public_url,
+            }).execute()
+            
+            if response.data:
+                logger.info(f"Image record created for project {project_id}: {placeholder_text}")
+                return response.data[0]
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to create image record: {e}", exc_info=True)
+            return None
+    
+    async def get_image_by_project_and_placeholder(
+        self,
+        project_id: str,
+        placeholder_text: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        根據 project_id 和 placeholder_text 查詢最新的圖片記錄。
+        """
+        try:
+            response = (
+                self.client.from_("images")
+                .select("*")
+                .eq("project_id", project_id)
+                .eq("placeholder_text", placeholder_text)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            
+            if response.data:
+                return response.data[0]
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch image record: {e}", exc_info=True)
+            return None
+    
+    async def get_images_by_project(
+        self,
+        project_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        根據 project_id 取得該專案的所有圖片記錄。
+        """
+        try:
+            response = (
+                self.client.from_("images")
+                .select("*")
+                .eq("project_id", project_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            
+            return response.data if response.data else []
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch images for project {project_id}: {e}", exc_info=True)
+            return []
+

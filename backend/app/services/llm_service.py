@@ -5,7 +5,7 @@ import json
 import re
 from functools import partial
 from typing import Dict, Any, Tuple, Optional, List, Callable, Awaitable
-from app.config import OPENAI_API_KEY, OLLAMA_BASE_URL
+from app.config import OPENAI_API_KEY, OLLAMA_BASE_URL, IMAGE_MODEL, GEMINI_API_KEY
 from app.models import SectionConfig, SectionGenerateResponse 
 from app.utils.extract_json import extract_json_block
 from app.models import SectionGenerateResponse
@@ -13,6 +13,9 @@ import asyncio
 import logging
 from app.utils.routing import resolve_model
 from app.utils.formatting import format_section_output
+import base64
+from openai import OpenAI
+from google import genai
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +316,229 @@ class LLMService:
             "final_answer": final_answer
         }, None
 
+    # ========== Image Generation Methods ==========
+    def _extract_image_placeholders(self, text: str) -> list[tuple[str, str]]:
+        """
+        從文本中提取所有 【圖：...】 佔位符。
+        返回 list of (placeholder_full_text, description)
+        """
+        pattern = r'【圖[:：]\s*([^】]+)】'
+        matches = re.findall(pattern, text)
+        results = []
+        for match in matches:
+            full_text = f"【圖：{match}】"
+            results.append((full_text, match))
+        return results
+    
+    def _optimize_image_prompt(self, description: str) -> str:
+        """優化圖片描述為詳細的 prompt（繁體中文專業版本）"""
+        return f"""請生成一張專業、高品質的圖片，用於企劃書或商務提案文件中：
+
+圖片描述：{description}
+
+要求：
+- 風格：專業、正式、商務感強
+- 品質：高解析度、清晰、專業攝影或高級插圖風格
+- 背景：簡潔專業、不分散注意力、適合企劃書排版
+- 色調：企業色調、穩重大氣、易於搭配文字
+- 整體：適合作為提案文件的配圖，能提升企劃書的專業度和視覺效果"""
+
+    
+    async def _generate_image_from_api(
+        self,
+        prompt: str,
+        model_name: str = IMAGE_MODEL,
+        size: str = "1024x1024"
+    ) -> tuple[Optional[bytes], Optional[str]]:
+        """使用 Google Gemini API 呼叫圖片生成（imagen-4.0-generate-001）"""
+        try:
+            if not GEMINI_API_KEY:
+                raise ValueError("GEMINI_API_KEY not set")
+            
+            # 創建 Gemini 客戶端
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            
+            # 使用 Gemini 的內容生成 API
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-image",
+                contents=[prompt]
+            )
+            
+            # 從生成結果中獲取圖像
+            image_bytes = None
+            for part in response.parts:
+                if part.inline_data is not None:
+                    # 將 inline_data 轉換為 PIL Image
+                    # image = part.as_image()
+                    # image.save("generated_image.png")  # 可選：保存到本地檔案以供檢查
+                    # image_bytes = self._pil_to_bytes(image)
+                    image_bytes = part.inline_data.data
+                    break
+            
+            if not image_bytes:
+                return None, "No image generated"
+            
+            return image_bytes, None
+                
+        except Exception as e:
+            error_msg = f"Failed to generate image: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return None, error_msg
+    
+
+    def _pil_to_bytes(self, google_image) -> bytes:
+        """將 Google genai Image 轉換為字節（PNG 格式）"""
+        import tempfile
+        import os
+        
+        try:
+            # 嘗試直接獲取字節（如果 Google Image 對象有此方法）
+            if hasattr(google_image, '_image_bytes'):
+                return google_image._image_bytes
+            
+            # 否則，保存到臨時文件然後讀取
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                tmp_path = tmp_file.name
+            
+            try:
+                # Google Image 的 save() 方法接受文件路徑
+                google_image.save(tmp_path)
+                
+                # 讀取臨時文件的內容
+                with open(tmp_path, 'rb') as f:
+                    image_bytes = f.read()
+                
+                return image_bytes
+            finally:
+                # 清理臨時文件
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                    
+        except Exception as e:
+            logger.error(f"Error converting image to bytes: {str(e)}", exc_info=True)
+            raise
+    
+    async def generate_images_for_content(
+        self,
+        content: Any,  # Can be Dict or str
+        project_id: str,
+        supabase_service: "SupabaseService",
+        model_name: str = IMAGE_MODEL
+    ) -> Any:  # Returns same type as input
+        """
+        從內容中提取 【圖：...】 佔位符，生成圖片，上傳到 Storage，記錄到 DB。
+        返回更新後的內容（佔位符已替換為圖片 URL）。
+        使用 OPENAI_API_KEY 進行圖片生成。
+        content 可以是 Dict 或 str。
+        """
+        try:
+            # 1. 從內容提取所有佔位符
+            placeholders_to_generate = []
+            logger.info(f"Processing content type: {type(content).__name__}")
+            
+            # 處理 content 是 dict 或 string 的情況
+            if isinstance(content, dict):
+                for field_key, field_value in content.items():
+                    if isinstance(field_value, str):
+                        found = self._extract_image_placeholders(field_value)
+                        placeholders_to_generate.extend(found)
+            elif isinstance(content, str):
+                # content 本身是字符串
+                found = self._extract_image_placeholders(content)
+                placeholders_to_generate.extend(found)
+            
+            if not placeholders_to_generate:
+                logger.info("No image placeholders found in content")
+                return content
+            
+            # 2. 去重
+            seen = set()
+            unique_placeholders = []
+            for full_text, desc in placeholders_to_generate:
+                if desc not in seen:
+                    seen.add(desc)
+                    unique_placeholders.append((full_text, desc))
+            
+            logger.info(f"Found {len(unique_placeholders)} unique image placeholders")
+            
+            # 3. 為每個佔位符生成圖片
+            placeholder_to_url = {}
+            
+            for placeholder_text, description in unique_placeholders:
+                # 檢查是否已存在
+                existing = await supabase_service.get_image_by_project_and_placeholder(
+                    project_id, placeholder_text
+                )
+                
+                if existing:
+                    logger.info(f"Image for '{placeholder_text}' already exists")
+                    placeholder_to_url[placeholder_text] = existing["public_url"]
+                    continue
+                
+                # 生成圖片
+                optimized_prompt = self._optimize_image_prompt(description)
+                logger.info(f"Generating image for: {placeholder_text}")
+                
+                image_bytes, api_error = await self._generate_image_from_api(
+                    prompt=optimized_prompt,
+                    model_name=model_name
+                )
+                
+                if api_error:
+                    logger.error(f"Image generation failed for '{placeholder_text}': {api_error}")
+                    continue
+                
+                # 上傳到 Storage
+                public_url, storage_path = await supabase_service.upload_image_bytes(
+                    project_id, image_bytes, "image/png"
+                )
+                
+                if not public_url:
+                    logger.error(f"Failed to upload image for '{placeholder_text}'")
+                    continue
+                
+                # 記錄到 DB
+                await supabase_service.create_image_record(
+                    project_id=project_id,
+                    placeholder_text=placeholder_text,
+                    storage_path=storage_path,
+                    public_url=public_url
+                )
+                
+                placeholder_to_url[placeholder_text] = public_url
+                logger.info(f"Image generated and stored: {placeholder_text}")
+            
+            # 4. 替換內容中的佔位符為 URL（Markdown 格式）
+            if isinstance(content, dict):
+                updated_content = {}
+                for key, value in content.items():
+                    if isinstance(value, str):
+                        updated_value = value
+                        for placeholder_text, image_url in placeholder_to_url.items():
+                            # 替換為 Markdown 圖片語法
+                            updated_value = updated_value.replace(
+                                placeholder_text,
+                                f"![{placeholder_text}]({image_url})"
+                            )
+                        updated_content[key] = updated_value
+                    else:
+                        updated_content[key] = value
+            else:
+                # content 是 str
+                updated_content = content
+                for placeholder_text, image_url in placeholder_to_url.items():
+                    # 替換為 Markdown 圖片語法
+                    updated_content = updated_content.replace(
+                        placeholder_text,
+                        f"![{placeholder_text}]({image_url})"
+                    )
+            
+            return updated_content
+            
+        except Exception as e:
+            logger.error(f"Error in generate_images_for_content: {str(e)}", exc_info=True)
+            return content  # 返回原內容，不中斷流程
+
     # --- 4. 公開接口 ---
     async def run_actor_critic_flow(self, http_session: httpx.AsyncClient, actor_model_bundle: Dict, critic_model_info: Dict, section_details: SectionConfig, user_input: str,supabase_service:"SupabaseService") -> Tuple[Optional[Dict], Optional[str]]:
         """執行 Actor-Critic 流程，Actor 使用加載的本地模型。"""
@@ -354,7 +580,8 @@ class LLMService:
         supabase_service: "SupabaseService",
         use_actor_critic: bool = False,
         is_external: Optional[bool] = None,
-        selected_model: Optional[str] = None
+        selected_model: Optional[str] = None,
+        project_id: Optional[str] = None
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
@@ -518,5 +745,17 @@ class LLMService:
         if not final_content_json: return SectionGenerateResponse(section_id=section_id, error="Generation resulted in empty content.")
         
         formatted_content = format_section_output(final_content_json, section_details.json_schema)
+        
+        print(project_id)
+        # ===== 同步生成圖片（在返回 formatted_content 前） =====
+        if project_id and formatted_content:
+            logger.info(f"Generating images synchronously for section {section_id}")
+            # 同步調用圖片生成，直接等待結果（使用 OPENAI_API_KEY）
+            formatted_content = await self.generate_images_for_content(
+                content=formatted_content,
+                project_id=project_id,
+                supabase_service=supabase_service
+            )
+        
         return SectionGenerateResponse(section_id=section_id, content=formatted_content,raw_json_content=final_content_json)
 

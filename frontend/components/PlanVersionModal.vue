@@ -83,7 +83,7 @@
           class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition"
           @click="handleExport"
         >
-          下載報告 Word
+          下載報告
         </button>
         <button
           type="button"

@@ -282,6 +282,7 @@ async def generate_plan(
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
                 selected_model=request_data.selected_model,
+                project_id=request_data.project_id
             )
             for s in sections
             for _ in range(num_candidates)

@@ -19,8 +19,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OLLAMA_BASE_URL = "http://localhost:11434/v1" # Ollama 的預設 API endpoint
 
+# 圖片生成配置
+IMAGE_MODEL = "imagen-4.0-generate-001"  # Google Gemini 圖片生成模型
+
 # 向量嵌入配置
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
 
 # 預設模型 ID
-DEFAULT_MODEL_ID = "gpt-3.5-turbo-1106"
+DEFAULT_MODEL_ID = "gpt-5-mini"

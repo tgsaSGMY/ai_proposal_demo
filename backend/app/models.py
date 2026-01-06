@@ -48,6 +48,7 @@ class GenerateRequest(BaseModel):
     num_candidates: int = Field(2, ge=1, le=3)
     is_external: bool = Field(True, description="是否使用外部模型（True）還是內部模型（False）。")
     selected_model: Optional[str] = Field(None, description="可選的指定模型，如 'gpt-5.2', 'gpt-5.1' 等。如果設置，將跳過模型路由。")
+    project_id: Optional[str] = Field(None, description="專案 ID，用於圖片生成時的關聯。")
 
 class SectionGenerateResponse(BaseModel):
     """單個章節生成的響應結果。"""

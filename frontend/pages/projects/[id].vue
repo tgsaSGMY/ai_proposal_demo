@@ -720,6 +720,7 @@ async function handleChatPlanGeneration(payload: {
       notifyError("請先登入");
       return;
     }
+    console.log(projectRecord.value?.id);
 
     const response = await fetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
@@ -735,6 +736,7 @@ async function handleChatPlanGeneration(payload: {
         is_external: useModelType.value === "external",
         sections: sectionsToGenerate,
         selected_model: payload.selectedModel,
+        project_id: projectRecord.value?.id || null,
       }),
     });
 
