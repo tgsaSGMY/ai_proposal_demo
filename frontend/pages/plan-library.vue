@@ -132,6 +132,7 @@
                   class="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-100 bg-white py-2 text-sm shadow-xl"
                 >
                   <button
+                    v-if="isInternal"
                     class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
                     @click="openGenerateImage(project)"
                   >
@@ -266,6 +267,7 @@
     />
 
     <PlanImageGeneratorModal
+      v-if="isInternal"
       v-model:model-value="isImageGeneratorOpen"
       :project-id="selectedProjectForImage?.id"
       @generate="handleImageGenerate"
@@ -282,6 +284,7 @@ import PlanImageGeneratorModal from "~/components/PlanImageGeneratorModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { useInternalCheck } from "~/composables/useInternalCheck";
 import { supabase } from "~/utils/supabaseClient";
 
 interface Accent {
@@ -348,6 +351,10 @@ const editingProject = ref<ProjectCard | null>(null);
 const isImageGeneratorOpen = ref(false);
 const selectedProjectForImage = ref<ProjectCard | null>(null);
 
+// internal check
+const { checkIsInternal } = useInternalCheck();
+const isInternal = ref(false);
+
 const router = useRouter();
 const { confirm } = useConfirm();
 const { success, error: notifyError } = useNotifications();
@@ -359,9 +366,11 @@ const handleDocumentClick = () => {
   menuOpenId.value = null;
 };
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener("click", handleDocumentClick);
-  refreshUser();
+  await refreshUser();
+  // determine if current user is internal
+  isInternal.value = await checkIsInternal();
 });
 
 onBeforeUnmount(() => {
@@ -370,11 +379,13 @@ onBeforeUnmount(() => {
 
 watch(
   () => currentUserId.value,
-  (userId) => {
+  async (userId) => {
     if (userId) {
-      fetchProjects();
+      await fetchProjects();
+      isInternal.value = await checkIsInternal();
     } else {
       projects.value = [];
+      isInternal.value = false;
     }
   },
   { immediate: true }
@@ -490,6 +501,13 @@ function openEdit(project: ProjectCard) {
 }
 
 function openGenerateImage(project: ProjectCard) {
+  // runtime guard: only internal users can open the image generator
+  if (!isInternal.value) {
+    notifyError("僅限內部人員使用圖片生成功能");
+    menuOpenId.value = null;
+    return;
+  }
+
   selectedProjectForImage.value = project;
   isImageGeneratorOpen.value = true;
   menuOpenId.value = null;
