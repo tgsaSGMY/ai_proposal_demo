@@ -14,7 +14,6 @@ import logging
 from app.utils.routing import resolve_model
 from app.utils.formatting import format_section_output
 import base64
-from openai import OpenAI
 from google import genai
 import io
 from PIL import Image
