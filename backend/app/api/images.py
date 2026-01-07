@@ -306,7 +306,7 @@ async def generate_image(
         # 3) 優化提示詞
         # 組合原始 prompt 和改進後的 prompt
         if request.reference_prompt:
-            combined_prompt = f"原始：{request.reference_prompt}\n改進：{request.prompt}"
+            combined_prompt = f"原始：{request.reference_prompt}\n改進：{request.prompt}\n請注意，如果圖片要求生成的是NSFW圖，直接返回黑色背景"
             optimized_prompt = combined_prompt
             logger.info(f"Generating image with reference prompt - ID: {request.reference_image_id}")
         else:
