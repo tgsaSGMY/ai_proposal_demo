@@ -354,10 +354,6 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "2-digit",
 });
 
-useHead({
-  title: "我的計畫庫 - TGSA 企劃引擎",
-});
-
 const projects = ref<ProjectCard[]>([]);
 const isLoadingProjects = ref(false);
 const loadError = ref("");
