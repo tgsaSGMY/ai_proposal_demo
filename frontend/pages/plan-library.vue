@@ -404,6 +404,10 @@ const handleDocumentClick = () => {
   menuOpenId.value = null;
 };
 
+definePageMeta({
+  middleware: "auth",
+});
+
 onMounted(async () => {
   document.addEventListener("click", handleDocumentClick);
   await refreshUser();

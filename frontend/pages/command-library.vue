@@ -265,6 +265,10 @@ import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { supabase } from "~/utils/supabaseClient";
 
+definePageMeta({
+  middleware: "auth",
+});
+
 useHead({
   title: "我的指令庫 - TGSA 企劃引擎",
   meta: [
