@@ -646,6 +646,9 @@ watch(
   (isOpen) => {
     if (isOpen && props.projectId) {
       fetchImages();
+    } else if (!isOpen) {
+      // Clear reference image if modal is closed externally
+      referenceImage.value = null;
     }
   },
   { immediate: true }
@@ -697,6 +700,8 @@ async function fetchImages() {
 
 function closeModal() {
   prompt.value = "";
+  // Clear reference image when closing modal
+  referenceImage.value = null;
   emit("update:modelValue", false);
   emit("close");
 }
