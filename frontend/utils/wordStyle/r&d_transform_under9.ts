@@ -9,6 +9,8 @@ import {
   TableCell,
   WidthType,
   BorderStyle,
+  Footer,
+  PageNumber,
 } from "docx";
 import type { ContentRenderer } from "../contentRenderer";
 import { DocxRenderer } from "../contentRenderer";
@@ -54,7 +56,7 @@ export async function exportPlanToWordRdTransformUnder9(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 36,
             bold: true,
             color: "000000",
@@ -71,7 +73,7 @@ export async function exportPlanToWordRdTransformUnder9(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "PMingLiU",
+            font: "Times New Roman",
             size: 32,
             bold: true,
             color: "5a78ac",
@@ -87,7 +89,7 @@ export async function exportPlanToWordRdTransformUnder9(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             bold: true,
             color: "000000",
@@ -102,7 +104,7 @@ export async function exportPlanToWordRdTransformUnder9(
           basedOn: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
           },
           paragraph: {
@@ -114,6 +116,24 @@ export async function exportPlanToWordRdTransformUnder9(
     sections: [
       {
         children: paragraphs,
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    children: [
+                      PageNumber.CURRENT,
+                      " / ",
+                      PageNumber.TOTAL_PAGES,
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
       },
     ],
   });
@@ -142,7 +162,7 @@ function renderCompanyOverview(
     children: [
       new TextRun({
         text: title,
-        font: "DFKai-SB",
+        font: "Times New Roman",
         size: 36,
         bold: true,
       }),
@@ -454,7 +474,7 @@ function renderTextWithHighlightedImages(
     (part) =>
       new TextRun({
         text: part.text,
-        font: "DFKai-SB",
+        font: "Times New Roman",
         size: 24,
         highlight: part.isImage ? "yellow" : undefined,
       })
@@ -488,7 +508,7 @@ function renderSimpleTable(
                   children: [
                     new TextRun({
                       text: cell,
-                      font: "DFKai-SB",
+                      font: "Times New Roman",
                       size: 24,
                     }),
                   ],

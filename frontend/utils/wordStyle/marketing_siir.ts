@@ -1,4 +1,12 @@
-import { Document, Packer, AlignmentType, Paragraph, TextRun } from "docx";
+import {
+  Document,
+  Packer,
+  AlignmentType,
+  Paragraph,
+  TextRun,
+  Footer,
+  PageNumber,
+} from "docx";
 import type { ContentRenderer } from "../contentRenderer";
 import { DocxRenderer } from "../contentRenderer";
 
@@ -55,7 +63,7 @@ export async function exportPlanToWordMarketingSiir(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 36,
             bold: true,
             color: "000000",
@@ -72,7 +80,7 @@ export async function exportPlanToWordMarketingSiir(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "PMingLiU",
+            font: "Times New Roman",
             size: 32,
             bold: true,
             color: "5a78ac",
@@ -88,7 +96,7 @@ export async function exportPlanToWordMarketingSiir(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             bold: true,
             color: "000000",
@@ -103,7 +111,7 @@ export async function exportPlanToWordMarketingSiir(
           basedOn: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
           },
           paragraph: {
@@ -115,6 +123,24 @@ export async function exportPlanToWordMarketingSiir(
     sections: [
       {
         children: paragraphs,
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    children: [
+                      PageNumber.CURRENT,
+                      " / ",
+                      PageNumber.TOTAL_PAGES,
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
       },
     ],
   });
@@ -141,7 +167,7 @@ function renderCompanyOverview(
     children: [
       new TextRun({
         text: title,
-        font: "DFKai-SB",
+        font: "Times New Roman",
         size: 36,
         bold: true,
       }),
@@ -465,7 +491,7 @@ function renderTextWithHighlightedImages(
         children.push(
           new TextRun({
             text: parts[i],
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
           })
         );
@@ -474,7 +500,7 @@ function renderTextWithHighlightedImages(
         children.push(
           new TextRun({
             text: images[i],
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             highlight: "yellow",
           })

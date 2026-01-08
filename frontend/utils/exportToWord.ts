@@ -253,7 +253,7 @@ async function exportPlanToWordDefault(
           next: "NormalText",
           quickFormat: true,
           run: {
-            font: "MS Gothic",
+            font: "Times New Roman",
             size: 26, // 13pt
             bold: true,
           },
@@ -268,7 +268,7 @@ async function exportPlanToWordDefault(
           next: "NormalText",
           quickFormat: true,
           run: {
-            font: "MS Gothic",
+            font: "Times New Roman",
             size: 22, // 11pt
             bold: true,
           },
@@ -282,7 +282,7 @@ async function exportPlanToWordDefault(
           basedOn: "Normal",
           quickFormat: true,
           run: {
-            font: "MS Mincho",
+            font: "Times New Roman",
             size: 22, // 11pt
           },
           paragraph: {

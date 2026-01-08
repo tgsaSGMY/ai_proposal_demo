@@ -1,4 +1,12 @@
-import { Document, Packer, AlignmentType, Paragraph, TextRun } from "docx";
+import {
+  Document,
+  Packer,
+  AlignmentType,
+  Paragraph,
+  TextRun,
+  Footer,
+  PageNumber,
+} from "docx";
 import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordMarketingImdp(
@@ -51,7 +59,7 @@ export async function exportPlanToWordMarketingImdp(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 36,
             bold: true,
             color: "000000",
@@ -68,7 +76,7 @@ export async function exportPlanToWordMarketingImdp(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "PMingLiU",
+            font: "Times New Roman",
             size: 32,
             bold: true,
             color: "5a78ac",
@@ -84,7 +92,7 @@ export async function exportPlanToWordMarketingImdp(
           next: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             bold: true,
             color: "000000",
@@ -99,7 +107,7 @@ export async function exportPlanToWordMarketingImdp(
           basedOn: "Normal",
           quickFormat: true,
           run: {
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
           },
           paragraph: {
@@ -111,6 +119,24 @@ export async function exportPlanToWordMarketingImdp(
     sections: [
       {
         children: paragraphs,
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    children: [
+                      PageNumber.CURRENT,
+                      " / ",
+                      PageNumber.TOTAL_PAGES,
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
       },
     ],
   });
@@ -130,7 +156,7 @@ export async function exportPlanToWordMarketingImdp(
       children: [
         new TextRun({
           text: title || "完整内容",
-          font: "DFKai-SB",
+          font: "Times New Roman",
           size: 36,
           bold: true,
         }),
@@ -545,7 +571,7 @@ export async function exportPlanToWordMarketingImdp(
       (part) =>
         new TextRun({
           text: part.text,
-          font: "DFKai-SB",
+          font: "Times New Roman",
           size: 24,
           highlight: part.isImage ? "yellow" : undefined,
         })

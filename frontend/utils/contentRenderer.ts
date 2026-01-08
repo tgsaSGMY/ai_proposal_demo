@@ -40,7 +40,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         spacing: { before: 400, after: 200, line: 200 },
         style: "SectionHeading",
         run: {
-          font: "PMingLiU",
+          font: "Times New Roman",
           size: 32,
           bold: true,
         },
@@ -54,7 +54,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         children: [
           new TextRun({
             text: text,
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             bold: true,
           }),
@@ -98,7 +98,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         children: [
           new TextRun({
             text: text,
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
           }),
         ],
@@ -113,7 +113,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         children: [
           new TextRun({
             text: text,
-            font: "DFKai-SB",
+            font: "Times New Roman",
             size: 24,
             highlight: "yellow",
           }),
@@ -168,7 +168,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                     new TextRun({
                       text: header,
                       bold: true,
-                      font: "微軟正黑體",
+                      font: "Times New Roman",
                       size: 20,
                     }),
                   ],
@@ -285,7 +285,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 children.push(
                   new TextRun({
                     text: parts[i],
-                    font: "微軟正黑體",
+                    font: "Times New Roman",
                     size: 20,
                     bold: isHeader,
                   })
@@ -295,7 +295,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 children.push(
                   new TextRun({
                     text: images[i],
-                    font: "微軟正黑體",
+                    font: "Times New Roman",
                     size: 20,
                     highlight: "yellow",
                     bold: isHeader,
@@ -318,7 +318,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 children: [
                   new TextRun({
                     text: line,
-                    font: "微軟正黑體",
+                    font: "Times New Roman",
                     size: 20,
                     bold: isHeader,
                   }),
@@ -377,7 +377,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             children: [
               new TextRun({
                 text: `${numberingIndex}. ${title}`,
-                font: "DFKai-SB",
+                font: "Times New Roman",
                 size: 24,
                 bold: true,
               }),
@@ -402,7 +402,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                     children: [
                       new TextRun({
                         text: key,
-                        font: "DFKai-SB",
+                        font: "Times New Roman",
                         size: 22,
                         bold: true,
                       }),
@@ -420,7 +420,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                     children: [
                       new TextRun({
                         text: `${key}: ${displayValue}`,
-                        font: "DFKai-SB",
+                        font: "Times New Roman",
                         size: 22,
                       }),
                     ],
@@ -436,7 +436,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                   children: [
                     new TextRun({
                       text: key,
-                      font: "DFKai-SB",
+                      font: "Times New Roman",
                       size: 22,
                       bold: true,
                     }),
@@ -453,7 +453,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                   children: [
                     new TextRun({
                       text: `${key}: ${String(value)}`,
-                      font: "DFKai-SB",
+                      font: "Times New Roman",
                       size: 22,
                     }),
                   ],
@@ -480,7 +480,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new TextRun({
                   text: String(title),
-                  font: "DFKai-SB",
+                  font: "Times New Roman",
                   size: 24,
                 }),
               ],
@@ -504,7 +504,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new TextRun({
                   text: String(desc),
-                  font: "DFKai-SB",
+                  font: "Times New Roman",
                   size: 24,
                 }),
               ],
@@ -538,7 +538,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                     new TextRun({
                       text: header,
                       bold: true,
-                      font: "微軟正黑體",
+                      font: "Times New Roman",
                       size: 20,
                     }),
                   ],
@@ -563,7 +563,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                     children: [
                       new TextRun({
                         text: String(row[header] ?? ""),
-                        font: "微軟正黑體",
+                        font: "Times New Roman",
                         size: 20,
                       }),
                     ],
@@ -623,7 +623,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new TextRun({
                   text: key,
-                  font: "DFKai-SB",
+                  font: "Times New Roman",
                   size: 22,
                   bold: true,
                 }),
@@ -641,7 +641,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new TextRun({
                   text: `${key}: ${displayValue}`,
-                  font: "DFKai-SB",
+                  font: "Times New Roman",
                   size: 22,
                 }),
               ],
@@ -657,7 +657,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             children: [
               new TextRun({
                 text: key,
-                font: "DFKai-SB",
+                font: "Times New Roman",
                 size: 22,
                 bold: true,
               }),
@@ -674,7 +674,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             children: [
               new TextRun({
                 text: `${key}: ${String(value)}`,
-                font: "DFKai-SB",
+                font: "Times New Roman",
                 size: 22,
               }),
             ],

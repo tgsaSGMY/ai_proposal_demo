@@ -1,4 +1,12 @@
-import { Document, Packer, AlignmentType } from "docx";
+import {
+  Document,
+  Packer,
+  AlignmentType,
+  Paragraph,
+  TextRun,
+  Footer,
+  PageNumber,
+} from "docx";
 import type { ContentRenderer } from "../contentRenderer";
 import { DocxRenderer } from "../contentRenderer";
 
@@ -141,7 +149,7 @@ export async function exportPlanToWordCentralPhase2(
           next: "NormalText",
           quickFormat: true,
           run: {
-            font: "MS Gothic",
+            font: "Times New Roman",
             size: 26,
             bold: true,
           },
@@ -156,7 +164,7 @@ export async function exportPlanToWordCentralPhase2(
           next: "NormalText",
           quickFormat: true,
           run: {
-            font: "MS Gothic",
+            font: "Times New Roman",
             size: 22,
             bold: true,
           },
@@ -170,7 +178,7 @@ export async function exportPlanToWordCentralPhase2(
           basedOn: "Normal",
           quickFormat: true,
           run: {
-            font: "MS Mincho",
+            font: "Times New Roman",
             size: 22,
           },
           paragraph: {
@@ -199,6 +207,24 @@ export async function exportPlanToWordCentralPhase2(
     sections: [
       {
         children: paragraphs,
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new TextRun({
+                    children: [
+                      PageNumber.CURRENT,
+                      " / ",
+                      PageNumber.TOTAL_PAGES,
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
       },
     ],
   });
