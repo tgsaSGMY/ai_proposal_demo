@@ -7,7 +7,7 @@
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
-          <span class="text-gray-600">計劃書生成精靈</span>
+          <span class="text-gray-600">AI企劃引擎</span>
         </p>
         <!-- Stage 1: 選擇計畫類型 -->
         <section
@@ -21,7 +21,7 @@
               請選擇目標補助計畫
             </p>
             <p class="mt-2 text-sm text-[#5f6c96]">
-              系統會依照類型載入對應的模型與模板組態
+              針對您的需求，挑選適合的AI企劃模型
             </p>
           </div>
 
@@ -42,23 +42,12 @@
                 :class="plan.iconBg"
               >
                 <img
-                  v-if="plan.image"
                   :src="plan.image"
                   alt=""
                   class="max-h-full max-w-full object-contain p-2"
                 />
-                <Icon
-                  v-else
-                  :name="plan.icon"
-                  class="h-10 w-10"
-                  :style="{ color: plan.iconColor }"
-                />
               </span>
-              <p
-                class="mt-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-[#8a94c1]"
-              >
-                {{ plan.category }}
-              </p>
+
               <h3 class="mt-1 text-xl font-semibold text-[#111b3f]">
                 {{ plan.title }}
               </h3>
@@ -68,17 +57,6 @@
               <p class="mt-1 text-xs text-[#8f98be]">
                 {{ plan.description }}
               </p>
-              <div
-                class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold text-[#97a0c7]"
-              >
-                <span
-                  v-for="tag in plan.tags"
-                  :key="tag"
-                  class="rounded-full border border-[#e6e9fb] bg-white px-3 py-1"
-                >
-                  {{ tag }}
-                </span>
-              </div>
             </button>
           </div>
 
@@ -335,7 +313,7 @@ import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
 
 useHead({
-  title: "計劃書生成精靈 - TGSA 企劃引擎",
+  title: "AI企劃引擎 - TGSA 企劃引擎",
   meta: [
     {
       name: "description",
@@ -348,7 +326,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "計劃書生成精靈 - TGSA 企劃引擎",
+      content: "AI企劃引擎 - TGSA 企劃引擎",
     },
     {
       property: "og:description",
@@ -380,17 +358,12 @@ interface PlanTypeOption {
   title: string;
   subtitle: string;
   description: string;
-  category: string;
-  tags: string[];
-  configNote: string;
   grantName: string;
   templateHint?: string;
   configId?: string;
   templateId?: string;
-  icon: string;
   iconBg: string;
-  iconColor: string;
-  image?: string;
+  image: string;
 }
 
 interface ModeOption {
@@ -426,91 +399,68 @@ interface ProjectMetadataPayload {
 const planTypes: PlanTypeOption[] = [
   {
     id: "siir-domestic",
-    title: "SIIR 內銷型",
-    subtitle: "小型企業創新研發計畫",
-    description: "適用於技術服務整合型案。",
-    category: "服務業創新",
-    tags: ["SIIR", "內銷", "流程升級"],
-    configNote: "Grant: SIIR · Template: 內銷既有模板",
+    title: "SIIR",
+    subtitle: "服務業創新計畫",
+    description:
+      "協助企業優化既有產品、服務或流程，\n透過系統化研發與驗證，強化內部營運效率與市場競爭力",
     grantName: "SIIR",
     templateHint: "內銷",
-    icon: "ph:lightbulb-duotone",
     iconBg: "bg-[#fff0eb]",
-    iconColor: "#ff8c55",
-    image: "/icons/SIIR.png",
+    image: "/icons/siir_logo.png",
   },
   {
     id: "imdp-export",
-    title: "IMDP 外銷型",
-    subtitle: "服務業創新研發計畫",
-    description: "適用於裝置製造與國際型案。",
-    category: "外銷拓展",
-    tags: ["IMDP", "出口", "品牌國際化"],
-    configNote: "Grant: IMDP · Template: Export Master",
+    title: "IMDP",
+    subtitle: "國際貿易署補助業界開發國際市場計畫",
+    description:
+      "以市場導向為核心，\n協助企業打造可複製、可輸出的商業模式，推動品牌與服務邁向國際市場。。",
     grantName: "IMDP",
     templateHint: "外銷",
-    icon: "ph:storefront-duotone",
     iconBg: "bg-[#eef2ff]",
-    iconColor: "#4b63ff",
-    image: "/icons/IMDP.png",
+    image: "/icons/imdp_logo.png",
   },
   {
     id: "citd-rnd",
-    title: "CITD 研發型",
-    subtitle: "傳統產業技術研發計畫",
-    description: "適用於製程改良及產品設計。",
-    category: "製造研發",
-    tags: ["CITD", "研發", "設備投資"],
-    configNote: "Grant: CITD · Template: R&D Core",
+    title: "CITD",
+    subtitle: "協助傳統產業技術開發計畫",
+    description:
+      "支持製程改良、設備升級與產品創新，\n協助企業以研發投入，提升品質穩定度與長期技術競爭力。",
     grantName: "CITD",
     templateHint: "研發",
-    icon: "ph:factory-duotone",
     iconBg: "bg-[#e9f7ef]",
-    iconColor: "#22c55e",
-    image: "/icons/CITD.png",
+    image: "/icons/citd_logo.png",
   },
-  {
-    id: "rnd-transform-small",
-    title: "研發轉型案 · 九人以下",
-    subtitle: "臺北市產業發展獎勵",
-    description: "適用於總部設於北市之研發。",
-    category: "研發轉型",
-    tags: ["轉型", "<9", "快速導入"],
-    configNote: "Grant: 研發轉型案 · Template: 小型企業",
-    grantName: "研發轉型",
-    templateHint: "九人以下",
-    icon: "ph:buildings-duotone",
-    iconBg: "bg-[#f3ecff]",
-    iconColor: "#9b5de5",
-  },
+  // {
+  //   id: "rnd-transform-small",
+  //   title: "研發轉型案 · 九人以下",
+  //   subtitle: "臺北市產業發展獎勵",
+  //   description: "適用於總部設於北市之研發。",
+  //   grantName: "研發轉型",
+  //   templateHint: "九人以下",
+  //   iconBg: "bg-[#f3ecff]",
+  //   image: "/icons/rnd_transform_small.png",
+  // },
   {
     id: "rnd-transform-large",
-    title: "研發轉型案 · 十人以上",
-    subtitle: "臺北市產業發展獎勵",
-    description: "適用於跨部門協同與治理。",
-    category: "研發轉型",
-    tags: ["轉型", ">10", "治理"],
-    configNote: "Grant: 研發轉型案 · Template: 中大型",
+    title: "美國關稅衝擊",
+    subtitle: "研發轉型補助(產發署)",
+    description:
+      "面對美國關稅調整與供應鏈重組壓力，協助企業透過研發與製程轉型，降低對單一市場與高關稅結構的依賴。",
     grantName: "研發轉型",
     templateHint: "十人以上",
-    icon: "ph:circles-three-plus-duotone",
     iconBg: "bg-[#fef3f2]",
-    iconColor: "#f43f5e",
+    image: "/icons/siti_logo.png",
   },
   {
     id: "sbir-local",
-    title: "SBIR 地方型",
-    subtitle: "小型企業創新研發計畫",
-    description: "適用於與地方政府共構示範案。",
-    category: "地方創新",
-    tags: ["SBIR", "地方", "示範"],
-    configNote: "Grant: SBIR Local · Template: Standard",
+    title: "SBIR",
+    subtitle: "地方產業創新研發計畫",
+    description:
+      "結合地方產業特色與政策資源，\n協助企業進行示範型研發，打造可擴散的地方創新成果。",
     grantName: "SBIR",
     templateHint: "地方",
-    icon: "ph:map-pin-duotone",
     iconBg: "bg-[#f0f7ff]",
-    iconColor: "#e11d48",
-    image: "/icons/SBIR__local.png",
+    image: "/icons/sbir_logo.png",
   },
 ];
 

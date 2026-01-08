@@ -2,7 +2,7 @@
   <div class="flex h-screen flex-col rounded-[32px] bg-white shadow-lg">
     <div class="flex-1 overflow-hidden border-b border-slate-200">
       <div class="px-5 py-4">
-        <p class="text-sm font-semibold text-slate-900">想法匯總</p>
+        <p class="text-sm font-semibold text-slate-900">關鍵指令</p>
       </div>
       <div
         class="max-h-[calc(100%-56px)] space-y-3 overflow-y-auto px-5 pb-4 pr-3 scrollbar-thin scrollbar-thumb-rose-300 scrollbar-track-transparent"
@@ -14,13 +14,13 @@
         >
           <div class="flex items-start justify-between">
             <p
-              class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff7a5b]"
+              class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff7a5b] my-auto"
             >
               {{ item.questionLabel }}
             </p>
             <button
               type="button"
-              class="ml-2 inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-100"
+              class="ml-2 inline-flex items-center justify-center rounded-md p-2 text-[#ff6b3d] bg-[#fff1ea] hover:bg-[#ffefea] shadow-sm"
               :title="`編輯 ${item.questionLabel}`"
               @click="
                 $emit('editQuestion', {
@@ -33,11 +33,11 @@
               <!-- pencil icon -->
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="h-4 w-4"
+                class="h-5 w-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
-                stroke-width="1.5"
+                stroke-width="2"
               >
                 <path
                   stroke-linecap="round"

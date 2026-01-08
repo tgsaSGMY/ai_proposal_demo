@@ -80,20 +80,14 @@
 
       <div class="flex h-full flex-col p-5 md:p-6">
         <div class="flex items-center gap-3 px-2">
-          <div
-            class="h-11 w-11 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              class="h-6 w-6"
-            >
-              <path
-                d="M12.672 5.266a1 1 0 00-1.344 0c-.749.681-2.35 2.263-3.356 4.383-1.012 2.13-1.415 4.512-.63 6.84a1 1 0 001.593.47l1.348-1.122a1 1 0 011.278 0l1.348 1.122a1 1 0 001.593-.47c.785-2.328.382-4.71-.63-6.84-1.007-2.12-2.608-3.702-3.356-4.383z"
-              />
-            </svg>
+          <div class="h-11 w-11 rounded-2xl overflow-hidden">
+            <img
+              src="/logo.png"
+              alt="TGSA 企劃引擎"
+              class="h-full w-full object-cover"
+            />
           </div>
+
           <div>
             <p class="text-lg font-semibold text-gray-900">TGSA企劃引擎</p>
             <p
