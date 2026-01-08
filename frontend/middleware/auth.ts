@@ -11,9 +11,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return;
   }
 
-  // 避免在 Server 端執行 (保留你原本的設定)
-  if (process.server) return;
-
   try {
     // 2. 檢查登入狀態
     const {
