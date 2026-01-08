@@ -354,6 +354,32 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "2-digit",
 });
 
+useHead({
+  title: "我的計畫庫 - TGSA 企劃引擎",
+  meta: [
+    {
+      name: "description",
+      content:
+        "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
+    },
+    {
+      name: "keywords",
+      content: "計畫庫, 計畫管理, 計畫追蹤, TGSA, AI 企劃",
+    },
+    {
+      property: "og:title",
+      content: "我的計畫庫 - TGSA 企劃引擎",
+    },
+    {
+      property: "og:description",
+      content:
+        "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "index, follow" },
+  ],
+});
+
 const projects = ref<ProjectCard[]>([]);
 const isLoadingProjects = ref(false);
 const loadError = ref("");
