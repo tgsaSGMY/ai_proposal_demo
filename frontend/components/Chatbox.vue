@@ -125,32 +125,6 @@
                       </p>
                     </article>
                   </template>
-
-                  <template
-                    v-else-if="
-                      message.type === 'references' && referenceSummaries.length
-                    "
-                  >
-                    <article
-                      class="rounded-[28px] border border-[#dde3ff] bg-white px-5 py-4 shadow-md"
-                    >
-                      <p class="text-sm font-semibold text-slate-800">
-                        已加入的參考資料
-                      </p>
-                      <ul class="mt-3 space-y-2">
-                        <li
-                          v-for="(summary, idx) in referenceSummaries"
-                          :key="idx"
-                          class="rounded-2xl bg-[#f8f9ff] px-4 py-2 text-sm text-slate-600"
-                        >
-                          <span class="mr-2 font-semibold text-[#ff6b3d]"
-                            >#{{ idx + 1 }}</span
-                          >
-                          {{ summary }}
-                        </li>
-                      </ul>
-                    </article>
-                  </template>
                 </div>
               </div>
             </div>
@@ -377,7 +351,6 @@ const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 const props = defineProps({
-  referenceSummaries: { type: Array, default: () => [] },
   sections: { type: Array, default: () => [] },
   candidatePlan: { type: Object, default: () => ({}) },
   finalPlan: { type: Object, default: () => ({}) },
@@ -388,7 +361,6 @@ const props = defineProps({
   templateName: { type: String, default: "" },
   projectTitle: { type: String, default: "" },
   projectSummary: { type: String, default: "" },
-  prefilledAnswers: { type: Object, default: () => ({}) },
   projectId: { type: String, default: "" },
   savedPlanVersions: { type: Array, default: () => [] },
   showSidebar: { type: Boolean, default: false },
@@ -794,14 +766,6 @@ watch(
 );
 
 watch(
-  () => props.prefilledAnswers,
-  (next) => {
-    applyPrefilledAnswers(next || {});
-  },
-  { deep: true, immediate: true }
-);
-
-watch(
   () => props.projectId,
   (nextId, prevId) => {
     if (typeof window === "undefined" || nextId === prevId) {
@@ -816,40 +780,6 @@ watch(
   },
   { immediate: true }
 );
-
-function applyPrefilledAnswers(prefillMap) {
-  if (!prefillMap || typeof prefillMap !== "object") {
-    return;
-  }
-  const nextAnswers = { ...questionAnswers.value };
-  let hasUpdates = false;
-  guidedQuestions.forEach((question) => {
-    const existing = nextAnswers[question.id];
-    if (existing && existing.trim()) {
-      return;
-    }
-    const candidate = extractPrefillValue(prefillMap, question.id);
-    if (candidate) {
-      nextAnswers[question.id] = candidate;
-      hasUpdates = true;
-    }
-  });
-  if (!hasUpdates) {
-    return;
-  }
-  questionAnswers.value = nextAnswers;
-  if (!chatInitialized.value) {
-    return;
-  }
-  if (activeQuestionId.value && nextAnswers[activeQuestionId.value]) {
-    upsertAnswerMessage(
-      activeQuestionId.value,
-      nextAnswers[activeQuestionId.value],
-      "prefill"
-    );
-    activeQuestionId.value = null;
-  }
-}
 
 function extractPrefillValue(prefillMap, questionId) {
   if (!questionId) {
@@ -1030,6 +960,7 @@ async function requestGeneration() {
         current_answers: questionAnswers.value,
         project_title: props.projectTitle || "",
         grant_name: props.grantName || "",
+        template_name: props.templateName || "",
       }),
     });
     const data = await resp.json().catch(() => null);

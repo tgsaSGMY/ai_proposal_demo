@@ -138,17 +138,15 @@
             :key="projectRecord?.id"
             class="h-full"
             :sections="currentSections"
-            :reference-summaries="referenceSummaries"
             :candidate-plan="candidatePlan"
             :final-plan="finalPlanContent"
             :is-generating="isLoading"
             :grant-id="selectedGrantId"
             :template-id="selectedTemplateId"
-            :grant-name="grantLabel"
+            :grant-name="grantName"
             :template-name="activeTemplateName"
             :project-title="projectRecord?.title"
             :project-summary="projectRecord?.description || ''"
-            :prefilled-answers="prefilledChatAnswers"
             :project-id="projectRecord?.id || ''"
             :saved-plan-versions="savedPlanVersions"
             show-sidebar
@@ -218,13 +216,6 @@ definePageMeta({
   middleware: "auth",
 });
 
-interface ProjectMetadata {
-  planType?: Record<string, any> | null;
-  backgroundEntries?: string[];
-  prefilledChatAnswers?: Record<string, string>;
-  [key: string]: any;
-}
-
 interface ProjectRecord {
   id: string;
   user_id: string;
@@ -237,7 +228,6 @@ interface ProjectRecord {
   grant_id?: string | null;
   template_id?: string | null;
   plan_type_id?: string | null;
-  plan_metadata?: ProjectMetadata | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -267,7 +257,6 @@ const {
 
 const isProjectLoading = ref(false);
 const loadError = ref("");
-const planMetadata = ref<ProjectMetadata | null>(null);
 const candidatePlan = ref<Record<string, any>>({});
 const chatMessages = ref<any[]>([]);
 const useModelType = ref("external");
@@ -283,12 +272,6 @@ onMounted(async () => {
   isInternal.value = await checkIsInternal();
 });
 
-const referenceSummaries = computed(
-  () => planMetadata.value?.backgroundEntries || []
-);
-const prefilledChatAnswers = computed(
-  () => planMetadata.value?.prefilledChatAnswers || {}
-);
 const savedPlanVersions = computed(() => {
   if (!projectRecord.value?.saved_plan) {
     return [];
@@ -337,9 +320,13 @@ const lastUpdatedDisplay = computed(() => {
 const modeLabel = computed(() =>
   projectRecord.value?.mode === "generator" ? "計畫生成模式" : "互動模式"
 );
-const grantLabel = computed(
-  () => planMetadata.value?.planType?.title || "自訂計畫"
-);
+
+const grantName = computed(() => {
+  const targetGrant = allConfigs.value.find(
+    (grant) => grant.id === selectedGrantId.value
+  );
+  return targetGrant?.name || "";
+});
 const activeTemplateName = computed(() => {
   const targetGrant = allConfigs.value.find(
     (grant) => grant.id === selectedGrantId.value
@@ -428,7 +415,6 @@ async function fetchProject() {
     }
     const data: ProjectRecord = await response.json();
     projectRecord.value = data;
-    planMetadata.value = data.plan_metadata || null;
 
     // 从 saved_plan 中提取最新版本的内容用于显示
     if (data.saved_plan) {
@@ -583,7 +569,6 @@ async function updateProject(payload: Record<string, any>) {
     }
     const updated: ProjectRecord = await response.json();
     projectRecord.value = updated;
-    planMetadata.value = updated.plan_metadata || planMetadata.value;
     finalPlanContent.value = updated.saved_plan || finalPlanContent.value;
     hydrateInputStateFromStoredAnswer(updated);
     return updated;

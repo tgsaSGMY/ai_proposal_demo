@@ -358,9 +358,8 @@ interface PlanTypeOption {
   title: string;
   subtitle: string;
   description: string;
-  grantName: string;
+  grantId: string;
   templateHint?: string;
-  configId?: string;
   templateId?: string;
   iconBg: string;
   image: string;
@@ -387,15 +386,6 @@ interface AttachmentAutofillResult {
   mainIdea: string;
 }
 
-interface ProjectMetadataPayload {
-  planType: PlanTypeOption | null;
-  backgroundEntries: string[];
-  backgroundNotes: string;
-  prefilledChatAnswers: Record<string, string>;
-  mode: ModeOption["id"] | null;
-  createdAt: string;
-}
-
 const planTypes: PlanTypeOption[] = [
   {
     id: "siir-domestic",
@@ -403,8 +393,8 @@ const planTypes: PlanTypeOption[] = [
     subtitle: "服務業創新計畫",
     description:
       "協助企業優化既有產品、服務或流程，\n透過系統化研發與驗證，強化內部營運效率與市場競爭力",
-    grantName: "SIIR",
-    templateHint: "內銷",
+    grantId: "marketing",
+    templateId: "siir",
     iconBg: "bg-[#fff0eb]",
     image: "/icons/siir_logo.png",
   },
@@ -414,8 +404,8 @@ const planTypes: PlanTypeOption[] = [
     subtitle: "國際貿易署補助業界開發國際市場計畫",
     description:
       "以市場導向為核心，\n協助企業打造可複製、可輸出的商業模式，推動品牌與服務邁向國際市場。。",
-    grantName: "IMDP",
-    templateHint: "外銷",
+    grantId: "marketing",
+    templateId: "imdp",
     iconBg: "bg-[#eef2ff]",
     image: "/icons/imdp_logo.png",
   },
@@ -425,8 +415,8 @@ const planTypes: PlanTypeOption[] = [
     subtitle: "協助傳統產業技術開發計畫",
     description:
       "支持製程改良、設備升級與產品創新，\n協助企業以研發投入，提升品質穩定度與長期技術競爭力。",
-    grantName: "CITD",
-    templateHint: "研發",
+    grantId: "r&d",
+    templateId: "standard",
     iconBg: "bg-[#e9f7ef]",
     image: "/icons/citd_logo.png",
   },
@@ -446,8 +436,8 @@ const planTypes: PlanTypeOption[] = [
     subtitle: "研發轉型補助(產發署)",
     description:
       "面對美國關稅調整與供應鏈重組壓力，協助企業透過研發與製程轉型，降低對單一市場與高關稅結構的依賴。",
-    grantName: "研發轉型",
-    templateHint: "十人以上",
+    grantId: "r&d_transform",
+    templateId: "over_10",
     iconBg: "bg-[#fef3f2]",
     image: "/icons/siti_logo.png",
   },
@@ -457,8 +447,8 @@ const planTypes: PlanTypeOption[] = [
     subtitle: "地方產業創新研發計畫",
     description:
       "結合地方產業特色與政策資源，\n協助企業進行示範型研發，打造可擴散的地方創新成果。",
-    grantName: "SBIR",
-    templateHint: "地方",
+    grantId: "local",
+    templateId: "standard",
     iconBg: "bg-[#f0f7ff]",
     image: "/icons/sbir_logo.png",
   },
@@ -621,17 +611,6 @@ const prefilledChatAnswers = computed(() => {
   }
   return answers;
 });
-
-function buildProjectMetadata(): ProjectMetadataPayload {
-  return {
-    planType: selectedPlanType.value,
-    backgroundEntries: backgroundSummary.value,
-    backgroundNotes: planBackground.value.trim(),
-    prefilledChatAnswers: prefilledChatAnswers.value,
-    mode: selectedMode.value,
-    createdAt: new Date().toISOString(),
-  };
-}
 
 async function runAttachmentAutofill(
   userId: string
@@ -832,35 +811,13 @@ function selectPlanType(plan: PlanTypeOption) {
 
 function resolvePlanConfig(plan: PlanTypeOption | null) {
   if (!plan || !allConfigs.value.length) return null;
-  let grant = null;
-  if (plan.configId) {
-    grant = allConfigs.value.find((item) => item.id === plan.configId) || null;
-  }
-  if (!grant) {
-    grant =
-      allConfigs.value.find((item) =>
-        item.name.toLowerCase().includes(plan.grantName.toLowerCase())
-      ) || null;
-  }
-  if (!grant) {
-    grant = allConfigs.value[0] || null;
-  }
+
+  // 直接按 grantId 查找对应的 grant
+  const grant = allConfigs.value.find((item) => item.id === plan.grantId);
   if (!grant) return null;
 
-  let template = null;
-  if (plan.templateId) {
-    template =
-      grant.templates.find((tpl) => tpl.id === plan.templateId) || null;
-  }
-  if (!template && plan.templateHint) {
-    template =
-      grant.templates.find((tpl) =>
-        tpl.name.toLowerCase().includes(plan.templateHint!.toLowerCase())
-      ) || null;
-  }
-  if (!template) {
-    template = grant.templates[0] || null;
-  }
+  // 直接按 templateId 查找对应的 template
+  const template = grant.templates.find((tpl) => tpl.id === plan.templateId);
   if (!template) return null;
 
   return {
@@ -898,7 +855,6 @@ async function enterChatStage() {
     return;
   }
 
-  const metadata = buildProjectMetadata();
   isCreatingProject.value = true;
   let storedAnswerPayload: Record<string, any> | null = null;
   try {
@@ -958,8 +914,6 @@ async function enterChatStage() {
         stored_answer: storedAnswerPayload || {},
         grant_id: selectedGrantId.value || null,
         template_id: selectedTemplateId.value || null,
-        plan_type_id: selectedPlanType.value?.id || null,
-        plan_metadata: metadata,
       }),
     });
 
