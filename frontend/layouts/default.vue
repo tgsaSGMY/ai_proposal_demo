@@ -293,6 +293,18 @@
         </nav>
 
         <div v-if="isAuthenticated" class="mt-6 space-y-3">
+          <div
+            v-if="userEmail"
+            class="px-4 py-3 rounded-2xl bg-gray-100 border border-gray-200"
+          >
+            <p class="text-xs text-gray-500 uppercase tracking-wide">
+              使用者帳號
+            </p>
+            <p class="text-sm font-semibold text-gray-900 mt-1 break-all">
+              {{ userEmail }}
+            </p>
+          </div>
+
           <button
             v-if="!isInternalView && isInternal"
             class="w-full rounded-2xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
@@ -356,6 +368,7 @@ watch(
 );
 
 const { userId: currentUserId, refreshUser } = useCurrentUser();
+const userEmail = ref("");
 let authSubscription = null;
 
 // 配置
@@ -442,10 +455,12 @@ async function handleSessionUpdate(session) {
   const sessionUserId = session?.user?.id ?? null;
   currentUserId.value = sessionUserId;
   isAuthenticated.value = !!sessionUserId;
+  userEmail.value = session?.user?.email ?? "";
 
   if (!isAuthenticated.value) {
     isInternal.value = false;
     userTotalCost.value = null;
+    userEmail.value = "";
     return;
   }
 
