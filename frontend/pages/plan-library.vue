@@ -419,7 +419,7 @@ function decorateProject(
       const filledCount = Object.values(dynamicFields).filter(
         (field: any) => field
       ).length;
-      completeness = Math.round((filledCount / 20) * 100);
+      completeness = Math.round((filledCount / 16) * 100);
     } else {
       completeness = 0;
     }
@@ -435,7 +435,7 @@ function decorateProject(
           )
           .map((key) => key.split("::").slice(0, 2).join("::"))
       ).size;
-      completeness = Math.round((filledCount / 20) * 100);
+      completeness = Math.round((filledCount / 16) * 100);
     } else {
       completeness = 0;
     }
