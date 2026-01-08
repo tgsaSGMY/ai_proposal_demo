@@ -6,7 +6,7 @@ import { supabase } from "~/utils/supabaseClient";
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   // 只在客戶端運行
-  // if (process.server) return;
+  if (process.server) return;
 
   // 檢查 Supabase 中的認證狀態
   try {

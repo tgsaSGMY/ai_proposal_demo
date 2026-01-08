@@ -11,6 +11,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return;
   }
 
+  if (process.server) return;
+
   try {
     // 2. 檢查登入狀態
     const {
