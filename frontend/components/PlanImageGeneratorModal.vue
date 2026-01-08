@@ -146,84 +146,89 @@
                   />
                 </div>
 
-                <!-- Enrich Prompt Button -->
-                <button
-                  class="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50 px-6 py-3 text-base font-semibold text-amber-700 transition hover:bg-amber-100 hover:border-amber-400 disabled:opacity-50"
-                  @click="enrichPrompt"
-                  :disabled="!prompt.trim() || isGenerating || isEnriching"
-                  title="按照計劃書內容豐富圖片描述"
-                >
-                  <svg
-                    v-if="isEnriching"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="h-5 w-5 animate-spin"
+                <!-- Buttons Container -->
+                <div class="flex gap-3">
+                  <!-- Enrich Prompt Button -->
+                  <button
+                    class="flex-1 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50 px-6 py-3 text-base font-semibold text-amber-700 transition hover:bg-amber-100 hover:border-amber-400 disabled:opacity-50"
+                    @click="enrichPrompt"
+                    :disabled="!prompt.trim() || isGenerating || isEnriching"
+                    title="按照計劃書內容豐富圖片描述"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 4.5a10 10 0 0 1-18.8 4.2"
-                    />
-                  </svg>
-                  <svg
-                    v-else
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="h-5 w-5"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
-                  <span>{{
-                    isEnriching ? "豐富中..." : "按照計劃書修飾描述"
-                  }}</span>
-                </button>
+                    <svg
+                      v-if="isEnriching"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-5 w-5 animate-spin"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 4.5a10 10 0 0 1-18.8 4.2"
+                      />
+                    </svg>
+                    <svg
+                      v-else
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-5 w-5"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    </svg>
+                    <span>{{
+                      isEnriching ? "豐富中..." : "按照計劃書修飾描述"
+                    }}</span>
+                  </button>
 
-                <!-- Generate Button -->
-                <button
-                  class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 px-6 py-3 text-base font-semibold text-white transition hover:from-rose-600 hover:to-pink-600 hover:shadow-lg disabled:from-rose-300 disabled:to-pink-300"
-                  @click="handleGenerate"
-                  :disabled="!prompt.trim() || isGenerating || isEnriching"
-                >
-                  <svg
-                    v-if="isGenerating"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="h-5 w-5 animate-spin"
+                  <!-- Generate Button -->
+                  <button
+                    class="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 px-6 py-3 text-base font-semibold text-white transition hover:from-rose-600 hover:to-pink-600 hover:shadow-lg disabled:from-rose-300 disabled:to-pink-300"
+                    @click="handleGenerate"
+                    :disabled="!prompt.trim() || isGenerating || isEnriching"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 4.5a10 10 0 0 1-18.8 4.2"
-                    />
-                  </svg>
-                  <svg
-                    v-else
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="h-5 w-5"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="M21 15l-5-5L5 21" />
-                  </svg>
-                  <span>{{ isGenerating ? "生成中..." : "立即生成圖片" }}</span>
-                </button>
+                    <svg
+                      v-if="isGenerating"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-5 w-5 animate-spin"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 4.5a10 10 0 0 1-18.8 4.2"
+                      />
+                    </svg>
+                    <svg
+                      v-else
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-5 w-5"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                    <span>{{
+                      isGenerating ? "生成中..." : "立即生成圖片"
+                    }}</span>
+                  </button>
+                </div>
               </div>
 
               <!-- History Section -->
