@@ -14,9 +14,27 @@ import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordRdStandard(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
+
+  // 添加project title在最上面
+  if (projectTitle) {
+    const titleParagraph = new Paragraph({
+      children: [
+        new TextRun({
+          text: projectTitle,
+          font: "DFKai-SB",
+          size: 36,
+          bold: true,
+        }),
+      ],
+      spacing: { before: 100, after: 100, line: 200 },
+      alignment: AlignmentType.CENTER,
+    });
+    docxRenderer.addCustomParagraph(titleParagraph);
+  }
 
   for (const section of sections) {
     const sectionData = planContent[section.id]?.content;
@@ -129,7 +147,7 @@ export async function exportPlanToWordRdStandard(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "研發計畫書.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "研發計畫書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

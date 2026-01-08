@@ -3,7 +3,8 @@ import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordMarketingImdp(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -16,7 +17,7 @@ export async function exportPlanToWordMarketingImdp(
 
     switch (section.id) {
       case "company_overview_imdp":
-        renderCompanyOverview(sectionData);
+        renderCompanyOverview(sectionData, projectTitle);
         break;
       case "plan_content_and_implementation":
         renderPlanContentAndImplementation(sectionData);
@@ -118,17 +119,17 @@ export async function exportPlanToWordMarketingImdp(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "IMDP計劃書.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "IMDP計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 
-  function renderCompanyOverview(data: any) {
+  function renderCompanyOverview(data: any, title?: string) {
     const titleParagraph = new Paragraph({
       children: [
         new TextRun({
-          text: "完整內容",
+          text: title || "完整内容",
           font: "DFKai-SB",
           size: 36,
           bold: true,

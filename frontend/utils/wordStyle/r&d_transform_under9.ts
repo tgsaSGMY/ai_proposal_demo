@@ -15,7 +15,8 @@ import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordRdTransformUnder9(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -30,7 +31,7 @@ export async function exportPlanToWordRdTransformUnder9(
     // 根據section ID進行特殊處理
     switch (section.id) {
       case "company_overview_rt_s":
-        renderCompanyOverview(sectionData, docxRenderer);
+        renderCompanyOverview(sectionData, docxRenderer, projectTitle);
         break;
       case "plan_content_and_implementation_rt_s":
         renderPlanContentAndImplementation(sectionData, docxRenderer);
@@ -121,7 +122,9 @@ export async function exportPlanToWordRdTransformUnder9(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "九人以下轉型計劃書.docx";
+  link.download = projectTitle
+    ? `${projectTitle}.docx`
+    : "九人以下轉型計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -129,8 +132,12 @@ export async function exportPlanToWordRdTransformUnder9(
 }
 
 // 公司概況
-function renderCompanyOverview(data: any, renderer: ContentRenderer<any>) {
-  const title = "完整內容";
+function renderCompanyOverview(
+  data: any,
+  renderer: ContentRenderer<any>,
+  projectTitle?: string
+) {
+  const title = projectTitle || "完整内容";
   const titleParagraph = new Paragraph({
     children: [
       new TextRun({

@@ -15,7 +15,8 @@ import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordRdTransformOver10(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -30,7 +31,7 @@ export async function exportPlanToWordRdTransformOver10(
     // 根據section ID進行特殊處理
     switch (section.id) {
       case "applicant_intro_rt_l":
-        renderApplicantIntro(sectionData, docxRenderer);
+        renderApplicantIntro(sectionData, docxRenderer, projectTitle);
         break;
       case "transformation_motivation_rt_l":
         renderTransformationMotivation(sectionData, docxRenderer);
@@ -130,7 +131,9 @@ export async function exportPlanToWordRdTransformOver10(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "十人以上轉型計劃書.docx";
+  link.download = projectTitle
+    ? `${projectTitle}.docx`
+    : "十人以上轉型計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -138,8 +141,12 @@ export async function exportPlanToWordRdTransformOver10(
 }
 
 // 壹、申請業者簡介
-function renderApplicantIntro(data: any, renderer: ContentRenderer<any>) {
-  const title = "完整內容";
+function renderApplicantIntro(
+  data: any,
+  renderer: ContentRenderer<any>,
+  projectTitle?: string
+) {
+  const title = projectTitle || "完整内容";
   const titleParagraph = new Paragraph({
     children: [
       new TextRun({

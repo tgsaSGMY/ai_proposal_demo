@@ -144,7 +144,8 @@ export async function exportPlanToWord(
   sections: ExportableSection[],
   planContent: Record<string, any>,
   grantId?: string,
-  templateId?: string
+  templateId?: string,
+  projectTitle?: string
 ) {
   // 根據 grant 和 template 分發到對應的 grant template 函數
   const grantTemplateKey = `${grantId}_${templateId}`;
@@ -208,21 +209,22 @@ export async function exportPlanToWord(
         exportFn = exportPlanToWordDefault;
     }
 
-    return await exportFn(sections, planContent);
+    return await exportFn(sections, planContent, projectTitle);
   } catch (error) {
     console.error(
       `Failed to export using template ${grantTemplateKey}:`,
       error
     );
     // 降級到默認導出
-    return exportPlanToWordDefault(sections, planContent);
+    return exportPlanToWordDefault(sections, planContent, projectTitle);
   }
 }
 
 // 默認導出函數（保留原有邏輯）
 async function exportPlanToWordDefault(
   sections: ExportableSection[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -318,7 +320,7 @@ async function exportPlanToWordDefault(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "計劃書草稿.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "計劃書草稿.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

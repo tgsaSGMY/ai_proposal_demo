@@ -4,7 +4,8 @@ import { DocxRenderer } from "../contentRenderer";
 
 export async function exportPlanToWordMarketingSiir(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -19,7 +20,7 @@ export async function exportPlanToWordMarketingSiir(
     // 根據section ID進行特殊處理
     switch (section.id) {
       case "company_overview_domestic":
-        renderCompanyOverview(sectionData, docxRenderer);
+        renderCompanyOverview(sectionData, docxRenderer, projectTitle);
         break;
       case "randd_content_domestic":
         renderRdContent(sectionData, docxRenderer);
@@ -122,7 +123,7 @@ export async function exportPlanToWordMarketingSiir(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "SIIR計劃書.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "SIIR計劃書.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -130,8 +131,12 @@ export async function exportPlanToWordMarketingSiir(
 }
 
 // 公司概況
-function renderCompanyOverview(data: any, renderer: ContentRenderer<any>) {
-  const title = "完整内容";
+function renderCompanyOverview(
+  data: any,
+  renderer: ContentRenderer<any>,
+  projectTitle?: string
+) {
+  const title = projectTitle || "完整内容";
   const titleParagraph = new Paragraph({
     children: [
       new TextRun({

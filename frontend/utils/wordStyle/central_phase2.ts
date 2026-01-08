@@ -112,7 +112,8 @@ function renderSectionContent(
 
 export async function exportPlanToWordCentralPhase2(
   sections: { id: string; name: string; json_schema: any }[],
-  planContent: Record<string, any>
+  planContent: Record<string, any>,
+  projectTitle?: string
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -207,7 +208,7 @@ export async function exportPlanToWordCentralPhase2(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "計劃書草稿.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "計劃書草稿.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
