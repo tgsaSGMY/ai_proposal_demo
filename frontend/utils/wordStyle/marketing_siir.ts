@@ -249,10 +249,11 @@ function renderInnovationContent(data: any, renderer: ContentRenderer<any>) {
   }
 
   // 計畫導入前後對比
-  if (data.計畫導入前後差異說明 && Array.isArray(data.計畫導入前後差異說明)) {
+  console.log("計劃導入前後差異說明 data:", data.計劃導入前後差異說明);
+  if (data.計劃導入前後差異說明 && Array.isArray(data.計劃導入前後差異說明)) {
     renderer.addArrayTitle("二、計畫導入前後對比");
     const headers = ["目標項目", "現況", "創新計畫完成後現況"];
-    const rows = data.計畫導入前後差異說明.map((item: any) => [
+    const rows = data.計劃導入前後差異說明.map((item: any) => [
       item.目標項目,
       item.現況,
       item.創新計劃完成後現況,
@@ -395,7 +396,7 @@ function renderExecutionPlan(data: any, renderer: ContentRenderer<any>) {
 
   // 計畫架構
   if (data.計畫架構 && Array.isArray(data.計畫架構)) {
-    renderer.addArrayTitle("（一）計畫架構：");
+    renderer.addArrayTitle("一、計畫架構：");
     const headers = ["分項代碼", "分項計畫", "執行單位", "計畫權重"];
     const rows = data.計畫架構.map((item: any) => [
       item.分項代碼,
@@ -412,9 +413,9 @@ function renderExecutionPlan(data: any, renderer: ContentRenderer<any>) {
     // 期中查核點
     if (checkpoints.期中查核點 && Array.isArray(checkpoints.期中查核點)) {
       renderer.addArrayTitle(
-        "（二）預定查核點說明(工作項目請依計畫內容自行增列)"
+        "二、預定查核點說明(工作項目請依計畫內容自行增列)"
       );
-      renderer.addArrayTitle("年度結案期中查核點");
+      renderer.addArrayTitle("1. 年度結案期中查核點");
       const headers = ["查核點編號", "預定完成時間", "查核點內容", "權重(%)"];
       const rows = checkpoints.期中查核點.map((item: any) => [
         item.查核點編號,
@@ -427,7 +428,7 @@ function renderExecutionPlan(data: any, renderer: ContentRenderer<any>) {
 
     // 期末查核點
     if (checkpoints.期末查核點 && Array.isArray(checkpoints.期末查核點)) {
-      renderer.addArrayTitle("年度結案期末查核點");
+      renderer.addArrayTitle("2. 年度結案期末查核點");
       const headers = ["查核點編號", "預定完成時間", "查核點內容", "權重(%)"];
       const rows = checkpoints.期末查核點.map((item: any) => [
         item.查核點編號,

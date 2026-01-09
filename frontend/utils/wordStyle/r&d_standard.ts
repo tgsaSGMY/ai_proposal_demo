@@ -178,7 +178,7 @@ export async function exportPlanToWordRdStandard(
 
     // 企業現況
     if (data.企業現況) {
-      docxRenderer.addArrayTitle("企業現況");
+      docxRenderer.addArrayTitle("一、企業現況");
       renderTextWithLineBreaks(data.企業現況);
     }
 
@@ -189,7 +189,7 @@ export async function exportPlanToWordRdStandard(
         (Array.isArray(rd.獎項) && rd.獎項.length > 0) ||
         (Array.isArray(rd.專利) && rd.專利.length > 0)
       ) {
-        docxRenderer.addArrayTitle("研發成果");
+        docxRenderer.addArrayTitle("二、研發成果");
       }
 
       const rdRows: string[][] = [];
@@ -238,7 +238,7 @@ export async function exportPlanToWordRdStandard(
 
     // 研發動機與說明
     if (data.研發動機與說明) {
-      docxRenderer.addArrayTitle("研發動機與說明");
+      docxRenderer.addArrayTitle("一、研發動機與說明");
       renderTextWithLineBreaks(data.研發動機與說明);
     }
   }
@@ -248,13 +248,13 @@ export async function exportPlanToWordRdStandard(
 
     // 創新研發標的
     if (data.創新研發標的) {
-      docxRenderer.addArrayTitle("1. 創新研發標的");
+      docxRenderer.addArrayTitle("一、 創新研發標的");
       renderTextWithLineBreaks(data.創新研發標的);
     }
 
     // 競爭對手分析
     if (Array.isArray(data.競爭對手分析) && data.競爭對手分析.length > 0) {
-      docxRenderer.addArrayTitle("2. 競爭對手分析");
+      docxRenderer.addArrayTitle("二、 競爭對手分析");
 
       // 轉置表格：公司作為column，比較項目作為row
       const comparisonItems = [
@@ -285,20 +285,20 @@ export async function exportPlanToWordRdStandard(
 
     // 技術可行性
     if (data.技術可行性) {
-      docxRenderer.addArrayTitle("3. 技術可行性");
+      docxRenderer.addArrayTitle("三、 技術可行性");
       renderTextWithLineBreaks(data.技術可行性);
     }
 
     // 市場可行性
     if (data.市場可行性) {
-      docxRenderer.addArrayTitle("4. 市場可行性");
+      docxRenderer.addArrayTitle("四、 市場可行性");
       renderTextWithLineBreaks(data.市場可行性);
     }
 
     // 智慧財產權管理
     if (data.智慧財產權管理) {
       const ip = data.智慧財產權管理;
-      docxRenderer.addArrayTitle("5. 智慧財產權管理");
+      docxRenderer.addArrayTitle("五、 智慧財產權管理");
 
       if (ip.說明) {
         docxRenderer.addArrayTitle("智慧財產權檢索與管理策略");
@@ -309,7 +309,7 @@ export async function exportPlanToWordRdStandard(
         Array.isArray(ip.智慧財產權檢索結果表) &&
         ip.智慧財產權檢索結果表.length > 0
       ) {
-        docxRenderer.addArrayTitle("智慧財產權檢索結果表");
+        docxRenderer.addArrayTitle("六、智慧財產權檢索結果表");
         const ipHeaders = ["專利號或關鍵字", "摘要", "差異分析"];
         const ipRows = ip.智慧財產權檢索結果表.map((item: any) => [
           safeText(item?.專利號或關鍵字),
@@ -322,7 +322,7 @@ export async function exportPlanToWordRdStandard(
 
     // 風險評估與對策
     if (Array.isArray(data.風險評估與對策) && data.風險評估與對策.length > 0) {
-      docxRenderer.addArrayTitle("6. 風險評估與對策");
+      docxRenderer.addArrayTitle("七、風險評估與對策");
       const riskHeaders = ["風險描述", "因應對策"];
       const riskRows = data.風險評估與對策.map((item: any) => [
         safeText(item?.風險描述),
@@ -337,7 +337,7 @@ export async function exportPlanToWordRdStandard(
 
     // 研發目標
     if (Array.isArray(data.研發目標) && data.研發目標.length > 0) {
-      docxRenderer.addArrayTitle("研發目標");
+      docxRenderer.addArrayTitle("一、研發目標");
       const targetHeaders = ["比較面向", "導入前狀況", "導入後狀況"];
       const targetRows = data.研發目標.map((item: any) => [
         safeText(item?.比較面向),
@@ -349,7 +349,7 @@ export async function exportPlanToWordRdStandard(
 
     // 創新性說明
     if (Array.isArray(data.創新性說明) && data.創新性說明.length > 0) {
-      docxRenderer.addArrayTitle("創新性說明");
+      docxRenderer.addArrayTitle("二、創新性說明");
       data.創新性說明.forEach((item: any, index: number) => {
         const numbering = index + 1;
         const title = item?.標題 || `創新項目 ${numbering}`;
@@ -363,7 +363,7 @@ export async function exportPlanToWordRdStandard(
       Array.isArray(data.功能規格與服務模式) &&
       data.功能規格與服務模式.length > 0
     ) {
-      docxRenderer.addArrayTitle("功能規格與服務模式");
+      docxRenderer.addArrayTitle("三、功能規格與服務模式");
       const specHeaders = ["技術指標", "說明"];
       const specRows = data.功能規格與服務模式.map((item: any) => [
         safeText(item?.指標名稱),
@@ -381,7 +381,7 @@ export async function exportPlanToWordRdStandard(
     }
 
     // （一）推動架構
-    docxRenderer.addArrayTitle("（一）推動架構：請以樹狀圖展竄");
+    docxRenderer.addArrayTitle("一、推動架構：請以樹狀圖展竄");
 
     data.分項計畫列表.forEach((item: any, itemIndex: number) => {
       const planName = safeText(item?.分項計畫名);
@@ -438,7 +438,7 @@ export async function exportPlanToWordRdStandard(
     });
 
     // （二）執行計畫、時程及執行進度
-    docxRenderer.addArrayTitle("（二）執行計畫、時程及執行進度：");
+    docxRenderer.addArrayTitle("二、執行計畫、時程及執行進度：");
 
     data.分項計畫列表.forEach((item: any, itemIndex: number) => {
       const planName = safeText(item?.分項計畫名);
@@ -449,7 +449,7 @@ export async function exportPlanToWordRdStandard(
 
       // （1）工作重點表
       if (Array.isArray(item?.細項) && item.細項.length > 0) {
-        docxRenderer.addArrayTitle("（1）工作重點");
+        docxRenderer.addArrayTitle("1. 工作重點");
 
         const itemHeaders = ["工作項目", "推動作法", "權重", "查核項目"];
         const itemRows = item.細項.map((subItem: any, subIndex: number) => {
@@ -466,7 +466,7 @@ export async function exportPlanToWordRdStandard(
 
       // （2）詳細說明
       if (item?.詳細說明) {
-        docxRenderer.addArrayTitle("（2）詳細說明");
+        docxRenderer.addArrayTitle("2. 詳細說明");
         renderTextWithLineBreaks(item.詳細說明);
       }
     });
