@@ -9,6 +9,7 @@ import {
 } from "docx";
 import type { ContentRenderer } from "../contentRenderer";
 import { DocxRenderer } from "../contentRenderer";
+import { chineseNumbers, getParenthesizedNumber } from "../chineseNumbers";
 
 export async function exportPlanToWordMarketingSiir(
   sections: { id: string; name: string; json_schema: any }[],
@@ -189,7 +190,7 @@ function renderRdContent(data: any, renderer: ContentRenderer<any>) {
   // 市場需求
   if (data.市場需求) {
     if (data.市場需求.標題) {
-      renderer.addArrayTitle("（一）" + data.市場需求.標題);
+      renderer.addArrayTitle("一、" + data.市場需求.標題);
     }
     if (data.市場需求.文字敘述) {
       const text = data.市場需求.文字敘述;
@@ -199,7 +200,7 @@ function renderRdContent(data: any, renderer: ContentRenderer<any>) {
 
   // 動機
   if (data.動機 && Array.isArray(data.動機)) {
-    renderer.addArrayTitle("（二）動機");
+    renderer.addArrayTitle("二、動機");
     data.動機.forEach((item: any, index: number) => {
       renderer.addArrayTitle(`${index + 1}. ${item.標題}`);
       if (item.文字敘述) {
@@ -219,7 +220,8 @@ function renderProjectObjectives(data: any, renderer: ContentRenderer<any>) {
 
   if (data.目標列表 && Array.isArray(data.目標列表)) {
     data.目標列表.forEach((item: any, index: number) => {
-      renderer.addArrayTitle(`${item.標題}`);
+      const numberLabel = chineseNumbers[index] || "十";
+      renderer.addArrayTitle(`${numberLabel}、${item.標題}`);
       if (item.敘述) {
         renderTextWithLineBreaks(item.敘述, renderer);
       }
@@ -237,7 +239,7 @@ function renderInnovationContent(data: any, renderer: ContentRenderer<any>) {
 
   // 創新點
   if (data.創新點 && Array.isArray(data.創新點)) {
-    renderer.addArrayTitle("創新技術");
+    renderer.addArrayTitle("一、創新技術");
     data.創新點.forEach((item: any, index: number) => {
       renderer.addArrayTitle(`${index + 1}. ${item.標題}`);
       if (item.敘述) {
@@ -248,7 +250,7 @@ function renderInnovationContent(data: any, renderer: ContentRenderer<any>) {
 
   // 計畫導入前後對比
   if (data.計畫導入前後差異說明 && Array.isArray(data.計畫導入前後差異說明)) {
-    renderer.addArrayTitle("計畫導入前後對比");
+    renderer.addArrayTitle("二、計畫導入前後對比");
     const headers = ["目標項目", "現況", "創新計畫完成後現況"];
     const rows = data.計畫導入前後差異說明.map((item: any) => [
       item.目標項目,
@@ -265,12 +267,12 @@ function renderFeasibilityAnalysis(data: any, renderer: ContentRenderer<any>) {
 
   // 競爭優勢分析
   if (data.競爭優勢分析) {
-    renderer.addArrayTitle("競爭優勢分析");
+    renderer.addArrayTitle("一、競爭優勢分析");
 
     // SWOT 分析 - 表格格式
     if (data.競爭優勢分析.SWOT分析) {
       const swot = data.競爭優勢分析.SWOT分析;
-      renderer.addArrayTitle("SWOT分析");
+      renderer.addArrayTitle("1. SWOT分析");
 
       // SWOT 2x2 表格，第一行是 header
       const swotHeaders = ["Strength優勢", "Weakness劣勢"];
@@ -296,7 +298,7 @@ function renderFeasibilityAnalysis(data: any, renderer: ContentRenderer<any>) {
         fiveForces.供應商議價能力;
 
       if (hasData) {
-        renderer.addArrayTitle("五力分析");
+        renderer.addArrayTitle("2. 五力分析");
 
         const fiveHeaders = ["標題", "說明"];
         const fiveRows = [
@@ -314,9 +316,9 @@ function renderFeasibilityAnalysis(data: any, renderer: ContentRenderer<any>) {
 
   // 行銷計畫
   if (data.行銷計畫 && Array.isArray(data.行銷計畫)) {
-    renderer.addArrayTitle("行銷推廣計畫");
-    data.行銷計畫.forEach((item: any) => {
-      renderer.addArrayTitle(item.標題);
+    renderer.addArrayTitle("3. 行銷推廣計畫");
+    data.行銷計畫.forEach((item: any, index: number) => {
+      renderer.addArrayTitle(`${getParenthesizedNumber(index)} ${item.標題}`);
       if (item.敘述) {
         renderTextWithLineBreaks(item.敘述, renderer);
       }
@@ -325,17 +327,17 @@ function renderFeasibilityAnalysis(data: any, renderer: ContentRenderer<any>) {
 
   // 可行性評估
   if (data.可行性評估 && Array.isArray(data.可行性評估)) {
-    renderer.addArrayTitle("通路可行性評估");
-    data.可行性評估.forEach((item: any) => {
+    renderer.addArrayTitle("4. 通路可行性評估");
+    data.可行性評估.forEach((item: any, index: number) => {
       if (item.項目.includes("分駐點")) {
-        renderer.addArrayTitle(item.項目);
+        renderer.addArrayTitle(`${getParenthesizedNumber(index)} ${item.項目}`);
         // 解析門市列表
         const stores = parseStoreList(item.可行性評估);
         stores.forEach((store: string) => {
           renderer.addIndentedListItem("門市", store);
         });
       } else {
-        renderer.addArrayTitle(item.項目);
+        renderer.addArrayTitle(`${getParenthesizedNumber(index)} ${item.項目}`);
         if (item.可行性評估) {
           renderTextWithLineBreaks(item.可行性評估, renderer);
         }
@@ -350,7 +352,7 @@ function renderBenefitsContent(data: any, renderer: ContentRenderer<any>) {
 
   // 業績性量化效益
   if (data.業績性量化效益 && Array.isArray(data.業績性量化效益)) {
-    renderer.addArrayTitle("1.業績性量化效益");
+    renderer.addArrayTitle("一、業績性量化效益");
     const headers = ["項目", "效益"];
     const rows = data.業績性量化效益.map((item: any) => [item.項目, item.效益]);
     renderer.addTable(headers, rows);
@@ -358,7 +360,7 @@ function renderBenefitsContent(data: any, renderer: ContentRenderer<any>) {
 
   // 策略性量化效益
   if (data.策略性量化效益 && Array.isArray(data.策略性量化效益)) {
-    renderer.addArrayTitle("2.策略性量化效益");
+    renderer.addArrayTitle("二、策略性量化效益");
     const headers = ["項目", "效益"];
     const rows = data.策略性量化效益.map((item: any) => [item.項目, item.效益]);
     renderer.addTable(headers, rows);
@@ -366,7 +368,7 @@ function renderBenefitsContent(data: any, renderer: ContentRenderer<any>) {
 
   // 質化效益
   if (data.質化效益 && Array.isArray(data.質化效益)) {
-    renderer.addArrayTitle("質化效益");
+    renderer.addArrayTitle("三、質化效益");
     data.質化效益.forEach((item: any, index: number) => {
       renderer.addArrayTitle(`${index + 1}. ${item.標題}`);
       if (item.敘述) {
