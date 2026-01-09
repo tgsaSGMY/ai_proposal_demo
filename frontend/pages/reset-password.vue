@@ -33,10 +33,9 @@
                   :type="showPassword ? 'text' : 'password'"
                   id="password"
                   v-model="password"
-                  placeholder="••••••••"
+                  placeholder="請輸入至少 8 個字符"
                   autocomplete="new-password"
                   required
-                  minlength="6"
                   class="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition duration-200 text-gray-900 placeholder-gray-400"
                 />
                 <button
@@ -48,43 +47,98 @@
                   <svg
                     v-if="showPassword"
                     class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
                   >
                     <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-4.803m5.596-3.856a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0M15 12a3 3 0 11-6 0 3 3 0 016 0zm6 0c0 1.657-.672 3.157-1.757 4.243A6 6 0 0121 12a6 6 0 00-9-5.657"
+                      fill-rule="evenodd"
+                      d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
+                      clip-rule="evenodd"
+                    />
+                    <path
+                      d="M15.171 13.576l1.414 1.414a1 1 0 00.707-.293l-3.546-3.546a4 4 0 00-5.478-5.478L8.829 6.424a6 6 0 018.484 8.484z"
                     />
                   </svg>
                   <svg
                     v-else
                     class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
                   >
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                     <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      fill-rule="evenodd"
+                      d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                      clip-rule="evenodd"
                     />
                   </svg>
                 </button>
               </div>
-              <p class="text-xs text-gray-500 mt-2">密碼至少需要 6 個字符</p>
             </div>
 
-            <!-- Confirm Password Input -->
+            <!-- Password Requirements -->
+            <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+              <p class="text-xs font-semibold text-indigo-900 mb-2">
+                密碼要求：
+              </p>
+              <ul class="text-xs text-indigo-700 space-y-1">
+                <li
+                  :class="
+                    password.length >= 8
+                      ? 'text-indigo-600 font-semibold'
+                      : 'text-indigo-600'
+                  "
+                >
+                  <span v-if="password.length >= 8">✓</span>
+                  <span v-else>○</span>
+                  至少 8 個字符
+                </li>
+                <li
+                  :class="
+                    hasUppercase
+                      ? 'text-indigo-600 font-semibold'
+                      : 'text-indigo-600'
+                  "
+                >
+                  <span v-if="hasUppercase">✓</span>
+                  <span v-else>○</span>
+                  至少 1 個大寫字母 (A-Z)
+                </li>
+                <li
+                  :class="
+                    hasLowercase
+                      ? 'text-indigo-600 font-semibold'
+                      : 'text-indigo-600'
+                  "
+                >
+                  <span v-if="hasLowercase">✓</span>
+                  <span v-else>○</span>
+                  至少 1 個小寫字母 (a-z)
+                </li>
+                <li
+                  :class="
+                    hasNumber
+                      ? 'text-indigo-600 font-semibold'
+                      : 'text-indigo-600'
+                  "
+                >
+                  <span v-if="hasNumber">✓</span>
+                  <span v-else>○</span>
+                  至少 1 個數字 (0-9)
+                </li>
+                <li
+                  :class="
+                    hasSpecialChar
+                      ? 'text-indigo-600 font-semibold'
+                      : 'text-indigo-600'
+                  "
+                >
+                  <span v-if="hasSpecialChar">✓</span>
+                  <span v-else>○</span>
+                  至少 1 個特殊字符 (!@#$%^&*)
+                </li>
+              </ul>
+            </div>
             <div>
               <label
                 for="confirmPassword"
@@ -97,10 +151,9 @@
                   :type="showConfirmPassword ? 'text' : 'password'"
                   id="confirmPassword"
                   v-model="confirmPassword"
-                  placeholder="••••••••"
+                  placeholder="請再次輸入密碼"
                   autocomplete="new-password"
                   required
-                  minlength="6"
                   class="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition duration-200 text-gray-900 placeholder-gray-400"
                 />
                 <button
@@ -112,35 +165,29 @@
                   <svg
                     v-if="showConfirmPassword"
                     class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
                   >
                     <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-4.803m5.596-3.856a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0M15 12a3 3 0 11-6 0 3 3 0 016 0zm6 0c0 1.657-.672 3.157-1.757 4.243A6 6 0 0121 12a6 6 0 00-9-5.657"
+                      fill-rule="evenodd"
+                      d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
+                      clip-rule="evenodd"
+                    />
+                    <path
+                      d="M15.171 13.576l1.414 1.414a1 1 0 00.707-.293l-3.546-3.546a4 4 0 00-5.478-5.478L8.829 6.424a6 6 0 018.484 8.484z"
                     />
                   </svg>
                   <svg
                     v-else
                     class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
                   >
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                     <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      fill-rule="evenodd"
+                      d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                      clip-rule="evenodd"
                     />
                   </svg>
                 </button>
@@ -212,7 +259,7 @@
             <!-- Submit Button -->
             <button
               type="submit"
-              :disabled="isLoading"
+              :disabled="isLoading || !isPasswordValid"
               class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:shadow-lg hover:from-indigo-700 hover:to-purple-700 transition duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
             >
               <svg
@@ -320,6 +367,26 @@ const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 const sessionValid = ref(false);
 
+// 密碼驗證計算屬性
+const hasUppercase = computed(() => /[A-Z]/.test(password.value));
+const hasLowercase = computed(() => /[a-z]/.test(password.value));
+const hasNumber = computed(() => /[0-9]/.test(password.value));
+const hasSpecialChar = computed(() =>
+  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
+);
+
+const isPasswordValid = computed(() => {
+  return (
+    password.value.length >= 8 &&
+    hasUppercase.value &&
+    hasLowercase.value &&
+    hasNumber.value &&
+    hasSpecialChar.value &&
+    password.value === confirmPassword.value &&
+    confirmPassword.value.length > 0
+  );
+});
+
 // 頁面挂載時驗證會話和令牌
 onMounted(async () => {
   try {
@@ -354,26 +421,18 @@ onMounted(async () => {
   }
 });
 
-// 驗證密碼匹配
-const validatePasswords = () => {
-  if (password.value.length < 6) {
-    errorMessage.value = "密碼至少需要 6 個字符";
-    return false;
-  }
-
-  if (password.value !== confirmPassword.value) {
-    errorMessage.value = "兩次輸入的密碼不一致，請重新檢查";
-    return false;
-  }
-
-  return true;
-};
-
 const handleResetPassword = async () => {
   errorMessage.value = "";
   successMessage.value = "";
 
-  if (!validatePasswords()) {
+  if (!isPasswordValid.value) {
+    errorMessage.value =
+      "密碼不符合要求。請確保包含大小寫字母、數字和特殊字符，且至少 8 個字符。";
+    return;
+  }
+
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = "兩次輸入的密碼不一致，請重新檢查";
     return;
   }
 
