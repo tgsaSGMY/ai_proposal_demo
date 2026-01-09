@@ -8,6 +8,7 @@ import {
   PageNumber,
 } from "docx";
 import { DocxRenderer } from "../contentRenderer";
+import { chineseNumbers } from "../chineseNumbers";
 
 export async function exportPlanToWordLocalStandard(
   sections: { id: string; name: string; json_schema: any }[],
@@ -180,25 +181,35 @@ export async function exportPlanToWordLocalStandard(
   function renderCompanyOverview(data: any) {
     docxRenderer.addSectionTitle("壹、公司概況");
 
+    let sectionIndex = 0;
+
     if (data.企業現況) {
-      docxRenderer.addArrayTitle("企業現況");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、企業現況`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.企業現況);
     }
 
     if (data.經營理念) {
-      docxRenderer.addArrayTitle("經營理念");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、經營理念`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.經營理念);
     }
 
     if (data.未來展望) {
-      docxRenderer.addArrayTitle("未來展望");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、未來展望`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.未來展望);
     }
 
     // 研發成果
     if (data.研發成果) {
       const rd = data.研發成果;
-      docxRenderer.addArrayTitle("研發成果");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、研發成果`);
+      sectionIndex++;
 
       const rdRows: string[][] = [];
       let awardItemIndex = 1;
@@ -245,7 +256,12 @@ export async function exportPlanToWordLocalStandard(
       Array.isArray(data.曾經參與政府相關研發計畫之實績) &&
       data.曾經參與政府相關研發計畫之實績.length > 0
     ) {
-      docxRenderer.addArrayTitle("曾經參與政府相關研發計畫之實績");
+      const chineseNumGov =
+        chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(
+        `${chineseNumGov}、曾經參與政府相關研發計畫之實績`
+      );
+      sectionIndex++;
       const govHeaders = [
         "計畫類別",
         "計畫名稱",
@@ -275,10 +291,14 @@ export async function exportPlanToWordLocalStandard(
   function renderPlanContent(data: any) {
     docxRenderer.addSectionTitle("貳、計畫內容與實施方法");
 
+    let sectionIndex = 0;
+
     // 研發動機
     if (data.研發動機) {
       const motivation = data.研發動機;
-      docxRenderer.addArrayTitle("研發動機");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、研發動機`);
+      sectionIndex++;
 
       if (motivation.文字敘述) {
         renderTextWithLineBreaks(motivation.文字敘述);
@@ -288,7 +308,10 @@ export async function exportPlanToWordLocalStandard(
         Array.isArray(motivation.痛點分析) &&
         motivation.痛點分析.length > 0
       ) {
-        docxRenderer.addArrayTitle("痛點分析");
+        const chineseNumDetail =
+          chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+        docxRenderer.addArrayTitle(`${chineseNumDetail}、痛點分析`);
+        sectionIndex++;
         motivation.痛點分析.forEach((item: any, index: number) => {
           const title = item?.標題
             ? `${index + 1}. ${item.標題}`
@@ -299,14 +322,20 @@ export async function exportPlanToWordLocalStandard(
       }
 
       if (motivation.解決方案服務) {
-        docxRenderer.addArrayTitle("解決方案/自身服務");
+        const chineseNumSolution =
+          chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+        docxRenderer.addArrayTitle(`${chineseNumSolution}、解決方案/自身服務`);
+        sectionIndex++;
         renderTextWithLineBreaks(motivation.解決方案服務);
       }
     }
 
     // 競爭力分析
     if (Array.isArray(data.競爭力分析) && data.競爭力分析.length > 0) {
-      docxRenderer.addArrayTitle("競爭力分析");
+      const chineseNumCompetitor =
+        chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNumCompetitor}、競爭力分析`);
+      sectionIndex++;
 
       // 轉置表格：公司作為column，比較項目作為row
       const comparisonItems = [
@@ -340,18 +369,26 @@ export async function exportPlanToWordLocalStandard(
   function renderFeasibilityAnalysis(data: any) {
     docxRenderer.addSectionTitle("參、可行性分析");
 
+    let sectionIndex = 0;
+
     if (data.市場可行性) {
-      docxRenderer.addArrayTitle("1. 市場可行性");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、市場可行性`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.市場可行性);
     }
 
     if (data.技術與設計可行性) {
-      docxRenderer.addArrayTitle("2. 技術與設計可行性");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、技術與設計可行性`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.技術與設計可行性);
     }
 
     if (data.執行能力可行性) {
-      docxRenderer.addArrayTitle("3. 執行能力可行性");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、執行能力可行性`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.執行能力可行性);
     }
   }
@@ -359,9 +396,13 @@ export async function exportPlanToWordLocalStandard(
   function renderProjectObjectives(data: any) {
     docxRenderer.addSectionTitle("肆、計畫目標與規格");
 
+    let sectionIndex = 0;
+
     // 計畫目標
     if (Array.isArray(data.計畫目標) && data.計畫目標.length > 0) {
-      docxRenderer.addArrayTitle("計畫目標");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、計畫目標`);
+      sectionIndex++;
       const targetHeaders = ["目標項目", "計劃前狀況", "計劃後狀況"];
       const targetRows = data.計畫目標.map((item: any, index: number) => [
         `${index + 1}. ${safeText(item?.目標項目)}`,
@@ -373,7 +414,9 @@ export async function exportPlanToWordLocalStandard(
 
     // 創新型說明
     if (Array.isArray(data.創新型說明) && data.創新型說明.length > 0) {
-      docxRenderer.addArrayTitle("創新型說明");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、創新型說明`);
+      sectionIndex++;
       data.創新型說明.forEach((item: any, index: number) => {
         const title = item?.標題
           ? `${index + 1}. ${item.標題}`
@@ -388,7 +431,9 @@ export async function exportPlanToWordLocalStandard(
       Array.isArray(data.功能規格_服務模式) &&
       data.功能規格_服務模式.length > 0
     ) {
-      docxRenderer.addArrayTitle("功能規格/服務模式");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、功能規格/服務模式`);
+      sectionIndex++;
       const specHeaders = ["項目", "指標或規格", "功能與應用"];
       const specRows = data.功能規格_服務模式.map((item: any) => [
         safeText(item?.項目),
@@ -403,7 +448,11 @@ export async function exportPlanToWordLocalStandard(
       Array.isArray(data.主要關鍵技術或服務_零組件及其來源) &&
       data.主要關鍵技術或服務_零組件及其來源.length > 0
     ) {
-      docxRenderer.addArrayTitle("主要關鍵技術或服務、零組件及其來源");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(
+        `${chineseNum}、主要關鍵技術或服務、零組件及其來源`
+      );
+      sectionIndex++;
       const techHeaders = ["主要關鍵技術或服務項目", "技術來源", "執行方式"];
       const techRows = data.主要關鍵技術或服務_零組件及其來源.map(
         (item: any) => [
@@ -417,13 +466,17 @@ export async function exportPlanToWordLocalStandard(
 
     // 技術或服務應用範圍
     if (data.技術或服務應用範圍) {
-      docxRenderer.addArrayTitle("技術或服務應用範圍");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、技術或服務應用範圍`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.技術或服務應用範圍);
     }
 
     // 衍生產品或服務
     if (Array.isArray(data.衍生產品或服務) && data.衍生產品或服務.length > 0) {
-      docxRenderer.addArrayTitle("衍生產品或服務");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、衍生產品或服務`);
+      sectionIndex++;
       const derivedHeaders = ["衍生產品類型", "說明"];
       const derivedRows = data.衍生產品或服務.map((item: any) => [
         safeText(item?.衍生產品類型),
@@ -436,9 +489,13 @@ export async function exportPlanToWordLocalStandard(
   function renderScheduleAndCheckpoints(data: any) {
     docxRenderer.addSectionTitle("伍、計畫執行時程及查核點");
 
+    let sectionIndex = 0;
+
     // 執行步驟及方法
     if (Array.isArray(data.執行步驟及方法) && data.執行步驟及方法.length > 0) {
-      docxRenderer.addArrayTitle("執行步驟及方法");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、執行步驟及方法`);
+      sectionIndex++;
       const stepLabels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
       data.執行步驟及方法.forEach((step: any, stepIndex: number) => {
@@ -479,15 +536,17 @@ export async function exportPlanToWordLocalStandard(
       Array.isArray(data.技術及智慧財產權說明) &&
       data.技術及智慧財產權說明.length > 0
     ) {
-      docxRenderer.addArrayTitle("技術及智慧財產權說明");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、技術及智慧財產權說明`);
+      sectionIndex++;
 
       // 1. 技術及智慧財產權來源對象背景
-      docxRenderer.addArrayTitle("1.技術及智慧財產權來源對象背景：");
-      data.技術及智慧財產權說明.forEach((item: any) => {
+      docxRenderer.addArrayTitle(`1.技術及智慧財產權來源對象背景：`);
+      data.技術及智慧財產權說明.forEach((item: any, index: number) => {
         const 對象 = safeText(item?.對象);
         const 背景 = safeText(item?.背景);
         if (對象) {
-          docxRenderer.addArrayTitle(`${對象}：`);
+          docxRenderer.addArrayTitle(`（${index + 1}）${對象}：`);
           if (背景) {
             renderTextWithLineBreaks(背景);
           }
@@ -495,12 +554,12 @@ export async function exportPlanToWordLocalStandard(
       });
 
       // 2. 技術來源對象之技術及智慧財產權能力
-      docxRenderer.addArrayTitle("2.技術來源對象之技術及智慧財產權能力：");
-      data.技術及智慧財產權說明.forEach((item: any) => {
+      docxRenderer.addArrayTitle(`2.技術來源對象之技術及智慧財產權能力：`);
+      data.技術及智慧財產權說明.forEach((item: any, index: number) => {
         const 對象 = safeText(item?.對象);
         const 能力 = safeText(item?.能力);
         if (對象) {
-          docxRenderer.addArrayTitle(`${對象}：`);
+          docxRenderer.addArrayTitle(`（${index + 1}）${對象}：`);
           if (能力) {
             renderTextWithLineBreaks(能力);
           }
@@ -508,12 +567,12 @@ export async function exportPlanToWordLocalStandard(
       });
 
       // 3. 於計畫工作執行項目與執行方法
-      docxRenderer.addArrayTitle("3.於計畫工作執行項目與執行方法：");
-      data.技術及智慧財產權說明.forEach((item: any) => {
+      docxRenderer.addArrayTitle(`3.於計畫工作執行項目與執行方法：`);
+      data.技術及智慧財產權說明.forEach((item: any, index: number) => {
         const 對象 = safeText(item?.對象);
         const 執行方法 = safeText(item?.執行方法);
         if (對象) {
-          docxRenderer.addArrayTitle(`${對象}：`);
+          docxRenderer.addArrayTitle(`（${index + 1}）${對象}：`);
           if (執行方法) {
             renderTextWithLineBreaks(執行方法);
           }
@@ -525,10 +584,14 @@ export async function exportPlanToWordLocalStandard(
   function renderExpectedBenefits(data: any) {
     docxRenderer.addSectionTitle("陸、預期效益");
 
+    let sectionIndex = 0;
+
     // 行銷策略
     if (data.行銷策略) {
       const marketing = data.行銷策略;
-      docxRenderer.addArrayTitle("行銷策略");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、行銷策略`);
+      sectionIndex++;
 
       const marketingData: string[][] = [];
       if (marketing.產品)
@@ -548,7 +611,9 @@ export async function exportPlanToWordLocalStandard(
     // 預期效益
     if (data.預期效益) {
       const benefits = data.預期效益;
-      docxRenderer.addArrayTitle("預期效益");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、預期效益`);
+      sectionIndex++;
 
       const benefitRows: string[][] = [];
 
@@ -599,13 +664,19 @@ export async function exportPlanToWordLocalStandard(
   function renderIPAnalysis(data: any) {
     docxRenderer.addSectionTitle("柒、智財分析");
 
+    let sectionIndex = 0;
+
     if (data.是否涉及他人智慧財產權) {
-      docxRenderer.addArrayTitle("是否涉及他人智慧財產權");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、是否涉及他人智慧財產權`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.是否涉及他人智慧財產權);
     }
 
     if (data.是否已掌握關鍵智慧財產權) {
-      docxRenderer.addArrayTitle("是否已掌握關鍵智慧財產權");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、是否已掌握關鍵智慧財產權`);
+      sectionIndex++;
       renderTextWithLineBreaks(data.是否已掌握關鍵智慧財產權);
     }
   }
@@ -613,9 +684,13 @@ export async function exportPlanToWordLocalStandard(
   function renderCheckpointsSummary(data: any) {
     docxRenderer.addSectionTitle("捌、計畫執行查核點說明");
 
+    let sectionIndex = 0;
+
     // 預定進度表
     if (Array.isArray(data.執行步驟及方法) && data.執行步驟及方法.length > 0) {
-      docxRenderer.addArrayTitle("預定進度表");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、預定進度表`);
+      sectionIndex++;
 
       const stepLabels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
       const scheduleRows: string[][] = [];
@@ -652,7 +727,9 @@ export async function exportPlanToWordLocalStandard(
 
     // 預定查核點說明
     if (Array.isArray(data.執行步驟及方法) && data.執行步驟及方法.length > 0) {
-      docxRenderer.addArrayTitle("預定查核點說明");
+      const chineseNum = chineseNumbers[sectionIndex] || `${sectionIndex + 1}`;
+      docxRenderer.addArrayTitle(`${chineseNum}、預定查核點說明`);
+      sectionIndex++;
 
       const stepLabels = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
       const checkpointRows: string[][] = [];

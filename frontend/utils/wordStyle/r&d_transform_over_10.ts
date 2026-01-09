@@ -14,6 +14,7 @@ import {
 } from "docx";
 import type { ContentRenderer } from "../contentRenderer";
 import { DocxRenderer } from "../contentRenderer";
+import { chineseNumbers } from "../chineseNumbers";
 
 export async function exportPlanToWordRdTransformOver10(
   sections: { id: string; name: string; json_schema: any }[],
@@ -195,22 +196,22 @@ function renderTransformationMotivation(
   renderer.addSectionTitle("貳、升級轉型動機");
 
   if (data.升級轉型背景) {
-    renderer.addArrayTitle("升級轉型背景");
+    renderer.addArrayTitle("一、升級轉型背景");
     renderTextWithLineBreaks(data.升級轉型背景, renderer);
   }
 
   if (data.現況闡述) {
-    renderer.addArrayTitle("現況闡述");
+    renderer.addArrayTitle("二、現況闡述");
     renderTextWithLineBreaks(data.現況闡述, renderer);
   }
 
   if (data.改善方向與規劃) {
-    renderer.addArrayTitle("改善方向與規劃");
+    renderer.addArrayTitle("三、改善方向與規劃");
     renderTextWithLineBreaks(data.改善方向與規劃, renderer);
   }
 
   if (data.預期效益) {
-    renderer.addArrayTitle("預期效益");
+    renderer.addArrayTitle("四、預期效益");
     renderTextWithLineBreaks(data.預期效益, renderer);
   }
 }
@@ -237,7 +238,8 @@ function renderImplementationMethod(data: any, renderer: ContentRenderer<any>) {
       // 分項計劃標題 - 使用計劃名稱
       const planName =
         plan.分項計劃名 || `第${String.fromCharCode(64 + planIndex + 1)}項計畫`;
-      renderer.addArrayTitle(`${planName}- 分項計畫`);
+      const chineseNumber = chineseNumbers[planIndex] || `${planIndex + 1}`;
+      renderer.addArrayTitle(`${chineseNumber}、${planName}- 分項計畫`);
 
       const headers = ["工作項目", "推動作法", "權重", "查核項目/完成日期"];
       const rows: string[][] = [];
@@ -393,7 +395,7 @@ function renderExpectedBenefits(data: any, renderer: ContentRenderer<any>) {
   renderer.addArrayTitle("二、技術效益");
 
   // （一）低碳化
-  renderer.addArrayTitle("（一）低碳化");
+  renderer.addArrayTitle("1. 低碳化");
   const lowCarbonBenefits = [
     "減少碳排放量",
     "減少用電量",
@@ -423,7 +425,7 @@ function renderExpectedBenefits(data: any, renderer: ContentRenderer<any>) {
   }
 
   // （二）智慧化
-  renderer.addArrayTitle("（二）智慧化");
+  renderer.addArrayTitle("2. 智慧化");
   const smartBenefits = [
     "整體設備效率OEE",
     "提升生產良率",
