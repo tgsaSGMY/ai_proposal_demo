@@ -300,8 +300,8 @@
       v-model:is-open="isFileImportOpen"
       field-title="聊天輸入"
       field-description="上傳 PDF/TXT 後可自動擷取內容填入訊息"
-      :sub-field-label="fileImportSubLabel"
-      :sub-field-value="fileImportInitialValue"
+      :field-label="fileImportFieldLabel"
+      :field-value="fileImportInitialValue"
       @confirm="handleFileImportConfirm"
     />
 
@@ -406,7 +406,7 @@ const composerRef = ref(null);
 const isFileImportOpen = ref(false);
 const DEFAULT_FILE_IMPORT_LABEL = "聊天輸入";
 const fileImportInitialValue = ref("");
-const fileImportSubLabel = ref(DEFAULT_FILE_IMPORT_LABEL);
+const fileImportFieldLabel = ref(DEFAULT_FILE_IMPORT_LABEL);
 
 // Edit-field modal state
 const isEditFieldModalOpen = ref(false);
@@ -850,7 +850,7 @@ function getLastAssistantMessageLabel() {
 
 function openAttachmentModal() {
   fileImportInitialValue.value = draftMessage.value || "";
-  fileImportSubLabel.value = getLastAssistantMessageLabel();
+  fileImportFieldLabel.value = getLastAssistantMessageLabel();
   isFileImportOpen.value = true;
 }
 

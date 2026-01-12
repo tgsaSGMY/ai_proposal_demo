@@ -79,6 +79,7 @@ import {
   mergeIntoEmptyValues,
   getCompositeKeyFromLabel,
   getDynamicFieldLabels,
+  getDynamicFieldDefinitions,
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
 import { supabase } from "~/utils/supabaseClient";
@@ -188,7 +189,9 @@ const saveUpdatesToDb = async () => {
       plan_content: planContent.value,
     };
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
 
     const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
@@ -276,10 +279,12 @@ async function saveRejectedAnswersToDb(rejected) {
     const payload = {
       rejected_answer: rejectedAnswerData,
     };
-    
-    const { data: { session } } = await supabase.auth.getSession();
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
-    
+
     const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
       method: "PUT",
       headers: {
@@ -319,18 +324,14 @@ function buildFinalUserInputForGeneration(summaries = []) {
     .map((section) => {
       const filledFields = section.fields
         .map((field) => {
-          const filledSubFields = field.subFields
-            .filter((sub) => sub.value && sub.value.trim() !== "")
-            .map((sub) => `${sub.shortLabel}: ${sub.value}`);
-          if (filledSubFields.length === 0) {
+          const fieldValue = field.value?.trim();
+          if (!fieldValue) {
             return null;
           }
           const description = field.description
             ? `說明: ${field.description}\n`
             : "";
-          return `【${field.title}】\n${description}${filledSubFields.join(
-            "\n"
-          )}`;
+          return `【${field.title}】\n${description}${fieldValue}`;
         })
         .filter((item) => Boolean(item));
 
@@ -445,14 +446,20 @@ async function handleGenerateUserInput() {
     }
     // 構建動態字段當前值（用於 reverse 模式）
     const currentDynamicFields = {};
+    const labelByCompositeKey = new Map(
+      getDynamicFieldDefinitions().map((definition) => [
+        definition.compositeKey,
+        definition.label,
+      ])
+    );
     const sections = buildDynamicSections(dynamicFieldValues.value);
     sections.forEach((section) => {
       section.fields.forEach((field) => {
-        field.subFields.forEach((subField) => {
-          if (subField.value && subField.value.trim() !== "") {
-            currentDynamicFields[subField.label] = subField.value;
-          }
-        });
+        if (field.value && field.value.trim() !== "") {
+          const label =
+            labelByCompositeKey.get(field.compositeKey) || field.title;
+          currentDynamicFields[label] = field.value;
+        }
       });
     });
 
@@ -511,41 +518,18 @@ async function handleGenerateUserInput() {
           if (!sectionValue || typeof sectionValue !== "object") return;
           Object.entries(sectionValue).forEach(
             ([propertyKey, propertyValue]) => {
-              if (!propertyValue || typeof propertyValue !== "object") {
-                const fallbackKey = makeCompositeKey(
-                  sectionId,
-                  propertyKey,
-                  "reply"
-                );
-                if (fallbackKey in nextValues) {
-                  const normalized =
-                    typeof propertyValue === "string"
-                      ? propertyValue
-                      : propertyValue != null
-                      ? JSON.stringify(propertyValue)
-                      : "";
-                  nextValues[fallbackKey] = normalized;
-                  updated = true;
-                }
+              const compositeKey = makeCompositeKey(sectionId, propertyKey);
+              if (!(compositeKey in nextValues)) {
                 return;
               }
-              Object.entries(propertyValue).forEach(([subKey, subValue]) => {
-                const compositeKey = makeCompositeKey(
-                  sectionId,
-                  propertyKey,
-                  subKey
-                );
-                if (compositeKey in nextValues) {
-                  const normalized =
-                    typeof subValue === "string"
-                      ? subValue
-                      : subValue != null
-                      ? JSON.stringify(subValue)
-                      : "";
-                  nextValues[compositeKey] = normalized;
-                  updated = true;
-                }
-              });
+              const normalized =
+                typeof propertyValue === "string"
+                  ? propertyValue
+                  : propertyValue != null
+                  ? JSON.stringify(propertyValue)
+                  : "";
+              nextValues[compositeKey] = normalized;
+              updated = true;
             }
           );
         });

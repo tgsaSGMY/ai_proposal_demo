@@ -72,10 +72,8 @@
             <span
               class="text-xs text-gray-400"
               v-if="
-                section.fields.some((field) =>
-                  field.subFields.some(
-                    (sub) => sub.value && sub.value.trim() !== ''
-                  )
+                section.fields.some(
+                  (field) => field.value && field.value.trim() !== ''
                 )
               "
             >
@@ -98,7 +96,7 @@
                   {{ field.title }}
                 </span>
                 <span class="text-xs text-gray-500">
-                  {{ computeFieldStatus(field.subFields) }}
+                  {{ computeFieldStatus(field.value) }}
                 </span>
               </div>
               <svg
@@ -135,27 +133,18 @@
                   {{ field.description }}
                 </p>
                 <div
-                  v-for="subField in field.subFields"
-                  :key="subField.id"
                   class="flex flex-col gap-2 rounded-lg border border-transparent p-2 transition hover:border-rose-100"
                 >
                   <div class="flex items-center justify-between gap-3">
-                    <label
-                      :for="subField.id"
-                      class="text-xs sm:text-sm font-semibold text-gray-600"
+                    <span class="text-xs sm:text-sm font-semibold text-gray-600"
+                      >填寫內容</span
                     >
-                      {{ subField.shortLabel || subField.label || field.title }}
-                    </label>
                     <div class="flex items-center gap-2">
                       <button
                         type="button"
                         class="text-[11px] sm:text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                         @click.stop="
-                          generateFieldWithAI(
-                            section.sectionId,
-                            field,
-                            subField
-                          )
+                          generateFieldWithAI(section.sectionId, field)
                         "
                         :disabled="isGeneratingField"
                       >
@@ -201,11 +190,7 @@
                         type="button"
                         class="text-[11px] sm:text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1"
                         @click.stop="
-                          openFileImportModal(
-                            section.sectionId,
-                            field,
-                            subField
-                          )
+                          openFileImportModal(section.sectionId, field)
                         "
                       >
                         <svg
@@ -227,17 +212,16 @@
                     </div>
                   </div>
                   <textarea
-                    :id="subField.id"
-                    :value="subField.value"
+                    :value="field.value"
+                    :placeholder="field.placeholder"
                     @input="
                       updateDynamicValue(
                         section.sectionId,
                         field.propertyKey,
-                        subField.key,
                         $event.target.value
                       )
                     "
-                    rows="3"
+                    rows="4"
                     class="w-full rounded-lg border border-gray-300 shadow-sm focus:border-rose-400 focus:ring-2 focus:ring-rose-200 transition resize-y p-2 text-sm sm:text-base"
                   ></textarea>
                 </div>
@@ -283,8 +267,8 @@
     v-model:is-open="fileImportState.isOpen"
     :field-title="fileImportState.fieldTitle"
     :field-description="fileImportState.fieldDescription"
-    :sub-field-label="fileImportState.subFieldLabel"
-    :sub-field-value="fileImportState.currentValue"
+    :field-label="fileImportState.fieldLabel"
+    :field-value="fileImportState.currentValue"
     @confirm="handleFileImportConfirm"
   />
 </template>
@@ -358,10 +342,9 @@ const createFileImportState = () => ({
   isOpen: false,
   sectionId: "",
   propertyKey: "",
-  subFieldKey: "",
   fieldTitle: "",
   fieldDescription: "",
-  subFieldLabel: "",
+  fieldLabel: "",
   currentValue: "",
 });
 
@@ -468,8 +451,8 @@ watch(
   }
 );
 
-function updateDynamicValue(sectionId, propertyKey, subFieldKey, value) {
-  const key = makeCompositeKey(sectionId, propertyKey, subFieldKey);
+function updateDynamicValue(sectionId, propertyKey, value) {
+  const key = makeCompositeKey(sectionId, propertyKey);
   internalDynamicValues.value = {
     ...internalDynamicValues.value,
     [key]: value,
@@ -496,14 +479,11 @@ function isFieldExpanded(sectionId, propertyKey) {
   return expandedFieldIds.value.has(fieldPanelKey(sectionId, propertyKey));
 }
 
-function computeFieldStatus(subFields) {
-  const filled = subFields.filter(
-    (sub) => sub.value && sub.value.trim() !== ""
-  ).length;
-  if (filled === 0) {
-    return "可選填";
+function computeFieldStatus(value) {
+  if (value && value.trim() !== "") {
+    return "已填寫";
   }
-  return `${filled}/${subFields.length} 已填寫`;
+  return "可選填";
 }
 
 const emitGeneratePlan = () => {
@@ -521,31 +501,25 @@ function ensureFieldExpanded(sectionId, propertyKey) {
   expandedFieldIds.value = next;
 }
 
-function openFileImportModal(sectionId, field, subField) {
+function openFileImportModal(sectionId, field) {
   fileImportState.value = {
     isOpen: true,
     sectionId,
     propertyKey: field.propertyKey,
-    subFieldKey: subField.key,
     fieldTitle: field.title,
     fieldDescription: field.description || "",
-    subFieldLabel: subField.shortLabel || subField.label || field.title,
-    currentValue: subField.value || "",
+    fieldLabel: field.title,
+    currentValue: field.value || "",
   };
 }
 
 function handleFileImportConfirm(newValue) {
   const state = fileImportState.value;
-  if (!state.sectionId || !state.propertyKey || !state.subFieldKey) {
+  if (!state.sectionId || !state.propertyKey) {
     fileImportState.value = createFileImportState();
     return;
   }
-  updateDynamicValue(
-    state.sectionId,
-    state.propertyKey,
-    state.subFieldKey,
-    newValue
-  );
+  updateDynamicValue(state.sectionId, state.propertyKey, newValue);
   ensureFieldExpanded(state.sectionId, state.propertyKey);
   notifySuccess("欄位內容已透過檔案匯入更新。");
   fileImportState.value = createFileImportState();
@@ -560,7 +534,7 @@ watch(
   }
 );
 
-async function generateFieldWithAI(sectionId, field, subField) {
+async function generateFieldWithAI(sectionId, field) {
   if (isGeneratingField.value) return;
 
   isGeneratingField.value = true;
@@ -570,11 +544,9 @@ async function generateFieldWithAI(sectionId, field, subField) {
     const sections = buildDynamicSections(internalDynamicValues.value);
     sections.forEach((section) => {
       section.fields.forEach((f) => {
-        f.subFields.forEach((sub) => {
-          if (sub.value && sub.value.trim() !== "") {
-            filledFields[sub.label || f.title] = sub.value;
-          }
-        });
+        if (f.value && f.value.trim() !== "") {
+          filledFields[`${section.sectionName} · ${f.title}`] = f.value;
+        }
       });
     });
 
@@ -585,8 +557,8 @@ async function generateFieldWithAI(sectionId, field, subField) {
       body: JSON.stringify({
         field_title: field.title,
         field_description: field.description || "",
-        subfield_label: subField.shortLabel || subField.label || field.title,
-        current_value: subField.value || "",
+        subfield_label: field.title,
+        current_value: field.value || "",
         filled_fields: filledFields,
         plan_name: props.projectTitle || "",
         plan_summary: props.projectSummary || "",
@@ -605,12 +577,7 @@ async function generateFieldWithAI(sectionId, field, subField) {
 
     if (generatedContent.trim()) {
       // 更新欄位內容
-      updateDynamicValue(
-        sectionId,
-        field.propertyKey,
-        subField.key,
-        generatedContent
-      );
+      updateDynamicValue(sectionId, field.propertyKey, generatedContent);
       ensureFieldExpanded(sectionId, field.propertyKey);
       notifySuccess("AI 已為欄位填寫內容，請檢查並編輯。");
     } else {

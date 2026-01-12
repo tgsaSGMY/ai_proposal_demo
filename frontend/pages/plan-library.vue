@@ -297,6 +297,10 @@ import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useInternalCheck } from "~/composables/useInternalCheck";
+import {
+  getDynamicFieldLabels,
+  ensureDynamicSchemaLoaded,
+} from "~/utils/dynamicSchema";
 import { supabase } from "~/utils/supabaseClient";
 
 interface Accent {
@@ -441,20 +445,22 @@ function decorateProject(
   const accent = accentOverride || accentPalette[index % accentPalette.length]!;
 
   let completeness = 0;
+  const totalFields = getDynamicFieldLabels().length;
 
   if (record.mode === "generator") {
-    // 生成模式：计算 stored_answer.user_input.dynamic_fields 中有 value 的数量 / 24
+    // 生成模式：计算 stored_answer.user_input.dynamic_fields 中有 value 的数量 / totalFields
     if (record.stored_answer?.user_input?.dynamic_fields) {
       const dynamicFields = record.stored_answer.user_input.dynamic_fields;
       const filledCount = Object.values(dynamicFields).filter(
         (field: any) => field
       ).length;
-      completeness = Math.round((filledCount / 16) * 100);
+      completeness =
+        totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
     } else {
       completeness = 0;
     }
   } else {
-    // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / 24
+    // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / totalFields
     if (record.stored_answer && record.stored_answer.chat_answers) {
       const allKeys = Object.keys(record.stored_answer.chat_answers);
       const filledCount = new Set(
@@ -465,7 +471,8 @@ function decorateProject(
           )
           .map((key) => key.split("::").slice(0, 2).join("::"))
       ).size;
-      completeness = Math.round((filledCount / 16) * 100);
+      completeness =
+        totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
     } else {
       completeness = 0;
     }
@@ -497,6 +504,11 @@ async function fetchProjects() {
   isLoadingProjects.value = true;
   loadError.value = "";
   try {
+    // Ensure dynamic schema is loaded before processing projects
+    await ensureDynamicSchemaLoaded({
+      apiBaseUrl: config.public.apiBaseUrl,
+    });
+
     const {
       data: { session },
     } = await supabase.auth.getSession();

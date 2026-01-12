@@ -149,10 +149,8 @@
             <span
               class="text-xs text-gray-400"
               v-if="
-                section.fields.some((field) =>
-                  field.subFields.some(
-                    (sub) => sub.value && sub.value.trim() !== ''
-                  )
+                section.fields.some(
+                  (field) => field.value && field.value.trim() !== ''
                 )
               "
             >
@@ -175,7 +173,7 @@
                   {{ field.title }}
                 </span>
                 <span class="text-xs text-gray-500">
-                  {{ computeFieldStatus(field.subFields) }}
+                  {{ computeFieldStatus(field.value) }}
                 </span>
               </div>
               <svg
@@ -211,29 +209,21 @@
                 >
                   {{ field.description }}
                 </p>
-                <div
-                  v-for="subField in field.subFields"
-                  :key="subField.id"
-                  class="flex flex-col gap-1"
-                >
-                  <label
-                    :for="subField.id"
-                    class="text-xs sm:text-sm font-medium text-gray-600"
-                  >
-                    {{ subField.shortLabel }}
+                <div class="flex flex-col gap-1">
+                  <label class="text-xs sm:text-sm font-medium text-gray-600">
+                    詳細內容
                   </label>
                   <textarea
-                    :id="subField.id"
-                    :value="subField.value"
+                    :value="field.value"
+                    :placeholder="field.placeholder"
                     @input="
                       updateDynamicValue(
                         section.sectionId,
                         field.propertyKey,
-                        subField.key,
                         $event.target.value
                       )
                     "
-                    rows="3"
+                    rows="4"
                     class="w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition resize-y p-2 text-sm sm:text-base"
                   ></textarea>
                 </div>
@@ -421,29 +411,21 @@ const dynamicSections = computed(() =>
 const referenceFieldOptions = computed(() => {
   const sections = dynamicSections.value || [];
   return sections.flatMap((section) =>
-    section.fields.flatMap((field) =>
-      field.subFields
-        .filter((sub) => !sub.value || sub.value.trim() === "")
-        .map((sub) => ({
-          section_id: section.sectionId,
-          property_key: field.propertyKey,
-          sub_field_key: sub.key,
-          label: `${section.sectionName} · ${field.title}${
-            sub.shortLabel ? ` (${sub.shortLabel})` : ""
-          }`,
-        }))
-    )
+    section.fields
+      .filter((field) => !field.value || field.value.trim() === "")
+      .map((field) => ({
+        section_id: section.sectionId,
+        property_key: field.propertyKey,
+        label: `${section.sectionName} · ${field.title}`,
+      }))
   );
 });
 
 const analysisTargets = computed(() =>
-  referenceFieldOptions.value.map(
-    ({ section_id, property_key, sub_field_key }) => ({
-      section_id,
-      property_key,
-      sub_field_key,
-    })
-  )
+  referenceFieldOptions.value.map(({ section_id, property_key }) => ({
+    section_id,
+    property_key,
+  }))
 );
 
 const excelReplyTargetMap = computed(() =>
@@ -485,8 +467,8 @@ const onGrantChange = () => {
   }
 };
 
-function updateDynamicValue(sectionId, propertyKey, subFieldKey, value) {
-  const key = makeCompositeKey(sectionId, propertyKey, subFieldKey);
+function updateDynamicValue(sectionId, propertyKey, value) {
+  const key = makeCompositeKey(sectionId, propertyKey);
   internalDynamicValues.value = {
     ...internalDynamicValues.value,
     [key]: value,
@@ -513,14 +495,11 @@ function isFieldExpanded(sectionId, propertyKey) {
   return expandedFieldIds.value.has(fieldPanelKey(sectionId, propertyKey));
 }
 
-function computeFieldStatus(subFields) {
-  const filled = subFields.filter(
-    (sub) => sub.value && sub.value.trim() !== ""
-  ).length;
-  if (filled === 0) {
-    return "可選填";
+function computeFieldStatus(value) {
+  if (value && value.trim() !== "") {
+    return "已填寫";
   }
-  return `${filled}/${subFields.length} 已填寫`;
+  return "可選填";
 }
 
 const emitGeneratePlan = () => {
@@ -631,8 +610,8 @@ async function handleExcelFileChange(event) {
       rows,
       dynamicSections: dynamicSections.value,
       replyTargetMap: excelReplyTargetMap.value,
-      onFill: (sectionId, propertyKey, subFieldKey, value) => {
-        updateDynamicValue(sectionId, propertyKey, subFieldKey, value);
+      onFill: (sectionId, propertyKey, value) => {
+        updateDynamicValue(sectionId, propertyKey, value);
         ensureFieldExpanded(sectionId, propertyKey);
       },
     });
@@ -696,8 +675,8 @@ function applyAutoFillEntries(autoFillItems = []) {
       return;
     }
 
-    const [sectionId, propertyKey, subFieldKey] = compositeKey.split("::");
-    if (!sectionId || !propertyKey || !subFieldKey) {
+    const [sectionId, propertyKey] = compositeKey.split("::");
+    if (!sectionId || !propertyKey) {
       return;
     }
 
@@ -711,7 +690,7 @@ function applyAutoFillEntries(autoFillItems = []) {
       return;
     }
 
-    updateDynamicValue(sectionId, propertyKey, subFieldKey, content);
+    updateDynamicValue(sectionId, propertyKey, content);
     ensureFieldExpanded(sectionId, propertyKey);
 
     applied.push({
@@ -763,10 +742,9 @@ async function handleAnalyzeLink(index) {
       : referenceFieldOptions.value;
 
     const contextTargets = targetFields.length
-      ? targetFields.map(({ section_id, property_key, sub_field_key }) => ({
+      ? targetFields.map(({ section_id, property_key }) => ({
           section_id,
           property_key,
-          sub_field_key,
         }))
       : analysisTargets.value;
 

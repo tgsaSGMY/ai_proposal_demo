@@ -48,11 +48,11 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import PlanInputPanel from "~/components/editor/generator/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/editor/generator/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
-import type { DynamicSubFieldKey } from "~/utils/dynamicSchema";
 import {
   buildDynamicSections,
   getCompositeKeyFromLabel,
   getDynamicFieldLabels,
+  getDynamicFieldDefinitions,
   makeCompositeKey,
   mergeIntoEmptyValues,
 } from "~/utils/dynamicSchema";
@@ -426,14 +426,20 @@ async function handleGeneratorUserInput() {
     }
 
     const currentDynamicFields: Record<string, string> = {};
+    const labelByCompositeKey = new Map(
+      getDynamicFieldDefinitions().map((definition) => [
+        definition.compositeKey,
+        definition.label,
+      ])
+    );
     const sections = buildDynamicSections(dynamicFieldValues.value);
     sections.forEach((section) => {
       section.fields.forEach((field) => {
-        field.subFields.forEach((subField) => {
-          if (subField.value && subField.value.trim() !== "") {
-            currentDynamicFields[subField.label] = subField.value;
-          }
-        });
+        if (field.value && field.value.trim() !== "") {
+          const label =
+            labelByCompositeKey.get(field.compositeKey) || field.title;
+          currentDynamicFields[label] = field.value;
+        }
       });
     });
 
@@ -492,41 +498,18 @@ async function handleGeneratorUserInput() {
           if (!sectionValue || typeof sectionValue !== "object") return;
           Object.entries(sectionValue).forEach(
             ([propertyKey, propertyValue]) => {
-              if (!propertyValue || typeof propertyValue !== "object") {
-                const fallbackKey = makeCompositeKey(
-                  sectionId,
-                  propertyKey,
-                  "reply"
-                );
-                if (fallbackKey in nextValues) {
-                  const normalized =
-                    typeof propertyValue === "string"
-                      ? propertyValue
-                      : propertyValue != null
-                      ? JSON.stringify(propertyValue)
-                      : "";
-                  nextValues[fallbackKey] = normalized;
-                  updated = true;
-                }
+              const compositeKey = makeCompositeKey(sectionId, propertyKey);
+              if (!(compositeKey in nextValues)) {
                 return;
               }
-              Object.entries(propertyValue).forEach(([subKey, subValue]) => {
-                const compositeKey = makeCompositeKey(
-                  sectionId,
-                  propertyKey,
-                  subKey as DynamicSubFieldKey
-                );
-                if (compositeKey in nextValues) {
-                  const normalized =
-                    typeof subValue === "string"
-                      ? subValue
-                      : subValue != null
-                      ? JSON.stringify(subValue)
-                      : "";
-                  nextValues[compositeKey] = normalized;
-                  updated = true;
-                }
-              });
+              const normalized =
+                typeof propertyValue === "string"
+                  ? propertyValue
+                  : propertyValue != null
+                  ? JSON.stringify(propertyValue)
+                  : "";
+              nextValues[compositeKey] = normalized;
+              updated = true;
             }
           );
         });

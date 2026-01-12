@@ -6,19 +6,13 @@ export interface ExcelImportRow extends Record<string, unknown> {}
 export interface ExcelReplyTarget {
   sectionId: string;
   propertyKey: string;
-  subFieldKey: string;
 }
 
 export interface ExcelApplyOptions {
   rows: ExcelImportRow[];
   dynamicSections: DynamicSectionViewModel[];
   replyTargetMap?: Map<string, ExcelReplyTarget>;
-  onFill: (
-    sectionId: string,
-    propertyKey: string,
-    subFieldKey: string,
-    value: string
-  ) => void;
+  onFill: (sectionId: string, propertyKey: string, value: string) => void;
 }
 
 export interface ExcelApplyResult {
@@ -54,15 +48,10 @@ export function buildExcelReplyTargetMap(
   sections.forEach((section) => {
     const normalizedSection = normalizeExcelText(section.sectionName);
     section.fields.forEach((field) => {
-      const replyField = field.subFields.find((sub) => sub.key === "reply");
-      if (!replyField) {
-        return;
-      }
       const normalizedItem = normalizeExcelText(field.title);
       const target: ExcelReplyTarget = {
         sectionId: section.sectionId,
         propertyKey: field.propertyKey,
-        subFieldKey: replyField.key,
       };
       buildExcelItemVariants(normalizedItem).forEach((variant) => {
         registerExcelLookup(map, normalizedSection, variant, target);
@@ -170,7 +159,7 @@ export function applyExcelRows({
       return;
     }
 
-    onFill(target.sectionId, target.propertyKey, target.subFieldKey, answer);
+    onFill(target.sectionId, target.propertyKey, answer);
     appliedCount += 1;
   });
 

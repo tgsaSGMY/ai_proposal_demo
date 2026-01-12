@@ -346,7 +346,6 @@ import {
   buildDynamicSections,
   createEmptyDynamicValues,
   makeCompositeKey,
-  type DynamicSubFieldKey,
 } from "~/utils/dynamicSchema";
 
 definePageMeta({
@@ -658,16 +657,12 @@ async function runAttachmentAutofill(
   processAutoFillResults(
     filledContent,
     sectionsView,
-    (sectionId, propertyKey, subFieldKey, value) => {
+    (sectionId, propertyKey, value) => {
       const normalized = (value || "").trim();
       if (!normalized) {
         return;
       }
-      const key = makeCompositeKey(
-        sectionId,
-        propertyKey,
-        subFieldKey as DynamicSubFieldKey
-      );
+      const key = makeCompositeKey(sectionId, propertyKey);
       accumulator[key] = normalized;
     },
     () => {}

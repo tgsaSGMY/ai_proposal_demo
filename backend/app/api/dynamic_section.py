@@ -53,8 +53,7 @@ class FieldCreateUpdate(BaseModel):
 @router.get("", response_model=List[DynamicSectionModel], summary="取得指定 schema 的所有章節與欄位")
 async def get_dynamic_schema(
 	schema_id: str = "default",
-	supabase_service: SupabaseService = Depends(get_supabase_service),
-	_=Depends(verify_internal_user),
+	supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
 	"""回傳指定 schema 的章節列表，包含底下的所有欄位。
 

@@ -153,10 +153,10 @@
             >
               <div>
                 <p class="text-xs font-semibold text-slate-500 uppercase">
-                  子欄位標籤
+                  欄位標籤
                 </p>
                 <p class="text-base font-semibold text-slate-900">
-                  {{ subFieldLabel || fieldTitle }}
+                  {{ fieldLabel || fieldTitle }}
                 </p>
               </div>
               <div>
@@ -166,7 +166,7 @@
                 <p
                   class="mt-1 rounded-xl bg-slate-100/70 p-3 text-sm text-slate-700 whitespace-pre-wrap min-h-[64px]"
                 >
-                  {{ subFieldValue || "目前尚未填寫" }}
+                  {{ fieldValue || "目前尚未填寫" }}
                 </p>
               </div>
             </div>
@@ -240,8 +240,8 @@ import { useNotifications } from "~/composables/useNotifications";
 const props = defineProps({
   fieldTitle: { type: String, default: "" },
   fieldDescription: { type: String, default: "" },
-  subFieldLabel: { type: String, default: "" },
-  subFieldValue: { type: String, default: "" },
+  fieldLabel: { type: String, default: "" },
+  fieldValue: { type: String, default: "" },
 });
 
 const emit = defineEmits<{ (e: "confirm", value: string): void }>();
@@ -269,7 +269,7 @@ watch(
   () => isOpenModel.value,
   (isOpen) => {
     if (isOpen) {
-      editableValue.value = props.subFieldValue || "";
+      editableValue.value = props.fieldValue || "";
       errorMessage.value = "";
     } else {
       resetState();
@@ -278,7 +278,7 @@ watch(
 );
 
 watch(
-  () => props.subFieldValue,
+  () => props.fieldValue,
   (val) => {
     if (isOpenModel.value && !analysisResult.value) {
       editableValue.value = val || "";
@@ -368,7 +368,7 @@ function addFiles(files: File[]) {
 
   selectedFiles.value.push(...newFiles);
   analysisResult.value = null;
-  editableValue.value = props.subFieldValue || "";
+  editableValue.value = props.fieldValue || "";
   errorMessage.value = "";
 }
 
@@ -396,8 +396,8 @@ async function analyzeFile() {
   });
   formData.append("field_title", props.fieldTitle);
   formData.append("field_description", props.fieldDescription || "");
-  formData.append("subfield_label", props.subFieldLabel || "");
-  formData.append("current_value", props.subFieldValue || "");
+  formData.append("subfield_label", props.fieldLabel || "");
+  formData.append("current_value", props.fieldValue || "");
 
   try {
     const response = await fetch(`${API_BASE_URL}/field_file_analysis`, {
@@ -413,7 +413,7 @@ async function analyzeFile() {
     }
 
     analysisResult.value = {
-      enhancedValue: payload?.value || props.subFieldValue || "",
+      enhancedValue: payload?.value || props.fieldValue || "",
     };
     editableValue.value = analysisResult.value.enhancedValue;
     notifySuccess(

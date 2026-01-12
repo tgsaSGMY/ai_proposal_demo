@@ -65,10 +65,6 @@ export async function callAutoFillApi(
 export function buildSectionSchema(section: {
   fields: Array<{
     propertyKey: string;
-    subFields: Array<{
-      key: string;
-      label: string;
-    }>;
   }>;
 }): Record<string, any> {
   const schema: {
@@ -82,19 +78,11 @@ export function buildSectionSchema(section: {
   };
 
   section.fields.forEach((field) => {
-    const subFieldProperties: Record<string, any> = {};
-    field.subFields.forEach((subField) => {
-      subFieldProperties[subField.key] = {
-        type: "string",
-        description: subField.label,
-      };
-    });
-
     schema.properties[field.propertyKey] = {
-      type: "object",
-      properties: subFieldProperties,
-      required: field.subFields.map((s) => s.key),
+      type: "string",
+      description: field.propertyKey,
     };
+    schema.required.push(field.propertyKey);
   });
 
   return schema;
@@ -113,15 +101,11 @@ export function processAutoFillResults(
     sectionId: string;
     fields: Array<{
       propertyKey: string;
-      subFields: Array<{
-        key: string;
-      }>;
     }>;
   }>,
   updateDynamicValue: (
     sectionId: string,
     propertyKey: string,
-    subFieldKey: string,
     value: string
   ) => void,
   ensureFieldExpanded: (sectionId: string, propertyKey: string) => void
@@ -139,23 +123,34 @@ export function processAutoFillResults(
 
     // 遍歷每個欄位並填入值
     section.fields.forEach((field) => {
-      const fieldContent = sectionContent.content[field.propertyKey];
-      if (!fieldContent || typeof fieldContent !== "object") {
+      const rawFieldContent = sectionContent.content[field.propertyKey];
+      if (rawFieldContent === undefined || rawFieldContent === null) {
         return;
       }
 
-      field.subFields.forEach((subField) => {
-        const value = fieldContent[subField.key];
-        if (value && typeof value === "string" && value.trim()) {
-          updateDynamicValue(
-            section.sectionId,
-            field.propertyKey,
-            subField.key,
-            value.trim()
+      let value: string | null = null;
+      if (typeof rawFieldContent === "string") {
+        value = rawFieldContent;
+      } else if (
+        typeof rawFieldContent === "object" &&
+        rawFieldContent !== null
+      ) {
+        if (typeof rawFieldContent.reply === "string") {
+          value = rawFieldContent.reply;
+        } else {
+          const firstStringEntry = Object.values(rawFieldContent).find(
+            (entry) => typeof entry === "string" && entry.trim() !== ""
           );
-          ensureFieldExpanded(section.sectionId, field.propertyKey);
+          if (typeof firstStringEntry === "string") {
+            value = firstStringEntry;
+          }
         }
-      });
+      }
+
+      if (value && value.trim() !== "") {
+        updateDynamicValue(section.sectionId, field.propertyKey, value.trim());
+        ensureFieldExpanded(section.sectionId, field.propertyKey);
+      }
     });
   });
 }

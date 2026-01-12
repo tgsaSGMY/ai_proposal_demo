@@ -3,6 +3,7 @@ import type { Ref, ComputedRef } from "vue";
 import {
   buildDynamicSections,
   createEmptyDynamicValues,
+  ensureDynamicSchemaLoaded,
   type DynamicValueMap,
 } from "~/utils/dynamicSchema";
 
@@ -88,6 +89,9 @@ export function usePlanGenerator() {
   // --- Methods ---
   const fetchAllConfigs = async (): Promise<void> => {
     try {
+      await ensureDynamicSchemaLoaded({
+        apiBaseUrl: config.public.apiBaseUrl,
+      });
       const response = await fetch(`${API_BASE_URL}/config`);
       if (!response.ok) throw new Error("Network response was not ok");
       allConfigs.value = await response.json();
@@ -106,18 +110,14 @@ export function usePlanGenerator() {
       .map((section) => {
         const filledFields = section.fields
           .map((field) => {
-            const filledSubFields = field.subFields
-              .filter((sub) => sub.value && sub.value.trim() !== "")
-              .map((sub) => `${sub.shortLabel}: ${sub.value}`);
-            if (filledSubFields.length === 0) {
+            const value = field.value?.trim();
+            if (!value) {
               return null;
             }
             const description = field.description
               ? `說明: ${field.description}\n`
               : "";
-            return `【${field.title}】\n${description}${filledSubFields.join(
-              "\n"
-            )}`;
+            return `【${field.title}】\n${description}${value}`;
           })
           .filter((item): item is string => Boolean(item));
 
