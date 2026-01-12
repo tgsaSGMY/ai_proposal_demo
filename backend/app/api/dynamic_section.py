@@ -1,0 +1,391 @@
+import logging
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.services.supabase_service import SupabaseService
+from .dependencies import get_supabase_service, verify_internal_user
+
+
+logger = logging.getLogger(__name__)
+
+
+router = APIRouter(
+	prefix="/api/dynamic-sections",
+	tags=["Dynamic Sections"],
+)
+
+
+class DynamicFieldModel(BaseModel):
+	id: str
+	section_id: str
+	field_key: str
+	title: str
+	description: Optional[str] = ""
+	order: int
+
+
+class DynamicSectionModel(BaseModel):
+	id: str
+	schema_id: str
+	section_key: str
+	title: str
+	order: int
+	fields: List[DynamicFieldModel] = Field(default_factory=list)
+
+
+class SectionCreateUpdate(BaseModel):
+	schema_id: str = Field("default", description="Schema identifier, default is 'default'.")
+	section_key: str = Field(..., description="Unique key for this section within a schema.")
+	title: str = Field(..., description="Display title of the section.")
+	order: int = Field(..., description="Display order of the section.")
+
+
+class FieldCreateUpdate(BaseModel):
+	section_id: str = Field(..., description="Parent section id.")
+	field_key: str = Field(..., description="Unique key of the field within a section.")
+	title: str = Field(..., description="Display title of the field.")
+	description: Optional[str] = Field("", description="Long description of the field.")
+	order: int = Field(..., description="Display order of the field within a section.")
+
+
+@router.get("", response_model=List[DynamicSectionModel], summary="取得指定 schema 的所有章節與欄位")
+async def get_dynamic_schema(
+	schema_id: str = "default",
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	"""回傳指定 schema 的章節列表，包含底下的所有欄位。
+
+	這裡直接使用 SupabaseService 上的 client（使用 service key），
+	繞過 RLS 方便後台管理，但仍透過 verify_internal_user 限制為內部人員。
+	"""
+
+	try:
+		sections_resp = (
+			supabase_service.client
+			.from_("dynamic_sections")
+			.select("*")
+			.eq("schema_id", schema_id)
+			.order("order", desc=False)
+			.execute()
+		)
+
+		sections_data = sections_resp.data or []
+		if not sections_data:
+			return []
+
+		section_ids = [s["id"] for s in sections_data]
+
+		fields_resp = (
+			supabase_service.client
+			.from_("dynamic_fields")
+			.select("*")
+			.in_("section_id", section_ids)
+			.order("order", desc=False)
+			.execute()
+		)
+
+		fields_data = fields_resp.data or []
+		fields_by_section: dict[str, List[DynamicFieldModel]] = {}
+		for f in fields_data:
+			model = DynamicFieldModel(
+				id=f["id"],
+				section_id=f["section_id"],
+				field_key=f["field_key"],
+				title=f["title"],
+				description=f.get("description") or "",
+				order=f["order"],
+			)
+			fields_by_section.setdefault(model.section_id, []).append(model)
+
+		result: List[DynamicSectionModel] = []
+		for s in sections_data:
+			section_fields = sorted(
+				fields_by_section.get(s["id"], []), key=lambda f: f.order
+			)
+			result.append(
+				DynamicSectionModel(
+					id=s["id"],
+					schema_id=s["schema_id"],
+					section_key=s["section_key"],
+					title=s["title"],
+					order=s["order"],
+					fields=section_fields,
+				)
+			)
+
+		return result
+
+	except Exception as e:
+		logger.error("Failed to fetch dynamic schema: %s", e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to fetch dynamic schema")
+
+
+@router.post(
+	"/sections",
+	response_model=DynamicSectionModel,
+	status_code=status.HTTP_201_CREATED,
+	summary="新增一個章節",
+)
+async def create_section(
+	payload: SectionCreateUpdate,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		insert_resp = (
+			supabase_service.client
+			.from_("dynamic_sections")
+			.insert(
+				{
+					"schema_id": payload.schema_id,
+					"section_key": payload.section_key,
+					"title": payload.title,
+					"order": payload.order,
+				}
+			)
+			.execute()
+		)
+
+		if not insert_resp.data:
+			raise HTTPException(status_code=500, detail="Failed to create section")
+
+		row = insert_resp.data[0]
+		return DynamicSectionModel(
+			id=row["id"],
+			schema_id=row["schema_id"],
+			section_key=row["section_key"],
+			title=row["title"],
+			order=row["order"],
+			fields=[],
+		)
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to create section: %s", e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to create section")
+
+
+@router.put(
+	"/sections/{section_id}",
+	response_model=DynamicSectionModel,
+	summary="更新一個章節",
+)
+async def update_section(
+	section_id: str,
+	payload: SectionCreateUpdate,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		update_resp = (
+			supabase_service.client
+			.from_("dynamic_sections")
+			.update(
+				{
+					"schema_id": payload.schema_id,
+					"section_key": payload.section_key,
+					"title": payload.title,
+					"order": payload.order,
+				}
+			)
+			.eq("id", section_id)
+			.execute()
+		)
+
+		if not update_resp.data:
+			raise HTTPException(status_code=404, detail="Section not found")
+
+		row = update_resp.data[0]
+
+		fields_resp = (
+			supabase_service.client
+			.from_("dynamic_fields")
+			.select("*")
+			.eq("section_id", section_id)
+			.order("order", desc=False)
+			.execute()
+		)
+		fields_data = fields_resp.data or []
+		fields = [
+			DynamicFieldModel(
+				id=f["id"],
+				section_id=f["section_id"],
+				field_key=f["field_key"],
+				title=f["title"],
+				description=f.get("description") or "",
+				order=f["order"],
+			)
+			for f in fields_data
+		]
+
+		return DynamicSectionModel(
+			id=row["id"],
+			schema_id=row["schema_id"],
+			section_key=row["section_key"],
+			title=row["title"],
+			order=row["order"],
+			fields=fields,
+		)
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to update section %s: %s", section_id, e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to update section")
+
+
+@router.delete(
+	"/sections/{section_id}",
+	status_code=status.HTTP_200_OK,
+	summary="刪除一個章節（會同時刪除底下欄位）",
+)
+async def delete_section(
+	section_id: str,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		delete_resp = (
+			supabase_service.client
+			.from_("dynamic_sections")
+			.delete()
+			.eq("id", section_id)
+			.execute()
+		)
+
+		if not delete_resp.data:
+			raise HTTPException(status_code=404, detail="Section not found")
+
+		return {"message": "Section deleted successfully"}
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to delete section %s: %s", section_id, e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to delete section")
+
+
+@router.post(
+	"/fields",
+	response_model=DynamicFieldModel,
+	status_code=status.HTTP_201_CREATED,
+	summary="新增一個欄位",
+)
+async def create_field(
+	payload: FieldCreateUpdate,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		insert_resp = (
+			supabase_service.client
+			.from_("dynamic_fields")
+			.insert(
+				{
+					"section_id": payload.section_id,
+					"field_key": payload.field_key,
+					"title": payload.title,
+					"description": payload.description,
+					"order": payload.order,
+				}
+			)
+			.execute()
+		)
+
+		if not insert_resp.data:
+			raise HTTPException(status_code=500, detail="Failed to create field")
+
+		row = insert_resp.data[0]
+		return DynamicFieldModel(
+			id=row["id"],
+			section_id=row["section_id"],
+			field_key=row["field_key"],
+			title=row["title"],
+			description=row.get("description") or "",
+			order=row["order"],
+		)
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to create field: %s", e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to create field")
+
+
+@router.put(
+	"/fields/{field_id}",
+	response_model=DynamicFieldModel,
+	summary="更新一個欄位",
+)
+async def update_field(
+	field_id: str,
+	payload: FieldCreateUpdate,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		update_resp = (
+			supabase_service.client
+			.from_("dynamic_fields")
+			.update(
+				{
+					"section_id": payload.section_id,
+					"field_key": payload.field_key,
+					"title": payload.title,
+					"description": payload.description,
+					"order": payload.order,
+				}
+			)
+			.eq("id", field_id)
+			.execute()
+		)
+
+		if not update_resp.data:
+			raise HTTPException(status_code=404, detail="Field not found")
+
+		row = update_resp.data[0]
+		return DynamicFieldModel(
+			id=row["id"],
+			section_id=row["section_id"],
+			field_key=row["field_key"],
+			title=row["title"],
+			description=row.get("description") or "",
+			order=row["order"],
+		)
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to update field %s: %s", field_id, e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to update field")
+
+
+@router.delete(
+	"/fields/{field_id}",
+	status_code=status.HTTP_200_OK,
+	summary="刪除一個欄位",
+)
+async def delete_field(
+	field_id: str,
+	supabase_service: SupabaseService = Depends(get_supabase_service),
+	_=Depends(verify_internal_user),
+):
+	try:
+		delete_resp = (
+			supabase_service.client
+			.from_("dynamic_fields")
+			.delete()
+			.eq("id", field_id)
+			.execute()
+		)
+
+		if not delete_resp.data:
+			raise HTTPException(status_code=404, detail="Field not found")
+
+		return {"message": "Field deleted successfully"}
+	except HTTPException:
+		raise
+	except Exception as e:
+		logger.error("Failed to delete field %s: %s", field_id, e, exc_info=True)
+		raise HTTPException(status_code=500, detail="Failed to delete field")
+
+ 

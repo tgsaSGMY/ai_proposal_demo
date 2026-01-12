@@ -301,7 +301,7 @@ export async function exportPlanToWordRdStandard(
       docxRenderer.addArrayTitle("五、 智慧財產權管理");
 
       if (ip.說明) {
-        docxRenderer.addArrayTitle("智慧財產權檢索與管理策略");
+        docxRenderer.addArrayTitle("1. 智慧財產權檢索與管理策略");
         renderTextWithLineBreaks(ip.說明);
       }
 
@@ -309,7 +309,7 @@ export async function exportPlanToWordRdStandard(
         Array.isArray(ip.智慧財產權檢索結果表) &&
         ip.智慧財產權檢索結果表.length > 0
       ) {
-        docxRenderer.addArrayTitle("六、智慧財產權檢索結果表");
+        docxRenderer.addArrayTitle("2.智慧財產權檢索結果表");
         const ipHeaders = ["專利號或關鍵字", "摘要", "差異分析"];
         const ipRows = ip.智慧財產權檢索結果表.map((item: any) => [
           safeText(item?.專利號或關鍵字),
@@ -322,7 +322,7 @@ export async function exportPlanToWordRdStandard(
 
     // 風險評估與對策
     if (Array.isArray(data.風險評估與對策) && data.風險評估與對策.length > 0) {
-      docxRenderer.addArrayTitle("七、風險評估與對策");
+      docxRenderer.addArrayTitle("六、風險評估與對策");
       const riskHeaders = ["風險描述", "因應對策"];
       const riskRows = data.風險評估與對策.map((item: any) => [
         safeText(item?.風險描述),

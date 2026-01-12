@@ -833,7 +833,7 @@ function handlePlanTypeConfirm() {
   }
   const configSelection = resolvePlanConfig(selectedPlanType.value);
   if (!configSelection) {
-    notifyError("找不到對應的 Config，請確認 API 是否已回傳資料");
+    notifyError("後臺更新導致無法取得計畫配置，請刷新頁面或稍後再試");
     return;
   }
   onSelectionChange(configSelection);
