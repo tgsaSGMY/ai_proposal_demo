@@ -28,6 +28,13 @@
               </span>
             </div>
             <button
+              @click="openSectionRecommender"
+              class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <span class="text-lg">🤖</span>
+              AI 推薦
+            </button>
+            <button
               @click="openCreateSection"
               class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 whitespace-nowrap"
             >
@@ -389,6 +396,14 @@
           目前尚未建立任何章節，請先點擊右上角「新增章節」。
         </div>
       </div>
+
+      <!-- Section Recommender Modal -->
+      <SectionRecommenderModal
+        :model-value="isRecommenderOpen"
+        :current-sections="sections"
+        @update:model-value="(val) => (isRecommenderOpen = val)"
+        @close="isRecommenderOpen = false"
+      />
     </div>
   </ClientOnly>
 </template>
@@ -419,6 +434,8 @@ import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
 import { useLoading } from "~/composables/useLoading";
+import { useInternalCheck } from "~/composables/useInternalCheck";
+import SectionRecommenderModal from "~/components/SectionRecommenderModal.vue";
 
 const { success, error: errorNotification } = useNotifications();
 const { confirm } = useConfirm();
@@ -433,6 +450,7 @@ const sections = ref([]); // [{ id, schema_id, section_key, title, order, fields
 
 const editingSection = ref(null);
 const editingField = ref(null);
+const isRecommenderOpen = ref(false);
 
 // Drag-and-drop state
 const draggedSectionIndex = ref(null);
@@ -517,6 +535,10 @@ function openCreateSection() {
     title: "",
     order: maxOrder + 1,
   };
+}
+
+function openSectionRecommender() {
+  isRecommenderOpen.value = true;
 }
 
 function startEditSection(section) {
