@@ -93,7 +93,8 @@ async def update_section_prompts_endpoint(
         request_data.template_id,
         request_data.grant_id,
         request_data.custom_prompt_list, 
-        request_data.system_prompt, 
+        request_data.system_prompt,
+        request_data.search_external,
     )
     
     if not success:

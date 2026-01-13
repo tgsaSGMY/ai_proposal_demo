@@ -30,6 +30,37 @@ class LLMService:
         self.max_retries = 3
         self.initial_retry_delay = 1  # 秒
         self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
+
+    @staticmethod
+    def _extract_openai_response_text(payload: Dict[str, Any]) -> str:
+        """解析 OpenAI Responses API 回傳的文字內容。"""
+        output_blocks = payload.get("output") or []
+        collected_text: List[str] = []
+
+        for block in output_blocks:
+            block_type = block.get("type")
+            if block_type in {"output_text", "text"}:
+                text_value = block.get("text")
+                if isinstance(text_value, list):
+                    collected_text.extend([str(t) for t in text_value])
+                elif text_value:
+                    collected_text.append(str(text_value))
+            elif block_type == "message":
+                for content in block.get("content", []):
+                    if content.get("type") in {"output_text", "text"} and content.get("text"):
+                        collected_text.append(str(content["text"]))
+
+        if collected_text:
+            return "\n".join(collected_text)
+
+        # Responses API 也可能透過 choices/message fallback
+        choices = payload.get("choices") or []
+        if choices:
+            message = choices[0].get("message", {})
+            if isinstance(message, dict):
+                return message.get("content", "") or ""
+
+        raise ValueError("OpenAI Responses payload did not contain textual output.")
     
     def _get_provider_for_model(self, model_id: str) -> str:
         """根據 model_id 判斷屬於哪個 provider"""
@@ -92,17 +123,53 @@ class LLMService:
             {"role": "user", "content": rewrite_prompt}
         ]
     
-    def _build_api_request(self, model_info: Dict, messages: List[Dict], is_json_output: bool) -> Tuple[str, Dict, Dict]:
+    def _build_api_request(
+        self, 
+        model_info: Dict,
+        messages: List[Dict],
+        is_json_output: bool,
+        enable_grounding: bool = False,
+    ) -> Tuple[str, Dict, Dict]:
         """根據 model_info 建立 API 請求的 URL, headers, 和 payload"""
         provider = model_info.get("provider")
         model_id = model_info.get("id")
         
         if provider == "openai":
-            if not self.openai_api_key: raise ValueError("OPENAI_API_KEY not set.")
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {self.openai_api_key}", "Content-Type": "application/json"}
-            payload = {"model": model_id, "messages": messages}
-            if is_json_output: payload["response_format"] = {"type": "json_object"}
+            if not self.openai_api_key:
+                raise ValueError("OPENAI_API_KEY not set.")
+
+            url = "https://api.openai.com/v1/responses"
+            headers = {
+                "Authorization": f"Bearer {self.openai_api_key}",
+                "Content-Type": "application/json",
+            }
+
+            # 將 Chat messages 轉成 Responses API 的 input
+            # OpenAI 官方建議
+            input_messages = []
+            for msg in messages:
+                role = msg.get("role")
+                content = msg.get("content")
+
+                if not content or not str(content).strip():
+                    continue
+
+                normalized_role = role if role in {"system", "user", "assistant"} else "user"
+
+                input_messages.append({
+                    "role": normalized_role,
+                    "content": str(content) 
+                })
+
+            payload = {
+                "model": model_id,
+                "input": input_messages, # 這裡傳入簡化後的列表
+            }
+
+            # Web Search
+            if enable_grounding:
+                payload["tools"] = [{"type": "web_search"}]
+
             return url, headers, payload
 
         elif provider == "ollama":
@@ -113,25 +180,60 @@ class LLMService:
             return url, headers, payload
         
         elif provider == "gemini":
-            # Google Gemini API
             from app.config import GEMINI_API_KEY
             if not GEMINI_API_KEY: raise ValueError("GEMINI_API_KEY not set.")
+
+            # 1. URL 設定 (使用 v1beta 以獲得最新功能支持)
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={GEMINI_API_KEY}"
             headers = {"Content-Type": "application/json"}
-            # Convert OpenAI messages format to Gemini format
+
             gemini_contents = []
+            system_instruction = None
+
+            # 2. 訊息處理 (分離 System Instruction 與 對話歷史)
             for msg in messages:
                 role = msg.get("role")
                 content = msg.get("content")
+                
+                # Gemini 的 System Prompt 是獨立欄位，不能放在 contents 裡
                 if role == "system":
-                    # System message should be part of the first user message or handled differently
+                    system_instruction = {
+                        "parts": [{"text": content}]
+                    }
                     continue
+
+                # 對話歷史
                 gemini_role = "user" if role == "user" else "model"
-                gemini_contents.append({"role": gemini_role, "parts": [{"text": content}]})
-            
-            payload = {"contents": gemini_contents, "generationConfig": {"temperature": 0.3}}
+                gemini_contents.append({
+                    "role": gemini_role,
+                    "parts": [{"text": content}]
+                })
+
+            # 3. 構建 Payload
+            payload = {
+                "contents": gemini_contents,
+                "generationConfig": {
+                    "temperature": 0.3
+                }
+            }
+
+            # 加入 System Instruction (如果有的話)
+            if system_instruction:
+                payload["systemInstruction"] = system_instruction
+
+            # 加入 JSON Mode
             if is_json_output:
                 payload["generationConfig"]["responseMimeType"] = "application/json"
+
+            # 4. 加入 Grounding (Google Search)
+            # 對應官方 SDK: tools=[types.Tool(google_search=types.GoogleSearch())]
+            if enable_grounding:
+                payload["tools"] = [
+                    {
+                        "googleSearch": {}  # 注意：這裡是 googleSearch (駝峰式)，值為空物件即可
+                    }
+                ]
+
             return url, headers, payload
             
         raise ValueError(f"Unsupported external provider: {provider}")
@@ -180,12 +282,24 @@ class LLMService:
             logger.error(f"Streaming error: {e}", exc_info=True)
             raise
 
-    async def call_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict], is_json_output: bool = True) -> Tuple[Optional[str], Optional[Dict]]:
+    async def call_external_api(
+        self,
+        session: httpx.AsyncClient,
+        model_info: Dict,
+        messages: List[Dict],
+        is_json_output: bool = True,
+        enable_grounding: bool = False,
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。"""
         async with self.request_semaphore:  # 限制并发请求数
             for attempt in range(self.max_retries): 
                 try:
-                    api_url, headers, payload = self._build_api_request(model_info, messages, is_json_output)
+                    api_url, headers, payload = self._build_api_request(
+                        model_info,
+                        messages,
+                        is_json_output,
+                        enable_grounding=enable_grounding,
+                    )
                     response = await session.post(api_url, json=payload, headers=headers, timeout=300)
                     response.raise_for_status()
                     
@@ -199,8 +313,11 @@ class LLMService:
                         parts = content.get("parts", [{}])
                         text = parts[0].get("text", "") if parts else ""
                         return text, None
+                    elif provider == "openai":
+                        text_output = self._extract_openai_response_text(response_json)
+                        return text_output, None
                     else:
-                        # OpenAI/Ollama 響應格式
+                        # Ollama 或其他 Chat-Completions 相容 API
                         return response_json["choices"][0]["message"]["content"], None
                     
                 except httpx.HTTPStatusError as e:
@@ -438,6 +555,8 @@ class LLMService:
         if not section_details or not section_details.json_schema or not section_details.system_prompt:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 
+        section_grounding_enabled = bool(getattr(section_details, "search_external", False))
+
         # 2. --- 路由与配额检查 ---
         # 如果提供了 selected_model，直接创建该模型的 info 对象；否则使用原有的 resolve_model 逻辑
         if selected_model:
@@ -483,6 +602,7 @@ class LLMService:
         if model_type == 'external':
             # --- 流程 A: 外部调用 ---
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
+            enable_grounding = section_grounding_enabled and model_to_use.get("provider") in {"openai", "gemini"}
 
             few_shot_str = ""
             if not disable_few_shot:
@@ -515,7 +635,12 @@ class LLMService:
                 {"role": "user", "content": user_content} 
             ]
 
-            raw_output, llm_error = await self.call_external_api(http_session, model_to_use, messages)
+            raw_output, llm_error = await self.call_external_api(
+                http_session,
+                model_to_use,
+                messages,
+                enable_grounding=enable_grounding,
+            )
             
             if llm_error:
                 error_message = llm_error.get("error")
@@ -606,7 +731,14 @@ class LLMService:
                     {"role": "user", "content": user_content} 
                 ]
 
-                raw_output, llm_error = await self.call_external_api(http_session, model_to_use, messages)
+                enable_grounding = section_grounding_enabled and model_to_use.get("provider") in {"openai", "gemini"}
+
+                raw_output, llm_error = await self.call_external_api(
+                    http_session,
+                    model_to_use,
+                    messages,
+                    enable_grounding=enable_grounding,
+                )
                 
                 if llm_error:
                     error_message = llm_error.get("error")

@@ -16,6 +16,7 @@ class SectionConfig(BaseModel):
     critic_prompt: Optional[str] = None
     rewrite_prompt: Optional[str] = None
     custom_prompt_list: Optional[List[str]] = []
+    search_external: bool = True
 
 class TemplateConfig(BaseModel):
     """代表一個計畫書模板（Template）的配置，它包含多個章節。"""
@@ -195,6 +196,7 @@ class UpdateSectionSettingsRequest(BaseModel):
     template_id: str
     custom_prompt_list: List[str]
     system_prompt: Optional[str] = None
+    search_external: Optional[bool] = None
 
 # --- 6. 其他特定 API 模型 (Other Specific API Models) ---
 class SectionSchemaInfo(BaseModel):

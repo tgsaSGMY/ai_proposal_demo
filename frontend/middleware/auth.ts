@@ -37,7 +37,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
         return navigateTo("/");
       }
     }
-    // ============================================================
 
     // 驗證全部通過，允許訪問
     return;

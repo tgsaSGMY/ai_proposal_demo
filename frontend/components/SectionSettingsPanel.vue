@@ -1,5 +1,34 @@
 <template>
   <div class="space-y-6 sm:space-y-8">
+    <!-- 引用網路來源開關 -->
+    <div
+      class="p-3 sm:p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+    >
+      <div>
+        <p class="text-xs sm:text-sm font-medium text-gray-700">引用網路來源</p>
+        <p class="text-[11px] sm:text-xs text-gray-500 mt-1">
+          關閉後將僅使用內部資料，不會自動引用外部來源的內容。
+        </p>
+      </div>
+      <label class="inline-flex items-center cursor-pointer select-none">
+        <input
+          type="checkbox"
+          class="sr-only peer"
+          v-model="editableData.search_external"
+        />
+        <div
+          class="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-indigo-200 rounded-full peer-checked:bg-indigo-600 transition-colors relative"
+        >
+          <span
+            class="absolute top-0.5 left-0.5 inline-block h-5 w-5 bg-white rounded-full shadow transition-transform"
+            :class="{ 'translate-x-5': editableData.search_external }"
+          ></span>
+        </div>
+        <span class="ml-3 text-xs sm:text-sm font-medium text-gray-700">
+          {{ editableData.search_external ? "啟用" : "關閉" }}
+        </span>
+      </label>
+    </div>
     <!-- System Prompt 編輯區 -->
     <div>
       <label
@@ -86,6 +115,7 @@ const emit = defineEmits(["save"]);
 const editableData = reactive({
   system_prompt: "",
   custom_prompt_list: [],
+  search_external: true,
 });
 
 const schemaFields = ref({});
@@ -130,6 +160,10 @@ watch(
       editableData.custom_prompt_list = JSON.parse(
         JSON.stringify(newVal.custom_prompt_list || [])
       );
+      editableData.search_external =
+        typeof newVal.search_external === "boolean"
+          ? newVal.search_external
+          : true;
       // 初始化時檢查是否為 JSON Schema
       isJsonSchema.value = parseSystemPrompt(editableData.system_prompt);
     }
@@ -177,6 +211,7 @@ function getEditableData() {
   return {
     system_prompt: finalSystemPrompt,
     custom_prompt_list: finalPrompts,
+    search_external: editableData.search_external,
   };
 }
 

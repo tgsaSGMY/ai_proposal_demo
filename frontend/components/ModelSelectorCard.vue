@@ -158,6 +158,10 @@
                 sectionName: section.name,
                 system_prompt: section.system_prompt,
                 custom_prompt_list: section.custom_prompt_list,
+                search_external:
+                  typeof section.search_external === 'boolean'
+                    ? section.search_external
+                    : true,
               }"
               :is-saving="isSavingSettings"
             />

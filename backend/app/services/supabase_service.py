@@ -569,6 +569,7 @@ class SupabaseService:
         grant_id: str,
         custom_prompt_list: List[str],
         system_prompt: Optional[str] = None,
+        search_external: Optional[bool] = None,
     ) -> bool:
         """更新指定 section 的 system_prompt, source_type 和 custom_prompt_list"""
         try:
@@ -578,6 +579,9 @@ class SupabaseService:
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:
                 update_data["system_prompt"] = system_prompt
+
+            if search_external is not None:
+                update_data["search_external"] = search_external
 
             response = (
                 self.client

@@ -454,6 +454,9 @@ function handleSettingsUpdated(payload) {
       if (section) {
         section.system_prompt = payload.system_prompt;
         section.custom_prompt_list = payload.custom_prompt_list;
+        if (typeof payload.search_external === "boolean") {
+          section.search_external = payload.search_external;
+        }
       }
     }
   }
