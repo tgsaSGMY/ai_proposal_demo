@@ -96,9 +96,17 @@
                   <span
                     v-for="field in section.fields || section.properties || []"
                     :key="field.field_key || field.key || field.title"
-                    class="block text-xs"
+                    class="block text-xs mb-1"
                   >
-                    • {{ field.title }}
+                    <span class="font-medium text-gray-600"
+                      >• {{ field.title }}</span
+                    >
+                    <span
+                      v-if="field.description"
+                      class="block text-[11px] text-gray-500 ml-3"
+                    >
+                      說明：{{ field.description }}
+                    </span>
                   </span>
                 </div>
               </div>

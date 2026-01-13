@@ -113,8 +113,14 @@ def _format_schema_for_prompt(schema_data: Dict[str, Any]) -> str:
 
 def _build_user_prompt(schema_description: str, document_text: str) -> str:
     return f"""
-請根據以下資訊協助我檢視動態章節設定：
+請協助我檢視動態章節設定，但**只能**針對「說明 (description)」內容提出具體調整建議。
 
+嚴格規範：
+1. 章節與欄位的顯示標題、順序與數量一律保持不變。
+2. 不可新增或刪除章節／欄位，欄位的 key 也禁止修改。
+3. 只允許更改“説明”的部分，每個欄位若需要更新，僅回傳調整後的 description，並加粗需要修改的文字片段，讓使用者更易理解。
+
+以下為當前 Schema：
 {schema_description}
 
 使用者提供的 Word 內容摘要：
@@ -122,5 +128,5 @@ def _build_user_prompt(schema_description: str, document_text: str) -> str:
 {document_text}
 --------------------
 
-請直接產出最新版本的章節與欄位，并且加粗要更改/增加的部分/内容。
+請依「原有結構」輸出結果，只針對 description 做改善建議。
 """.strip()
