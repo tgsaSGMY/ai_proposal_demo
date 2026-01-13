@@ -50,6 +50,33 @@ class GenerateRequest(BaseModel):
     selected_model: Optional[str] = Field(None, description="可選的指定模型，如 'gpt-5.2', 'gpt-5.1' 等。如果設置，將跳過模型路由。")
     project_id: Optional[str] = Field(None, description="專案 ID，用於圖片生成時的關聯。")
 
+
+class PlanRevisionRequest(BaseModel):
+    """基於既有版本重新優化計畫書的請求。"""
+
+    grant: str = Field(..., description="目標計畫書的 ID。")
+    template: str = Field(..., description="目標模板的 ID。")
+    current_version: Dict[str, Any] = Field(
+        ..., description="目前版本的內容，按照 section_id 映射。"
+    )
+    stored_answer: Optional[Dict[str, Any]] = Field(
+        default=None, description="已儲存的問答或使用者輸入摘要。"
+    )
+    project_title: Optional[str] = Field(
+        default="", description="專案名稱，提供額外上下文。"
+    )
+    project_summary: Optional[str] = Field(
+        default="", description="專案摘要，提供額外上下文。"
+    )
+    num_candidates: int = Field(2, ge=1, le=3)
+    is_external: bool = Field(True, description="是否使用外部模型。")
+    selected_model: Optional[str] = Field(
+        default=None, description="可選的指定模型 ID。"
+    )
+    project_id: Optional[str] = Field(
+        default=None, description="專案 ID，便於記錄。"
+    )
+
 class SectionGenerateResponse(BaseModel):
     """單個章節生成的響應結果。"""
     section_id: str

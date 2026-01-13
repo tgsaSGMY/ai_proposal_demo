@@ -428,7 +428,9 @@ class LLMService:
         use_actor_critic: bool = False,
         is_external: Optional[bool] = None,
         selected_model: Optional[str] = None,
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        section_context: Optional[str] = None,
+        disable_few_shot: bool = False,
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
@@ -482,9 +484,24 @@ class LLMService:
             # --- 流程 A: 外部调用 ---
             logger.info(f"-> Using API generation with model: {model_to_use['id']}")
 
-            few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
-          
-            user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
+            few_shot_str = ""
+            if not disable_few_shot:
+                few_shot_str = await self._format_few_shot_examples(
+                    user_input, section_details, supabase_service
+                )
+
+            user_content_parts = []
+            if few_shot_str:
+                user_content_parts.append(few_shot_str.strip())
+            user_content_parts.append(f"用户需求: {user_input}")
+            if section_context:
+                user_content_parts.append(
+                    "章節參考內容：\n" + section_context.strip()
+                )
+            user_content_parts.append(
+                f"请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
+            )
+            user_content = "\n\n".join(user_content_parts)
         
 
             # 檢查是否有自定義指令，並將它們附加到 user_content
@@ -559,9 +576,24 @@ class LLMService:
             else:
                 # 仅使用 Actor，跳过 Critic - 更快地生成多个 sections
                 logger.info(f"-> Using fast Actor-only generation for section: {section_id}")
-                few_shot_str = await self._format_few_shot_examples(user_input, section_details, supabase_service)
-                
-                user_content = f"{few_shot_str}\n用户需求: {user_input}\n请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
+                few_shot_str = ""
+                if not disable_few_shot:
+                    few_shot_str = await self._format_few_shot_examples(
+                        user_input, section_details, supabase_service
+                    )
+
+                user_content_parts = []
+                if few_shot_str:
+                    user_content_parts.append(few_shot_str.strip())
+                user_content_parts.append(f"用户需求: {user_input}")
+                if section_context:
+                    user_content_parts.append(
+                        "章節參考內容：\n" + section_context.strip()
+                    )
+                user_content_parts.append(
+                    f"请根据以下 JSON schema 生成内容:\n{json.dumps(section_details.json_schema, ensure_ascii=False)}"
+                )
+                user_content = "\n\n".join(user_content_parts)
             
                 # 檢查是否有自定義指令，並將它們附加到 user_content
                 if section_details.custom_prompt_list:

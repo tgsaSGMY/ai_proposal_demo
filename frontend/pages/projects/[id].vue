@@ -157,6 +157,7 @@
             @messagesUpdated="handleMessagesUpdated"
             @aiResponseComplete="persistConversationHistory"
             @updateProjectTitle="handleUpdateProjectTitle"
+            @requestVersionUpdate="handleVersionRevision"
           />
         </section>
       </div>
@@ -732,20 +733,78 @@ async function handleChatPlanGeneration(payload: {
     }
 
     const rawData = await response.json();
-    const processedCandidates: Record<string, any> = {};
-    for (const sectionId in rawData) {
-      processedCandidates[sectionId] = rawData[sectionId].map(
-        (candidate: any) => ({
-          content: candidate.raw_json_content,
-          error: candidate.error || null,
-        })
-      );
-    }
-    candidatePlan.value = processedCandidates;
+    candidatePlan.value = transformPlanCandidates(rawData);
     success("計畫書草稿已生成！");
   } catch (error: any) {
     console.error("生成計畫書時發生錯誤:", error);
     notifyError(`生成失敗: ${error.message}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleVersionRevision(payload: {
+  version: any;
+  selectedModel?: string;
+}) {
+  if (!payload?.version?.data) {
+    notifyError("找不到這個版本的內容，無法更新。");
+    return;
+  }
+  if (!selectedGrantId.value || !selectedTemplateId.value) {
+    notifyError("請先完成基本設定後再進行版本更新。");
+    return;
+  }
+
+  showLoading("正在優化計畫版本...", true);
+  finalPlanContent.value = {};
+  candidatePlan.value = {};
+  lastGenerationPrompt.value = `版本更新：${
+    payload.version.title || payload.version.id || "unknown"
+  }`;
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      hideLoading();
+      notifyError("請先登入");
+      return;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/revise_plan_version`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        grant: selectedGrantId.value,
+        template: selectedTemplateId.value,
+        current_version: payload.version.data,
+        stored_answer: projectRecord.value?.stored_answer || null,
+        project_title: projectRecord.value?.title || "",
+        project_summary: projectRecord.value?.description || "",
+        num_candidates: 2,
+        is_external: useModelType.value === "external",
+        selected_model: payload.selectedModel,
+        project_id: projectRecord.value?.id || null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorDetail = await response.text();
+      throw new Error(`伺服器錯誤 (${response.status}): ${errorDetail}`);
+    }
+
+    const rawData = await response.json();
+    candidatePlan.value = transformPlanCandidates(rawData);
+    success("新版候選內容已生成！");
+  } catch (error: any) {
+    console.error("版本更新時發生錯誤:", error);
+    notifyError(`版本更新失敗: ${error.message}`);
   } finally {
     hideLoading();
   }
@@ -795,5 +854,25 @@ async function savePreferenceData(
 function handleMessagesUpdated(messages: any[]) {
   chatMessages.value = messages;
   // Removed auto-save on keystroke - now saving only when AI responds or versions are confirmed
+}
+
+function transformPlanCandidates(rawData: Record<string, any>) {
+  const processed: Record<string, any> = {};
+  if (!rawData || typeof rawData !== "object") {
+    return processed;
+  }
+
+  Object.entries(rawData).forEach(([sectionId, candidates]) => {
+    if (!Array.isArray(candidates)) {
+      return;
+    }
+    processed[sectionId] = candidates.map((candidate: any) => ({
+      content:
+        candidate?.raw_json_content ?? candidate?.content ?? candidate ?? null,
+      error: candidate?.error || null,
+    }));
+  });
+
+  return processed;
 }
 </script>

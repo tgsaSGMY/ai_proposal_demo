@@ -24,6 +24,7 @@ from pathlib import Path
 
 from app.models import (
     GenerateRequest,
+    PlanRevisionRequest,
     SectionGenerateResponse,
     AutoFillRequest,
     SyntheticInputRequest,
@@ -35,7 +36,7 @@ from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from .dependencies import get_llm_service, get_supabase_service, get_current_user_id
 from app.utils.extract_json import extract_json_block  
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,114 @@ async def generate_plan(
     return plan_content
 
 
+@router.post("/revise_plan_version")
+async def revise_plan_version(
+    request_data: PlanRevisionRequest,
+    request: Request,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    llm_service: LLMService = Depends(get_llm_service),
+    user_id: str = Depends(get_current_user_id),
+):
+    if not request_data.current_version or not isinstance(request_data.current_version, dict):
+        raise HTTPException(status_code=400, detail="current_version is required for revision.")
+
+    app_state = request.app.state
+    all_grants_config = getattr(app_state, "all_grants_config", [])
+
+    grant_config = None
+    template_config = None
+    for grant in all_grants_config:
+        if grant.id == request_data.grant:
+            grant_config = grant
+            for template in grant.templates:
+                if template.id == request_data.template:
+                    template_config = template
+                    break
+            break
+
+    if not template_config:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Template {request_data.template} not found in Grant {request_data.grant}.",
+        )
+
+    sections = template_config.sections
+    if not sections:
+        raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+
+    answers_summary = _format_revision_answers(request_data.stored_answer)
+    user_input_summary = _format_user_input_summary(request_data.stored_answer)
+    commands_data = await supabase_service.get_commands_by_user_id(user_id)
+
+    project_title = request_data.project_title or "未提供"
+    project_summary = request_data.project_summary or "尚未提供摘要"
+
+    base_prompt = f"""
+你是一位資深的計畫書編輯，任務是基於現有版本進行「版本更新」。請遵循：
+- 維持章節 JSON Schema 結構與欄位順序，保留 80~90% 原始內容骨架。
+- 對語句不順、細節不足或缺乏佐證的段落進行精煉、補強與具體化。
+- 若需補充無法確定的資訊，請以 OOO 作為暫時佔位符。
+- 問答摘要可能已經更新了，請根據問答摘要補齊內容，但仍需與整體脈絡一致。
+- 完成後輸出純 JSON，不要添加說明文字。
+
+計畫名稱：{project_title}
+計畫摘要：{project_summary}
+
+【使用者問答摘要】
+{answers_summary}
+"""
+
+    if user_input_summary:
+        base_prompt += f"\n\n【使用者輸入摘要】\n{user_input_summary}"
+
+    if commands_data:
+        commands_text = "\n".join(
+            [
+                f"- {cmd.get('title', '')}: {cmd.get('description', '')}"
+                for cmd in commands_data
+                if cmd.get('title') or cmd.get('description')
+            ]
+        )
+        if commands_text:
+            base_prompt += f"\n\n【啟用中的 Commands】\n{commands_text}"
+
+    version_map = request_data.current_version
+
+    async with httpx.AsyncClient() as client:
+        tasks = []
+        for section in sections:
+            section_context = _build_section_revision_context(section, version_map)
+            for _ in range(request_data.num_candidates):
+                tasks.append(
+                    llm_service.generate_section_content(
+                        http_session=client,
+                        grant_id=request_data.grant,
+                        template_id=request_data.template,
+                        section_id=section.id,
+                        user_input=base_prompt,
+                        app_state=app_state,
+                        user_id=user_id,
+                        supabase_service=supabase_service,
+                        is_external=request_data.is_external,
+                        selected_model=request_data.selected_model,
+                        project_id=request_data.project_id,
+                        section_context=section_context,
+                        disable_few_shot=True,
+                    )
+                )
+
+        results = await asyncio.gather(*tasks)
+
+    plan_content = {}
+    for res in results:
+        section_id = res.section_id
+        if section_id not in plan_content:
+            plan_content[section_id] = []
+        plan_content[section_id].append(res.dict())
+
+    return plan_content
+
+
 # --- 輔助函數 ---
 def get_current_timestamp():
     return datetime.now(timezone.utc).isoformat()
@@ -484,6 +593,104 @@ def get_chat_messages(system_prompt: str, history_records: list, last_user_msg: 
         messages.append({"role": "user", "content": last_user_msg})
         
     return messages
+
+
+def _extract_chat_answers_from_stored(stored_answer: Dict[str, Any]) -> Dict[str, Any]:
+    if not stored_answer or not isinstance(stored_answer, dict):
+        return {}
+    for key in ("chat_answers", "chatAnswers"):
+        value = stored_answer.get(key)
+        if isinstance(value, dict):
+            return value.copy()
+    return {}
+
+
+def _format_revision_answers(
+    stored_answer: Optional[Dict[str, Any]]
+) -> str:
+    merged = _extract_chat_answers_from_stored(stored_answer or {})
+    if not merged:
+        return "（目前尚無額外問答摘要）"
+
+    lines = []
+    for key in sorted(merged.keys()):
+        value = merged[key]
+        if value is None:
+            continue
+        if isinstance(value, (dict, list)):
+            text = json.dumps(value, ensure_ascii=False)
+        else:
+            text = str(value)
+        text = text.strip()
+        if not text:
+            continue
+        if len(text) > 600:
+            text = text[:600] + "..."
+        lines.append(f"- {key}: {text}")
+    return "\n".join(lines) if lines else "（目前尚無額外問答摘要）"
+
+
+def _format_user_input_summary(stored_answer: Optional[Dict[str, Any]]) -> str:
+    if not stored_answer or not isinstance(stored_answer, dict):
+        return ""
+    user_input = stored_answer.get("user_input") or stored_answer.get("userInput")
+    if not isinstance(user_input, dict):
+        return ""
+
+    sections = []
+    main_idea = user_input.get("main_idea") or user_input.get("mainIdea")
+    if main_idea:
+        sections.append(f"【核心構想】\n{main_idea}")
+
+    dynamic_fields = user_input.get("dynamic_fields") or user_input.get("dynamicFields")
+    if isinstance(dynamic_fields, dict):
+        field_lines = []
+        for key, value in dynamic_fields.items():
+            if value is None:
+                continue
+            if isinstance(value, (dict, list)):
+                text = json.dumps(value, ensure_ascii=False)
+            else:
+                text = str(value)
+            text = text.strip()
+            if not text:
+                continue
+            field_lines.append(f"- {key}: {text}")
+        if field_lines:
+            sections.append("【動態欄位摘要】\n" + "\n".join(field_lines))
+    return "\n\n".join(sections)
+
+
+def _build_section_revision_context(section, version_map: Dict[str, Any]) -> str:
+    existing_entry = None
+    if version_map and isinstance(version_map, dict):
+        existing_entry = version_map.get(section.id)
+
+    if existing_entry is None:
+        return (
+            f"此章節（{section.name}）目前沒有內容。請根據問答摘要與 JSON Schema 補齊完整內容，"
+            "同時維持原有語氣與結構邏輯。"
+        )
+
+    content_candidate = existing_entry
+    if isinstance(existing_entry, dict):
+        if existing_entry.get("content") is not None:
+            content_candidate = existing_entry.get("content")
+        elif existing_entry.get("raw_json_content") is not None:
+            content_candidate = existing_entry.get("raw_json_content")
+
+    if isinstance(content_candidate, str):
+        formatted_content = content_candidate
+    else:
+        try:
+            formatted_content = json.dumps(content_candidate, ensure_ascii=False, indent=2)
+        except Exception:
+            formatted_content = str(content_candidate)
+
+    return (
+        f"以下為【{section.name}】章節的既有內容，請在此基礎上進行微調：\n{formatted_content}\n"
+        "請保留核心脈絡與欄位排列，只針對語句、缺漏與佐證進行補強，必要時可新增具體數據或示例。"
+    )
 
 # --- 主要 WebSocket Endpoint ---
 

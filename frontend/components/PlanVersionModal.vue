@@ -80,6 +80,14 @@
       >
         <button
           type="button"
+          class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="loading || !version?.data"
+          @click="handleVersionUpdate"
+        >
+          版本更新
+        </button>
+        <button
+          type="button"
           class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition"
           @click="handleExport"
         >
@@ -105,9 +113,10 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   version: { type: Object, default: () => ({}) },
   planSections: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["close", "export"]);
+const emit = defineEmits(["close", "export", "updateVersion"]);
 
 const sections = computed(() => {
   if (!props.version?.data || !props.planSections?.length) {
@@ -156,6 +165,13 @@ function generateHtmlForSection(section, content) {
 
 function handleExport() {
   emit("export", props.version);
+}
+
+function handleVersionUpdate() {
+  if (!props.version || !props.version.data) {
+    return;
+  }
+  emit("updateVersion", props.version);
 }
 </script>
 

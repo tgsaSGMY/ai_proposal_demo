@@ -293,8 +293,10 @@
       :visible="isVersionModalVisible"
       :version="selectedVersion"
       :plan-sections="sections"
+      :loading="isGenerating"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
+      @updateVersion="handleVersionUpdateRequest"
     />
     <FieldFileImportModal
       v-model:is-open="isFileImportOpen"
@@ -381,6 +383,7 @@ const emit = defineEmits([
   "questionAnswersUpdated",
   "guidedQuestionsUpdated",
   "aiResponseComplete",
+  "requestVersionUpdate",
 ]);
 
 const messages = ref([]);
@@ -1055,6 +1058,17 @@ async function handleEditConfirm(value) {
 
 async function handleVersionExport(version) {
   emit("requestExport", { version });
+}
+
+function handleVersionUpdateRequest(version) {
+  if (!version) {
+    return;
+  }
+  emit("requestVersionUpdate", {
+    version,
+    selectedModel: selectedModel.value || undefined,
+  });
+  isVersionModalVisible.value = false;
 }
 
 function scrollToBottom() {
