@@ -270,7 +270,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "我的指令庫 - TGSA 企劃引擎",
+  title: "我的指令庫 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -283,7 +283,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "我的指令庫 - 模型參數與配置管理 - TGSA 企劃引擎",
+      content: "我的指令庫 - 模型參數與配置管理 - TGSA 補助引擎",
     },
     {
       property: "og:description",

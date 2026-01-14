@@ -4,7 +4,7 @@
       class="md:hidden bg-white text-gray-900 flex items-center justify-between px-4 py-3 border-b border-gray-200 sticky top-0 z-40"
     >
       <div class="font-semibold text-lg">
-        TGSA企劃引擎
+        TGSA補助引擎
         <span class="text-xs text-gray-400 align-top">PRO ENTERPRISE</span>
       </div>
       <button @click="showSidebar = !showSidebar" class="focus:outline-none">
@@ -57,7 +57,7 @@
         class="md:hidden sticky top-0 bg-white z-50 flex items-center justify-between px-4 py-3 border-b border-gray-200"
       >
         <div class="font-semibold text-lg">
-          TGSA企劃引擎
+          TGSA補助引擎
           <span class="text-xs text-gray-400 align-top">PRO ENTERPRISE</span>
         </div>
         <button @click="showSidebar = false" class="focus:outline-none">
@@ -83,13 +83,13 @@
           <div class="h-11 w-11 rounded-2xl overflow-hidden">
             <img
               src="/logo.png"
-              alt="TGSA 企劃引擎"
+              alt="TGSA 補助引擎"
               class="h-full w-full object-cover"
             />
           </div>
 
           <div>
-            <p class="text-lg font-semibold text-gray-900">TGSA企劃引擎</p>
+            <p class="text-lg font-semibold text-gray-900">TGSA補助引擎</p>
             <p
               v-if="isInternal"
               class="text-xs uppercase tracking-wide text-gray-400"

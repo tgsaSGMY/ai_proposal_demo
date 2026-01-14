@@ -14,7 +14,7 @@
               AI
             </span>
             <div>
-              <p class="text-lg font-semibold text-slate-900">企劃引擎</p>
+              <p class="text-lg font-semibold text-slate-900">補助引擎</p>
               <p class="flex items-center gap-2 text-xs text-slate-400">
                 <span
                   class="flex flex-1 h-2 w-2 rounded-full bg-green-500 shadow-lg shadow-green-500/50"

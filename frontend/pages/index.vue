@@ -7,7 +7,7 @@
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
-          <span class="text-gray-600">AI企劃引擎</span>
+          <span class="text-gray-600">AI補助引擎</span>
         </p>
         <!-- Stage 1: 選擇計畫類型 -->
         <section
@@ -313,7 +313,7 @@ import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
 
 useHead({
-  title: "AI企劃引擎 - TGSA 企劃引擎",
+  title: "AI補助引擎 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -326,7 +326,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "AI企劃引擎 - TGSA 企劃引擎",
+      content: "AI補助引擎 - TGSA 補助引擎",
     },
     {
       property: "og:description",

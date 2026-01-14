@@ -358,7 +358,7 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
 });
 
 useHead({
-  title: "我的計畫庫 - TGSA 企劃引擎",
+  title: "我的計畫庫 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -371,7 +371,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "我的計畫庫 - TGSA 企劃引擎",
+      content: "我的計畫庫 - TGSA 補助引擎",
     },
     {
       property: "og:description",

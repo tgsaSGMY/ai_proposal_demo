@@ -187,7 +187,7 @@ const projectTitle = computed(() => {
 });
 
 useHead(() => ({
-  title: `${projectTitle.value} - TGSA 企劃引擎`,
+  title: `${projectTitle.value} - TGSA 補助引擎`,
   meta: [
     {
       name: "description",
@@ -200,7 +200,7 @@ useHead(() => ({
     },
     {
       property: "og:title",
-      content: `${projectTitle.value} - TGSA 企劃引擎`,
+      content: `${projectTitle.value} - TGSA 補助引擎`,
     },
     {
       property: "og:description",
