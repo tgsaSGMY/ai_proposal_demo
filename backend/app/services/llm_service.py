@@ -289,6 +289,7 @@ class LLMService:
         messages: List[Dict],
         is_json_output: bool = True,
         enable_grounding: bool = False,
+        response_hook: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Tuple[Optional[str], Optional[Dict]]:
         """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。"""
         async with self.request_semaphore:  # 限制并发请求数
@@ -306,6 +307,12 @@ class LLMService:
                     # 根據 provider 解析響應
                     provider = model_info.get("provider")
                     response_json = response.json()
+
+                    if response_hook:
+                        try:
+                            response_hook(response_json)
+                        except Exception:
+                            logger.warning("Response hook failed", exc_info=True)
                     
                     if provider == "gemini":
                         # Gemini 響應格式
@@ -356,6 +363,80 @@ class LLMService:
                     error_msg = f"An unexpected error occurred during API call: {repr(e)}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}
+
+    @staticmethod
+    def _extract_external_sources(provider: Optional[str], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Pull citation/grounding URLs from provider payloads."""
+
+        print(payload)
+        sources: List[Dict[str, Any]] = []
+        if not isinstance(payload, dict):
+            return sources
+
+        provider_label = provider or "unknown"
+
+        def append_source(url: Optional[str], title: Optional[str] = None, snippet: Optional[str] = None):
+            if not url:
+                return
+            sources.append(
+                {
+                    "provider": provider_label,
+                    "url": url,
+                    "title": title,
+                    "snippet": snippet,
+                }
+            )
+
+        def iter_list(items):
+            return items if isinstance(items, list) else []
+
+        # OpenAI style metadata
+        metadata = payload.get("metadata") or payload.get("response_metadata") or {}
+        for entry in iter_list(metadata.get("citations") or metadata.get("references") or []):
+            append_source(entry.get("url") or entry.get("source"), entry.get("title"), entry.get("snippet") or entry.get("quote"))
+
+        # Responses API tool outputs may be embedded inside output blocks
+        for block in iter_list(payload.get("output")):
+            for content in iter_list(block.get("content")):
+                for citation in iter_list(content.get("citations")):
+                    append_source(citation.get("url") or citation.get("source"), citation.get("title"), citation.get("snippet"))
+                for annotation in iter_list(content.get("annotations")):
+                    append_source(
+                        annotation.get("url") or annotation.get("source"),
+                        annotation.get("title"),
+                        annotation.get("snippet") or annotation.get("text"),
+                    )
+
+        # Choices[].message.content annotations fallback
+        for choice in iter_list(payload.get("choices")):
+            message = choice.get("message") or {}
+            for part in iter_list(message.get("content")):
+                for annotation in iter_list(part.get("annotations")):
+                    append_source(
+                        annotation.get("url") or annotation.get("source"),
+                        annotation.get("title"),
+                        annotation.get("snippet") or annotation.get("text"),
+                    )
+
+        # Gemini grounding metadata
+        gemini_grounding = payload.get("groundingMetadata") or payload.get("grounding_metadata")
+        if isinstance(gemini_grounding, dict):
+            for source in iter_list(gemini_grounding.get("sources")):
+                append_source(source.get("uri") or source.get("url"), source.get("title"), source.get("description"))
+
+            for chunk in iter_list(
+                gemini_grounding.get("groundingChunks")
+                or gemini_grounding.get("grounding_chunks")
+                or gemini_grounding.get("groundingchunks")
+            ):
+                web_ref = chunk.get("web") or {}
+                append_source(
+                    web_ref.get("uri") or web_ref.get("url"),
+                    web_ref.get("title"),
+                    web_ref.get("snippet") or web_ref.get("description"),
+                )
+
+        return sources
 
     async def generate_with_loaded_model(self, model: Any, tokenizer: Any, messages: List[Dict]) -> Tuple[Optional[str], Optional[Dict]]:
         try:
@@ -575,6 +656,12 @@ class LLMService:
         
         model_to_use = original_model_info
         model_type = model_to_use.get('type', 'internal')
+        captured_external_sources: List[Dict[str, Any]] = []
+
+        def capture_response_sources(payload: Dict[str, Any]):
+            references = self._extract_external_sources(model_to_use.get("provider"), payload)
+            if references:
+                captured_external_sources.extend(references)
 
         # has_quota, reason = await supabase_service.check_quota(user_id, model_type)
         
@@ -627,7 +714,7 @@ class LLMService:
             # 檢查是否有自定義指令，並將它們附加到 user_content
             if section_details.custom_prompt_list:
                 custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
-                user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}"
+                user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}\n如果允許使用web search工具，請務必使用最新的網路資訊來補充回答內容。"
 
             system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。\n用戶的輸入若是無或是相關資料量不夠，可以自己發散思維來寫作內容，客觀内容可以用OOO代替。"
             messages = [
@@ -635,11 +722,14 @@ class LLMService:
                 {"role": "user", "content": user_content} 
             ]
 
+            response_hook = capture_response_sources if enable_grounding else None
+
             raw_output, llm_error = await self.call_external_api(
                 http_session,
                 model_to_use,
                 messages,
                 enable_grounding=enable_grounding,
+                response_hook=response_hook,
             )
             
             if llm_error:
@@ -733,11 +823,14 @@ class LLMService:
 
                 enable_grounding = section_grounding_enabled and model_to_use.get("provider") in {"openai", "gemini"}
 
+                response_hook = capture_response_sources if enable_grounding else None
+
                 raw_output, llm_error = await self.call_external_api(
                     http_session,
                     model_to_use,
                     messages,
                     enable_grounding=enable_grounding,
+                    response_hook=response_hook,
                 )
                 
                 if llm_error:
@@ -756,5 +849,22 @@ class LLMService:
         if not final_content_json: return SectionGenerateResponse(section_id=section_id, error="Generation resulted in empty content.")
         
         formatted_content = format_section_output(final_content_json, section_details.json_schema)
+
+        if project_id:
+            try:
+                await supabase_service.log_execution_event(
+                    project_id=project_id,
+                    user_id=user_id,
+                    event_type="section_generated",
+                    section_id=section_id,
+                    external_sources=captured_external_sources or None,
+                    payload={
+                        "model_id": model_to_use.get("id"),
+                        "model_type": model_type,
+                        "mode": "actor_critic" if use_actor_critic else "single_pass",
+                    },
+                )
+            except Exception:
+                logger.warning("Failed to log section_generated event", exc_info=True)
         return SectionGenerateResponse(section_id=section_id, content=formatted_content,raw_json_content=final_content_json)
 

@@ -273,6 +273,16 @@ onMounted(async () => {
   isInternal.value = await checkIsInternal();
 });
 
+function formatVersionTimestamp(value?: string | null) {
+  if (value) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString("zh-TW");
+    }
+  }
+  return new Date().toLocaleString("zh-TW");
+}
+
 const savedPlanVersions = computed(() => {
   if (!projectRecord.value?.saved_plan) {
     return [];
@@ -284,7 +294,7 @@ const savedPlanVersions = computed(() => {
       id: `v${index + 1}`,
       number: index + 1,
       title: version.title || `版本 ${index + 1}`,
-      timestamp: version.timestamp || new Date().toLocaleString("zh-TW"),
+      timestamp: formatVersionTimestamp(version.timestamp),
       data: version.data || version,
     }));
   }
@@ -294,9 +304,7 @@ const savedPlanVersions = computed(() => {
       id: "v1",
       number: 1,
       title: "初版推演結果",
-      timestamp: projectRecord.value.updated_at
-        ? new Date(projectRecord.value.updated_at).toLocaleString("zh-TW")
-        : new Date().toLocaleString("zh-TW"),
+      timestamp: formatVersionTimestamp(projectRecord.value.updated_at),
       data: savedPlan,
     },
   ];
@@ -658,7 +666,7 @@ async function onCandidateConfirm({
   const newVersion = {
     number: versionNumber,
     title: `版本 ${versionNumber}`,
-    timestamp: new Date().toLocaleString("zh-TW"),
+    timestamp: new Date().toISOString(),
     data: newPlanContent,
   };
 

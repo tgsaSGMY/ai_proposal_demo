@@ -249,7 +249,41 @@ async def generate_plan(
     sections = template_config.sections
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+
+    revision_started_at = datetime.now(timezone.utc)
+    revision_context = {
+        "grant_id": request_data.grant,
+        "template_id": request_data.template,
+        "num_candidates": request_data.num_candidates,
+        "is_external": request_data.is_external,
+        "selected_model": request_data.selected_model,
+    }
+
+    if request_data.project_id:
+        await supabase_service.log_execution_event(
+            project_id=request_data.project_id,
+            user_id=user_id,
+            event_type="plan_revision_started",
+            payload={**revision_context, "started_at": revision_started_at.isoformat()},
+        )
     
+    generation_started_at = datetime.now(timezone.utc)
+    generation_context = {
+        "grant_id": request_data.grant,
+        "template_id": request_data.template,
+        "num_candidates": request_data.num_candidates,
+        "is_external": request_data.is_external,
+        "selected_model": request_data.selected_model,
+    }
+
+    if request_data.project_id:
+        await supabase_service.log_execution_event(
+            project_id=request_data.project_id,
+            user_id=user_id,
+            event_type="plan_generation_started",
+            payload={**generation_context, "started_at": generation_started_at.isoformat()},
+        )
+
     num_candidates = request_data.num_candidates
 
     # 獲取該用戶的所有開啟狀態的 commands
@@ -298,6 +332,21 @@ async def generate_plan(
             plan_content[section_id] = []
         plan_content[section_id].append(res.dict())
 
+    if request_data.project_id:
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = int((finished_at - generation_started_at).total_seconds() * 1000)
+        await supabase_service.log_execution_event(
+            project_id=request_data.project_id,
+            user_id=user_id,
+            event_type="plan_generation_completed",
+            payload={
+                **generation_context,
+                "duration_ms": duration_ms,
+                "section_count": len(sections),
+                "finished_at": finished_at.isoformat(),
+            },
+        )
+
     return plan_content
 
 
@@ -335,6 +384,23 @@ async def revise_plan_version(
     sections = template_config.sections
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+
+    revision_started_at = datetime.now(timezone.utc)
+    revision_context = {
+        "grant_id": request_data.grant,
+        "template_id": request_data.template,
+        "num_candidates": request_data.num_candidates,
+        "is_external": request_data.is_external,
+        "selected_model": request_data.selected_model,
+    }
+
+    if request_data.project_id:
+        await supabase_service.log_execution_event(
+            project_id=request_data.project_id,
+            user_id=user_id,
+            event_type="plan_revision_started",
+            payload={**revision_context, "started_at": revision_started_at.isoformat()},
+        )
 
     answers_summary = _format_revision_answers(request_data.stored_answer)
     user_input_summary = _format_user_input_summary(request_data.stored_answer)
@@ -405,6 +471,21 @@ async def revise_plan_version(
         if section_id not in plan_content:
             plan_content[section_id] = []
         plan_content[section_id].append(res.dict())
+
+    if request_data.project_id:
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = int((finished_at - revision_started_at).total_seconds() * 1000)
+        await supabase_service.log_execution_event(
+            project_id=request_data.project_id,
+            user_id=user_id,
+            event_type="plan_revision_completed",
+            payload={
+                **revision_context,
+                "duration_ms": duration_ms,
+                "section_count": len(sections),
+                "finished_at": finished_at.isoformat(),
+            },
+        )
 
     return plan_content
 
@@ -739,12 +820,53 @@ async def websocket_chat_guidance(websocket: WebSocket):
         if not project_id or not supabase_service:
             return
         try:
+            previous_answers = stored_answer_state.get("chat_answers") or {}
+            previous_answers_snapshot = json.dumps(
+                previous_answers,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            current_answers_snapshot = json.dumps(current_answers, ensure_ascii=False, sort_keys=True)
+            answers_changed = previous_answers_snapshot != current_answers_snapshot
             stored_answer_state["chat_answers"] = current_answers.copy()
             payload = {
                 "conversation_history": conversation_history_records,
                 "stored_answer": stored_answer_state,
             }
             await supabase_service.update_project_record(project_id, user_id, payload)
+            if answers_changed and user_id:
+                # 計算詳細的字段變化
+                field_changes = []
+                all_field_ids = set(previous_answers.keys()) | set(current_answers.keys())
+                for field_id in sorted(all_field_ids):
+                    old_value = previous_answers.get(field_id, "")
+                    new_value = current_answers.get(field_id, "")
+                    if old_value != new_value:
+                        # 找到欄位標籤（如果可用）
+                        field_label = None
+                        for q in all_questions:
+                            if q.get("id") == field_id:
+                                field_label = q.get("label", field_id)
+                                break
+                        field_display = field_label or field_id
+                        field_changes.append({
+                            "field_id": field_id,
+                            "field_label": field_display,
+                            "old_value": old_value,
+                            "new_value": new_value,
+                            "change": f"{field_display}：《{old_value}》→《{new_value}》"
+                        })
+                
+                await supabase_service.log_execution_event(
+                    project_id=project_id,
+                    user_id=user_id,
+                    event_type="stored_answer_updated",
+                    payload={
+                        "answers_count": len(current_answers),
+                        "field_changes": field_changes,
+                        "changes_summary": " | ".join([f["change"] for f in field_changes])
+                    },
+                )
         except Exception as exc:
             logger.error(f"DB Save Error: {exc}")
 

@@ -95,6 +95,14 @@
         </button>
         <button
           type="button"
+          class="rounded-full border border-[#ffd4c8] px-6 py-2 text-sm font-semibold text-[#ff6b5c] hover:bg-[#fff8f6] transition disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="timelineLoading || !version"
+          @click="handleTimelineDownload"
+        >
+          下載時間軸
+        </button>
+        <button
+          type="button"
           class="rounded-full border border-gray-200 px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
           @click="$emit('close')"
         >
@@ -114,9 +122,15 @@ const props = defineProps({
   version: { type: Object, default: () => ({}) },
   planSections: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  timelineLoading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["close", "export", "updateVersion"]);
+const emit = defineEmits([
+  "close",
+  "export",
+  "updateVersion",
+  "downloadTimeline",
+]);
 
 const sections = computed(() => {
   if (!props.version?.data || !props.planSections?.length) {
@@ -172,6 +186,13 @@ function handleVersionUpdate() {
     return;
   }
   emit("updateVersion", props.version);
+}
+
+function handleTimelineDownload() {
+  if (!props.version) {
+    return;
+  }
+  emit("downloadTimeline", props.version);
 }
 </script>
 

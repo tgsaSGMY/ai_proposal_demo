@@ -321,7 +321,6 @@ interface ProjectRecord {
   grant_id?: string | null;
   template_id?: string | null;
   plan_type_id?: string | null;
-  plan_metadata?: Record<string, any> | null;
   created_at: string;
   updated_at: string | null;
 }

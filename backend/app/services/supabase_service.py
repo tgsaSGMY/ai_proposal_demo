@@ -2,10 +2,11 @@
 
 import os
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from fastapi import Request
 from supabase import create_client, Client
 from sqlalchemy import create_engine, text 
+from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 import asyncio 
@@ -51,7 +52,7 @@ class SupabaseService:
         finally:
             session.close()
 
-    def _execute_sql(self, statement: str, params: Dict[str, Any]):
+    def _execute_sql(self, statement: Union[str, TextClause], params: Dict[str, Any]):
         """執行一個帶參數的原生 SQL 語句。"""
         try:
             with self.get_db_session() as session:
@@ -149,6 +150,34 @@ class SupabaseService:
         }
         await asyncio.to_thread(self._execute_sql, stmt, params)
         print("Actor-Critic run logged to datasets table.")
+
+    async def log_execution_event(
+        self,
+        *,
+        project_id: Optional[str],
+        user_id: Optional[str],
+        event_type: str,
+        section_id: Optional[str] = None,
+        version_id: Optional[str] = None,
+        external_sources: Optional[List[Dict[str, Any]]] = None,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Append an execution timeline entry for AI transparency."""
+        try:
+            insert_data = {
+                "project_id": project_id,
+                "user_id": user_id,
+                "event_type": event_type,
+                "section_id": section_id,
+                "version_id": version_id,
+                "external_sources": external_sources,  # Supabase handles JSON serialization
+                "payload": payload or {},
+            }
+            response = self.client.from_("execution_logs").insert(insert_data).execute()
+            if response.data:
+                logger.debug(f"Execution event logged: {event_type} for project {project_id}")
+        except Exception:
+            logger.error("Failed to log execution event", exc_info=True)
             
     def register_new_model(self, model_id: str, display_name: str, base_model_id: str, adapter_path: str, tags: list = None):
         """将新训练的模型注册到数据库"""
@@ -555,6 +584,30 @@ class SupabaseService:
 
         response = self.client.from_("datasets").update(data).eq("id", dataset_id).execute()
         return response.data[0] if response.data else None
+
+    async def get_execution_logs(
+        self,
+        project_id: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Fetch execution log entries for a project within an optional time window."""
+
+        query = (
+            self.client
+            .from_("execution_logs")
+            .select("*")
+            .eq("project_id", project_id)
+            .order("created_at", desc=False)
+        )
+
+        if start_time:
+            query = query.gte("created_at", start_time)
+        if end_time:
+            query = query.lte("created_at", end_time)
+
+        response = await asyncio.to_thread(query.execute)
+        return response.data or []
 
     async def delete_dataset_by_id(self, dataset_id: int) -> bool:
         """根據 ID 刪除 datasets 表中的記錄"""

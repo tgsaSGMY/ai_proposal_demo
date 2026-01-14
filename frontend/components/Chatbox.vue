@@ -294,9 +294,11 @@
       :version="selectedVersion"
       :plan-sections="sections"
       :loading="isGenerating"
+      :timeline-loading="timelineLoading"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
       @updateVersion="handleVersionUpdateRequest"
+      @downloadTimeline="handleTimelineDownload"
     />
     <FieldFileImportModal
       v-model:is-open="isFileImportOpen"
@@ -342,6 +344,7 @@ import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModa
 import EditFieldModal from "~/components/editor/helper/EditFieldModal.vue";
 import RecommendNameModal from "~/components/editor/helper/RecommendNameModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
+import { useNotifications } from "~/composables/useNotifications";
 import {
   buildDynamicSections,
   createEmptyDynamicValues,
@@ -372,6 +375,7 @@ const isGenerating = computed(() => props.isGenerating);
 const showSidebar = computed(() => Boolean(props.showSidebar));
 
 const { confirm } = useConfirm();
+const { error: notifyError } = useNotifications();
 
 const emit = defineEmits([
   "generatePlan",
@@ -436,6 +440,7 @@ const projectRealtimeChannel = ref(null);
 const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
 const selectedModel = ref("");
+const timelineLoading = ref(false);
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
@@ -491,6 +496,10 @@ const hasCandidatePlan = computed(
 );
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
+
+function getCurrentTimestamp() {
+  return new Date().toISOString();
+}
 
 function getQuestionMeta(questionId) {
   if (!questionId) {
@@ -588,6 +597,7 @@ async function streamAIGuidanceMessage(question) {
             type: "text",
             content: "",
             isStreaming: true,
+            timestamp: getCurrentTimestamp(),
           };
           messages.value.push(aiMsg);
           // ensure we have a recorded last user index (in case it wasn't set)
@@ -887,6 +897,7 @@ async function handleSend(useAIFill = false) {
     role: "user",
     type: "text",
     content: messageContent,
+    timestamp: getCurrentTimestamp(),
   };
   messages.value.push(userMsg);
   // remember index so we can remove it if the stream is cancelled
@@ -1060,6 +1071,76 @@ async function handleVersionExport(version) {
   emit("requestExport", { version });
 }
 
+async function handleTimelineDownload(version) {
+  if (!props.projectId) {
+    notifyError("找不到專案資料，請重新整理後再嘗試");
+    return;
+  }
+  if (!version) {
+    notifyError("請先選擇要下載的版本");
+    return;
+  }
+
+  timelineLoading.value = true;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("請先登入後再下載時間軸");
+    }
+
+    const params = new URLSearchParams();
+    if (version.id) {
+      params.set("version_id", version.id);
+    } else if (version.number) {
+      params.set("version_number", String(version.number));
+    }
+
+    const query = params.toString() ? `?${params.toString()}` : "";
+    const response = await fetch(
+      `${API_BASE_URL}/projects/${props.projectId}/timeline/pdf${query}`,
+      {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || "下載時間軸失敗");
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.download = buildTimelineFilename(version);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error("Failed to download timeline", error);
+    notifyError(error?.message || "下載時間軸失敗，請稍後再試");
+  } finally {
+    timelineLoading.value = false;
+  }
+}
+
+function buildTimelineFilename(version) {
+  const safeTitle = (version?.title || props.projectTitle || "timeline")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .trim()
+    .replace(/_{2,}/g, "_");
+  const versionTag =
+    version?.id || (version?.number ? `v${version.number}` : "");
+  const suffix = versionTag ? `-${versionTag}` : "";
+  return `${safeTitle || "timeline"}${suffix}-timeline.pdf`;
+}
+
 function handleVersionUpdateRequest(version) {
   if (!version) {
     return;
@@ -1097,11 +1178,22 @@ function normalizeStoredMessages(entries = []) {
       if (!content) {
         return null;
       }
+      const timestampCandidate =
+        entry.timestamp ||
+        entry.created_at ||
+        entry.createdAt ||
+        entry.time ||
+        entry.updated_at ||
+        entry.createdAt;
+      const normalizedTimestamp = timestampCandidate
+        ? String(timestampCandidate)
+        : getCurrentTimestamp();
       return {
         id: entry.id || `history-${index}-${Date.now()}`,
         role,
         type: entry.type || "text",
         content,
+        timestamp: normalizedTimestamp,
       };
     })
     .filter(Boolean);
