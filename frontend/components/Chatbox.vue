@@ -1318,7 +1318,16 @@ function buildGuidedQuestionList() {
     // },
   ];
 
-  const sections = buildDynamicSections(createEmptyDynamicValues());
+  const sections = buildDynamicSections(
+    createEmptyDynamicValues({
+      templateId: props.templateId,
+      templateGrantId: props.grantId,
+    }),
+    {
+      templateId: props.templateId,
+      templateGrantId: props.grantId,
+    }
+  );
   sections.forEach((section) => {
     section.fields.forEach((field) => {
       const id = `${section.sectionId}::${field.propertyKey}`;

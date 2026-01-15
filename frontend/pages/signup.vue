@@ -1,9 +1,9 @@
 <template>
   <div class="flex items-center justify-center px-4 sm:p-6">
     <div class="w-full max-w-md">
-      <!-- Card Container -->
+      <!-- 卡片容器 -->
       <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <!-- Header Section with Gradient -->
+        <!-- 頂部區塊（漸層背景） -->
         <div
           class="bg-gradient-to-r from-purple-600 to-violet-600 px-6 sm:px-8 py-4 sm:py-7"
         >
@@ -15,12 +15,12 @@
           </p>
         </div>
 
-        <!-- Form Section -->
+        <!-- 表單區塊 -->
         <form
           @submit.prevent="handleSignUp"
           class="px-6 sm:px-8 py-8 sm:py-10 space-y-6"
         >
-          <!-- Email Input -->
+          <!-- 電子郵件輸入 -->
           <div>
             <label
               for="email"
@@ -38,7 +38,7 @@
             />
           </div>
 
-          <!-- Password Input -->
+          <!-- 密碼輸入 -->
           <div>
             <label
               for="password"
@@ -92,7 +92,7 @@
             </div>
           </div>
 
-          <!-- Password Requirements -->
+          <!-- 密碼要求說明 -->
           <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
             <p class="text-xs font-semibold text-purple-900 mb-2">密碼要求：</p>
             <ul class="text-xs text-purple-700 space-y-1">
@@ -154,7 +154,7 @@
             </ul>
           </div>
 
-          <!-- Success Message -->
+          <!-- 成功訊息 -->
           <Transition
             name="fade"
             enter-active-class="transition duration-200"
@@ -185,7 +185,7 @@
             </div>
           </Transition>
 
-          <!-- Error Message -->
+          <!-- 錯誤訊息 -->
           <Transition
             name="fade"
             enter-active-class="transition duration-200"
@@ -216,7 +216,7 @@
             </div>
           </Transition>
 
-          <!-- Submit Button -->
+          <!-- 送出按鈕 -->
           <button
             type="submit"
             :disabled="loading || !isPasswordValid"
@@ -266,11 +266,13 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+// 引入 Supabase 客戶端，用於呼叫 RPC 與 auth（處理註冊、登入等行為）
 
 definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+// 若使用者已登入，中介層會導回其他頁面，這裡保留 router 以便需要時導航使用
 const router = useRouter();
 
 const email = ref("");
@@ -280,7 +282,7 @@ const errorMessage = ref("");
 const successMessage = ref("");
 const showPassword = ref(false);
 
-// 密碼驗證計算屬性
+// 以下為密碼驗證的計算屬性：用於即時顯示各項要求是否達成（UI 顯示用）
 const hasUppercase = computed(() => /[A-Z]/.test(password.value));
 const hasLowercase = computed(() => /[a-z]/.test(password.value));
 const hasNumber = computed(() => /[0-9]/.test(password.value));
@@ -288,6 +290,7 @@ const hasSpecialChar = computed(() =>
   /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
 );
 
+/* isPasswordValid：綜合檢查密碼是否符合所有安全性條件（長度＋格式） */
 const isPasswordValid = computed(() => {
   return (
     password.value.length >= 8 &&
@@ -298,6 +301,13 @@ const isPasswordValid = computed(() => {
   );
 });
 
+/**
+ * handleSignUp - 註冊按鈕觸發的主要流程：
+ * 1) 欄位驗證
+ * 2) 密碼強度檢查
+ * 3) 呼叫 RPC 檢查白名單
+ * 4) 呼叫 supabase.auth.signUp 進行註冊
+ */
 const handleSignUp = async () => {
   if (!email.value || !password.value) {
     errorMessage.value = "請輸入電子郵件和密碼";

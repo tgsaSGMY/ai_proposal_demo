@@ -353,7 +353,10 @@ const fileImportState = ref(createFileImportState());
 watch(
   dynamicValuesModel,
   (newVal) => {
-    internalDynamicValues.value = mergeIntoEmptyValues(newVal);
+    internalDynamicValues.value = mergeIntoEmptyValues(newVal, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
   },
   { immediate: true, deep: true }
 );
@@ -414,7 +417,10 @@ const selectedTemplateName = computed(
 );
 
 const dynamicSections = computed(() =>
-  buildDynamicSections(internalDynamicValues.value)
+  buildDynamicSections(internalDynamicValues.value, {
+    templateId: selectedTemplateId.value,
+    templateGrantId: selectedGrantId.value,
+  })
 );
 
 const isReadyToGenerate = computed(() => {
@@ -541,7 +547,10 @@ async function generateFieldWithAI(sectionId, field) {
   try {
     // 收集已填寫的其他欄位
     const filledFields = {};
-    const sections = buildDynamicSections(internalDynamicValues.value);
+    const sections = buildDynamicSections(internalDynamicValues.value, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
     sections.forEach((section) => {
       section.fields.forEach((f) => {
         if (f.value && f.value.trim() !== "") {

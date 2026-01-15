@@ -131,7 +131,11 @@ onMounted(async () => {
   selectedTemplateId.value = props.draft.template_id;
   planContent.value = props.draft.plan_content;
   dynamicFieldValues.value = mergeIntoEmptyValues(
-    props.draft.user_input?.dynamic_fields
+    props.draft.user_input?.dynamic_fields,
+    {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    }
   );
   if (!editableDraft.user_input) {
     editableDraft.user_input = { main_idea: "", dynamic_fields: {} };
@@ -318,7 +322,10 @@ function onContentUpdateInModal({ sectionId, content }) {
 
 function buildFinalUserInputForGeneration(summaries = []) {
   let finalInput = `核心想法: ${editableDraft.user_input?.main_idea || ""}\n\n`;
-  const sections = buildDynamicSections(dynamicFieldValues.value);
+  const sections = buildDynamicSections(dynamicFieldValues.value, {
+    templateId: selectedTemplateId.value,
+    templateGrantId: selectedGrantId.value,
+  });
 
   const additionalDetails = sections
     .map((section) => {
@@ -444,15 +451,22 @@ async function handleGenerateUserInput() {
     if (!userId) {
       return;
     }
+    const schemaOptions = {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    };
     // 構建動態字段當前值（用於 reverse 模式）
     const currentDynamicFields = {};
     const labelByCompositeKey = new Map(
-      getDynamicFieldDefinitions().map((definition) => [
+      getDynamicFieldDefinitions(schemaOptions).map((definition) => [
         definition.compositeKey,
         definition.label,
       ])
     );
-    const sections = buildDynamicSections(dynamicFieldValues.value);
+    const sections = buildDynamicSections(dynamicFieldValues.value, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
     sections.forEach((section) => {
       section.fields.forEach((field) => {
         if (field.value && field.value.trim() !== "") {
@@ -469,7 +483,7 @@ async function handleGenerateUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       user_id: userId,
-      dynamic_fields_schema: getDynamicFieldLabels().map((label) => ({
+      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map((label) => ({
         label,
       })),
     };
@@ -497,7 +511,10 @@ async function handleGenerateUserInput() {
       const attemptLabelMap = (fieldMap) => {
         let updated = false;
         Object.entries(fieldMap).forEach(([label, fieldValue]) => {
-          const compositeKey = getCompositeKeyFromLabel(label);
+          const compositeKey = getCompositeKeyFromLabel(
+            label,
+            schemaOptions
+          );
           if (compositeKey && compositeKey in nextValues) {
             const normalized =
               typeof fieldValue === "string"
@@ -544,7 +561,10 @@ async function handleGenerateUserInput() {
 
       if (hasUpdates) {
         isHydratingDynamicFields = true;
-        dynamicFieldValues.value = mergeIntoEmptyValues(nextValues);
+        dynamicFieldValues.value = mergeIntoEmptyValues(
+          nextValues,
+          schemaOptions
+        );
         debounceSave();
       }
     }

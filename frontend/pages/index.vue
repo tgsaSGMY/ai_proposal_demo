@@ -637,7 +637,10 @@ async function runAttachmentAutofill(
   }
 
   const baseValues = createEmptyDynamicValues();
-  const sectionsView = buildDynamicSections(baseValues);
+  const sectionsView = buildDynamicSections(baseValues, {
+    templateId: selectedTemplateId.value,
+    templateGrantId: selectedGrantId.value,
+  });
   const sectionsPayload = sectionsView.map((section) => ({
     section_id: section.sectionId,
     section_name: section.sectionName,

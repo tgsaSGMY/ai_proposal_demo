@@ -424,14 +424,22 @@ async function handleGeneratorUserInput() {
       return;
     }
 
+    const schemaOptions = {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    };
+
     const currentDynamicFields: Record<string, string> = {};
     const labelByCompositeKey = new Map(
-      getDynamicFieldDefinitions().map((definition) => [
+      getDynamicFieldDefinitions(schemaOptions).map((definition) => [
         definition.compositeKey,
         definition.label,
       ])
     );
-    const sections = buildDynamicSections(dynamicFieldValues.value);
+    const sections = buildDynamicSections(dynamicFieldValues.value, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
     sections.forEach((section) => {
       section.fields.forEach((field) => {
         if (field.value && field.value.trim() !== "") {
@@ -448,7 +456,7 @@ async function handleGeneratorUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       user_id: userId,
-      dynamic_fields_schema: getDynamicFieldLabels().map((label) => ({
+      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map((label) => ({
         label,
       })),
     };
@@ -476,7 +484,7 @@ async function handleGeneratorUserInput() {
       const attemptLabelMap = (fieldMap: Record<string, any>) => {
         let updated = false;
         Object.entries(fieldMap).forEach(([label, fieldValue]) => {
-          const compositeKey = getCompositeKeyFromLabel(label);
+          const compositeKey = getCompositeKeyFromLabel(label, schemaOptions);
           if (compositeKey && compositeKey in nextValues) {
             const normalized =
               typeof fieldValue === "string"
@@ -523,7 +531,7 @@ async function handleGeneratorUserInput() {
 
       if (hasUpdates) {
         isHydratingDynamicFieldState = true;
-        dynamicFieldValues.value = mergeIntoEmptyValues(nextValues);
+        dynamicFieldValues.value = mergeIntoEmptyValues(nextValues, schemaOptions);
       }
     }
     scheduleGeneratorAutosave();

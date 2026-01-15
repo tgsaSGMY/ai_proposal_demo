@@ -301,17 +301,16 @@ function matchesTemplate(
   if (!templateId && !templateGrantId) {
     return true;
   }
-  if (templateId && section.templateId && section.templateId !== templateId) {
+  if (templateId && section.templateId !== templateId) {
     return false;
   }
-  if (
-    templateGrantId &&
-    section.templateGrantId &&
-    section.templateGrantId !== templateGrantId
-  ) {
+  if (templateGrantId && section.templateGrantId !== templateGrantId) {
     return false;
   }
-  return true;
+  return Boolean(
+    (!templateId || section.templateId === templateId) &&
+      (!templateGrantId || section.templateGrantId === templateGrantId)
+  );
 }
 
 function getRenderableSections(options?: SchemaFilterOptions) {
@@ -581,12 +580,15 @@ export function getDynamicFieldLabels(options?: SchemaFilterOptions): string[] {
   );
 }
 
-export function getCompositeKeyFromLabel(label?: string | null): string | null {
+export function getCompositeKeyFromLabel(
+  label?: string | null,
+  options?: SchemaFilterOptions
+): string | null {
   if (!label) {
     return null;
   }
   const normalizedTarget = normalizeLabel(label);
-  const definitions = getDynamicFieldDefinitions();
+  const definitions = getDynamicFieldDefinitions(options);
 
   const exactMatch = definitions.find(
     (definition) => normalizeLabel(definition.label) === normalizedTarget

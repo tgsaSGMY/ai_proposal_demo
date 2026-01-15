@@ -444,7 +444,11 @@ function decorateProject(
   const accent = accentOverride || accentPalette[index % accentPalette.length]!;
 
   let completeness = 0;
-  const totalFields = getDynamicFieldLabels().length;
+  const schemaOptions = {
+    templateId: record.template_id,
+    templateGrantId: record.grant_id,
+  };
+  const totalFields = getDynamicFieldLabels(schemaOptions).length;
 
   if (record.mode === "generator") {
     // 生成模式：计算 stored_answer.user_input.dynamic_fields 中有 value 的数量 / totalFields

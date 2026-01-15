@@ -390,7 +390,11 @@ function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
     typeof userInputPayload.dynamic_fields === "object"
   ) {
     dynamicFieldValues.value = mergeIntoEmptyValues(
-      userInputPayload.dynamic_fields as Record<string, string>
+      userInputPayload.dynamic_fields as Record<string, string>,
+      {
+        templateId: selectedTemplateId.value,
+        templateGrantId: selectedGrantId.value,
+      }
     );
   }
 }

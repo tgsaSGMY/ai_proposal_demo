@@ -303,9 +303,13 @@ async function handleBatchStart(payload) {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error("請先登入");
+    const schemaOptions = {
+      templateId: payload.template_id,
+      templateGrantId: payload.grant_id,
+    };
     const payload1 = {
       ...payload,
-      dynamic_fields_schema: getAllCompositeKeys(),
+      dynamic_fields_schema: getAllCompositeKeys(schemaOptions),
     };
     const response = await fetch(
       `${API_BASE_URL}/draft_plans/batch_synthetic`,

@@ -368,7 +368,10 @@ const expandedFieldIds = ref(new Set());
 watch(
   dynamicValuesModel,
   (newVal) => {
-    internalDynamicValues.value = mergeIntoEmptyValues(newVal);
+    internalDynamicValues.value = mergeIntoEmptyValues(newVal, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
   },
   { immediate: true, deep: true }
 );
@@ -405,7 +408,10 @@ const availableTemplates = computed(() => {
 });
 
 const dynamicSections = computed(() =>
-  buildDynamicSections(internalDynamicValues.value)
+  buildDynamicSections(internalDynamicValues.value, {
+    templateId: selectedTemplateId.value,
+    templateGrantId: selectedGrantId.value,
+  })
 );
 
 const referenceFieldOptions = computed(() => {
