@@ -2,9 +2,9 @@
   <ClientOnly>
     <div class="flex items-center justify-center p-4 sm:p-6">
       <div class="w-full max-w-md">
-        <!-- Card Container -->
+        <!-- 卡片容器 -->
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <!-- Header Section with Gradient -->
+          <!-- 頂部區塊（漸層背景） -->
           <div
             class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 sm:px-8 py-8 sm:py-10"
           >
@@ -16,12 +16,12 @@
             </p>
           </div>
 
-          <!-- Form Section -->
+          <!-- 表單區塊 -->
           <form
             @submit.prevent="handleLogin"
             class="px-6 sm:px-8 py-8 sm:py-10 space-y-6"
           >
-            <!-- Email Input -->
+            <!-- 電子郵件輸入 -->
             <div>
               <label
                 for="email"
@@ -40,7 +40,7 @@
               />
             </div>
 
-            <!-- Password Input -->
+            <!-- 密碼輸入 -->
             <div>
               <label
                 for="password"
@@ -67,7 +67,7 @@
               </div>
             </div>
 
-            <!-- Error Message -->
+            <!-- 錯誤訊息 -->
             <Transition
               name="fade"
               enter-active-class="transition duration-200"
@@ -98,7 +98,7 @@
               </div>
             </Transition>
 
-            <!-- Submit Button -->
+            <!-- 送出按鈕 -->
             <button
               type="submit"
               :disabled="isLoading"
@@ -143,7 +143,7 @@
             </button>
           </form>
 
-          <!-- Footer Section -->
+          <!-- 頁腳區塊 -->
           <!-- <div
           class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
         >
@@ -165,18 +165,28 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+// 引入 Supabase：處理登入驗證與錯誤回傳解析
 
 definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+// router 用於登入成功後導向
 const router = useRouter();
 
-const email = ref("");
-const password = ref("");
-const errorMessage = ref("");
-const isLoading = ref(false);
+// 表單欄位與 UI 狀態說明
+const email = ref(""); // 使用者輸入電子郵件
+const password = ref(""); // 使用者輸入密碼
+const errorMessage = ref(""); // 顯示錯誤訊息
+const isLoading = ref(false); // 請求中狀態
 
+/**
+ * handleLogin - 處理使用者登入流程
+ * 步驟：
+ *  1) 檢查欄位是否填寫
+ *  2) 呼叫 supabase.auth.signInWithPassword
+ *  3) 根據回傳錯誤提供更友善的提示（如驗證未完成、帳號不存在等）
+ */
 const handleLogin = async () => {
   if (!email.value || !password.value) {
     errorMessage.value = "請輸入電子郵件和密碼";

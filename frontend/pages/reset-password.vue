@@ -2,9 +2,9 @@
   <ClientOnly>
     <div class="flex items-center justify-center p-4 sm:p-6 min-h-screen">
       <div class="w-full max-w-md">
-        <!-- Card Container -->
+        <!-- 卡片容器 -->
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <!-- Header Section with Gradient -->
+          <!-- 頂部區塊（漸層背景） -->
           <div
             class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 sm:px-8 py-8 sm:py-10"
           >
@@ -14,13 +14,13 @@
             <p class="text-indigo-100 text-sm sm:text-base">請輸入您的新密碼</p>
           </div>
 
-          <!-- Form Section -->
+          <!-- 表單區塊 -->
           <form
             v-if="sessionValid"
             @submit.prevent="handleResetPassword"
             class="px-6 sm:px-8 py-8 sm:py-10 space-y-6"
           >
-            <!-- New Password Input -->
+            <!-- 新密碼輸入 -->
             <div>
               <label
                 for="password"
@@ -76,7 +76,7 @@
               </div>
             </div>
 
-            <!-- Password Requirements -->
+            <!-- 密碼要求說明 -->
             <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
               <p class="text-xs font-semibold text-indigo-900 mb-2">
                 密碼要求：
@@ -194,7 +194,7 @@
               </div>
             </div>
 
-            <!-- Error Message -->
+            <!-- 錯誤訊息 -->
             <Transition
               name="fade"
               enter-active-class="transition duration-200"
@@ -225,7 +225,7 @@
               </div>
             </Transition>
 
-            <!-- Success Message -->
+            <!-- 成功訊息 -->
             <Transition
               name="fade"
               enter-active-class="transition duration-200"
@@ -256,7 +256,7 @@
               </div>
             </Transition>
 
-            <!-- Submit Button -->
+            <!-- 送出按鈕 -->
             <button
               type="submit"
               :disabled="isLoading || !isPasswordValid"
@@ -301,7 +301,7 @@
             </button>
           </form>
 
-          <!-- Session Error Message -->
+          <!-- 會話相關錯誤訊息 -->
           <div
             v-if="!sessionValid && errorMessage"
             class="px-6 sm:px-8 py-8 sm:py-10"
@@ -332,7 +332,7 @@
             </NuxtLink>
           </div>
 
-          <!-- Footer Section -->
+          <!-- 頁腳區塊 -->
           <div
             class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
           >
@@ -354,20 +354,23 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+// 引入 Supabase：處理驗證與使用者操作（例如更新密碼與會話檢查）
 
+// router 用於頁面導向；route 用於取得當前路由資訊（例如重設 token 在 URL hash）
 const router = useRouter();
 const route = useRoute();
 
-const password = ref("");
-const confirmPassword = ref("");
-const errorMessage = ref("");
-const successMessage = ref("");
-const isLoading = ref(false);
-const showPassword = ref(false);
-const showConfirmPassword = ref(false);
-const sessionValid = ref(false);
+// 表單欄位與 UI 狀態說明
+const password = ref(""); // 使用者輸入的新密碼
+const confirmPassword = ref(""); // 確認密碼欄位
+const errorMessage = ref(""); // 顯示錯誤訊息
+const successMessage = ref(""); // 顯示成功訊息
+const isLoading = ref(false); // 請求進行中
+const showPassword = ref(false); // 新密碼顯示切換
+const showConfirmPassword = ref(false); // 確認密碼顯示切換
+const sessionValid = ref(false); // 是否有有效的重設會話/token，控制是否顯示表單
 
-// 密碼驗證計算屬性
+// 以下為密碼驗證計算屬性（用於 UI 即時顯示各項要求是否滿足）
 const hasUppercase = computed(() => /[A-Z]/.test(password.value));
 const hasLowercase = computed(() => /[a-z]/.test(password.value));
 const hasNumber = computed(() => /[0-9]/.test(password.value));
@@ -375,6 +378,7 @@ const hasSpecialChar = computed(() =>
   /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
 );
 
+/* isPasswordValid：綜合檢查密碼是否符合所有條件（長度、字元組合、與確認密碼相符） */
 const isPasswordValid = computed(() => {
   return (
     password.value.length >= 8 &&
@@ -387,7 +391,7 @@ const isPasswordValid = computed(() => {
   );
 });
 
-// 頁面挂載時驗證會話和令牌
+// 頁面掛載時：檢查 URL hash（可能含重設 token）或現有會話，以決定是否顯示重設表單
 onMounted(async () => {
   try {
     // 檢查 URL 中是否有令牌（來自郵件鏈接）
@@ -421,6 +425,14 @@ onMounted(async () => {
   }
 });
 
+/**
+ * handleResetPassword - 處理重設密碼流程
+ * 步驟：
+ *  1) 驗證欄位與密碼強度
+ *  2) 呼叫 Supabase API 更新使用者密碼
+ *  3) 根據錯誤訊息給予使用者具體提示（例如 token 過期 / 與舊密碼相同）
+ *  4) 成功後導向回首頁
+ */
 const handleResetPassword = async () => {
   errorMessage.value = "";
   successMessage.value = "";

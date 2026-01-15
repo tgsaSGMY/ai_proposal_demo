@@ -2,9 +2,9 @@
   <ClientOnly>
     <div class="flex items-center justify-center p-4 sm:p-6 min-h-screen">
       <div class="w-full max-w-md">
-        <!-- Card Container -->
+        <!-- 卡片容器 -->
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <!-- Header Section with Gradient -->
+          <!-- 頂部區塊（漸層背景） -->
           <div
             class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 sm:px-8 py-8 sm:py-10"
           >
@@ -16,12 +16,12 @@
             </p>
           </div>
 
-          <!-- Form Section -->
+          <!-- 表單區塊 -->
           <form
             @submit.prevent="handleForgotPassword"
             class="px-6 sm:px-8 py-8 sm:py-10 space-y-6"
           >
-            <!-- Email Input -->
+            <!-- 電子郵件輸入 -->
             <div>
               <label
                 for="email"
@@ -40,7 +40,7 @@
               />
             </div>
 
-            <!-- Error Message -->
+            <!-- 錯誤訊息 -->
             <Transition
               name="fade"
               enter-active-class="transition duration-200"
@@ -71,7 +71,7 @@
               </div>
             </Transition>
 
-            <!-- Success Message -->
+            <!-- 成功訊息 -->
             <Transition
               name="fade"
               enter-active-class="transition duration-200"
@@ -102,7 +102,7 @@
               </div>
             </Transition>
 
-            <!-- Submit Button -->
+            <!-- 送出按鈕 -->
             <button
               type="submit"
               :disabled="isLoading"
@@ -147,7 +147,7 @@
             </button>
           </form>
 
-          <!-- Footer Section -->
+          <!-- 頁腳區塊 -->
           <div
             class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
           >
@@ -169,16 +169,25 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+// 引入 Supabase：用於發送重設郵件以及處理與驗證相關的操作
 
 definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
-const email = ref("");
-const errorMessage = ref("");
-const successMessage = ref("");
-const isLoading = ref(false);
+// 表單欄位與 UI 狀態
+const email = ref(""); // 使用者輸入的電子郵件
+const errorMessage = ref(""); // 錯誤訊息顯示
+const successMessage = ref(""); // 成功訊息顯示
+const isLoading = ref(false); // 請求中狀態
 
+/**
+ * handleForgotPassword - 處理發送重設密碼郵件
+ * 步驟：
+ *  1) 驗證是否輸入郵件
+ *  2) 呼叫 supabase.auth.resetPasswordForEmail 發送重設鏈接
+ *  3) 根據錯誤類型顯示友善提示
+ */
 const handleForgotPassword = async () => {
   if (!email.value) {
     errorMessage.value = "請輸入電子郵件";
