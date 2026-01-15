@@ -142,21 +142,6 @@
               {{ isLoading ? "登入中..." : "登入" }}
             </button>
           </form>
-
-          <!-- 頁腳區塊 -->
-          <!-- <div
-          class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
-        >
-          <p class="text-gray-600 text-sm">
-            沒有帳戶？
-            <NuxtLink
-              to="/"
-              class="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline transition"
-            >
-              返回首頁
-            </NuxtLink>
-          </p>
-        </div> -->
         </div>
       </div>
     </div>

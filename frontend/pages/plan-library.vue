@@ -13,6 +13,7 @@
           <div
             class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
           >
+            <!-- 頁面標題與動作區：顯示頁面標題、說明文字，以及新增計畫的 CTA 按鈕 -->
             <div class="space-y-2">
               <h1 class="text-3xl font-semibold text-gray-900">我的計畫庫</h1>
               <p class="text-sm text-gray-500 max-w-2xl">
@@ -46,6 +47,7 @@
           v-if="isLoadingProjects"
           class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-gray-500"
         >
+          <!-- 載入中樣式：當專案尚在請求中顯示的占位區塊 -->
           <span class="text-sm font-semibold tracking-wide"
             >正在載入計畫...</span
           >
@@ -56,6 +58,7 @@
           v-else-if="loadError"
           class="flex flex-col items-center justify-center rounded-3xl border border-rose-100 bg-white p-8 text-center"
         >
+          <!-- 載入錯誤顯示：當取得專案發生錯誤時顯示提示與重試按鈕 -->
           <p class="text-base font-semibold text-rose-500">{{ loadError }}</p>
           <p class="mt-2 text-sm text-gray-500">無法載入專案，請重新整理。</p>
           <button
@@ -70,6 +73,7 @@
           v-else-if="projects.length === 0"
           class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-gray-200 bg-white/90 p-10 text-center"
         >
+          <!-- 空狀態：尚無已儲存計畫時顯示，引導使用者建立新計畫 -->
           <p class="text-lg font-semibold text-gray-800">
             目前尚無已儲存的計畫
           </p>
@@ -113,6 +117,7 @@
                   :aria-expanded="menuOpenId === project.id"
                   aria-label="更多操作"
                 >
+                  <!-- 專案卡片的「更多操作」按鈕（打開選單以編輯 / 刪除 / 生成圖片等） -->
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -213,6 +218,7 @@
       <section
         class="flex-shrink-0 border-t border-gray-100 bg-gray-50 px-4 py-4 md:px-6 md:py-4"
       >
+        <!-- 側欄統計與快捷資訊：例如本月生成次數、真人專家邀請等 -->
         <div class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div
             class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm flex items-start gap-3"
@@ -297,12 +303,16 @@ import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useInternalCheck } from "~/composables/useInternalCheck";
+// 引入元件與 composables：處理編輯 modal、圖片生成、使用者資訊、內部權限判定、通知與確認對話等功能
+
 import {
   getDynamicFieldLabels,
   ensureDynamicSchemaLoaded,
 } from "~/utils/dynamicSchema";
 import { supabase } from "~/utils/supabaseClient";
+// 透過動態 schema 來計算每個計畫卡片的進度，並使用 Supabase API 取得與管理專案資料
 
+// 介面定義：用來描述 UI 卡片與後端的專案紀錄結構
 interface Accent {
   tagBg: string;
   tagText: string;
@@ -403,6 +413,10 @@ const { userId: currentUserId, refreshUser } = useCurrentUser();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+/**
+ * 點擊文件任意處時關閉任何打開的操作選單
+ * - 用於實現「點選外部關閉」功能
+ */
 const handleDocumentClick = () => {
   menuOpenId.value = null;
 };
@@ -436,6 +450,17 @@ watch(
   { immediate: true }
 );
 
+/**
+ * 將後端的 ProjectRecord 轉換為供 UI 顯示的 ProjectCard
+ * - 計算計畫完成度百分比（基於 stored_answer 中填入的動態欄位）
+ * - 指派顏色與樣式（accent）用於卡片展示
+ * - 格式化最後更新時間為台灣時區格式
+ * - 區分「生成模式」和「互動模式」
+ * @param record - 後端專案記錄
+ * @param index - 專案在列表中的索引（用於循環指派顏色）
+ * @param accentOverride - 可選的顏色樣式覆蓋
+ * @returns 裝飾後的前端專案卡片物件
+ */
 function decorateProject(
   record: ProjectRecord,
   index: number,
@@ -498,6 +523,14 @@ function decorateProject(
   };
 }
 
+/**
+ * 向後端 API 取得使用者的專案列表
+ * - 確保動態 schema 已載入（用於計算完成度）
+ * - 驗證登入狀態與取得 session token
+ * - 呼叫 GET /api/projects API
+ * - 將每個 record 裝飾成 ProjectCard 並按索引指派顏色
+ * - 設定載入狀態與錯誤訊息
+ */
 async function fetchProjects() {
   const userId = currentUserId.value || (await refreshUser());
   if (!userId) {
@@ -543,20 +576,40 @@ async function fetchProjects() {
   }
 }
 
+/**
+ * 切換指定專案卡片的操作選單開關狀態
+ * @param id - 專案的 ID
+ */
 function toggleMenu(id: string) {
   menuOpenId.value = menuOpenId.value === id ? null : id;
 }
 
+/**
+ * 導向指定專案的詳細頁面
+ * @param id - 專案的 ID
+ */
 function goToProject(id: string) {
   router.push(`/projects/${id}`);
 }
 
+/**
+ * 打開專案編輯 modal，將選中的專案載入到編輯表單中
+ * @param project - 要編輯的專案卡片物件
+ */
 function openEdit(project: ProjectCard) {
   editingProject.value = { ...project } as ProjectCard;
   isEditModalOpen.value = true;
   menuOpenId.value = null;
 }
 
+/**
+ * 打開圖片生成 modal（僅限內部使用者）
+ * - 驗證當前使用者是否為內部人員
+ * - 若不是內部使用者，顯示錯誤通知並返回
+ * - 設定選中的專案用於圖片生成
+ * - 打開圖片生成 modal
+ * @param project - 要生成圖片的專案卡片物件
+ */
 function openGenerateImage(project: ProjectCard) {
   // runtime guard: only internal users can open the image generator
   if (!isInternal.value) {
@@ -570,16 +623,29 @@ function openGenerateImage(project: ProjectCard) {
   menuOpenId.value = null;
 }
 
+/**
+ * 關閉專案編輯 modal 並清空編輯狀態
+ */
 function closeEditModal() {
   isEditModalOpen.value = false;
   editingProject.value = null;
 }
 
+/**
+ * 關閉圖片生成 modal 並清空選中專案狀態
+ */
 function closeImageGeneratorModal() {
   isImageGeneratorOpen.value = false;
   selectedProjectForImage.value = null;
 }
 
+/**
+ * 處理圖片生成請求
+ * - 驗證選中的專案存在
+ * - 記錄生成請求信息
+ * - 顯示成功通知
+ * @param prompt - 用戶輸入的圖片生成提示詞
+ */
 async function handleImageGenerate(prompt: string) {
   if (!selectedProjectForImage.value) return;
 
@@ -596,6 +662,15 @@ async function handleImageGenerate(prompt: string) {
   }
 }
 
+/**
+ * 儲存編輯後的專案資訊
+ * - 驗證專案 ID 存在
+ * - 驗證登入狀態與取得 session token
+ * - 呼叫 PUT /api/projects/{id} API 更新標題與描述
+ * - 更新本地列表中的專案卡片
+ * - 成功後顯示通知並關閉編輯 modal
+ * @param payload - 專案更新數據，包含 id、title、description
+ */
 async function handleSave(payload: {
   id?: string;
   title: string;
@@ -643,6 +718,15 @@ async function handleSave(payload: {
   }
 }
 
+/**
+ * 刪除專案
+ * - 需使用者確認（二次確認對話）
+ * - 驗證登入狀態與取得 session token
+ * - 呼叫 DELETE /api/projects/{id} API
+ * - 從本地列表中移除已刪除的專案
+ * - 成功後顯示通知
+ * @param project - 要刪除的專案卡片物件
+ */
 async function handleDelete(project: ProjectCard) {
   menuOpenId.value = null;
   const confirmed = await confirm({
@@ -681,6 +765,9 @@ async function handleDelete(project: ProjectCard) {
   }
 }
 
+/**
+ * 建立新專案：導向首頁以開始新的計畫生成流程
+ */
 function handleCreateProject() {
   router.push("/");
 }

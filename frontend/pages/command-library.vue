@@ -2,6 +2,7 @@
   <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-10">
     <div class="mx-auto max-w-6xl space-y-6">
       <header class="space-y-3">
+        <!-- 頁首區：顯示導覽路徑與頁面統計（已啟用 / 全部指令） -->
         <p
           class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
         >
@@ -47,6 +48,7 @@
         </div>
       </header>
 
+      <!-- 標籤篩選區：切換查看所有 / 系統 / 企業指令 -->
       <section
         class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm"
       >
@@ -67,6 +69,7 @@
         </div>
       </section>
 
+      <!-- 搜尋與新增區：可搜尋指令或建立新指令 -->
       <div
         class="flex flex-col gap-3 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
       >
@@ -152,6 +155,7 @@
                 :aria-expanded="menuOpenId === command.id"
                 aria-label="更多操作"
               >
+                <!-- 卡片更多操作按鈕：打開選單以編輯或刪除該指令 -->
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -201,6 +205,7 @@
                 command.lastUpdated
               }}</span>
             </div>
+            <!-- 指令啟用切換區：可直接在卡片上啟用或停用對應指令 -->
             <div
               class="flex items-center gap-2 text-xs font-semibold text-gray-500"
             >
@@ -264,14 +269,18 @@ import CommandEditModal from "~/components/CommandEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { supabase } from "~/utils/supabaseClient";
+// 引入：modal、確認與通知工具、以及 Supabase 用於指令的 CRUD 操作
 
 definePageMeta({
   middleware: "auth",
 });
+// 本頁需驗證（登入）後才可存取與編輯指令
 
 useHead({
   title: "我的指令庫 - TGSA 補助引擎",
   meta: [
+    // SEO 與分享資訊：說明該頁面的用途與關鍵字，改善搜尋結果顯示
+
     {
       name: "description",
       content:
@@ -295,6 +304,7 @@ useHead({
   ],
 });
 
+// 介面定義：描述指令在前端使用的形態
 interface CommandItem {
   id: string;
   title: string;
@@ -317,6 +327,7 @@ interface SupabaseCommandRow {
 
 type CommandTab = "all" | "system" | "company";
 
+// 預設指令：若使用者尚未建立任何指令，系統會 seed 一組預設項目供快速開始
 const DEFAULT_COMMANDS = [
   { title: "公司基本資料與資訊庫", isCompany: true },
   { title: "公司商業策略與機會", isCompany: true },
@@ -325,17 +336,18 @@ const DEFAULT_COMMANDS = [
   { title: "工程師提問模組", isCompany: true },
 ] as const;
 
-const commands = ref<CommandItem[]>([]);
-const activeTab = ref<CommandTab>("all");
-const searchTerm = ref("");
-const menuOpenId = ref<string | null>(null);
-const isEditModalOpen = ref(false);
+// 資料與 UI 狀態變數
+const commands = ref<CommandItem[]>([]); // 指令列表
+const activeTab = ref<CommandTab>("all"); // 目前分頁（all, system, company）
+const searchTerm = ref(""); // 搜尋關鍵字
+const menuOpenId = ref<string | null>(null); // 打開的卡片操作選單 id
+const isEditModalOpen = ref(false); // 編輯 modal 顯示狀態
 const editingCommand = ref<{
   id?: string;
   title: string;
   description: string;
   isCompany: boolean;
-} | null>(null);
+} | null>(null); // 正在編輯的指令
 const { confirm } = useConfirm();
 const {
   success,
@@ -343,9 +355,9 @@ const {
   error: notifyError,
   warning: notifyWarning,
 } = useNotifications();
-const userId = ref<string | null>(null);
-const isLoadingCommands = ref(false);
-let hasSeededDefaults = false;
+const userId = ref<string | null>(null); // 當前使用者 id
+const isLoadingCommands = ref(false); // 載入狀態
+let hasSeededDefaults = false; // 是否已經 seed 過預設指令
 
 const tabCounts = computed(() => ({
   all: commands.value.length,
@@ -385,14 +397,26 @@ const filteredCommands = computed(() => {
   });
 });
 
+/**
+ * 切換指令分頁篩選
+ * @param value - 分頁類型 ('all' - 所有指令, 'system' - 系統規則, 'company' - 企業專屬)
+ */
 function setTab(value: CommandTab) {
   activeTab.value = value;
 }
 
+/**
+ * 切換指定指令卡片的操作選單開關狀態
+ * @param id - 指令的 ID
+ */
 function toggleMenu(id: string) {
   menuOpenId.value = menuOpenId.value === id ? null : id;
 }
 
+/**
+ * 打開指令編輯 modal，將選中的指令載入到編輯表單中
+ * @param command - 要編輯的指令物件
+ */
 function openEdit(command: CommandItem) {
   editingCommand.value = {
     id: command.id,
@@ -404,11 +428,22 @@ function openEdit(command: CommandItem) {
   menuOpenId.value = null;
 }
 
+/**
+ * 關閉指令編輯 modal 並清空編輯狀態
+ */
 function closeEditModal() {
   isEditModalOpen.value = false;
   editingCommand.value = null;
 }
 
+/**
+ * 儲存指令（新增或更新）
+ * - 驗證使用者登入狀態
+ * - 檢查標題與描述不可為空
+ * - 呼叫 Supabase 執行 INSERT（新增）或 UPDATE（更新）
+ * - 成功後重新載入指令列表並關閉 modal
+ * @param payload - 指令數據物件，包含 id（編輯時）、title、description、isCompany
+ */
 async function handleSave(payload: {
   id?: string;
   title: string;
@@ -462,6 +497,14 @@ async function handleSave(payload: {
   }
 }
 
+/**
+ * 刪除指令
+ * - 需使用者確認（二次確認對話）
+ * - 驗證登入狀態
+ * - 呼叫 Supabase DELETE
+ * - 成功後重新載入指令列表
+ * @param command - 要刪除的指令物件
+ */
 async function handleDelete(command: CommandItem) {
   menuOpenId.value = null;
   const confirmed = await confirm({
@@ -489,6 +532,12 @@ async function handleDelete(command: CommandItem) {
   success("指令已刪除");
 }
 
+/**
+ * 建立新指令：初始化編輯表單並打開 modal
+ * - 清空編輯表單的所有欄位
+ * - 設定預設值（企業 DNA 類型為 false）
+ * - 打開編輯 modal
+ */
 function handleCreateCommand() {
   editingCommand.value = {
     title: "",
@@ -498,6 +547,12 @@ function handleCreateCommand() {
   isEditModalOpen.value = true;
 }
 
+/**
+ * 啟動指令初始化流程
+ * - 取得當前登入使用者的 ID
+ * - 載入使用者的指令列表
+ * - 若發生錯誤，顯示通知
+ */
 async function bootstrapCommands() {
   try {
     const {
@@ -513,6 +568,14 @@ async function bootstrapCommands() {
   }
 }
 
+/**
+ * 從 Supabase 載入當前使用者的指令列表
+ * - 若使用者未登入，返回空列表
+ * - 按最近更新時間排序（降序）
+ * - 若清單為空且尚未 seed，則自動建立預設指令
+ * - 將 Supabase 的 snake_case 欄位轉換為前端使用的格式
+ * - 設定載入狀態與錯誤訊息
+ */
 async function loadCommands() {
   if (!userId.value) {
     commands.value = [];
@@ -544,6 +607,13 @@ async function loadCommands() {
   }
 }
 
+/**
+ * 為新使用者自動建立預設指令集
+ * - 建立一組常用的系統規則與企業 DNA 指令範本
+ * - 預設狀態為停用（is_open: false），使用者可後續啟用
+ * - 記錄建立時間戳
+ * - 若建立失敗，拋出錯誤
+ */
 async function seedDefaultCommands() {
   if (!userId.value) {
     return;
@@ -563,6 +633,14 @@ async function seedDefaultCommands() {
   }
 }
 
+/**
+ * 將 Supabase 的指令記錄轉換為前端使用的 CommandItem 格式
+ * - 轉換欄位命名（snake_case → camelCase）
+ * - 格式化時間戳為台灣時區格式
+ * - 保持所有必要的業務邏輯資料
+ * @param row - Supabase 指令記錄
+ * @returns 轉換後的前端指令物件
+ */
 function mapCommandRow(row: SupabaseCommandRow): CommandItem {
   return {
     id: row.id,
@@ -575,6 +653,14 @@ function mapCommandRow(row: SupabaseCommandRow): CommandItem {
   };
 }
 
+/**
+ * 格式化時間戳為台灣時區的可讀格式
+ * - 若輸入為空，返回 '-'
+ * - 若日期無效，返回原始值
+ * - 否則返回 'YYYY/MM/DD HH:MM:SS' 格式
+ * @param value - ISO 格式的時間戳或 null
+ * @returns 格式化後的日期時間字串
+ */
 function formatTimestamp(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -584,6 +670,15 @@ function formatTimestamp(value?: string | null) {
   return date.toLocaleString("zh-TW", { hour12: false });
 }
 
+/**
+ * 切換指令的啟用/停用狀態
+ * - 驗證使用者登入
+ * - 若要啟用，檢查標題與描述不可為空，否則打開編輯 modal
+ * - 呼叫 Supabase 更新 is_open 狀態
+ * - 更新本地狀態與最後更新時間
+ * - 成功後顯示通知
+ * @param commandId - 指令的 ID
+ */
 async function handleToggle(commandId: string) {
   if (!userId.value) {
     notifyWarning("請先登入後再進行操作");
@@ -621,15 +716,21 @@ async function handleToggle(commandId: string) {
   info(nextState ? "已啟用此指令" : "已停用此指令");
 }
 
+/**
+ * 點擊文件任意處時關閉任何打開的操作選單
+ * - 用於實現「點選外部關閉」功能
+ */
 const handleDocumentClick = () => {
   menuOpenId.value = null;
 };
 
+// 初始化：加上全域點擊監聽並載入指令資料
 onMounted(async () => {
   document.addEventListener("click", handleDocumentClick);
   await bootstrapCommands();
 });
 
+// 清理監聽器
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleDocumentClick);
 });
