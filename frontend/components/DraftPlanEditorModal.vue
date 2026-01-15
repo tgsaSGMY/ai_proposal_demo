@@ -483,9 +483,11 @@ async function handleGenerateUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       user_id: userId,
-      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map((label) => ({
-        label,
-      })),
+      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map(
+        (label) => ({
+          label,
+        })
+      ),
     };
 
     // 在 reverse 模式下，傳送 planContent 讓後端反推
@@ -511,10 +513,7 @@ async function handleGenerateUserInput() {
       const attemptLabelMap = (fieldMap) => {
         let updated = false;
         Object.entries(fieldMap).forEach(([label, fieldValue]) => {
-          const compositeKey = getCompositeKeyFromLabel(
-            label,
-            schemaOptions
-          );
+          const compositeKey = getCompositeKeyFromLabel(label, schemaOptions);
           if (compositeKey && compositeKey in nextValues) {
             const normalized =
               typeof fieldValue === "string"

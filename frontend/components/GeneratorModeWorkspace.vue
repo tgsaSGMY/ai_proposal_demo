@@ -456,9 +456,11 @@ async function handleGeneratorUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       user_id: userId,
-      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map((label) => ({
-        label,
-      })),
+      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map(
+        (label) => ({
+          label,
+        })
+      ),
     };
 
     if (projectRecord.value?.mode === "golden" && finalPlanContent.value) {
@@ -531,7 +533,10 @@ async function handleGeneratorUserInput() {
 
       if (hasUpdates) {
         isHydratingDynamicFieldState = true;
-        dynamicFieldValues.value = mergeIntoEmptyValues(nextValues, schemaOptions);
+        dynamicFieldValues.value = mergeIntoEmptyValues(
+          nextValues,
+          schemaOptions
+        );
       }
     }
     scheduleGeneratorAutosave();
