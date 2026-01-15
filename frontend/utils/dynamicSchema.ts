@@ -37,6 +37,8 @@ export interface DynamicSchemaSection {
   id: string;
   title: string;
   properties: DynamicSchemaProperty[];
+  templateId?: string | null;
+  templateGrantId?: string | null;
 }
 
 /**
@@ -232,6 +234,8 @@ interface RemoteDynamicSection {
   title: string;
   order: number;
   fields: RemoteDynamicField[];
+  template_id?: string | null;
+  template_grant_id?: string | null;
 }
 
 const DEFAULT_SCHEMA_ID = "default";
@@ -251,9 +255,73 @@ const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
   ),
 }));
 
+interface SchemaCacheEntry {
+  sections: DynamicSchemaSection[];
+  loadedAt: number;
+}
+
 let schemaSections: DynamicSchemaSection[] = [...FALLBACK_SCHEMA_SECTIONS];
-let remoteSchemaLoadedAt = 0;
-let schemaLoadPromise: Promise<DynamicSchemaSection[]> | null = null;
+let activeTemplateId: string | null = null;
+let activeTemplateGrantId: string | null = null;
+const schemaCache: Record<string, SchemaCacheEntry> = {};
+const schemaLoadPromises: Record<string, Promise<DynamicSchemaSection[]>> = {};
+
+interface SchemaFilterOptions {
+  templateId?: string | null;
+  templateGrantId?: string | null;
+}
+
+function buildCacheKey({
+  schemaId,
+  templateId,
+  templateGrantId,
+}: {
+  schemaId: string;
+  templateId?: string | null;
+  templateGrantId?: string | null;
+}) {
+  const normalizedSchema = schemaId || DEFAULT_SCHEMA_ID;
+  const normalizedGrant = templateGrantId || "all-grants";
+  const normalizedTemplate = templateId || "all-templates";
+  return `${normalizedGrant}::${normalizedTemplate}::${normalizedSchema}`;
+}
+
+function cloneFallbackSections(): DynamicSchemaSection[] {
+  return FALLBACK_SCHEMA_SECTIONS.map((section) => ({
+    ...section,
+    properties: section.properties.map((property) => ({ ...property })),
+  }));
+}
+
+function matchesTemplate(
+  section: DynamicSchemaSection,
+  templateId?: string | null,
+  templateGrantId?: string | null
+): boolean {
+  if (!templateId && !templateGrantId) {
+    return true;
+  }
+  if (templateId && section.templateId && section.templateId !== templateId) {
+    return false;
+  }
+  if (
+    templateGrantId &&
+    section.templateGrantId &&
+    section.templateGrantId !== templateGrantId
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function getRenderableSections(options?: SchemaFilterOptions) {
+  const targetTemplateId = options?.templateId ?? activeTemplateId;
+  const targetTemplateGrantId =
+    options?.templateGrantId ?? activeTemplateGrantId;
+  return schemaSections.filter((section) =>
+    matchesTemplate(section, targetTemplateId, targetTemplateGrantId)
+  );
+}
 
 function mapRemoteSections(
   sections: RemoteDynamicSection[]
@@ -272,18 +340,35 @@ function mapRemoteSections(
           title: field.title,
           description: field.description || "",
         })),
+      templateId: section.template_id || null,
+      templateGrantId: section.template_grant_id || null,
     }));
 }
 
-async function fetchRemoteSchema(
-  schemaId: string,
-  apiBaseUrl: string = "http://localhost:8000"
-): Promise<DynamicSchemaSection[]> {
-  const response = await fetch(
-    `${apiBaseUrl}/api/dynamic-sections?schema_id=${encodeURIComponent(
-      schemaId
-    )}`
-  );
+interface FetchRemoteSchemaOptions {
+  schemaId: string;
+  templateId?: string | null;
+  templateGrantId?: string | null;
+  apiBaseUrl?: string;
+}
+
+async function fetchRemoteSchema({
+  schemaId,
+  templateId,
+  templateGrantId,
+  apiBaseUrl = "http://localhost:8000",
+}: FetchRemoteSchemaOptions): Promise<DynamicSchemaSection[]> {
+  const url = new URL(`${apiBaseUrl}/api/dynamic-sections`);
+  if (templateId) {
+    url.searchParams.set("template_id", templateId);
+    if (templateGrantId) {
+      url.searchParams.set("template_grant_id", templateGrantId);
+    }
+  } else {
+    url.searchParams.set("schema_id", schemaId);
+  }
+
+  const response = await fetch(url.toString());
 
   if (!response.ok) {
     throw new Error(`Failed to fetch remote schema: ${response.status}`);
@@ -301,54 +386,71 @@ export async function ensureDynamicSchemaLoaded(options?: {
   schemaId?: string;
   forceRefresh?: boolean;
   apiBaseUrl?: string;
+  templateId?: string | null;
+  templateGrantId?: string | null;
 }): Promise<DynamicSchemaSection[]> {
   const targetSchemaId = options?.schemaId || DEFAULT_SCHEMA_ID;
   const apiBaseUrl = options?.apiBaseUrl || "http://localhost:8000";
+  const templateId = options?.templateId ?? null;
+  const templateGrantId = options?.templateGrantId ?? null;
+  const cacheKey = buildCacheKey({
+    schemaId: targetSchemaId,
+    templateId,
+    templateGrantId,
+  });
   const now = Date.now();
+  activeTemplateId = templateId;
+  activeTemplateGrantId = templateGrantId;
 
+  const cachedEntry = schemaCache[cacheKey];
   if (
     !options?.forceRefresh &&
-    schemaLoadPromise === null &&
-    remoteSchemaLoadedAt &&
-    now - remoteSchemaLoadedAt < SCHEMA_CACHE_TTL
+    cachedEntry &&
+    now - cachedEntry.loadedAt < SCHEMA_CACHE_TTL
   ) {
-    return schemaSections;
+    schemaSections = cachedEntry.sections;
+    return cachedEntry.sections;
   }
 
-  if (schemaLoadPromise && !options?.forceRefresh) {
-    return schemaLoadPromise;
+  if (!options?.forceRefresh && schemaLoadPromises[cacheKey]) {
+    return schemaLoadPromises[cacheKey];
   }
 
-  schemaLoadPromise = (async () => {
+  const loadPromise = (async () => {
     try {
-      const remoteSections = await fetchRemoteSchema(
-        targetSchemaId,
-        apiBaseUrl
-      );
-      console.log("Fetched remote dynamic schema:", remoteSections);
-      if (remoteSections.length > 0) {
-        schemaSections = remoteSections;
-        remoteSchemaLoadedAt = Date.now();
-      } else {
-        console.warn(
-          "Remote schema empty, fallback to static RAW_DYNAMIC_SCHEMA definition."
-        );
-        schemaSections = [...FALLBACK_SCHEMA_SECTIONS];
-      }
+      const remoteSections = await fetchRemoteSchema({
+        schemaId: targetSchemaId,
+        templateId,
+        templateGrantId,
+        apiBaseUrl,
+      });
+      const resolvedSections =
+        remoteSections.length > 0 ? remoteSections : cloneFallbackSections();
+      schemaCache[cacheKey] = {
+        sections: resolvedSections,
+        loadedAt: Date.now(),
+      };
+      schemaSections = resolvedSections;
+      return resolvedSections;
     } catch (error) {
       console.warn(
         "Failed to load dynamic schema from API, fallback to static definition.",
         error
       );
-      schemaSections = [...FALLBACK_SCHEMA_SECTIONS];
-    } finally {
-      schemaLoadPromise = null;
+      const fallbackSections = cloneFallbackSections();
+      schemaCache[cacheKey] = {
+        sections: fallbackSections,
+        loadedAt: Date.now(),
+      };
+      schemaSections = fallbackSections;
+      return fallbackSections;
     }
+  })().finally(() => {
+    delete schemaLoadPromises[cacheKey];
+  });
 
-    return schemaSections;
-  })();
-
-  return schemaLoadPromise;
+  schemaLoadPromises[cacheKey] = loadPromise;
+  return loadPromise;
 }
 
 /**
@@ -387,9 +489,12 @@ function buildPlaceholder(fieldTitle: string, description: string): string {
  * 用途：初始化新草稿或重置字段
  * @returns 包含所有字段的空值映射
  */
-export function createEmptyDynamicValues(): DynamicValueMap {
+export function createEmptyDynamicValues(
+  options?: SchemaFilterOptions
+): DynamicValueMap {
   const values: DynamicValueMap = {};
-  schemaSections.forEach((section) => {
+  const sections = getRenderableSections(options);
+  sections.forEach((section) => {
     section.properties.forEach((property) => {
       const key = makeCompositeKey(section.id, property.key);
       values[key] = "";
@@ -409,9 +514,11 @@ export function createEmptyDynamicValues(): DynamicValueMap {
  * @returns 視圖模型數組，可直接用於模板渲染
  */
 export function buildDynamicSections(
-  values: DynamicValueMap = {}
+  values: DynamicValueMap = {},
+  options?: SchemaFilterOptions
 ): DynamicSectionViewModel[] {
-  return schemaSections.map((section) => ({
+  const sections = getRenderableSections(options);
+  return sections.map((section) => ({
     sectionId: section.id,
     sectionName: section.title,
     fields: section.properties.map((property) => {
@@ -437,9 +544,10 @@ export function buildDynamicSections(
  * @returns 合併後的完整值映射
  */
 export function mergeIntoEmptyValues(
-  values: DynamicValueMap | undefined
+  values: DynamicValueMap | undefined,
+  options?: SchemaFilterOptions
 ): DynamicValueMap {
-  const merged = createEmptyDynamicValues();
+  const merged = createEmptyDynamicValues(options);
   if (!values) {
     return merged;
   }
@@ -451,8 +559,10 @@ export function mergeIntoEmptyValues(
   return merged;
 }
 
-export function getDynamicFieldDefinitions(): DynamicFieldDefinition[] {
-  return schemaSections.flatMap((section) =>
+export function getDynamicFieldDefinitions(
+  options?: SchemaFilterOptions
+): DynamicFieldDefinition[] {
+  return getRenderableSections(options).flatMap((section) =>
     section.properties.map((property) => ({
       sectionId: section.id,
       sectionTitle: section.title,
@@ -465,8 +575,10 @@ export function getDynamicFieldDefinitions(): DynamicFieldDefinition[] {
   );
 }
 
-export function getDynamicFieldLabels(): string[] {
-  return getDynamicFieldDefinitions().map((definition) => definition.label);
+export function getDynamicFieldLabels(options?: SchemaFilterOptions): string[] {
+  return getDynamicFieldDefinitions(options).map(
+    (definition) => definition.label
+  );
 }
 
 export function getCompositeKeyFromLabel(label?: string | null): string | null {
@@ -497,8 +609,8 @@ export function getCompositeKeyFromLabel(label?: string | null): string | null {
   return partialMatch ? partialMatch.compositeKey : null;
 }
 
-export function getAllCompositeKeys(): string[] {
-  return schemaSections.flatMap((section) =>
+export function getAllCompositeKeys(options?: SchemaFilterOptions): string[] {
+  return getRenderableSections(options).flatMap((section) =>
     section.properties.map((property) =>
       makeCompositeKey(section.id, property.key)
     )

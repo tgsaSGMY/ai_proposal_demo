@@ -19,17 +19,15 @@
           </div>
 
           <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <div class="text-sm text-gray-500 flex items-center gap-2">
-              <span class="font-semibold text-gray-700">使用中的 Schema：</span>
-              <span
-                class="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold"
-              >
-                {{ currentSchemaId }}
-              </span>
-            </div>
             <button
               @click="openSectionRecommender"
               class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 flex items-center justify-center gap-2 whitespace-nowrap"
+              :disabled="!isTemplateSelected"
+              :class="[
+                !isTemplateSelected
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'cursor-pointer',
+              ]"
             >
               <span class="text-lg">🤖</span>
               AI 推薦
@@ -37,11 +35,69 @@
             <button
               @click="openCreateSection"
               class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 whitespace-nowrap"
+              :disabled="!isTemplateSelected"
+              :class="[
+                !isTemplateSelected
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'cursor-pointer',
+              ]"
             >
               <span class="text-lg">＋</span>
               新增章節
             </button>
           </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label
+              class="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide"
+            >
+              選擇補助類別 (Grant)
+            </label>
+            <select
+              v-model="selectedGrantId"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500"
+            >
+              <option value="" disabled>請先選擇補助類別</option>
+              <option v-for="grant in grants" :key="grant.id" :value="grant.id">
+                {{ grant.name }} ({{ grant.id }})
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              class="block text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide"
+            >
+              選擇模板 (Template)
+            </label>
+            <select
+              v-model="selectedTemplateId"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 disabled:bg-gray-100 disabled:text-gray-400"
+              :disabled="!availableTemplates.length"
+            >
+              <option value="" disabled>
+                {{
+                  availableTemplates.length ? "請選擇模板" : "請先選擇補助類別"
+                }}
+              </option>
+              <option
+                v-for="template in availableTemplates"
+                :key="template.id + template.name"
+                :value="template.id"
+              >
+                {{ template.name }} ({{ template.id }})
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div
+          v-if="!isTemplateSelected"
+          class="mb-6 rounded-xl bg-gray-50 border border-dashed border-gray-200 p-6 text-center text-gray-500"
+        >
+          請先選擇補助類別與模板，才能管理對應的章節與欄位。
         </div>
 
         <!-- Create Section Form (outside of loop) -->
@@ -324,75 +380,78 @@
                     </tr>
                   </tbody>
                 </table>
-
-                <!-- Create field form (inline after table) -->
-                <div
-                  v-if="
-                    editingField &&
-                    editingField.section_id === section.id &&
-                    !editingField.id
-                  "
-                  class="border-t-2 border-indigo-200 bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 overflow-x-auto"
-                >
-                  <table class="min-w-full text-left text-xs sm:text-sm">
-                    <tbody>
-                      <tr
-                        class="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-200"
-                      >
-                        <td class="py-3 pr-4 align-top">
-                          <input
-                            v-model="editingField.field_key"
-                            type="text"
-                            class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 font-medium"
-                            placeholder="例如：description"
-                          />
-                        </td>
-                        <td class="py-3 pr-4 align-top">
-                          <input
-                            v-model="editingField.title"
-                            type="text"
-                            class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 font-medium"
-                            placeholder="例如：項目說明"
-                          />
-                        </td>
-                        <td class="py-3 pr-4 align-top hidden sm:table-cell">
-                          <textarea
-                            v-model="editingField.description"
-                            rows="2"
-                            class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 resize-none"
-                            placeholder="欄位說明"
-                          />
-                        </td>
-                        <td
-                          class="py-3 pr-0 align-top text-right whitespace-nowrap space-x-1.5"
-                        >
-                          <button
-                            @click="saveField(editingField)"
-                            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md hover:shadow-lg hover:from-green-600 hover:to-emerald-600 transition-all active:scale-95"
-                          >
-                            ✓ 新增
-                          </button>
-                          <button
-                            @click="cancelEditField"
-                            class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition-all"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
               </div>
 
               <p v-else class="text-xs text-gray-400 italic">
                 尚無欄位，請點擊「新增欄位」開始建立。
               </p>
+
+              <!-- Create field form (shown regardless of field count) -->
+              <div
+                v-if="
+                  editingField &&
+                  editingField.section_id === section.id &&
+                  !editingField.id
+                "
+                class="mt-3 border-t-2 border-indigo-200 bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 overflow-x-auto"
+              >
+                <table class="min-w-full text-left text-xs sm:text-sm">
+                  <tbody>
+                    <tr
+                      class="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-indigo-200"
+                    >
+                      <td class="py-3 pr-4 align-top">
+                        <input
+                          v-model="editingField.field_key"
+                          type="text"
+                          class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 font-medium"
+                          placeholder="例如：description"
+                        />
+                      </td>
+                      <td class="py-3 pr-4 align-top">
+                        <input
+                          v-model="editingField.title"
+                          type="text"
+                          class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 font-medium"
+                          placeholder="例如：項目說明"
+                        />
+                      </td>
+                      <td class="py-3 pr-4 align-top hidden sm:table-cell">
+                        <textarea
+                          v-model="editingField.description"
+                          rows="2"
+                          class="w-full px-2 py-1.5 rounded-lg border-2 border-indigo-300 bg-white shadow-md hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all text-xs placeholder-gray-400 resize-none"
+                          placeholder="欄位說明"
+                        />
+                      </td>
+                      <td
+                        class="py-3 pr-0 align-top text-right whitespace-nowrap space-x-1.5"
+                      >
+                        <button
+                          @click="saveField(editingField)"
+                          class="px-3 py-1.5 text-xs font-bold rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md hover:shadow-lg hover:from-green-600 hover:to-emerald-600 transition-all active:scale-95"
+                        >
+                          ✓ 新增
+                        </button>
+                        <button
+                          @click="cancelEditField"
+                          class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 transition-all"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
 
-        <div v-else class="text-center py-10 text-gray-500">
+        <div
+          v-else-if="isTemplateSelected"
+          class="text-center py-10 text-gray-500"
+        >
           目前尚未建立任何章節，請先點擊右上角「新增章節」。
         </div>
       </div>
@@ -429,7 +488,7 @@ useHead({
   ],
 });
 
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
@@ -445,7 +504,9 @@ const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 // Data models (frontend-side)
-const currentSchemaId = ref("default");
+const grants = ref([]);
+const selectedGrantId = ref("");
+const selectedTemplateId = ref("");
 const sections = ref([]); // [{ id, schema_id, section_key, title, order, fields: [...] }]
 
 const editingSection = ref(null);
@@ -459,6 +520,31 @@ const draggedFieldIndex = ref(null);
 const dragOverFieldSectionId = ref(null);
 const dragOverFieldIndex = ref(null);
 
+const availableTemplates = computed(() => {
+  if (!selectedGrantId.value) return [];
+  const targetGrant = grants.value.find(
+    (grant) => grant.id === selectedGrantId.value
+  );
+  return targetGrant?.templates || [];
+});
+
+const isTemplateSelected = computed(() =>
+  Boolean(selectedGrantId.value && selectedTemplateId.value)
+);
+
+const currentSchemaLabel = computed(() => {
+  if (!selectedGrantId.value || !selectedTemplateId.value) {
+    return "未選擇";
+  }
+  const grantName =
+    grants.value.find((g) => g.id === selectedGrantId.value)?.name ||
+    selectedGrantId.value;
+  const templateName =
+    availableTemplates.value.find((t) => t.id === selectedTemplateId.value)
+      ?.name || selectedTemplateId.value;
+  return `${grantName}/${templateName}`;
+});
+
 function cloneSection(section) {
   return {
     id: section.id,
@@ -466,6 +552,8 @@ function cloneSection(section) {
     section_key: section.section_key,
     title: section.title,
     order: section.order,
+    template_id: section.template_id || selectedTemplateId.value,
+    template_grant_id: section.template_grant_id || selectedGrantId.value,
   };
 }
 
@@ -483,7 +571,7 @@ function cloneField(field) {
 function isEditingField(field) {
   return (
     editingField.value &&
-    editingField.id !== null &&
+    editingField.value.id !== null &&
     editingField.value.id === field.id
   );
 }
@@ -498,13 +586,17 @@ async function getAuthToken() {
 }
 
 async function fetchSections() {
+  if (!isTemplateSelected.value) {
+    sections.value = [];
+    return;
+  }
   try {
     showLoading("載入章節與欄位...");
     const token = await getAuthToken();
     const response = await fetch(
-      `${API_BASE_URL}/dynamic-sections?schema_id=${encodeURIComponent(
-        currentSchemaId.value
-      )}`,
+      `${API_BASE_URL}/dynamic-sections?template_id=${encodeURIComponent(
+        selectedTemplateId.value
+      )}&template_grant_id=${encodeURIComponent(selectedGrantId.value)}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -513,7 +605,16 @@ async function fetchSections() {
     );
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
-    sections.value = data;
+    sections.value = (data || [])
+      .map((section) => ({
+        ...section,
+        template_id: section.template_id || selectedTemplateId.value,
+        template_grant_id: section.template_grant_id || selectedGrantId.value,
+        fields: (section.fields || [])
+          .slice()
+          .sort((a, b) => (a.order || 0) - (b.order || 0)),
+      }))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
   } catch (e) {
     console.error(e);
     errorNotification("載入失敗：" + e.message);
@@ -524,20 +625,30 @@ async function fetchSections() {
 
 // --- Section CRUD ---
 function openCreateSection() {
+  if (!isTemplateSelected.value) {
+    errorNotification("請先選擇補助類別與模板");
+    return;
+  }
   const maxOrder = sections.value.reduce(
     (max, s) => (s.order > max ? s.order : max),
     0
   );
   editingSection.value = {
     id: null,
-    schema_id: currentSchemaId.value,
+    schema_id: selectedTemplateId.value,
     section_key: "",
     title: "",
     order: maxOrder + 1,
+    template_id: selectedTemplateId.value,
+    template_grant_id: selectedGrantId.value,
   };
 }
 
 function openSectionRecommender() {
+  if (!isTemplateSelected.value) {
+    errorNotification("請先選擇補助類別與模板");
+    return;
+  }
   isRecommenderOpen.value = true;
 }
 
@@ -570,10 +681,13 @@ async function saveSection(localSection) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        schema_id: currentSchemaId.value,
+        schema_id: localSection.schema_id,
         section_key: localSection.section_key,
         title: localSection.title,
         order: localSection.order || 1,
+        template_id: localSection.template_id || selectedTemplateId.value,
+        template_grant_id:
+          localSection.template_grant_id || selectedGrantId.value,
       }),
     });
 
@@ -807,6 +921,9 @@ async function dropSection(targetIndex, event) {
             section_key: section.section_key,
             title: section.title,
             order: section.order,
+            template_id: section.template_id || selectedTemplateId.value,
+            template_grant_id:
+              section.template_grant_id || selectedGrantId.value,
           }),
         }
       );
@@ -911,6 +1028,45 @@ onMounted(async () => {
     return;
   }
 
+  await fetchGrantTemplates();
+});
+
+async function fetchGrantTemplates() {
+  try {
+    showLoading("載入補助模板...");
+    const response = await fetch(`${API_BASE_URL}/config`);
+    if (!response.ok) throw new Error(await response.text());
+    grants.value = await response.json();
+    if (!selectedGrantId.value && grants.value.length) {
+      selectedGrantId.value = grants.value[0].id;
+    }
+  } catch (e) {
+    console.error(e);
+    errorNotification("載入補助列表失敗：" + e.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+watch(selectedGrantId, (newGrantId) => {
+  const templates = availableTemplates.value;
+  if (!newGrantId || !templates.length) {
+    selectedTemplateId.value = "";
+    sections.value = [];
+    return;
+  }
+  if (!templates.find((tpl) => tpl.id === selectedTemplateId.value)) {
+    selectedTemplateId.value = templates[0]?.id || "";
+  }
+});
+
+watch(selectedTemplateId, async (newTemplateId) => {
+  sections.value = [];
+  editingSection.value = null;
+  editingField.value = null;
+  if (!newTemplateId) {
+    return;
+  }
   await fetchSections();
 });
 </script>

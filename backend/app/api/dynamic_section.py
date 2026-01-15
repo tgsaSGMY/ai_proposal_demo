@@ -28,7 +28,9 @@ class DynamicFieldModel(BaseModel):
 
 class DynamicSectionModel(BaseModel):
 	id: str
-	schema_id: str
+	schema_id: Optional[str] = None
+	template_id: Optional[str] = None
+	template_grant_id: Optional[str] = None
 	section_key: str
 	title: str
 	order: int
@@ -36,7 +38,9 @@ class DynamicSectionModel(BaseModel):
 
 
 class SectionCreateUpdate(BaseModel):
-	schema_id: str = Field("default", description="Schema identifier, default is 'default'.")
+	schema_id: Optional[str] = Field("default", description="Schema identifier, default is 'default'.")
+	template_id: Optional[str] = Field(None, description="Plan template id this section belongs to.")
+	template_grant_id: Optional[str] = Field(None, description="Grant id that pairs with template_id.")
 	section_key: str = Field(..., description="Unique key for this section within a schema.")
 	title: str = Field(..., description="Display title of the section.")
 	order: int = Field(..., description="Display order of the section.")
@@ -50,8 +54,10 @@ class FieldCreateUpdate(BaseModel):
 	order: int = Field(..., description="Display order of the field within a section.")
 
 
-@router.get("", response_model=List[DynamicSectionModel], summary="取得指定 schema 的所有章節與欄位")
+@router.get("", response_model=List[DynamicSectionModel], summary="取得指定 schema 或 template 的所有章節與欄位")
 async def get_dynamic_schema(
+	template_id: Optional[str] = None,
+	template_grant_id: Optional[str] = None,
 	schema_id: str = "default",
 	supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
@@ -62,14 +68,19 @@ async def get_dynamic_schema(
 	"""
 
 	try:
-		sections_resp = (
+		query = (
 			supabase_service.client
 			.from_("dynamic_sections")
 			.select("*")
-			.eq("schema_id", schema_id)
-			.order("order", desc=False)
-			.execute()
 		)
+		if template_id:
+			query = query.eq("template_id", template_id)
+			if template_grant_id:
+				query = query.eq("template_grant_id", template_grant_id)
+		else:
+			query = query.eq("schema_id", schema_id)
+
+		sections_resp = query.order("order", desc=False).execute()
 
 		sections_data = sections_resp.data or []
 		if not sections_data:
@@ -107,7 +118,9 @@ async def get_dynamic_schema(
 			result.append(
 				DynamicSectionModel(
 					id=s["id"],
-					schema_id=s["schema_id"],
+					schema_id=s.get("schema_id"),
+					template_id=s.get("template_id"),
+					template_grant_id=s.get("template_grant_id"),
 					section_key=s["section_key"],
 					title=s["title"],
 					order=s["order"],
@@ -140,6 +153,8 @@ async def create_section(
 			.insert(
 				{
 					"schema_id": payload.schema_id,
+					"template_id": payload.template_id,
+					"template_grant_id": payload.template_grant_id,
 					"section_key": payload.section_key,
 					"title": payload.title,
 					"order": payload.order,
@@ -154,7 +169,9 @@ async def create_section(
 		row = insert_resp.data[0]
 		return DynamicSectionModel(
 			id=row["id"],
-			schema_id=row["schema_id"],
+			schema_id=row.get("schema_id"),
+			template_id=row.get("template_id"),
+			template_grant_id=row.get("template_grant_id"),
 			section_key=row["section_key"],
 			title=row["title"],
 			order=row["order"],
@@ -185,6 +202,8 @@ async def update_section(
 			.update(
 				{
 					"schema_id": payload.schema_id,
+					"template_id": payload.template_id,
+					"template_grant_id": payload.template_grant_id,
 					"section_key": payload.section_key,
 					"title": payload.title,
 					"order": payload.order,
@@ -222,7 +241,9 @@ async def update_section(
 
 		return DynamicSectionModel(
 			id=row["id"],
-			schema_id=row["schema_id"],
+			schema_id=row.get("schema_id"),
+			template_id=row.get("template_id"),
+			template_grant_id=row.get("template_grant_id"),
 			section_key=row["section_key"],
 			title=row["title"],
 			order=row["order"],

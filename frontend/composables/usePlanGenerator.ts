@@ -53,7 +53,10 @@ export function usePlanGenerator() {
   const selectedTemplateId: Ref<string> = ref("");
   const userInput: Ref<string> = ref("");
   const dynamicFieldValues: Ref<DynamicValueMap> = ref(
-    createEmptyDynamicValues()
+    createEmptyDynamicValues({
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    })
   );
   const planContent: Ref<PlanContent> = ref({});
 
@@ -89,8 +92,11 @@ export function usePlanGenerator() {
   // --- Methods ---
   const fetchAllConfigs = async (): Promise<void> => {
     try {
+      // Load schema for currently selected template when available
       await ensureDynamicSchemaLoaded({
         apiBaseUrl: config.public.apiBaseUrl,
+        templateId: selectedTemplateId.value,
+        templateGrantId: selectedGrantId.value,
       });
       const response = await fetch(`${API_BASE_URL}/config`);
       if (!response.ok) throw new Error("Network response was not ok");
@@ -104,7 +110,10 @@ export function usePlanGenerator() {
 
   const buildFinalUserInput = (summaries: string[] = []): string => {
     let finalInput = `核心想法: ${userInput.value}\n\n`;
-    const sections = buildDynamicSections(dynamicFieldValues.value);
+    const sections = buildDynamicSections(dynamicFieldValues.value, {
+      templateId: selectedTemplateId.value,
+      templateGrantId: selectedGrantId.value,
+    });
 
     const additionalDetails = sections
       .map((section) => {
@@ -146,7 +155,19 @@ export function usePlanGenerator() {
     selectedGrantId.value = selection.grantId;
     selectedTemplateId.value = selection.templateId;
     planContent.value = {}; // 重置
-    dynamicFieldValues.value = createEmptyDynamicValues();
+    dynamicFieldValues.value = createEmptyDynamicValues({
+      templateId: selection.templateId,
+      templateGrantId: selection.grantId,
+    });
+    // Reload schema for new template selection
+    ensureDynamicSchemaLoaded({
+      apiBaseUrl: config.public.apiBaseUrl,
+      templateId: selection.templateId,
+      templateGrantId: selection.grantId,
+      forceRefresh: false,
+    }).catch((error) => {
+      console.error("Failed to load schema for selected template:", error);
+    });
   };
 
   // 自动选择唯一的模板
