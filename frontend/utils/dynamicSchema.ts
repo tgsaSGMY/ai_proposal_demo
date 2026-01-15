@@ -1,77 +1,159 @@
 /**
- * 動態輸入字段 Schema 定義和工具函數
+ * ========================================
+ * 动态输入字段 Schema 定义和工具函数
+ * ========================================
  *
- * 此模塊管理整個應用的動態字段結構，包括：
- * - 靜態字段定義（不依賴運行時配置）
- * - 複合鍵（composite key）生成和管理
- * - UI 視圖模型（ViewModel）構建
- * - 字段值映射和驗證
+ * 此模块管理整个应用的动态字段结构，包括：
+ * - 静态字段定义（不依赖运行时配置）
+ * - 复合键（composite key）生成和管理
+ * - UI 视图模型（ViewModel）构建
+ * - 字段值映射和验证
+ * - 远程 Schema 加载和缓存
+ *
+ * 核心概念：
+ *   - DynamicValueKey: 字段的唯一标识符（格式：section::field）
+ *   - DynamicValueMap: 字段值的映射表（键值对存储）
+ *   - DynamicSchemaSection: Schema 中的章节定义
+ *   - DynamicSectionViewModel: 前端渲染用的视图模型
  */
 
+// ===== 导入依赖库 =====
+// 导入 Supabase 数据库客户端（用于 RPC 调用）
+
+// ===== 类型定义部分 =====
+
 /**
- * 動態字段值的鍵類型
- * 格式：section::field
- * 例如："二、研發動機::市場規模"
+ * 动态字段值的键类型
+ *
+ * 格式说明：
+ *   - 由章节 ID 和字段 Key 用 "::" 分隔组成
+ *   - 例如："二、研發動機::市場規模"
+ *   - 用于在 DynamicValueMap 中唯一标识一个字段
  */
 export type DynamicValueKey = string;
 
 /**
- * 動態字段值的映射表
- * 鍵是複合鍵字符串，值是字段內容（通常是文本）
+ * 动态字段值的映射表
+ *
+ * 结构说明：
+ *   - 键：复合键字符串（DynamicValueKey）
+ *   - 值：字段内容（通常是用户输入的文本）
+ *
+ * 用途：
+ *   - 存储用户在表单中填入的数据
+ *   - 支持跨组件的数据共享
+ *   - 便于序列化和持久化
+ *
+ * 示例：
+ *   {
+ *     "二、研發動機::核心問題": "开发 AI 模型...",
+ *     "二、研發動機::市場規模": "目标市场是...",
+ *   }
  */
 export type DynamicValueMap = Record<DynamicValueKey, string>;
 
 import { supabase } from "~/utils/supabaseClient";
 
+// ===== Schema 属性定义 =====
+/**
+ * Schema 中单个属性（字段）的定义
+ *
+ * 属性说明：
+ *   - key: 字段的编程识别符（例如："核心問題"）
+ *   - title: 字段在 UI 中显示的标题（例如："1.技術或服務的核心問題是甚麼?"）
+ *   - description: 字段的详细说明文字（例如："要解決什麼核心技術問題?"）
+ */
 export interface DynamicSchemaProperty {
-  key: string;
-  title: string;
-  description: string;
+  key: string; // 字段的唯一标识符
+  title: string; // 显示给用户的字段标题
+  description: string; // 字段的帮助文本/说明
 }
 
 /**
- * Schema 中章節的定義
- * 每個章節包含多個字段（屬性）
+ * Schema 中章节（Section）的定义
+ *
+ * 属性说明：
+ *   - id: 章节的唯一标识符（例如："二、研發動機"）
+ *   - title: 章节的显示名称
+ *   - properties: 该章节包含的所有字段
+ *   - templateId: 可选的模板 ID（用于区分不同模板）
+ *   - templateGrantId: 可选的补助金 ID（用于区分不同补助金）
+ *
+ * 注意：
+ *   - templateId 和 templateGrantId 用于支持多个模板时的字段过滤
  */
 export interface DynamicSchemaSection {
-  id: string;
-  title: string;
-  properties: DynamicSchemaProperty[];
-  templateId?: string | null;
-  templateGrantId?: string | null;
+  id: string; // 章节唯一标识符
+  title: string; // 章节显示名称
+  properties: DynamicSchemaProperty[]; // 该章节的所有字段
+  templateId?: string | null; // 所属模板 ID（可选）
+  templateGrantId?: string | null; // 所属补助金 ID（可选）
 }
 
 /**
- * UI 展示用的章節視圖模型
- * 用於在前端渲染時提供完整的結構化數據
+ * 前端 UI 展示用的章节视图模型
+ *
+ * 说明：
+ *   - 这是为前端渲染优化的数据结构
+ *   - 相比 DynamicSchemaSection，增加了用户输入的数值
+ *   - 每个字段都包含渲染所需的完整信息
+ *
+ * 用途：
+ *   - 直接传给 Vue 组件进行渲染
+ *   - 包含 UI 所需的所有字段（值、占位符等）
  */
 export interface DynamicSectionViewModel {
-  sectionId: string;
-  sectionName: string;
-  fields: DynamicFieldViewModel[];
+  sectionId: string; // 章节 ID
+  sectionName: string; // 章节显示名称
+  fields: DynamicFieldViewModel[]; // 该章节的所有字段的视图模型
 }
 
 /**
- * UI 展示用的字段視圖模型
- * 包含欄位在前端渲染所需的完整資訊
+ * 前端 UI 展示用的字段视图模型
+ *
+ * 说明：
+ *   - 包含单个字段在前端渲染所需的完整信息
+ *   - 是 DynamicSchemaProperty + 用户值 + UI 辅助信息 的组合
+ *
+ * 属性说明：
+ *   - propertyKey: 字段的编程标识符
+ *   - title: 字段标题（用户可见）
+ *   - description: 字段说明（帮助文本）
+ *   - compositeKey: 复合键（用于数据映射）
+ *   - placeholder: 输入框占位符文本
+ *   - value: 该字段当前的值（用户输入的内容）
  */
 export interface DynamicFieldViewModel {
-  propertyKey: string;
-  title: string;
-  description: string;
-  compositeKey: string;
-  placeholder: string;
-  value: string;
+  propertyKey: string; // 字段的编程标识符
+  title: string; // 显示给用户的标题
+  description: string; // 字段说明/帮助文本
+  compositeKey: string; // 复合键（section::field 格式）
+  placeholder: string; // 输入框占位符
+  value: string; // 当前的字段值
 }
 
+/**
+ * 字段定义的完整描述
+ *
+ * 说明：
+ *   - 包含字段的所有元数据（定义信息）
+ *   - 用于生成字段标签、查询字段等场景
+ *
+ * 属性说明：
+ *   - sectionId/sectionTitle: 章节信息
+ *   - propertyKey/propertyTitle: 字段信息
+ *   - description: 字段说明
+ *   - compositeKey: 复合键
+ *   - label: 组合标签（"章节名|字段名" 格式）
+ */
 export interface DynamicFieldDefinition {
-  sectionId: string;
-  sectionTitle: string;
-  propertyKey: string;
-  propertyTitle: string;
-  description: string;
-  compositeKey: string;
-  label: string;
+  sectionId: string; // 所属章节 ID
+  sectionTitle: string; // 所属章节标题
+  propertyKey: string; // 字段编程标识符
+  propertyTitle: string; // 字段显示标题
+  description: string; // 字段说明
+  compositeKey: string; // 复合键
+  label: string; // 组合标签（用于查询和匹配）
 }
 
 const RAW_DYNAMIC_SCHEMA: Record<
@@ -218,29 +300,58 @@ const RAW_DYNAMIC_SCHEMA: Record<
   // // },
 };
 
+// ===== 远程 API 数据接口 =====
+/**
+ * 从后端 API 返回的字段定义（远程格式）
+ *
+ * 说明：
+ *   - 这是后端数据库中的字段定义格式
+ *   - 与本地的 DynamicSchemaProperty 对应
+ *   - 包含数据库 ID 和排序信息
+ */
 interface RemoteDynamicField {
-  id: string;
-  section_id: string;
-  field_key: string;
-  title: string;
-  description?: string;
-  order: number;
+  id: string; // 数据库中的字段 ID
+  section_id: string; // 所属章节 ID
+  field_key: string; // 字段编程标识符
+  title: string; // 字段显示标题
+  description?: string; // 字段说明（可选）
+  order: number; // 字段排序顺序
 }
 
+/**
+ * 从后端 API 返回的章节定义（远程格式）
+ *
+ * 说明：
+ *   - 这是后端数据库中的章节定义格式
+ *   - 与本地的 DynamicSchemaSection 对应
+ *   - 包含该章节的所有字段
+ */
 interface RemoteDynamicSection {
-  id: string;
-  schema_id: string;
-  section_key: string;
-  title: string;
-  order: number;
-  fields: RemoteDynamicField[];
-  template_id?: string | null;
-  template_grant_id?: string | null;
+  id: string; // 数据库中的章节 ID
+  schema_id: string; // 所属 Schema ID
+  section_key: string; // 章节编程标识符
+  title: string; // 章节显示标题
+  order: number; // 章节排序顺序
+  fields: RemoteDynamicField[]; // 该章节的所有字段
+  template_id?: string | null; // 所属模板 ID（可选）
+  template_grant_id?: string | null; // 所属补助金 ID（可选）
 }
 
+// ===== 缓存和状态管理常量 =====
+// 默认 Schema ID（当没有指定时使用）
 const DEFAULT_SCHEMA_ID = "default";
+// Schema 缓存有效期：5 分钟（超过此时间后重新从后端加载）
 const SCHEMA_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
+// ===== 静态 Schema 初始化 =====
+/**
+ * 从静态定义生成回退 Schema 章节数组
+ *
+ * 说明：
+ *   - 将 RAW_DYNAMIC_SCHEMA（硬编码的字段定义）转换为 DynamicSchemaSection 格式
+ *   - 当后端 API 加载失败时，使用此静态定义作为回退方案
+ *   - 这样即使网络问题也能保证应用继续工作
+ */
 const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
   RAW_DYNAMIC_SCHEMA
 ).map(([sectionKey, sectionValue]) => ({
@@ -255,15 +366,29 @@ const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
   ),
 }));
 
+// ===== 缓存数据结构 =====
+/**
+ * Schema 缓存条目
+ *
+ * 说明：
+ *   - 存储 Schema 及其加载时间戳
+ *   - 用于缓存过期检查
+ */
 interface SchemaCacheEntry {
-  sections: DynamicSchemaSection[];
-  loadedAt: number;
+  sections: DynamicSchemaSection[]; // 缓存的 Schema 章节数据
+  loadedAt: number; // 加载时间戳（用于过期判断）
 }
 
+// ===== 全局状态管理 =====
+// 当前活跃的 Schema 章节（内存中的副本）
 let schemaSections: DynamicSchemaSection[] = [...FALLBACK_SCHEMA_SECTIONS];
+// 当前活跃的模板 ID（用于字段过滤）
 let activeTemplateId: string | null = null;
+// 当前活跃的补助金 ID（用于字段过滤）
 let activeTemplateGrantId: string | null = null;
+// Schema 缓存：以缓存键为 key，缓存条目为 value
 const schemaCache: Record<string, SchemaCacheEntry> = {};
+// 正在加载的 Promise：避免重复发起相同的网络请求
 const schemaLoadPromises: Record<string, Promise<DynamicSchemaSection[]>> = {};
 
 interface SchemaFilterOptions {
@@ -472,7 +597,20 @@ function normalizeLabel(label: string): string {
 function buildFieldLabel(sectionTitle: string, propertyTitle: string): string {
   return `${sectionTitle}｜${propertyTitle}`;
 }
-
+// ===== 占位符生成工具 =====
+/**
+ * 构建输入框占位符文本
+ *
+ * 说明：
+ *   - 组合字段标题和描述生成占位符
+ *   - 优化用户输入体验
+ *
+ * 参数：
+ *   - fieldTitle: 字段标题
+ *   - description: 字段描述
+ *
+ * 返回值：格式化的占位符文本
+ */
 function buildPlaceholder(fieldTitle: string, description: string): string {
   const base = `請填寫「${fieldTitle}」的內容`;
   if (!description) {
@@ -481,12 +619,30 @@ function buildPlaceholder(fieldTitle: string, description: string): string {
   return `${base}\n提示: ${description}`;
 }
 
+// ===== 导出的公共 API 函数 =====
+
 /**
- * 創建一個空的動態字段值映射
- * 所有字段初始值都是空字符串
+ * 创建空的动态字段值映射
  *
- * 用途：初始化新草稿或重置字段
- * @returns 包含所有字段的空值映射
+ * 功能：
+ *   - 为所有定义的字段创建空值映射
+ *   - 每个字段初始值都是空字符串
+ *
+ * 用途：
+ *   - 初始化新的草稿或项目
+ *   - 重置表单所有字段
+ *   - 作为合并操作的基础
+ *
+ * 参数：
+ *   - options?: 过滤选项（可选，指定模板/补助金）
+ *
+ * 返回值：
+ *   - DynamicValueMap: 包含所有字段的空值映射
+ *     例如：{
+ *       "二、研發動機::核心問題": "",
+ *       "二、研發動機::市場規模": "",
+ *       ...
+ *     }
  */
 export function createEmptyDynamicValues(
   options?: SchemaFilterOptions
@@ -503,14 +659,39 @@ export function createEmptyDynamicValues(
 }
 
 /**
- * 構建 UI 視圖模型（ViewModel）
- * 將平面的值映射轉換為樹狀結構的 ViewModel，用於前端渲染
+ * 构建前端 UI 视图模型（ViewModel）
  *
- * 流程：RAW_DYNAMIC_SCHEMA -> 遍歷結構 -> 注入值 -> ViewModel
+ * 功能：
+ *   - 将平面的值映射（DynamicValueMap）转换为树状结构
+ *   - 注入用户输入的值到 Schema 定义
+ *   - 添加 UI 渲染所需的辅助信息（占位符、复合键等）
  *
- * 用途：提供給 Vue 組件使用，完整包含 UI 渲染所需的所有信息
- * @param values - 動態字段的值映射
- * @returns 視圖模型數組，可直接用於模板渲染
+ * 工作流程：
+ *   1. 获取可渲染的 Schema 章节（应用过滤）
+ *   2. 遍历每个章节和其字段
+ *   3. 从值映射中查找当前字段的值
+ *   4. 构建完整的字段视图模型（包含标题、描述、值、占位符等）
+ *   5. 返回树状结构
+ *
+ * 用途：
+ *   - 提供给 Vue 组件进行模板渲染
+ *   - 完整包含 UI 渲染所需的所有信息
+ *   - 支持多个模板的字段过滤
+ *
+ * 参数：
+ *   - values: 动态字段的值映射（默认为空映射）
+ *   - options: 过滤选项（指定模板/补助金）
+ *
+ * 返回值：
+ *   - DynamicSectionViewModel[]: 视图模型数组，可直接用于模板渲染
+ *     每个章节包含所有字段的完整信息（标题、值、占位符等）
+ *
+ * 示例：
+ *   const sections = buildDynamicSections(
+ *     {"二、研發動機::核心問題": "开发 AI 模型..."},
+ *     {templateId: "template1"}
+ *   );
+ *   // 结果用于 v-for 遍历和表单渲染
  */
 export function buildDynamicSections(
   values: DynamicValueMap = {},

@@ -1,3 +1,5 @@
+<!-- 推荐名称模态帐组件：基于描述推荐字段名称 -->
+\n
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
@@ -258,6 +260,7 @@ const options = ref<string[]>(props.suggestions || []);
 const selected = ref(props.originalName || "");
 const customName = ref("");
 
+// 監聽建議列表和原始名稱的變化，更新選擇項
 watch(
   () => props.suggestions,
   (s) => {
@@ -271,7 +274,7 @@ watch(
   }
 );
 
-// typing a custom name should select it
+// 輸入自定義名稱時自動選中
 function onCustomInput() {
   const v = (customName.value || "").trim();
   if (v) {
@@ -279,7 +282,7 @@ function onCustomInput() {
   }
 }
 
-// when selection changes, if it's one of the suggestions or the original name, clear customName
+// 當選擇變化時，如果選中的是建議項或原始名稱，清除自定義輸入框
 watch(selected, (v) => {
   if (!v) return;
   if (options.value.includes(v) || v === props.originalName) {
@@ -289,6 +292,7 @@ watch(selected, (v) => {
   }
 });
 
+// 確認選擇並發送事件，關閉模態框
 function confirmSelection() {
   const pick = (selected.value || "").trim();
   if (!pick) return;

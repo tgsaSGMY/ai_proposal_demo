@@ -68,11 +68,14 @@
 </template>
 
 <script setup>
+// ===== 页面元数据 =====
+// 设置中间件验证，确保用户已登陆
 definePageMeta({
   middleware: "auth",
 });
 
-// SEO 配置
+// ===== SEO 配置 =====
+// 设置页面标题和元数据，用于搜索引擎优化
 useHead({
   title: "數據生產工作室 - AI 計畫書平台",
   meta: [
@@ -96,7 +99,8 @@ useHead({
   ],
 });
 
-// Modal submit/cancel handlers
+// ===== 输入框模态框处理函数 =====
+// 处理用户在输入框模态框中的提交操作（重命名或创建企划）
 async function handleInputModalSubmit(value) {
   isInputModalVisible.value = false;
   if (!value || !value.trim()) return;
@@ -154,27 +158,36 @@ async function handleInputModalSubmit(value) {
 }
 
 function handleInputModalCancel() {
+  // 关闭输入框模态框
   isInputModalVisible.value = false;
   inputModalDraft = null;
 }
+
+// ===== 导入依赖库 =====
+// 导入 Vue 核心库
 import { ref, onMounted, onUnmounted, computed } from "vue";
+// 导入 Supabase 数据库客户端
 import { supabase } from "~/utils/supabaseClient";
+// 导入自定义组合式函数和通知服务
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
+// 导入子组件
 import DraftPlanList from "~/components/DraftPlanList.vue";
 import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
 import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
 import InputPromptModal from "~/components/InputPromptModal.vue";
+// 导入加载状态和动态模式生成工具
 import { useLoading } from "~/composables/useLoading";
 import { getAllCompositeKeys } from "~/utils/dynamicSchema";
 
-// Modal state for renaming and creating drafts
+// ===== 模态框状态数据 =====
+// 用于重命名或创建企划的输入框模态框状态
 const isInputModalVisible = ref(false);
 const inputModalTitle = ref("");
 const inputModalMessage = ref("");
 const inputModalDefaultValue = ref("");
-let inputModalMode = ""; // 'rename' or 'create'
+let inputModalMode = ""; // 'rename' 或 'create' 模式
 let inputModalDraft = null;
 
 const { success, error: errorNotification } = useNotifications();
@@ -184,11 +197,16 @@ const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const { show: showLoading, hide: hideLoading } = useLoading();
 const { allConfigs, fetchAllConfigs } = usePlanGenerator();
 
+// ===== 数据状态 =====
+// 草稿列表、选中的草稿、批量模态框可见性状态
 const drafts = ref([]);
 const selectedDraft = ref(null);
 const isBatchModalVisible = ref(false);
+// 实时数据库频道引用，用于监听数据变化
 let realtimeChannel = null;
 
+// ===== 企划编辑操作 =====
+// 处理重命名企划的模态框打开
 async function handleRenameDraft(draft) {
   inputModalTitle.value = "重命名企划";
   inputModalMessage.value = "请输入新的企划名称:";
@@ -198,6 +216,8 @@ async function handleRenameDraft(draft) {
   isInputModalVisible.value = true;
 }
 
+// ===== 删除企划 =====
+// 显示确认对话框并删除选中的企划
 async function handleDeleteDraft(draft) {
   const isConfirmed = await confirm({
     title: "確認刪除企劃",
@@ -230,6 +250,8 @@ async function handleDeleteDraft(draft) {
   }
 }
 
+// ===== 获取草稿列表 =====
+// 从数据库中获取所有企划草稿，按创建时间倒序排列
 async function fetchDrafts() {
   const { data, error } = await supabase
     .from("draft_plans")
@@ -243,6 +265,8 @@ async function fetchDrafts() {
   }
 }
 
+// ===== 生命周期钩子 =====
+// 页面挂载时，初始化配置和草稿列表，并监听实时数据变化
 onMounted(async () => {
   showLoading("加载中...");
   await fetchAllConfigs(); // Fetch configs for Batch modal
@@ -261,12 +285,16 @@ onMounted(async () => {
   hideLoading();
 });
 
+// ===== 组件卸载 =====
+// 页面卸载时，清理实时频道订阅
 onUnmounted(() => {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
   }
 });
 
+// ===== 内部用户检查 =====
+// 检查当前用户是否为内部人员，否则重定向到首页
 onMounted(async () => {
   const { checkIsInternal } = useInternalCheck();
 
@@ -279,6 +307,8 @@ onMounted(async () => {
   }
 });
 
+// ===== 打开编辑器 =====
+// 打开选中的企划编辑器，初始化 user_input 和 plan_content 对象
 function openEditor(draft) {
   // Make sure user_input and plan_content are valid objects
   if (!draft.user_input) draft.user_input = {};
@@ -286,6 +316,8 @@ function openEditor(draft) {
   selectedDraft.value = draft;
 }
 
+// ===== 创建企划 =====
+// 显示输入框模态框，用于创建新的企划（手动标注或生成企划）
 async function handleCreateDraft(mode) {
   inputModalTitle.value = "新建企划";
   inputModalMessage.value = `请输入新的企划名称 (${
@@ -297,6 +329,8 @@ async function handleCreateDraft(mode) {
   isInputModalVisible.value = true;
 }
 
+// ===== 批量 AI 生成 =====
+// 启动批量 AI 生成任务，将新企划添加到草稿列表
 async function handleBatchStart(payload) {
   try {
     const {
@@ -330,6 +364,8 @@ async function handleBatchStart(payload) {
   }
 }
 
+// ===== 保存到最终数据集 =====
+// 将企划保存到最终数据集，然后删除对应的草稿
 async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   const {
     id: draftId,

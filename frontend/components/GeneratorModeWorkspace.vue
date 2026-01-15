@@ -1,3 +1,4 @@
+<!-- 生成器帜控店组件：方案生成的主输入/输出面板 -->
 <template>
   <section class="rounded-3xl border border-gray-100 bg-white/90 p-4">
     <div class="flex min-h-[70vh] flex-col gap-4 lg:flex-row">
@@ -192,6 +193,7 @@ watch(
   { deep: true }
 );
 
+// 比较两个记录对象是否完全相等
 function recordsAreEqual(
   next?: Record<string, string> | null,
   prev?: Record<string, string> | null
@@ -251,6 +253,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
+// 调度生成器自动保存，使用防抖延迟执行
 function scheduleGeneratorAutosave() {
   if (!projectRecord.value) {
     return;
@@ -263,6 +266,7 @@ function scheduleGeneratorAutosave() {
   }, 2000);
 }
 
+// 持久化生成器状态到后端
 async function persistGeneratorState() {
   if (!projectRecord.value) {
     return;
@@ -286,6 +290,7 @@ async function persistGeneratorState() {
   }
 }
 
+// 序列化数据以便存储，处理undefined和null
 function serializeForStorage<T>(value: T): T | null {
   if (value === undefined || value === null) {
     return null;
@@ -298,6 +303,7 @@ function serializeForStorage<T>(value: T): T | null {
   }
 }
 
+// 处理主要想法的更新，同步到本地状态
 function handleMainIdeaUpdate(value: string) {
   if (userInput.value === value) {
     return;
@@ -305,6 +311,7 @@ function handleMainIdeaUpdate(value: string) {
   userInput.value = value;
 }
 
+// 处理生成器选择变更，调度自动保存
 function handleGeneratorSelectionChange(selection: {
   grantId: string;
   templateId: string;
@@ -312,6 +319,7 @@ function handleGeneratorSelectionChange(selection: {
   scheduleGeneratorAutosave();
 }
 
+// 处理自动填充，更新方案内容
 function handleGeneratorAutoFill(
   filledContent: Record<string, { content?: string; error?: string }>
 ) {
@@ -322,6 +330,7 @@ function handleGeneratorAutoFill(
   scheduleGeneratorAutosave();
 }
 
+// 处理方案内容更新
 function handleGeneratorContentUpdate({
   sectionId,
   content,
@@ -336,6 +345,7 @@ function handleGeneratorContentUpdate({
   scheduleGeneratorAutosave();
 }
 
+// 处理计划生成请求，调用后端API生成方案
 async function handleGeneratorPlanRequest(outerPayload?: {
   summaries?: string[];
 }) {
@@ -411,6 +421,7 @@ async function handleGeneratorPlanRequest(outerPayload?: {
   }
 }
 
+// 处理用户输入生成，反推用户输入内容
 async function handleGeneratorUserInput() {
   if (!currentGrant.value || !currentTemplate.value) {
     notifyError("請先選擇主題和模板！");
@@ -548,6 +559,7 @@ async function handleGeneratorUserInput() {
   }
 }
 
+// 处理候选方案确认，将选中方案填充到结果中
 function onCandidateConfirm({
   selected,
   rejected,

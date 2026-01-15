@@ -1,3 +1,4 @@
+<!-- 方案输出面板组件：显示生成的方案内容结果 -->
 <template>
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
@@ -199,17 +200,18 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-// 直接返回對象
+// 获取指定章节的内容对象，确保返回格式正确
 function getSectionContent(sectionId) {
   const content = props.planContent[sectionId]?.content;
-  // 確保返回的是一個對象
   return typeof content === "object" && content !== null ? content : {};
 }
 
+// 获取指定章节的错误信息
 function getSectionError(sectionId) {
   return props.planContent[sectionId]?.error;
 }
 
+// 将生成的方案内容导出为Word文档
 async function handleExportToWord() {
   if (!props.sections.length) {
     errorNotification("請先選擇模板");
@@ -223,11 +225,12 @@ async function handleExportToWord() {
   );
 }
 
-// 接收對象
+// 更新指定章节的内容对象
 function updateSectionContent(sectionId, newContentObject) {
   emit("update:content", { sectionId, content: newContentObject });
 }
 
+// 处理从文件加载内容的点击事件，需要先选择模板
 function handleFileLoadClick() {
   if (props.sections.length === 0) {
     errorNotification("請先在左側選擇一個模板，以便我們知道要填充哪些欄位。");
@@ -236,7 +239,7 @@ function handleFileLoadClick() {
   fileInput.value.click();
 }
 
-// 處理選擇的檔案
+// 处理用户选择的Word或PDF文件，调用自动填充API
 async function handleFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -274,7 +277,7 @@ async function handleFileSelected(event) {
   }
 }
 
-// 調用後端自動填充 API
+// 调用后端自动填充API，根据文档内容智能填充章节字段
 async function callAutoFillApi(payload) {
   const response = await fetch(`${API_BASE_URL}/autofill_from_document`, {
     method: "POST",
@@ -289,7 +292,7 @@ async function callAutoFillApi(payload) {
   return await response.json();
 }
 
-// 從 Word 或 PDF 檔案中提取文字的輔助函數
+// 从Word或PDF文件中提取文本内容，支持多页PDF
 async function extractTextFromFile(file) {
   if (file.type === "application/pdf" && !pdfjsLib) {
     throw new Error(

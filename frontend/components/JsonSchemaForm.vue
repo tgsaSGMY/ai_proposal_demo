@@ -1,3 +1,4 @@
+<!-- JSON Schema 表单组件：根据 Schema 动态生成表单输入框 -->
 <template>
   <div class="space-y-4 sm:space-y-6">
     <div v-for="(propInfo, key) in schema.properties || {}" :key="key">
@@ -294,6 +295,7 @@ const emit = defineEmits(["update:modelValue"]);
 
 const collapsedKeys = ref(new Set());
 
+// 监听schema变化，当schema改变时清空折叠状态
 watch(
   () => props.schema,
   () => {
@@ -302,17 +304,20 @@ watch(
   { deep: true }
 );
 
+// 更新指定键的值，发送更新事件给父组件
 function updateValue(key, value) {
   const newValue = { ...props.modelValue, [key]: value };
   emit("update:modelValue", newValue);
 }
 
+// 更新数组中指定索引的项值
 function updateArrayItem(key, index, itemValue) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
   newArray[index] = itemValue;
   updateValue(key, newArray);
 }
 
+// 为数组添加新的对象项，初始化所有属性为空字符串
 function addArrayItem(key, itemSchemaProperties) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
   const newItem = {};
@@ -323,22 +328,26 @@ function addArrayItem(key, itemSchemaProperties) {
   updateValue(key, newArray);
 }
 
+// 为字符串数组添加新的空字符串项
 function addArrayStringItem(key) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
   newArray.push("");
   updateValue(key, newArray);
 }
 
+// 删除数组中指定索引的项
 function removeArrayItem(key, index) {
   const newArray = props.modelValue[key] ? [...props.modelValue[key]] : [];
   newArray.splice(index, 1);
   updateValue(key, newArray);
 }
 
+// 生成区块的唯一键，用于标识折叠状态
 function makeBlockKey(prefix, key, index = null) {
   return index !== null ? `${prefix}:${key}:${index}` : `${prefix}:${key}`;
 }
 
+// 切换指定区块的折叠/展开状态
 function toggleCollapse(blockKey) {
   const next = new Set(collapsedKeys.value);
   if (next.has(blockKey)) {
@@ -349,10 +358,12 @@ function toggleCollapse(blockKey) {
   collapsedKeys.value = next;
 }
 
+// 检查指定区块是否处于折叠状态
 function isCollapsed(blockKey) {
   return collapsedKeys.value.has(blockKey);
 }
 
+// 获取对象类型字段的值，确保返回对象格式
 function getObjectModel(key) {
   const value = props.modelValue[key];
   if (value && typeof value === "object" && !Array.isArray(value)) {

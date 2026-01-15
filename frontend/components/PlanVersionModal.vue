@@ -1,3 +1,4 @@
+<!-- 方案版本管理模态帐组件：查看和切换方案的不同版本 -->
 <template>
   <div
     v-if="visible"
@@ -132,6 +133,7 @@ const emit = defineEmits([
   "downloadTimeline",
 ]);
 
+// 计算属性：过滤并映射版本数据到章节列表，包含内容和HTML渲染
 const sections = computed(() => {
   if (!props.version?.data || !props.planSections?.length) {
     return [];
@@ -155,6 +157,7 @@ const sections = computed(() => {
     .filter(Boolean);
 });
 
+// 为章节内容生成HTML格式的渲染结果
 function generateHtmlForSection(section, content) {
   try {
     return renderPlanToHtml(
@@ -177,10 +180,12 @@ function generateHtmlForSection(section, content) {
   }
 }
 
+// 触发导出事件，将版本数据发送给父组件
 function handleExport() {
   emit("export", props.version);
 }
 
+// 触发版本更新事件，用新版本数据更新计划
 function handleVersionUpdate() {
   if (!props.version || !props.version.data) {
     return;
@@ -188,6 +193,7 @@ function handleVersionUpdate() {
   emit("updateVersion", props.version);
 }
 
+// 触发时间轴下载事件
 function handleTimelineDownload() {
   if (!props.version) {
     return;

@@ -1,3 +1,4 @@
+<!-- 方案图片生成模态帐组件：为方案模式画或描拏生成插画 -->
 <template>
   <Teleport to="body">
     <Transition
@@ -646,19 +647,21 @@ const { success, error: notifyError } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+// 监听modalValue打开/关闭，打开时加载图片列表
 watch(
   () => props.modelValue,
   (isOpen) => {
     if (isOpen && props.projectId) {
       fetchImages();
     } else if (!isOpen) {
-      // Clear reference image if modal is closed externally
+      // 关闭时清空参考图片
       referenceImage.value = null;
     }
   },
   { immediate: true }
 );
 
+// 从后端API获取项目的图片列表
 async function fetchImages() {
   if (!props.projectId) return;
 
@@ -703,18 +706,21 @@ async function fetchImages() {
   }
 }
 
+// 关闭模态框并重置所有状态
 function closeModal() {
   prompt.value = "";
-  // Clear reference image when closing modal
+  // 关闭时清空参考图片
   referenceImage.value = null;
   emit("update:modelValue", false);
   emit("close");
 }
 
+// 处理背景点击事件，关闭模态框
 function handleBackdropClick() {
   closeModal();
 }
 
+// 调用后端API生成图片，支持参考图片配置
 async function handleGenerate() {
   if (!prompt.value.trim() || !props.projectId) return;
 
@@ -768,6 +774,7 @@ async function handleGenerate() {
   }
 }
 
+// 调用后端API删除指定的图片记录
 async function handleDeleteImage(imageId: string) {
   try {
     const {
@@ -800,6 +807,7 @@ async function handleDeleteImage(imageId: string) {
   }
 }
 
+// 将提示词复制到剪贴板
 function copyPrompt(text: string) {
   navigator.clipboard
     .writeText(text)
@@ -811,6 +819,7 @@ function copyPrompt(text: string) {
     });
 }
 
+// 根据计划内容丰富提示词
 async function enrichPrompt() {
   if (!prompt.value.trim() || !props.projectId) return;
 
@@ -852,6 +861,7 @@ async function enrichPrompt() {
   }
 }
 
+// 下载图片到本地设备
 async function downloadImage(image: ImageRecord) {
   try {
     const imageUrl = image.signed_url || image.public_url;
@@ -880,6 +890,7 @@ async function downloadImage(image: ImageRecord) {
   }
 }
 
+// 选择图片作为参考，用于后续生成相似风格的图片
 function adjustImage(image: ImageRecord) {
   referenceImage.value = image;
   // 滾動到最上方

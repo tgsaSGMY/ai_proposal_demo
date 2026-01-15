@@ -1,3 +1,4 @@
+<!-- 方案库编辑模态帐组件：编辑保存在个人或企业库中的方案 -->
 <template>
   <Teleport to="body">
     <Transition
@@ -138,6 +139,7 @@ const formState = reactive({
   description: "",
 });
 
+// 监听项目属性变化，更新表单状态
 watch(
   () => props.project,
   (project) => {
@@ -147,16 +149,19 @@ watch(
   { immediate: true }
 );
 
+// 检查表单是否可以提交，需要标题和描述都不为空
 const canSubmit = computed(
   () =>
     formState.title.trim().length > 0 && formState.description.trim().length > 0
 );
 
+// 关闭模态框并发送关闭事件
 function handleClose() {
   emit("update:modelValue", false);
   emit("close");
 }
 
+// 保存表单变更，验证数据后发送保存事件
 function handleSave() {
   if (!props.project || !canSubmit.value) return;
   emit("save", {

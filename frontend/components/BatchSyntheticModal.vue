@@ -1,4 +1,5 @@
 <!-- /components/BatchSyntheticModal.vue -->
+<!-- 批量简易模态帐组件：批量组合章节内容生成提案 -->
 <template>
   <div
     v-if="visible"
@@ -113,6 +114,7 @@ const availableTemplates = computed(() => {
   return grant ? grant.templates : [];
 });
 
+// 監聽模態框可見性變化，在關閉時重置表單狀態
 watch(
   () => props.visible,
   (newVal) => {
@@ -124,10 +126,12 @@ watch(
   }
 );
 
+// 關閉模態框
 function close() {
   emit("close");
 }
 
+// 異步獲取用戶 ID，如果失敗則顯示錯誤通知並返回 null
 async function getUserIdOrNotify() {
   const userId = currentUserId.value || (await refreshUser());
   if (!userId) {
@@ -136,6 +140,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
+// 驗證用戶 ID，獲取所選主題和模板，然後發送生成事件並關閉模態框
 async function startBatch() {
   const userId = await getUserIdOrNotify();
   if (!userId) {

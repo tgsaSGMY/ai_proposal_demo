@@ -355,28 +355,40 @@
   </div>
 </template>
 <script setup>
+// ===== 导入依赖库 =====
+// 导入 Vue 核心库和相关函数
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
+// 导入 Supabase 认证服务
 import { supabase } from "~/utils/supabaseClient";
+// 导入自定义组合式函数
 import { useCurrentUser } from "~/composables/useCurrentUser";
 
+// ===== 路由和初始化 =====
+// 获取 Vue Router 实例
 const router = useRouter();
 const route = useRoute();
 
-// UI 狀態
+// ===== UI 状态管理 =====
+// 移动设备上侧边栏的显示/隐藏状态
 const showSidebar = ref(false);
+// 用户是否已认证
 const isAuthenticated = ref(false);
-const isInternal = ref(false); // 權限：是否為內部人員
+// 权限：是否为内部人员
+const isInternal = ref(false);
+// 用户的总消费成本
 const userTotalCost = ref(0);
 
-// 計算屬性或 Watcher 來決定顯示哪種側邊欄
-// 這樣可以確保"側邊欄"永遠跟"當前網址"是對應的
+// ===== 视图切换状态 =====
+// 计算属性或 Watcher 来决定显示哪种侧边栏
+// 这样可以确保"侧边栏"永远跟"当前网址"是对应的
 const isInternalView = ref(false);
 
-// 監聽路由變化，自動切換側邊欄狀態
+// ===== 侦听器：路由变化 =====
+// 监听路由变化，自动切换侧边栏状态
 watch(
   () => route.path,
   (newPath) => {
-    // 如果路徑以 /_builder 開頭，且使用者有權限，則顯示內部視圖
+    // 如果路径以 /_builder 开头，且用户有权限，则显示内部视图
     if (newPath.startsWith("/_builder") && isInternal.value) {
       isInternalView.value = true;
     } else {
@@ -386,96 +398,137 @@ watch(
   { immediate: true }
 );
 
+// ===== 用户信息管理 =====
+// 获取当前用户 ID 和刷新函数
 const { userId: currentUserId, refreshUser } = useCurrentUser();
+// 当前用户的电子邮件地址
 const userEmail = ref("");
+// 认证变化的订阅对象
 let authSubscription = null;
 
-// 配置
+// ===== API 配置 =====
+// 获取运行时配置
 const config = useRuntimeConfig();
+// API 基础 URL
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// 處理側邊欄點擊 (移動端關閉菜單)
+// ===== 事件处理函数 =====
+// 处理侧边栏点击 (移动端关闭菜单)
 function handleNavClick() {
+  // 在移动设备上，点击菜单项后自动关闭侧边栏
   if (typeof window !== "undefined" && window.innerWidth < 768) {
     showSidebar.value = false;
   }
 }
 
-// 切換視圖功能：只負責跳轉路由，剩下的交給上面的 watch 處理
+// ===== 视图切换功能 =====
+// 切换到内部视图：跳转到内部管理员界面
+// 管理员可以编辑方案模板、部分配置等
 async function switchToInternalView() {
+  // 跳转到内部管理员的模型编辑页面
   await router.push("/_builder/model");
+  // 移动端上自动关闭侧边栏
   handleNavClick();
 }
 
+// 切换回外部视图：跳转到普通用户的首页
 async function switchToExternalView() {
+  // 跳转到外部用户的首页
   await router.push("/");
+  // 移动端上自动关闭侧边栏
   handleNavClick();
 }
 
-// 獲取用量
+// ===== 用户成本/使用量管理 =====
+// 获取指定用户的成本和使用量信息
+// 参数: targetUserId - 要查询的用户 ID
 async function fetchUserUsage(targetUserId) {
+  // 如果没有提供用户 ID，则将使用量设为 null
   if (!targetUserId) {
     userTotalCost.value = null;
     return;
   }
+
   try {
+    // 调用 API 获取用户成本信息
     const response = await fetch(
       `${API_BASE_URL}/user-usage?user_id=${targetUserId}`
     );
+    // 如果响应失败，抛出错误
     if (!response.ok) throw new Error("Failed to fetch usage");
     const data = await response.json();
+    // 将成本保存到状态，格式化为 2 位小数
     userTotalCost.value = Number(data.usage).toFixed(2);
   } catch (e) {
+    // 如果出错，将使用量设为 null
     userTotalCost.value = null;
   }
 }
 
-// 登出
+// ===== 用户登出功能 =====
+// 处理用户登出：清除认证状态，清理本地存储，重定向到登录页面
 async function handleLogout() {
   try {
+    // 调用 Supabase 的 signOut 方法进行登出
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
 
-    // 狀態重置
-    isAuthenticated.value = false;
-    isInternalView.value = false;
-    currentUserId.value = null;
-    userTotalCost.value = null;
-    localStorage.clear();
+    // 清除所有相关的用户状态信息
+    isAuthenticated.value = false; // 标记为未认证
+    isInternalView.value = false; // 切回外部视图
+    currentUserId.value = null; // 清空用户 ID
+    userTotalCost.value = null; // 清空用户成本
+    localStorage.clear(); // 清空所有本地存储
 
+    // 重定向到登录页面
     await router.push("/login");
+    // 移动端上关闭侧边栏
     handleNavClick();
   } catch (error) {
+    // 登出失败时打印错误信息
     console.error("Logout error:", error);
   }
 }
 
-// 初始化與監聽
+// ===== 组件生命周期和初始化 =====
+// 组件挂载时的初始化逻辑
+// 在这里获取用户会话、检查权限、设置认证监听器
 onMounted(async () => {
+  // 刷新用户信息缓存
   refreshUser();
 
-  // 1. 獲取初始 Session
+  // 第 1 步：获取初始的认证会话
   const {
     data: { session },
   } = await supabase.auth.getSession();
+  // 使用会话信息更新本地状态
   await handleSessionUpdate(session);
 
-  // 2. 監聽 Auth 變化 (包含切換 Tab 時的 Session Refresh)
+  // 第 2 步：监听认证状态变化（包括用户切换标签页时的会话刷新）
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
+    // 当 Supabase 认证状态变化时，更新本地状态
     handleSessionUpdate(session);
   });
+  // 保存订阅对象以便在组件卸载时取消订阅
   authSubscription = subscription;
 });
 
-// 統一處理 Session 邏輯
+// ===== 处理会话状态更新 =====
+// 统一处理所有与 Supabase 会话相关的状态逻辑
+// 参数: session - Supabase 会话对象（可能为 null）
 async function handleSessionUpdate(session) {
+  // 从会话中提取用户 ID（如果会话不存在则为 null）
   const sessionUserId = session?.user?.id ?? null;
+  // 更新状态中的用户 ID
   currentUserId.value = sessionUserId;
+  // 根据是否有用户 ID 来设置认证状态
   isAuthenticated.value = !!sessionUserId;
+  // 更新用户邮箱（如果会话不存在则为空字符串）
   userEmail.value = session?.user?.email ?? "";
 
+  // 如果用户未认证，清除所有相关权限和数据
   if (!isAuthenticated.value) {
     isInternal.value = false;
     userTotalCost.value = null;
@@ -483,14 +536,16 @@ async function handleSessionUpdate(session) {
     return;
   }
 
-  // 獲取用量
+  // 对于已认证的用户：获取成本/使用量信息
   fetchUserUsage(sessionUserId);
 
-  // 檢查內部權限
+  // 检查用户是否具有内部权限（管理员权限）
   const { checkIsInternal } = useInternalCheck();
   isInternal.value = await checkIsInternal();
 
-  // 強制檢查一次路由狀態，確保 isInternalView 正確
+  // 强制检查一次路由状态，确保 isInternalView 标志准确
+  // 如果路由是 /_builder 开头且用户有权限，则显示内部视图
+  // 否则显示外部用户视图
   if (route.path.startsWith("/_builder") && isInternal.value) {
     isInternalView.value = true;
   } else {
@@ -498,7 +553,10 @@ async function handleSessionUpdate(session) {
   }
 }
 
+// ===== 组件卸载清理 =====
+// 组件卸载前执行清理操作，防止内存泄漏
 onBeforeUnmount(() => {
+  // 取消 Supabase 认证状态变化的监听器订阅
   authSubscription?.unsubscribe();
 });
 </script>

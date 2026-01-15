@@ -1,3 +1,5 @@
+<!-- 答案编辑模态帐组件：编辑需求或提示的答案 -->
+\n
 <template>
   <Transition name="fade">
     <div
@@ -57,15 +59,18 @@ const emit = defineEmits(["update:draft", "cancel", "save"]);
 
 const { visible, questionLabel, questionPrompt } = toRefs(props);
 
+// 計算屬性：雙向綁定草稿文本，獲取時返回 Props 中的值，設置時發送 update:draft 事件
 const draftModel = computed({
   get: () => props.draft,
   set: (value: string) => emit("update:draft", value),
 });
 
+// 發送取消事件並關閉模態框
 function emitCancel() {
   emit("cancel");
 }
 
+// 發送保存事件並關閉模態框
 function emitSave() {
   emit("save");
 }

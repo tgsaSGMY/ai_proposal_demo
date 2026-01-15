@@ -1,3 +1,4 @@
+<!-- 字段文件导入模态帐组件：从 Excel或 CSV 导入字段数据 -->
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
@@ -265,6 +266,7 @@ const analysisResult = ref<{
 const editableValue = ref("");
 const errorMessage = ref("");
 
+// 監聽模態框打開/關閉，初始化或重置表單狀態
 watch(
   () => isOpenModel.value,
   (isOpen) => {
@@ -301,12 +303,14 @@ const canConfirm = computed(() => {
   );
 });
 
+// 將字節大小格式化為易讀的文件大小（KB或MB）
 function formatFileSize(bytes: number): string {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
+// 重置所有表單狀態，清空已選文件和分析結果
 
 function resetState() {
   selectedFiles.value = [];
@@ -315,9 +319,11 @@ function resetState() {
   errorMessage.value = "";
   dragActive.value = false;
 }
+// 觸發文件選擇對話框
 
 function triggerFilePicker() {
   fileInputRef.value?.click();
+  // 處理文件選擇器的文件變化事件
 }
 
 function handleFileChange(event: Event) {
@@ -329,6 +335,7 @@ function handleFileChange(event: Event) {
   if (target) {
     target.value = "";
   }
+  // 處理拖拽事件，更新UI反饋和添加文件
 }
 
 function handleDragOver() {
@@ -369,6 +376,7 @@ function addFiles(files: File[]) {
   selectedFiles.value.push(...newFiles);
   analysisResult.value = null;
   editableValue.value = props.fieldValue || "";
+  // 移除指定索引的文件或清除所有已選文件
   errorMessage.value = "";
 }
 
@@ -378,6 +386,7 @@ function removeFile(idx: number) {
 
 function clearAllFiles() {
   selectedFiles.value = [];
+  // 調用後端API分析上傳的文件，使用OCR和AI增強字段內容
   analysisResult.value = null;
 }
 
@@ -424,6 +433,7 @@ async function analyzeFile() {
     errorMessage.value = message;
     notifyError(`分析失敗：${message}`);
   } finally {
+    // 發送確認事件並關閉模態框
     isAnalyzing.value = false;
   }
 }

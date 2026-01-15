@@ -1,4 +1,5 @@
 <!-- /components/DraftPlanList.vue -->
+<!-- 方案草稿列表组件：显示正在编辑的方案草稿 -->
 <template>
   <div>
     <!-- Filter Controls -->
@@ -177,14 +178,17 @@ const searchTerm = ref("");
 const filterMode = ref("");
 const activeMenu = ref(null);
 
+// 切换菜单的显示/隐藏状态
 function toggleMenu(draftId) {
   activeMenu.value = activeMenu.value === draftId ? null : draftId;
 }
 
+// 关闭菜单
 function closeMenu() {
   activeMenu.value = null;
 }
 
+// 打开草稿，如果菜单已打开则先关闭菜单
 function openDraft(draft) {
   if (activeMenu.value) {
     closeMenu();
@@ -193,11 +197,13 @@ function openDraft(draft) {
   emit("select", draft);
 }
 
+// 发送重命名事件
 function emitRename(draft) {
   emit("rename", draft);
   closeMenu();
 }
 
+// 发送删除事件
 function emitDelete(draft) {
   emit("delete", draft);
   closeMenu();
@@ -211,6 +217,7 @@ onUnmounted(() => {
   window.removeEventListener("click", closeMenu);
 });
 
+// 计算属性：根据搜索词和过滤模式返回匹配的草稿列表
 const filteredDrafts = computed(() => {
   return props.drafts.filter((draft) => {
     const nameMatch = draft.name
@@ -221,6 +228,7 @@ const filteredDrafts = computed(() => {
   });
 });
 
+// 根据草稿状态返回对应的边框颜色
 function getStatusBorderColor(status) {
   const map = {
     completed: "bg-green-500",
@@ -232,6 +240,7 @@ function getStatusBorderColor(status) {
   return map[status] || "border-gray-300";
 }
 
+// 根据状态返回状态文本
 function getStatusText(status) {
   const map = {
     completed: "已完成",

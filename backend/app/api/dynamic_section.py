@@ -66,6 +66,7 @@ async def get_dynamic_schema(
 	這裡直接使用 SupabaseService 上的 client（使用 service key），
 	繞過 RLS 方便後台管理，但仍透過 verify_internal_user 限制為內部人員。
 	"""
+	# 根據 template 或 schema ID 查詢動態章節資料，並返回完整的章節和欄位結構
 
 	try:
 		query = (
@@ -146,6 +147,7 @@ async def create_section(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 創建新的動態章節，包含所有必要的元數據（schema、template、標題、排序等）
 	try:
 		insert_resp = (
 			supabase_service.client
@@ -195,6 +197,7 @@ async def update_section(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 更新指定章節的資料，包括標題、排序、template 關聯等信息
 	try:
 		update_resp = (
 			supabase_service.client
@@ -266,6 +269,7 @@ async def delete_section(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 刪除指定章節及其所有子欄位，執行級聯刪除操作
 	try:
 		delete_resp = (
 			supabase_service.client
@@ -297,6 +301,7 @@ async def create_field(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 在指定章節下創建新的動態欄位，包含標題、描述、排序等信息
 	try:
 		insert_resp = (
 			supabase_service.client
@@ -343,6 +348,7 @@ async def update_field(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 更新指定欄位的資料，包括標題、描述、所屬章節、排序等信息
 	try:
 		update_resp = (
 			supabase_service.client
@@ -389,6 +395,7 @@ async def delete_field(
 	supabase_service: SupabaseService = Depends(get_supabase_service),
 	_=Depends(verify_internal_user),
 ):
+	# 刪除指定欄位，從章節中移除此欄位定義
 	try:
 		delete_resp = (
 			supabase_service.client

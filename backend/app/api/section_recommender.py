@@ -40,6 +40,7 @@ async def recommend_sections(
     payload: SectionRecommenderRequest,
     llm_service: LLMService = Depends(get_llm_service),
 ):
+    # 根據 Word 文檔和現有 Schema 生成章節改版建議，使用 LLM 分析並提供具體的修改意見
     document_text = (payload.document_text or "").strip()
     if not document_text:
         raise HTTPException(status_code=400, detail="document_text 不可為空")
@@ -76,6 +77,7 @@ async def recommend_sections(
 
 
 def _normalize_schema(schema_info: Any) -> Dict[str, Any]:
+    # 規範化 Schema 資料，支持 Dict 或 JSON 字符串兩種格式
     if isinstance(schema_info, dict):
         return schema_info
     if isinstance(schema_info, str):
@@ -87,6 +89,7 @@ def _normalize_schema(schema_info: Any) -> Dict[str, Any]:
 
 
 def _format_schema_for_prompt(schema_data: Dict[str, Any]) -> str:
+    # 將 Schema 資料格式化為易讀的文本，用於 LLM 提示詞，包含所有章節和欄位信息
     sections: List[Dict[str, Any]] = schema_data.get("sections", [])
     if not sections:
         return "目前尚未定義任何章節。"
@@ -112,6 +115,7 @@ def _format_schema_for_prompt(schema_data: Dict[str, Any]) -> str:
 
 
 def _build_user_prompt(schema_description: str, document_text: str) -> str:
+    # 構建用戶提示詞，指示 LLM 只能修改欄位說明而不能改變章節結構
     return f"""
 請協助我檢視動態章節設定，但**只能**針對「說明 (description)」內容提出具體調整建議。
 

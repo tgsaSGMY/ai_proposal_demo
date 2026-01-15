@@ -6,9 +6,11 @@ from app.services.llm_service import LLMService
 from typing import Optional
 
 def get_supabase_service(request: Request) -> SupabaseService:
+    # 從應用狀態中獲取 Supabase Service 實例
     return request.app.state.supabase_service
 
 def get_llm_service(request: Request) -> LLMService:
+    # 從應用狀態中獲取 LLM Service 實例
     return request.app.state.llm_service
 
 async def get_current_user_id(

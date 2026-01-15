@@ -1,6 +1,9 @@
+<!-- 全局通知列表组件：在右上角显示成功、错误、信息、警告等通知 -->
 <template>
   <!-- 通知容器，固定在屏幕右上角 -->
-  <div class="fixed top-2 right-2 sm:top-4 sm:right-4 z-50 w-full max-w-xs sm:max-w-sm space-y-2 sm:space-y-3">
+  <div
+    class="fixed top-2 right-2 sm:top-4 sm:right-4 z-50 w-full max-w-xs sm:max-w-sm space-y-2 sm:space-y-3"
+  >
     <!-- 使用 TransitionGroup 讓列表的增刪有動畫效果 -->
     <TransitionGroup name="list" tag="div">
       <div
@@ -58,7 +61,7 @@ import {
 
 const { notifications, remove } = useNotifications();
 
-// 根據通知類型返回對應的 Tailwind CSS 樣式
+// 根据通知类型返回对应的Tailwind样式（成功/错误/信息/警告四种颜色）
 const notificationClasses = (type) => {
   const baseClasses = "bg-white text-gray-900 border";
   const typeClasses = {
@@ -70,7 +73,7 @@ const notificationClasses = (type) => {
   return typeClasses[type] || baseClasses;
 };
 
-// 根據通知類型返回對應的圖標組件
+// 根据通知类型返回对应的图标组件
 const notificationIcon = (type) => {
   const icons = {
     success: CheckCircleIcon,

@@ -28,6 +28,7 @@ async def internal_generate_synthetic_input(
     llm_service: LLMService,
     supabase_service: SupabaseService,
 ) -> Dict[str, Any]:
+    # 可重用的內部函數，根據動態欄位 Schema 使用 LLM 生成合成用戶輸入，包含核心構想和所有欄位答案
     """
     可重用的内部函数，用于生成合成的用户输入。
     """

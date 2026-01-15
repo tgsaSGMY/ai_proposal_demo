@@ -468,11 +468,14 @@
 </template>
 
 <script setup>
+// ===== 页面元数据 =====
+// 设置中间件验证，确保用户已登陆
 definePageMeta({
   middleware: "auth",
 });
 
-// SEO
+// ===== SEO 配置 =====
+// 设置页面标题和元数据，用于搜索引擎优化
 useHead({
   title: "動態欄位配置中心 - AI 計畫書平台",
   meta: [
@@ -488,14 +491,21 @@ useHead({
   ],
 });
 
+// ===== 导入依赖库 =====
+// 导入 Vue 核心库
 import { ref, onMounted, computed, watch } from "vue";
+// 导入 Supabase 数据库客户端
 import { supabase } from "~/utils/supabaseClient";
+// 导入自定义组合式函数
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
 import { useLoading } from "~/composables/useLoading";
 import { useInternalCheck } from "~/composables/useInternalCheck";
+// 导入子组件
 import SectionRecommenderModal from "~/components/SectionRecommenderModal.vue";
 
+// ===== 初始化服务 =====
+// 获取通知、确认、加载状态等服务
 const { success, error: errorNotification } = useNotifications();
 const { confirm } = useConfirm();
 const { show: showLoading, hide: hideLoading } = useLoading();
@@ -503,23 +513,29 @@ const { show: showLoading, hide: hideLoading } = useLoading();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// Data models (frontend-side)
+// ===== 数据模型（前端端） =====
+// 存储补助、选中的补助和模板、以及章节列表
 const grants = ref([]);
 const selectedGrantId = ref("");
 const selectedTemplateId = ref("");
 const sections = ref([]); // [{ id, schema_id, section_key, title, order, fields: [...] }]
 
+// ===== 编辑状态 =====
+// 当前正在编辑的章节和欄位，以及推荐模态框状态
 const editingSection = ref(null);
 const editingField = ref(null);
 const isRecommenderOpen = ref(false);
 
-// Drag-and-drop state
+// ===== 拖拽状态 =====
+// 用于管理章节和欄位的拖拽排序
 const draggedSectionIndex = ref(null);
 const dragOverSectionIndex = ref(null);
 const draggedFieldIndex = ref(null);
 const dragOverFieldSectionId = ref(null);
 const dragOverFieldIndex = ref(null);
 
+// ===== 计算属性：可用模板 =====
+// 根据选中的补助类别，动态计算可用的模板列表
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
   const targetGrant = grants.value.find(
@@ -528,10 +544,14 @@ const availableTemplates = computed(() => {
   return targetGrant?.templates || [];
 });
 
+// ===== 计算属性：是否选中模板 =====
+// 检查用户是否同时选中了补助类别和模板
 const isTemplateSelected = computed(() =>
   Boolean(selectedGrantId.value && selectedTemplateId.value)
 );
 
+// ===== 计算属性：当前架构标签 =====
+// 返回格式化的补助类别和模板名称
 const currentSchemaLabel = computed(() => {
   if (!selectedGrantId.value || !selectedTemplateId.value) {
     return "未選擇";
@@ -545,6 +565,8 @@ const currentSchemaLabel = computed(() => {
   return `${grantName}/${templateName}`;
 });
 
+// ===== 工具函数：克隆章节 =====
+// 创建章节对象的浅拷贝，用于编辑操作
 function cloneSection(section) {
   return {
     id: section.id,
@@ -557,6 +579,8 @@ function cloneSection(section) {
   };
 }
 
+// ===== 工具函数：克隆欄位 =====
+// 创建欄位对象的浅拷贝，用于编辑操作
 function cloneField(field) {
   return {
     id: field.id,
@@ -568,6 +592,8 @@ function cloneField(field) {
   };
 }
 
+// ===== 工具函数：检查欄位是否在编辑 =====
+// 判断指定的欄位是否正在被编辑
 function isEditingField(field) {
   return (
     editingField.value &&
@@ -576,7 +602,8 @@ function isEditingField(field) {
   );
 }
 
-// --- API helpers ---
+// ===== API 辅助函数：获取认证令牌 =====
+// 从 Supabase 会话中获取访问令牌，用于 API 认证
 async function getAuthToken() {
   const {
     data: { session },
@@ -585,6 +612,8 @@ async function getAuthToken() {
   return session.access_token;
 }
 
+// ===== 获取章节列表 =====
+// 从后端 API 获取选中模板的所有章节和欄位
 async function fetchSections() {
   if (!isTemplateSelected.value) {
     sections.value = [];
@@ -623,7 +652,8 @@ async function fetchSections() {
   }
 }
 
-// --- Section CRUD ---
+// ===== 章节 CRUD 操作 =====
+// 打开创建新章节的界面
 function openCreateSection() {
   if (!isTemplateSelected.value) {
     errorNotification("請先選擇補助類別與模板");
@@ -644,6 +674,8 @@ function openCreateSection() {
   };
 }
 
+// ===== 打开章节推荐模态框 =====
+// 显示 AI 推荐章节的模态框
 function openSectionRecommender() {
   if (!isTemplateSelected.value) {
     errorNotification("請先選擇補助類別與模板");
@@ -652,14 +684,20 @@ function openSectionRecommender() {
   isRecommenderOpen.value = true;
 }
 
+// ===== 开始编辑章节 =====
+// 打开指定章节的编辑界面
 function startEditSection(section) {
   editingSection.value = cloneSection(section);
 }
 
+// ===== 取消章节编辑 =====
+// 关闭章节编辑界面，不保存任何更改
 function cancelEditSection() {
   editingSection.value = null;
 }
 
+// ===== 保存章节 =====
+// 调用 API 保存新建或编辑的章节
 async function saveSection(localSection) {
   try {
     if (!localSection.section_key || !localSection.title) {
@@ -714,6 +752,8 @@ async function saveSection(localSection) {
   }
 }
 
+// ===== 确认删除章节 =====
+// 显示确认对话框，验证用户确认后删除章节及其所有欄位
 async function confirmDeleteSection(section) {
   const isConfirmed = await confirm({
     title: "確認刪除章節",
@@ -749,7 +789,8 @@ async function confirmDeleteSection(section) {
   }
 }
 
-// --- Field CRUD ---
+// ===== 欄位 CRUD 操作 =====
+// 打开创建新欄位的界面
 function openCreateField(section) {
   const maxOrder = section.fields.reduce(
     (max, f) => (f.order > max ? f.order : max),
@@ -765,14 +806,20 @@ function openCreateField(section) {
   };
 }
 
+// ===== 开始编辑欄位 =====
+// 打开指定欄位的编辑界面
 function startEditField(section, field) {
   editingField.value = cloneField(field);
 }
 
+// ===== 取消欄位编辑 =====
+// 关闭欄位编辑界面，不保存任何更改
 function cancelEditField() {
   editingField.value = null;
 }
 
+// ===== 保存欄位 =====
+// 调用 API 保存新建或编辑的欄位
 async function saveField(localField) {
   try {
     if (!localField.field_key || !localField.title) {
@@ -826,6 +873,8 @@ async function saveField(localField) {
   }
 }
 
+// ===== 确认删除欄位 =====
+// 显示确认对话框，验证用户确认后删除欄位
 async function confirmDeleteField(field) {
   const isConfirmed = await confirm({
     title: "確認刪除欄位",
@@ -866,18 +915,23 @@ async function confirmDeleteField(field) {
   }
 }
 
-// --- Drag-and-drop for sections ---
+// ===== 拖拽排序：章节 =====
+// 处理章节拖拽的开始事件
 function startDragSection(index, event) {
   draggedSectionIndex.value = index;
   event.dataTransfer.effectAllowed = "move";
 }
 
+// ===== 拖拽排序：章节悬停 =====
+// 处理拖拽章节时的悬停事件
 function dragOverSection(index, event) {
   event.preventDefault();
   event.dataTransfer.dropEffect = "move";
   dragOverSectionIndex.value = index;
 }
 
+// ===== 拖拽排序：章节放置 =====
+// 处理章节拖拽放置事件，更新章节顺序并调用 API 保存
 async function dropSection(targetIndex, event) {
   event.preventDefault();
   dragOverSectionIndex.value = null;
@@ -938,18 +992,23 @@ async function dropSection(targetIndex, event) {
   }
 }
 
+// ===== 拖拽排序：章节结束 =====
+// 处理章节拖拽结束事件，清理拖拽状态
 function dragEndSection() {
   draggedSectionIndex.value = null;
   dragOverSectionIndex.value = null;
 }
 
-// --- Drag-and-drop for fields ---
+// ===== 拖拽排序：欄位 =====
+// 处理欄位拖拽的开始事件
 function startDragField(sectionId, fieldIndex, event) {
   draggedFieldIndex.value = fieldIndex;
   dragOverFieldSectionId.value = sectionId;
   event.dataTransfer.effectAllowed = "move";
 }
 
+// ===== 拖拽排序：欄位悬停 =====
+// 处理拖拽欄位时的悬停事件
 function dragOverField(sectionId, fieldIndex, event) {
   event.preventDefault();
   event.dataTransfer.dropEffect = "move";
@@ -957,6 +1016,8 @@ function dragOverField(sectionId, fieldIndex, event) {
   dragOverFieldIndex.value = fieldIndex;
 }
 
+// ===== 拖拽排序：欄位放置 =====
+// 处理欄位拖拽放置事件，更新欄位顺序并调用 API 保存
 async function dropField(targetSectionId, targetFieldIndex, event) {
   event.preventDefault();
   dragOverFieldSectionId.value = null;
@@ -1012,13 +1073,16 @@ async function dropField(targetSectionId, targetFieldIndex, event) {
   }
 }
 
+// ===== 拖拽排序：欄位结束 =====
+// 处理欄位拖拽结束事件，清理拖拽状态
 function dragEndField() {
   draggedFieldIndex.value = null;
   dragOverFieldSectionId.value = null;
   dragOverFieldIndex.value = null;
 }
 
-// --- Lifecycle ---
+// ===== 生命周期 =====
+// 页面挂载时，检查用户权限并加载补助模板列表
 onMounted(async () => {
   // 僅允許內部人員存取
   const { checkIsInternal } = useInternalCheck();
@@ -1031,6 +1095,8 @@ onMounted(async () => {
   await fetchGrantTemplates();
 });
 
+// ===== 获取补助和模板列表 =====
+// 从后端 API 获取所有可用的补助类别和对应的模板
 async function fetchGrantTemplates() {
   try {
     showLoading("載入補助模板...");
@@ -1048,6 +1114,8 @@ async function fetchGrantTemplates() {
   }
 }
 
+// ===== 侦听器：补助类别变化 =====
+// 当补助类别变化时，重置模板选择和章节列表
 watch(selectedGrantId, (newGrantId) => {
   const templates = availableTemplates.value;
   if (!newGrantId || !templates.length) {
@@ -1060,6 +1128,8 @@ watch(selectedGrantId, (newGrantId) => {
   }
 });
 
+// ===== 侦听器：模板变化 =====
+// 当模板选择变化时，清空编辑状态并获取该模板的章节列表
 watch(selectedTemplateId, async (newTemplateId) => {
   sections.value = [];
   editingSection.value = null;

@@ -1,3 +1,4 @@
+<!-- 章节配置面板组件：配置章节的字段和提示词 -->
 <template>
   <div class="space-y-6 sm:space-y-8">
     <!-- 引用網路來源開關 -->
@@ -176,10 +177,12 @@ function updateSchemaFields(key, newValue) {
   schemaFields.value[key] = newValue;
 }
 
+// 添加新的自定义指令
 function addPrompt() {
   editableData.custom_prompt_list.push("");
 }
 
+// 删除指定索引的自定义指令
 function deletePrompt(index) {
   editableData.custom_prompt_list.splice(index, 1);
 }

@@ -1,3 +1,4 @@
+<!-- JSON Schema 编辑器组件：可视化编辑 JSON Schema 定义的动态字段 -->
 <template>
   <div class="space-y-3">
     <div
@@ -89,38 +90,40 @@ const props = defineProps({
 
 const emit = defineEmits(["update"]);
 
-// 类型判断函数
+// 判断值是否为字符串类型
 function isString(val) {
   return typeof val === "string";
 }
 
+// 判断值是否为对象类型（排除数组）
 function isObject(val) {
   return val !== null && typeof val === "object" && !Array.isArray(val);
 }
 
+// 判断值是否为数组类型
 function isArray(val) {
   return Array.isArray(val);
 }
 
-// 更新顶层值
+// 更新顶层字段的值
 function updateValue(key, newValue) {
   emit("update", key, newValue);
 }
 
-// 更新嵌套对象的值
+// 更新嵌套对象字段的值
 function updateNestedValue(parentKey, childKey, newValue) {
   const updated = { ...props.fields[parentKey], [childKey]: newValue };
   emit("update", parentKey, updated);
 }
 
-// 更新数组中的字符串项
+// 更新数组中字符串项的值
 function updateArrayItem(key, index, newValue) {
   const updated = [...props.fields[key]];
   updated[index] = newValue;
   emit("update", key, updated);
 }
 
-// 更新数组中的对象项的子属性
+// 更新数组中对象项的子属性值
 function updateNestedArrayValue(parentKey, arrayIndex, childKey, newValue) {
   const updated = [...props.fields[parentKey]];
   updated[arrayIndex] = { ...updated[arrayIndex], [childKey]: newValue };

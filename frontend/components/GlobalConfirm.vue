@@ -1,4 +1,4 @@
-<!-- 雙重確認按鈕 -->
+<!-- 全局确认对话框组件：显示带两个按钮的确认弹窗，支持primary和danger两种样式 -->
 <template>
   <Transition
     enter-active-class="transition-opacity duration-300 ease-out"
@@ -43,18 +43,24 @@
                 />
               </div>
               <div class="mt-3 sm:mt-0 sm:ml-4 text-left flex-1">
-                <h3 class="text-base sm:text-lg leading-6 font-bold text-gray-900">
+                <h3
+                  class="text-base sm:text-lg leading-6 font-bold text-gray-900"
+                >
                   {{ options.title }}
                 </h3>
                 <div class="mt-1 sm:mt-2">
-                  <p class="text-xs sm:text-sm text-gray-500 whitespace-pre-wrap">
+                  <p
+                    class="text-xs sm:text-sm text-gray-500 whitespace-pre-wrap"
+                  >
                     {{ options.message }}
                   </p>
                 </div>
               </div>
             </div>
           </div>
-          <div class="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col-reverse sm:flex-row-reverse gap-2 sm:gap-3">
+          <div
+            class="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col-reverse sm:flex-row-reverse gap-2 sm:gap-3"
+          >
             <button
               @click="handleConfirm"
               type="button"
@@ -87,6 +93,7 @@ import {
 
 const { isVisible, options, handleConfirm, handleCancel } = useConfirm();
 
+// 根据确认按钮类型返回对应的样式类（primary为蓝色，danger为红色）
 const confirmButtonClass = computed(() => {
   if (!options.value) return "";
   return (
@@ -98,6 +105,7 @@ const confirmButtonClass = computed(() => {
   );
 });
 
+// 根据确认颜色返回图标背景色
 const iconBgColor = computed(() => {
   if (!options.value) return "";
   return (
@@ -108,6 +116,7 @@ const iconBgColor = computed(() => {
   );
 });
 
+// 根据确认颜色返回图标颜色
 const iconColor = computed(() => {
   if (!options.value) return "";
   return (

@@ -1,11 +1,16 @@
+<!-- 输入提示词模态帐组件：提示用户输入并提供上下文信息 -->
 <template>
   <div
     v-if="visible"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
   >
-    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-xs sm:max-w-sm">
+    <div
+      class="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full max-w-xs sm:max-w-sm"
+    >
       <h2 class="text-base sm:text-lg font-semibold mb-2">{{ title }}</h2>
-      <p v-if="message" class="mb-2 sm:mb-4 text-gray-600 text-xs sm:text-base">{{ message }}</p>
+      <p v-if="message" class="mb-2 sm:mb-4 text-gray-600 text-xs sm:text-base">
+        {{ message }}
+      </p>
       <input
         v-model="inputValue"
         :placeholder="placeholder"
@@ -14,8 +19,12 @@
         autofocus
       />
       <div class="flex justify-end gap-1 sm:gap-2">
-        <button @click="cancel" class="btn-secondary text-xs sm:text-base">取消</button>
-        <button @click="submit" class="btn-primary text-xs sm:text-base">确定</button>
+        <button @click="cancel" class="btn-secondary text-xs sm:text-base">
+          取消
+        </button>
+        <button @click="submit" class="btn-primary text-xs sm:text-base">
+          确定
+        </button>
       </div>
     </div>
   </div>
@@ -33,6 +42,7 @@ const emits = defineEmits(["submit", "cancel"]);
 
 const inputValue = ref(props.defaultValue || "");
 
+// 监听默认值变化，更新输入框内容
 watch(
   () => props.defaultValue,
   (val) => {
@@ -40,9 +50,12 @@ watch(
   }
 );
 
+// 提交输入值，发送给父组件
 function submit() {
   emits("submit", inputValue.value);
 }
+
+// 取消输入，发送取消事件
 function cancel() {
   emits("cancel");
 }

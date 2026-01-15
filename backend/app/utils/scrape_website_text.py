@@ -1,5 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
+from fastapi import HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
 
 def scrape_website_text(url: str) -> str:
     try:

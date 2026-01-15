@@ -1,3 +1,4 @@
+<!-- 聊天侧边栏组件：显示聊天历史列表和新建对话按钮 -->
 <template>
   <div class="flex h-screen flex-col rounded-[32px] bg-white shadow-lg">
     <div class="flex-1 overflow-hidden border-b border-slate-200">
@@ -126,6 +127,7 @@ const props = defineProps({
 
 const emit = defineEmits(["selectVersion", "editQuestion"]);
 
+// 計算屬性：將問題答案轉換為顯示格式，支持按中文數字排序和提取 Label
 const qaItems = computed(() => {
   const items: QAItem[] = [];
   const answers = props.questionAnswers || {};

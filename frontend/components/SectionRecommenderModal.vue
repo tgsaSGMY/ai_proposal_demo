@@ -1,3 +1,4 @@
+<!-- 章节推荐模态帐组件：为用户推荐应该填写的章节 -->
 <template>
   <div
     v-if="modelValue"
@@ -244,10 +245,12 @@ const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 const { success, error: errorNotification } = useNotifications();
 
+// 将Markdown格式的**加粗**转换为HTML的<strong>标签
 function formatRecommendations(text: string): string {
   return text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
 }
 
+// 关闭模态框并重置所有状态
 function closeModal() {
   emit("update:modelValue", false);
   emit("close");
@@ -255,6 +258,7 @@ function closeModal() {
   recommendations.value = null;
 }
 
+// 处理用户选择的Word文件
 function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement;
   const files = target.files;
@@ -264,6 +268,7 @@ function handleFileSelect(event: Event) {
   }
 }
 
+// 解析上传的Word文件内容，调用后端API获取AI建议
 async function analyzeFile() {
   if (!selectedFile.value) {
     errorNotification("請先選擇檔案");

@@ -1,3 +1,4 @@
+<!-- 编辑器方案输入面板组件：编辑方案的配置信息 -->
 <template>
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
@@ -408,6 +409,7 @@ const selectedTemplate = computed(() => {
   );
 });
 
+// 計算屬性：獲取選中的主題和模板名稱
 const selectedGrantName = computed(
   () => selectedGrant.value?.name || "尚未選擇"
 );
@@ -457,6 +459,7 @@ watch(
   }
 );
 
+// 更新指定章節字段的值，同步到父組件
 function updateDynamicValue(sectionId, propertyKey, value) {
   const key = makeCompositeKey(sectionId, propertyKey);
   internalDynamicValues.value = {
@@ -469,6 +472,7 @@ function updateDynamicValue(sectionId, propertyKey, value) {
 function fieldPanelKey(sectionId, propertyKey) {
   return `${sectionId}::${propertyKey}`;
 }
+// 切換字段的展開/折疊狀態
 
 function toggleField(sectionId, propertyKey) {
   const id = fieldPanelKey(sectionId, propertyKey);
@@ -480,21 +484,25 @@ function toggleField(sectionId, propertyKey) {
   }
   expandedFieldIds.value = next;
 }
+// 判斷指定字段是否已展開
 
 function isFieldExpanded(sectionId, propertyKey) {
   return expandedFieldIds.value.has(fieldPanelKey(sectionId, propertyKey));
 }
+// 根據字段是否有值返回對應的狀態文本
 
 function computeFieldStatus(value) {
   if (value && value.trim() !== "") {
     return "已填寫";
   }
   return "可選填";
+  // 發送生成完整計劃書的事件
 }
 
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
   emit("generatePlan", { summaries: [] });
+  // 確保指定字段處於展開狀態（如果未展開則展開）
 };
 
 function ensureFieldExpanded(sectionId, propertyKey) {
@@ -504,6 +512,7 @@ function ensureFieldExpanded(sectionId, propertyKey) {
   }
   const next = new Set(expandedFieldIds.value);
   next.add(id);
+  // 打開文件導入模態框，準備導入字段內容
   expandedFieldIds.value = next;
 }
 
@@ -516,6 +525,7 @@ function openFileImportModal(sectionId, field) {
     fieldDescription: field.description || "",
     fieldLabel: field.title,
     currentValue: field.value || "",
+    // 處理文件導入確認，更新字段內容並展開該字段
   };
 }
 

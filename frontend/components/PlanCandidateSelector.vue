@@ -1,3 +1,4 @@
+<!-- 方案候选项选择器组件：从多个生成的方案中选择一个 -->
 <template>
   <Transition name="fade">
     <div
@@ -191,10 +192,12 @@ watch(
   { immediate: false }
 );
 
+// 计算属性：检查所有章节是否都已选择候选方案
 const isAllSectionsSelected = computed(() =>
   props.sections.every((s) => selected[s.id] !== undefined)
 );
 
+// 计算属性：统计已选择的章节数量
 const selectedCount = computed(() =>
   props.sections.reduce(
     (acc, s) => (selected[s.id] !== undefined ? acc + 1 : acc),
@@ -215,6 +218,7 @@ function selectAllFirst() {
   }
 }
 
+// 确认选择并发送事件，包含选中和被拒绝的方案
 function confirmSelection() {
   const finalSelected = {};
   const finalRejected = {}; // 用不同的变量名以避免与 props.selected 冲突
@@ -255,6 +259,7 @@ function confirmSelection() {
   emit("close"); // 您可以决定是在确认后自动关闭，还是让父组件来控制
 }
 
+// 为候选方案生成HTML格式的内容呈现
 function generateHtmlForCandidate(section, candidateContent) {
   if (!section || !section.id || !candidateContent) {
     return '<p class="text-gray-500 italic">（無內容）</p>';

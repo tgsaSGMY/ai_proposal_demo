@@ -25,6 +25,7 @@ async def get_project_images(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     user_id: str = Depends(get_current_user_id),
 ) -> List[Dict[str, Any]]:
+    # 根據 project_id 取得該專案的所有圖片，驗證使用者權限並為每張圖片產生有效期 1 小時的 signed URL
     """
     根據 project_id 取得該專案的所有圖片。
     會驗證使用者是否為該專案的擁有者。
@@ -100,6 +101,7 @@ async def delete_image(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     user_id: str = Depends(get_current_user_id),
 ):
+    # 刪除指定圖片，驗證使用者為該圖片所屬專案的擁有者，同時刪除 Storage 中的檔案
     """
     刪除指定的圖片。
     會驗證使用者是否為該圖片所屬專案的擁有者。
@@ -165,6 +167,7 @@ async def enrich_prompt(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
+    # 根據專案計劃書內容使用 LLM 豐富圖片描述，使其更符合計劃書內容並適合生成圖片
     """
     根據專案的計劃書內容（stored_answer）來豐富使用者提供的圖片描述。
     使用 LLM 服務生成更詳細且符合計劃書內容的描述。
@@ -274,6 +277,7 @@ async def generate_image(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
+    # 根據提示詞立即生成圖片並上傳至 Storage，支援參考圖片微調模式，產生有效的 signed URL 供客戶端訪問
     """
     根據提示詞立即生成一張圖片。
     將圖片上傳到 Storage 並記錄到資料庫。

@@ -1,3 +1,4 @@
+<!-- 模型配置选择卡片组件：为章节选择内部/外部模型或自定义提示词 -->
 <template>
   <div
     class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 transition-opacity"
@@ -219,6 +220,8 @@ const settingsPanelRef = ref(null);
 const currentInternalModelId = computed(
   () => props.currentInternalRule?.model_id
 );
+
+// 计算属性：获取当前应用的外部模型ID
 const currentExternalModelId = computed(
   () => props.currentExternalRule?.model_id
 );
@@ -227,7 +230,7 @@ const currentExternalModelId = computed(
 const internalModels = computed(() => props.models);
 const externalModels = computed(() => props.models);
 
-// 初始化
+// 组件挂载时初始化模型选择状态
 onMounted(() => {
   // 初始化內部模型選擇
   if (currentInternalModelId.value) {
@@ -245,6 +248,7 @@ onMounted(() => {
   }
 });
 
+// 保存模型配置变更和prompt设置
 async function saveChanges() {
   try {
     // 處理內部模型規則
@@ -293,7 +297,7 @@ async function saveChanges() {
   }
 }
 
-// ---處理 Prompt 保存的新函數 ---
+// 处理保存prompt设置，调用后端API更新章节提示词配置
 async function handleSaveSettings(updatedSettings) {
   if (!updatedSettings) return;
 

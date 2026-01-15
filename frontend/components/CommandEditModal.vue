@@ -1,3 +1,4 @@
+<!-- 命令编辑模态帐组件：编辑自定义的API调用命令 -->
 <template>
   <Teleport to="body">
     <Transition
@@ -146,6 +147,7 @@ const form = reactive<CommandPayload>({
   isCompany: false,
 });
 
+// 監聽命令 Prop 變化，自動同步表單資料到本地狀態
 watch(
   () => props.command,
   (value) => {
@@ -157,11 +159,13 @@ watch(
   { immediate: true }
 );
 
+// 關閉模態框，觸發 update:modelValue 和 close 事件
 function handleClose() {
   emit("update:modelValue", false);
   emit("close");
 }
 
+// 驗證表單並發送保存事件，包含完整的命令資料（id、標題、描述、公司標籤）
 function handleSave() {
   if (!form.title.trim() || !form.description.trim()) return;
   emit("save", { ...form });

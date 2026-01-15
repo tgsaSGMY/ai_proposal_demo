@@ -44,6 +44,7 @@ def _resolve_version_index(
     version_id: Optional[str],
     version_number: Optional[int],
 ) -> Optional[int]:
+    # 根據版本 ID 或版本編號解析對應的版本索引，支持多種格式（v1、1、ID 字符串）
     if version_number and version_number > 0:
         candidate = version_number - 1
         if 0 <= candidate < len(versions):
@@ -69,6 +70,7 @@ def _compute_version_window(
     versions: List[Dict[str, Any]],
     target_index: int,
 ) -> Tuple[Optional[datetime], Optional[datetime], Dict[str, Any]]:
+    # 計算指定版本的時間窗口，用於篩選該版本期間的執行日誌和聊天記錄
     version = versions[target_index]
 
     def version_timestamp(entry: Dict[str, Any]) -> Optional[datetime]:
@@ -96,6 +98,7 @@ async def _build_timeline_response(
     version_id: Optional[str],
     version_number: Optional[int],
 ):
+    # 構建時間軸回應資料，包含指定版本的聊天記錄、執行日誌和時間窗口信息
     record = await supabase_service.get_project_by_id(project_id, user_id)
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
@@ -166,6 +169,7 @@ async def list_projects(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 取得當前使用者的所有專案列表
     return await supabase_service.get_projects_by_user(user_id)
 
 
@@ -175,6 +179,7 @@ async def get_project(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 根據專案 ID 取得單一專案詳情，須驗證使用者權限
     record = await supabase_service.get_project_by_id(project_id, user_id)
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
@@ -187,6 +192,7 @@ async def create_project(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 建立新的專案記錄，自動關聯當前使用者 ID
     data = payload.dict(exclude_none=True)
     data["user_id"] = user_id
     record = await supabase_service.create_project_record(data)
@@ -202,6 +208,7 @@ async def update_project(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 更新指定專案的內容，須驗證使用者為專案擁有者
     record = await supabase_service.update_project_record(project_id, user_id, payload.dict(exclude_none=True))
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
@@ -215,6 +222,7 @@ async def delete_project(
     user_id: str = Depends(get_current_user_id), 
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 刪除指定專案，須驗證使用者為專案擁有者
     # 將 project_id 和 user_id 一起傳給 Service
     success = await supabase_service.delete_project_record(project_id, user_id)
     
@@ -233,6 +241,7 @@ async def get_project_timeline(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 取得指定專案和版本的 AI 執行時間軸，包括聊天記錄和執行日誌
     timeline_data = await _build_timeline_response(
         project_id=project_id,
         user_id=user_id,
@@ -251,6 +260,7 @@ async def download_project_timeline_pdf(
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 將指定版本的時間軸資料導出為 PDF 格式並返回下載
     timeline_data = await _build_timeline_response(
         project_id=project_id,
         user_id=user_id,

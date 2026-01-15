@@ -1,3 +1,4 @@
+<!-- 全局加载动画组件：显示旋转加载指示器和加载消息 -->
 <template>
   <Transition
     enter-active-class="transition-opacity duration-200 ease-out"
@@ -32,6 +33,7 @@
 </template>
 
 <script setup>
+// 使用全局加载状态组合式函数
 import { useLoading } from "~/composables/useLoading";
 
 const { isLoading, loadingMessage, showProgressHint } = useLoading();

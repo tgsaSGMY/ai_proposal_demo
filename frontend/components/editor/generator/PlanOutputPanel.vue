@@ -1,3 +1,4 @@
+<!-- 编辑器方案输出面板组件：显示编辑方案的最终输出 -->
 <template>
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
@@ -191,7 +192,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-// 从选定版本获取内容（只读）
+// 從選定版本獲取指定章節的內容（唯讀模式）
 function getSectionContent(sectionId) {
   let content;
 
@@ -205,9 +206,11 @@ function getSectionContent(sectionId) {
   return typeof content === "object" && content !== null ? content : {};
 }
 
+// 獲取指定章節的錯誤信息
 function getSectionError(sectionId) {
   return props.planContent[sectionId]?.error;
 }
+// 導出當前選定版本為Word文檔
 
 async function handleExportToWord() {
   if (!props.sections.length) {
@@ -223,12 +226,13 @@ async function handleExportToWord() {
     props.templateId
   );
 }
-
+阻止對已保存版本的編輯操作;
 // 禁止所有编辑
 function updateSectionContent(sectionId, newContentObject) {
   errorNotification("已保存版本不能編輯，請返回當前版本進行修改");
   return;
 }
+// 觸發文件選擇對話框用於自動填充
 
 function handleFileLoadClick() {
   if (props.sections.length === 0) {

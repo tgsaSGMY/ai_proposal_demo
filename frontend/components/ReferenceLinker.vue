@@ -1,3 +1,4 @@
+<!-- 参考上下文链接器组件：关联章节间的参考关系 -->
 <template>
   <div
     class="space-y-3 sm:space-y-4 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50"
@@ -177,10 +178,12 @@ const emit = defineEmits([
   "view-summary",
 ]);
 
+// 更新参考链接的属性（URL、状态等）
 function updateLink(index, field, value) {
   emit("update", { index, field, value });
 }
 
+// 更新链接对应的字段选择列表
 function updateSelectedFields(index, fieldLabel, isChecked) {
   const link = props.links[index];
   const currentSelected = link.selectedFields || [];
@@ -199,6 +202,7 @@ function updateSelectedFields(index, fieldLabel, isChecked) {
   });
 }
 
+// 根据链接状态返回对应的CSS样式类
 function getStatusClass(status) {
   switch (status) {
     case "loading":
@@ -212,6 +216,7 @@ function getStatusClass(status) {
   }
 }
 
+// 根据链接状态返回状态标题文本
 function getStatusTitle(status) {
   switch (status) {
     case "loading":

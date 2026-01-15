@@ -174,15 +174,21 @@
 </template>
 
 <script setup>
+// ===== 页面元数据 =====
+// 设置中间件验证，确保用户已登陆
 definePageMeta({
   middleware: "auth",
 });
 
+// ===== 导入依赖库 =====
+// 导入 Vue 核心库
 import { ref, onMounted, computed } from "vue";
+// 导入子组件和服务
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
 import { useNotifications } from "~/composables/useNotifications";
 
-// SEO 配置
+// ===== SEO 配置 =====
+// 设置页面标题和元数据，用于搜索引擎优化
 useHead({
   title: "模型配置中心 - AI 計畫書平台",
   meta: [
@@ -207,10 +213,14 @@ useHead({
   ],
 });
 
+// ===== 初始化服务 =====
+// 获取通知服务和配置信息
 const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+// ===== 生命周期钩子 =====
+// 页面挂载时检查用户是否为内部人员
 onMounted(async () => {
   const { checkIsInternal } = useInternalCheck();
 
@@ -223,6 +233,8 @@ onMounted(async () => {
   }
 });
 
+// ===== 数据状态 =====
+// 存储所有配置、模型、路由规则及用户选择
 const allConfigs = ref([]);
 const allModels = ref([]);
 const routingRules = ref([]);
@@ -232,7 +244,8 @@ const selectedSection = ref(null);
 const isModalOpen = ref(false);
 const isRefreshing = ref(false);
 
-// --- Computed Properties ---
+// ===== 计算属性：可用模板 =====
+// 根据选中的补助类别，动态计算可用的模板列表
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
   const selectedGrant = allConfigs.value.find(
@@ -241,6 +254,8 @@ const availableTemplates = computed(() => {
   return selectedGrant ? selectedGrant.templates : [];
 });
 
+// ===== 计算属性：当前章节列表 =====
+// 根据选中的模板，动态计算对应的章节列表
 const currentSections = computed(() => {
   if (!selectedTemplateId.value) return [];
   const template = availableTemplates.value.find(
@@ -249,7 +264,8 @@ const currentSections = computed(() => {
   return template ? template.sections : [];
 });
 
-// --- API Calls ---
+// ===== API 调用 =====
+// 从后端获取初始数据：配置、模型和路由规则
 async function fetchData() {
   try {
     const {
@@ -294,7 +310,8 @@ async function fetchData() {
 
 onMounted(fetchData);
 
-// --- Refresh Configuration ---
+// ===== 刷新配置 =====
+// 调用 API 刷新所有配置数据，获取最新的模板和模型列表
 async function refreshConfigurations() {
   isRefreshing.value = true;
   try {
@@ -326,7 +343,8 @@ async function refreshConfigurations() {
   }
 }
 
-// --- Logic & Methods ---
+// ===== 计算属性：默认模型 ID =====
+// 通过优先级系统查找默认应用的模型 ID
 const defaultModelId = computed(() => {
   // 通過優先級系統查找默認應用的模型 ID
   const globalRule = routingRules.value.find(
@@ -335,7 +353,9 @@ const defaultModelId = computed(() => {
   return globalRule ? globalRule.model_id : null;
 });
 
-// 根據 section 和模型類型 (internal/external) 獲取應用的規則
+// ===== 获取章节的应用规则 =====
+// 根据 section ID 和模型类型（内部/外部），获取应用的路由规则
+// 优先级：完全匹配 > 全局规则
 function getAppliedRuleForSection(sectionId, isExternal) {
   // 先按 isExternal 過濾，再按 priority 排序
   // 1. 查找完全匹配 section_id 和 is_external 的規則
@@ -356,22 +376,30 @@ function getAppliedRuleForSection(sectionId, isExternal) {
   return globalRule || null;
 }
 
+// ===== 获取章节的应用模型 =====
+// 根据规则查找对应的模型对象
 function getAppliedModelForSection(sectionId, isExternal) {
   const rule = getAppliedRuleForSection(sectionId, isExternal);
   if (!rule) return null;
   return allModels.value.find((m) => m.id === rule.model_id) || null;
 }
 
+// ===== 打开模态框 =====
+// 打开指定章节的模型配置模态框
 function openModal(section) {
   selectedSection.value = section;
   isModalOpen.value = true;
 }
 
+// ===== 关闭模态框 =====
+// 关闭模型配置模态框
 function closeModal() {
   isModalOpen.value = false;
   selectedSection.value = null;
 }
 
+// ===== 保存路由规则 =====
+// 调用 API 保存新的路由规则配置
 async function handleSaveRule(rulePayload) {
   try {
     const {
@@ -407,6 +435,8 @@ async function handleSaveRule(rulePayload) {
   }
 }
 
+// ===== 删除路由规则 =====
+// 调用 API 删除指定的路由规则
 async function handleDeleteRule(ruleId) {
   try {
     const {
@@ -442,6 +472,8 @@ async function handleDeleteRule(ruleId) {
   }
 }
 
+// ===== 设置更新处理 =====
+// 处理章节设置的更新（系统提示、自定义提示等）
 function handleSettingsUpdated(payload) {
   // 在本地數據中找到並更新對應的 section
   const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
@@ -462,6 +494,8 @@ function handleSettingsUpdated(payload) {
   }
 }
 
+// ===== 侦听器：模板列表变化 =====
+// 当可用模板列表变化时，自动选择第一个模板
 watch(availableTemplates, (newTemplates) => {
   if (newTemplates) {
     selectedTemplateId.value = newTemplates[0].id;

@@ -1,4 +1,5 @@
 <!-- /components/DraftPlanEditorModal.vue -->
+<!-- 草稿方案编辑模态帐组件：新建或编辑方案前会草稿 -->
 <template>
   <div
     class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-2 sm:p-0"
@@ -176,6 +177,7 @@ watch(
   { deep: true }
 );
 
+// 保存更新的草稿数据到数据库
 const saveUpdatesToDb = async () => {
   try {
     if (!editableDraft.user_input) {
@@ -215,6 +217,7 @@ const saveUpdatesToDb = async () => {
   }
 };
 
+// 防抖保存，延迟1.5秒后执行保存
 const debounceSave = () => {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(saveUpdatesToDb, 1500);
@@ -225,24 +228,29 @@ onUnmounted(() => {
 });
 
 // --- Event Handlers ---
+// 关闭模态框，先保存草稿
 async function close() {
   showLoading();
   await saveUpdatesToDb();
   emit("close");
   hideLoading();
 }
+
+// 保存草稿到数据集
 function handleSaveToDataset() {
   const finalInputs = buildFinalUserInputForGeneration();
   editableDraft.plan_content = planContent.value;
   emit("save-to-dataset", editableDraft, finalInputs);
 }
 
+// 更新主要想法
 function updateMainIdea(value) {
   if (!editableDraft.user_input) editableDraft.user_input = {};
   editableDraft.user_input.main_idea = value;
   debounceSave();
 }
 
+// 处理选择变更，更新模态框内的配置
 function onSelectionChangeInModal(selection) {
   selectedGrantId.value = selection.grantId;
   selectedTemplateId.value = selection.templateId;
@@ -251,6 +259,7 @@ function onSelectionChangeInModal(selection) {
   debounceSave();
 }
 
+// 处理候选方案确认，将选中方案填充到结果中
 function onCandidateConfirm({ selected, rejected }) {
   const newPlanContent = {};
   for (const [sectionId, candidate] of Object.entries(selected)) {
@@ -267,6 +276,7 @@ function onCandidateConfirm({ selected, rejected }) {
   success("已選擇方案並填充到結果中！");
 }
 
+// 保存被拒绝的答案到数据库
 async function saveRejectedAnswersToDb(rejected) {
   try {
     const rejectedAnswerData = {};
@@ -308,18 +318,21 @@ async function saveRejectedAnswersToDb(rejected) {
   }
 }
 
+// 处理自动填充，更新计划内容
 function handleAutoFillInModal(filledContent) {
   if (!planContent.value) planContent.value = {};
   Object.assign(planContent.value, filledContent);
   debounceSave();
 }
 
+// 处理内容更新，更新指定章节的内容
 function onContentUpdateInModal({ sectionId, content }) {
   if (!planContent.value) planContent.value = {};
   planContent.value[sectionId] = { content };
   debounceSave();
 }
 
+// 构建最终用户输入用于生成，包含核心想法和详细补充
 function buildFinalUserInputForGeneration(summaries = []) {
   let finalInput = `核心想法: ${editableDraft.user_input?.main_idea || ""}\n\n`;
   const sections = buildDynamicSections(dynamicFieldValues.value, {
@@ -374,6 +387,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
+// 处理计划生成，调用后端API生成多个候选方案
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
   showLoading("正在生成計劃書...", true);
@@ -437,6 +451,7 @@ async function handleGeneratePlanInModal(outerPayload) {
   }
 }
 
+// 处理用户输入生成，根据现有内容和模板反推用户输入
 async function handleGenerateUserInput() {
   if (!currentGrant.value || !currentTemplate.value) {
     errorNotification("請先選擇主題和模板！");

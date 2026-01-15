@@ -1,3 +1,4 @@
+<!-- 方案输入面板组件：收集用户输入的方案信息（主题、模板、核心想法等） -->
 <template>
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
@@ -344,6 +345,7 @@ onMounted(() => {
   refreshUser();
 });
 
+// 获取当前用户ID或刷新用户信息，失败时弹出通知
 async function getUserIdOrNotify() {
   const userId = currentUserId.value || (await refreshUser());
   if (!userId) {
@@ -376,6 +378,7 @@ watch(
   { immediate: true, deep: true }
 );
 
+// 重置所有动态值和展开状态，恢复初始状态
 function resetDynamicValues() {
   internalDynamicValues.value = createEmptyDynamicValues();
   dynamicValuesModel.value = { ...internalDynamicValues.value };
@@ -401,12 +404,14 @@ watch(
 );
 
 // 計算屬性（模板和章節）
+// 计算属性：根据选中的补助ID返回可用的模板列表
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
   const grant = props.allConfigs.find((g) => g.id === selectedGrantId.value);
   return grant ? grant.templates : [];
 });
 
+// 计算属性：根据动态值构建完整的章节结构
 const dynamicSections = computed(() =>
   buildDynamicSections(internalDynamicValues.value, {
     templateId: selectedTemplateId.value,
@@ -414,6 +419,7 @@ const dynamicSections = computed(() =>
   })
 );
 
+// 计算属性：从所有章节中收集可用的字段选项列表
 const referenceFieldOptions = computed(() => {
   const sections = dynamicSections.value || [];
   return sections.flatMap((section) =>
@@ -438,6 +444,7 @@ const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value)
 );
 
+// 计算属性：检查是否准备好生成计划，需要选择模板和输入摘要
 const isReadyToGenerate = computed(() => {
   return (
     selectedTemplateId.value &&
@@ -463,6 +470,7 @@ watch(
   }
 );
 
+// 补助变更处理：若新补助不包含当前模板，则清空模板选择
 const onGrantChange = () => {
   const isIncluded = availableTemplates.value.some(
     (t) => t.id === selectedTemplateId.value
@@ -473,6 +481,7 @@ const onGrantChange = () => {
   }
 };
 
+// 更新指定章节字段的动态值
 function updateDynamicValue(sectionId, propertyKey, value) {
   const key = makeCompositeKey(sectionId, propertyKey);
   internalDynamicValues.value = {
@@ -482,10 +491,12 @@ function updateDynamicValue(sectionId, propertyKey, value) {
   dynamicValuesModel.value = { ...internalDynamicValues.value };
 }
 
+// 生成字段面板的唯一键
 function fieldPanelKey(sectionId, propertyKey) {
   return `${sectionId}::${propertyKey}`;
 }
 
+// 切换字段的展开/折叠状态
 function toggleField(sectionId, propertyKey) {
   const id = fieldPanelKey(sectionId, propertyKey);
   const next = new Set(expandedFieldIds.value);
@@ -497,10 +508,12 @@ function toggleField(sectionId, propertyKey) {
   expandedFieldIds.value = next;
 }
 
+// 检查字段是否处于展开状态
 function isFieldExpanded(sectionId, propertyKey) {
   return expandedFieldIds.value.has(fieldPanelKey(sectionId, propertyKey));
 }
 
+// 计算字段的填写状态，已填写或可选填
 function computeFieldStatus(value) {
   if (value && value.trim() !== "") {
     return "已填寫";
@@ -508,6 +521,7 @@ function computeFieldStatus(value) {
   return "可選填";
 }
 
+// 发送生成计划事件，附带参考链接摘要
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
 
@@ -518,6 +532,7 @@ const emitGeneratePlan = () => {
   emit("generatePlan", { summaries: completedSummaries });
 };
 
+// 触发Excel文件上传
 function triggerExcelUpload() {
   if (isImportingFromExcel.value) {
     return;
@@ -529,6 +544,7 @@ function triggerExcelUpload() {
   }
 }
 
+// 触发Word文件上传
 function triggerWordUpload() {
   const input = wordInputRef.value;
   if (input) {
@@ -537,6 +553,7 @@ function triggerWordUpload() {
   }
 }
 
+// 处理Word文件选择，提取文本并自动填充字段
 async function handleWordFileChange(event) {
   const input = event?.target;
   const file = input?.files?.[0];
@@ -598,6 +615,7 @@ async function handleWordFileChange(event) {
   }
 }
 
+// 处理Excel文件选择，解析行数据并应用到动态字段
 async function handleExcelFileChange(event) {
   const input = event?.target;
   const file = input?.files?.[0];
@@ -654,10 +672,12 @@ async function handleExcelFileChange(event) {
 const isSummaryModalVisible = ref(false);
 const currentSummary = ref("");
 
+// 添加新的参考链接
 function addReferenceLink() {
   referenceLinks.value.push({ url: "", status: "pending", summary: "" });
 }
 
+// 确保指定字段处于展开状态
 function ensureFieldExpanded(sectionId, propertyKey) {
   const id = fieldPanelKey(sectionId, propertyKey);
   if (expandedFieldIds.value.has(id)) {
@@ -668,6 +688,7 @@ function ensureFieldExpanded(sectionId, propertyKey) {
   expandedFieldIds.value = next;
 }
 
+// 应用自动填充条目到动态字段，返回已应用的条目列表
 function applyAutoFillEntries(autoFillItems = []) {
   if (!Array.isArray(autoFillItems) || autoFillItems.length === 0) {
     return [];
@@ -709,10 +730,12 @@ function applyAutoFillEntries(autoFillItems = []) {
   return applied;
 }
 
+// 删除指定索引的参考链接
 function removeReferenceLink(index) {
   referenceLinks.value.splice(index, 1);
 }
 
+// 更新参考链接的属性（URL、字段选择等）
 function updateReferenceLink({ index, field, value }) {
   if (referenceLinks.value[index]) {
     referenceLinks.value[index][field] = value;
@@ -723,6 +746,7 @@ function updateReferenceLink({ index, field, value }) {
   }
 }
 
+// 查看参考链接的摘要信息
 function viewLinkSummary(index) {
   if (referenceLinks.value[index]) {
     currentSummary.value = referenceLinks.value[index].summary;
@@ -730,6 +754,7 @@ function viewLinkSummary(index) {
   }
 }
 
+// 分析参考链接，调用后端API获取URL内容和生成摘要
 async function handleAnalyzeLink(index) {
   const link = referenceLinks.value[index];
   if (!link || !link.url) return;

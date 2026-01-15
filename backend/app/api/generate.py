@@ -220,6 +220,7 @@ async def generate_plan(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
+    # 生成完整計劃書，根據指定的 grant 和 template，為每個章節非同步生成多個候選版本，支援外部模型和自訂選擇
     """主功能 -> 生成完整計劃書，可生成多候选版本"""
     
     # 從 app_state 獲取所有配置
@@ -358,6 +359,7 @@ async def revise_plan_version(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
+    # 根據現有版本內容進行修訂，結合更新的問答摘要與用戶輸入，為每個章節生成改進的候選版本，同時記錄執行事件
     if not request_data.current_version or not isinstance(request_data.current_version, dict):
         raise HTTPException(status_code=400, detail="current_version is required for revision.")
 
@@ -777,6 +779,7 @@ def _build_section_revision_context(section, version_map: Dict[str, Any]) -> str
 
 @router.websocket("/ws/chat_guidance")
 async def websocket_chat_guidance(websocket: WebSocket):
+    # WebSocket 即時聊天引導，根據對話歷史和已填欄位動態推薦下一題，並自動提取填寫的欄位並同步至資料庫
     await websocket.accept()
     
     # Extract user_id from WebSocket query parameter or headers
@@ -1164,6 +1167,7 @@ async def generate_synthetic_input(
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 根據 random 或 reverse 模式生成合成用戶輸入，支援隨機生成新構想或反推現有計劃書內容，統一返回 main_idea 和 dynamic_fields 格式
     """根據模式生成用戶輸入，使用統一的動態字段格式。
     
     支持兩種模式：
@@ -1323,6 +1327,7 @@ async def recommend_project_names(
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
 ):
+    # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
     model_registry = request.app.state.model_registry or {}
     model_info = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.1-mini")
@@ -1477,6 +1482,7 @@ async def autofill_from_document(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     user_id: str = "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5"
 ):
+    # 根據文檔文本和多個章節 Schema，使用強大的 LLM 解析並填充結構化的 JSON，支援預設和 Word 導入等提示模式
     """
     接收文檔純文字和多個章節的 schema，
     調用強大的 LLM 來解析文本並填充成結構化的 JSON。
@@ -1564,6 +1570,7 @@ async def generate_field_content(
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
 ):
+    # 根據已填寫的欄位和計劃信息，使用 LLM 為單個目標欄位推斷並生成最佳內容，若已有內容則進行擴展或優化
     """根據已填寫的欄位推估單個欄位應該填寫的內容"""
     
     model_registry = request.app.state.model_registry or {}
@@ -1666,6 +1673,7 @@ async def field_file_analysis(
     subfield_label: str = Form(""),
     current_value: str = Form(""),
 ):
+    # 上傳 PDF 或 TXT 檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
 

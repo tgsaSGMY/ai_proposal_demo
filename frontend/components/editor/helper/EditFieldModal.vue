@@ -1,3 +1,4 @@
+<!-- 编辑字段模态帐组件：编辑动态schema中的个年字段 -->
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
@@ -100,6 +101,7 @@ const isOpenModel = defineModel("isOpen", { type: Boolean, default: false });
 const value = ref(props.initialValue || "");
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
+// 監聽模態框打開/關閉，初始化編輯內容並在打開時自動聚焦文本框
 watch(
   () => isOpenModel.value,
   (open) => {
@@ -115,6 +117,7 @@ watch(
   }
 );
 
+// 監聽初始值變化，在模態框打開時更新編輯內容
 watch(
   () => props.initialValue,
   (v) => {
@@ -123,11 +126,13 @@ watch(
     }
   }
 );
+// 發送確認事件並關閉模態框
 
 function emitConfirm() {
   emit("confirm", (value.value || "").trim());
   handleClose();
 }
+// 關閉模態框
 
 function handleClose() {
   isOpenModel.value = false;

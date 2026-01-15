@@ -166,26 +166,35 @@
 </template>
 
 <script setup lang="ts">
+// ===== 导入依赖库 =====
+// 导入 Vue 核心库和路由
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+// 导入子组件
 import Chatbox from "~/components/Chatbox.vue";
 import GeneratorModeWorkspace from "~/components/GeneratorModeWorkspace.vue";
+// 导入自定义组合式函数
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
-import { exportPlanToWord } from "~/utils/exportToWord";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+// 导入工具函数
+import { exportPlanToWord } from "~/utils/exportToWord";
 import { mergeIntoEmptyValues } from "~/utils/dynamicSchema";
 import { supabase } from "~/utils/supabaseClient";
 
+// ===== 路由和响应式数据 =====
+// 获取当前路由信息
 const route = useRoute();
-
+// 项目记录数据
 const projectRecord = ref<ProjectRecord | null>(null);
 
 const projectTitle = computed(() => {
   return projectRecord.value?.title || "計畫工作區";
 });
 
+// ===== SEO 配置 =====
+// 设置动态页面标题和元数据，用于搜索引擎优化
 useHead(() => ({
   title: `${projectTitle.value} - TGSA 補助引擎`,
   meta: [
@@ -211,12 +220,14 @@ useHead(() => ({
   ],
 }));
 
-const projectId = computed(() => route.params.id as string);
-
+// ===== 页面元数据 =====
+// 设置中间件验证，确保用户已登陆
 definePageMeta({
   middleware: "auth",
 });
 
+// ===== 项目接口类型定义 =====
+// 定义项目记录的数据结构
 interface ProjectRecord {
   id: string;
   user_id: string;
@@ -233,15 +244,25 @@ interface ProjectRecord {
   updated_at: string | null;
 }
 
+// ===== 计算属性：项目 ID =====
+// 从路由参数中提取项目 ID
+const projectId = computed(() => route.params.id as string);
+
+// ===== 初始化服务和状态 =====
+// 获取路由、通知、加载状态、用户信息等服务
 const router = useRouter();
 
 const { success, info, error: notifyError } = useNotifications();
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
 const { userId: currentUserId, refreshUser } = useCurrentUser();
 
+// ===== API 配置 =====
+// 获取 API 基础 URL
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+// ===== 计划生成器状态 =====
+// 获取计划相关的所有配置和数据
 const {
   allConfigs,
   selectedGrantId,
@@ -256,6 +277,8 @@ const {
   fetchAllConfigs,
 } = usePlanGenerator();
 
+// ===== 项目编辑状态 =====
+// 存储与项目加载、编辑相关的状态
 const isProjectLoading = ref(false);
 const loadError = ref("");
 const candidatePlan = ref<Record<string, any>>({});
@@ -266,6 +289,8 @@ const lastGenerationPrompt = ref("");
 const isPersistingProject = ref(false);
 const conversationSyncTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 
+// ===== 生命周期钩子：页面挂载 =====
+// 页面加载时初始化内部状态检查
 onMounted(async () => {
   const { checkIsInternal } = useInternalCheck();
 
@@ -273,6 +298,8 @@ onMounted(async () => {
   isInternal.value = await checkIsInternal();
 });
 
+// ===== 版本时间戳格式化 =====
+// 将时间戳转换为本地时间字符串，用于显示版本信息
 function formatVersionTimestamp(value?: string | null) {
   if (value) {
     const parsed = new Date(value);
@@ -283,6 +310,8 @@ function formatVersionTimestamp(value?: string | null) {
   return new Date().toLocaleString("zh-TW");
 }
 
+// ===== 计算属性：已保存的计划版本 =====
+// 将保存的计划数据转换为版本列表格式，支持单个版本和多个版本
 const savedPlanVersions = computed(() => {
   if (!projectRecord.value?.saved_plan) {
     return [];
@@ -309,9 +338,15 @@ const savedPlanVersions = computed(() => {
     },
   ];
 });
+
+// ===== 计算属性：是否为生成模式 =====
+// 检查项目是否为计划生成模式
 const isGeneratorMode = computed(
   () => projectRecord.value?.mode === "generator"
 );
+
+// ===== 计算属性：工作区是否就绪 =====
+// 检查项目、补助、模板和章节是否全部已加载
 const workspaceReady = computed(() =>
   Boolean(
     projectRecord.value &&
@@ -320,22 +355,33 @@ const workspaceReady = computed(() =>
       currentSections.value.length
   )
 );
+
+// ===== 计算属性：最后更新时间显示 =====
+// 返回项目最后更新的时间戳，用于显示在页面上
 const lastUpdatedDisplay = computed(() => {
   if (!projectRecord.value) return "";
   const source =
     projectRecord.value.updated_at || projectRecord.value.created_at;
   return new Date(source).toLocaleString("zh-TW");
 });
+
+// ===== 计算属性：模式标签 =====
+// 返回项目模式的显示标签（生成模式或互动模式）
 const modeLabel = computed(() =>
   projectRecord.value?.mode === "generator" ? "計畫生成模式" : "互動模式"
 );
 
+// ===== 计算属性：补助名称 =====
+// 根据选中的补助 ID，返回对应的补助名称
 const grantName = computed(() => {
   const targetGrant = allConfigs.value.find(
     (grant) => grant.id === selectedGrantId.value
   );
   return targetGrant?.name || "";
 });
+
+// ===== 计算属性：活动模板名称 =====
+// 根据选中的模板 ID，返回对应的模板名称
 const activeTemplateName = computed(() => {
   const targetGrant = allConfigs.value.find(
     (grant) => grant.id === selectedGrantId.value
@@ -346,6 +392,8 @@ const activeTemplateName = computed(() => {
   return template?.name || "";
 });
 
+// ===== 生命周期钩子：页面挂载 =====
+// 页面加载时初始化项目数据和配置
 onMounted(async () => {
   await refreshUser();
   if (!allConfigs.value.length) {
@@ -358,6 +406,8 @@ onMounted(async () => {
   await fetchProject();
 });
 
+// ===== 生命周期钩子：页面卸载 =====
+// 页面卸载前清理定时器并保存对话历史
 onBeforeUnmount(() => {
   if (conversationSyncTimer.value) {
     clearTimeout(conversationSyncTimer.value);
@@ -366,6 +416,8 @@ onBeforeUnmount(() => {
   }
 });
 
+// ===== 获取用户 ID 或通知 =====
+// 尝试获取当前用户 ID，如果失败则显示错误通知
 async function getUserIdOrNotify() {
   const userId = currentUserId.value || (await refreshUser());
   if (!userId) {
@@ -374,6 +426,8 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
+// ===== 从已保存答案水合输入状态 =====
+// 从项目的 stored_answer 中恢复用户输入和动态字段值
 function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
   if (!record?.stored_answer || typeof record.stored_answer !== "object") {
     return;
@@ -399,6 +453,8 @@ function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
   }
 }
 
+// ===== 获取项目数据 =====
+// 从后端 API 获取指定项目的详细信息
 async function fetchProject() {
   if (!projectId.value) return;
   isProjectLoading.value = true;
@@ -461,11 +517,15 @@ async function fetchProject() {
   }
 }
 
+// ===== 切换模型类型 =====
+// 在内部模型和外部模型之间切换
 function toggleModel() {
   useModelType.value =
     useModelType.value === "internal" ? "external" : "internal";
 }
 
+// ===== 导出计划为 Word =====
+// 调用导出函数将计划内容导出为 Word 文档
 async function handleExportWord(payload?: { version?: any }) {
   let contentToExport = finalPlanContent.value;
 
@@ -500,6 +560,8 @@ async function handleExportWord(payload?: { version?: any }) {
   }
 }
 
+// ===== 保存对话历史 =====
+// 将当前的对话消息列表保存到项目中
 async function persistConversationHistory() {
   if (!projectRecord.value) return;
   try {
@@ -511,6 +573,8 @@ async function persistConversationHistory() {
   }
 }
 
+// ===== 初始化生成器状态 =====
+// 从项目数据初始化生成模式的状态
 async function initializeGeneratorStateFromProject(record: ProjectRecord) {
   if (record.mode !== "generator") {
     return;
@@ -524,6 +588,8 @@ async function initializeGeneratorStateFromProject(record: ProjectRecord) {
   }
 }
 
+// ===== 处理生成器更新 =====
+// 处理来自生成器工作区的状态更新，保存到后端
 async function handleGeneratorUpdate(payload: {
   user_id: string;
   grant_id: string | null;
@@ -544,6 +610,8 @@ async function handleGeneratorUpdate(payload: {
   }
 }
 
+// ===== 更新项目标题 =====
+// 调用 API 更新项目的名称
 async function handleUpdateProjectTitle(newTitle: string) {
   if (!projectRecord.value) return;
   try {
@@ -555,6 +623,8 @@ async function handleUpdateProjectTitle(newTitle: string) {
   }
 }
 
+// ===== 更新项目 =====
+// 调用 API 更新项目的各个字段
 async function updateProject(payload: Record<string, any>) {
   if (!projectRecord.value) return null;
   try {

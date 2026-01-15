@@ -305,13 +305,19 @@
 </template>
 
 <script setup lang="ts">
+// ===== 导入 =====
+// 导入 Vue 核心库和路由
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+
+// 导入自定义组合式函数
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
 
+// ===== SEO 配置 =====
+// 设置页面标题和元数据，用于搜索引擎优化和社交媒体分享
 useHead({
   title: "AI補助引擎 - TGSA 補助引擎",
   meta: [

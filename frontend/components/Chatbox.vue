@@ -1,3 +1,4 @@
+<!-- 聊天框组件：显示聊天消息列表和输入框，支持发送消息 -->
 <template>
   <div class="flex h-screen gap-4">
     <div class="flex-1 h-full">
@@ -444,6 +445,7 @@ const timelineLoading = ref(false);
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
+// 轉義 HTML 字符防止 XSS 攻擊，將特殊字符轉換為 HTML Entity
 function escapeHtml(unsafe) {
   return String(unsafe || "")
     .replace(/&/g, "&amp;")
@@ -453,6 +455,7 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#39;");
 }
 
+// 格式化聊天消息用於顯示：轉義 HTML、轉換粗體標記、保留換行符
 function formatMessageForDisplay(raw) {
   const text = raw == null ? "" : String(raw);
   // escape HTML first
@@ -497,10 +500,12 @@ const hasCandidatePlan = computed(
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
+// 獲取當前 ISO 時間戳
 function getCurrentTimestamp() {
   return new Date().toISOString();
 }
 
+// 從引導問題列表中查找指定 ID 的問題元數據
 function getQuestionMeta(questionId) {
   if (!questionId) {
     return null;
@@ -508,6 +513,7 @@ function getQuestionMeta(questionId) {
   return guidedQuestions.find((item) => item.id === questionId) || null;
 }
 
+// 構建用於 AI 對話的歷史消息負載，最多包含指定數量的最近消息，並格式化答案信息
 function buildConversationHistoryPayload(limit = 8) {
   const simpleHistory = [];
   const allowedTypes = new Set(["text", "question", "answer"]);
@@ -533,6 +539,9 @@ function buildConversationHistoryPayload(limit = 8) {
   return simpleHistory;
 }
 
+// 通過 WebSocket 建立連接並流式接收 AI 的引導消息和問題回答
+// 初始化階段會建立 WebSocket 連接，之後通過此連接發送用戶消息和接收 AI 回應
+// 支持流式接收、自動填充答案、暫停/取消操作等功能
 async function streamAIGuidanceMessage(question) {
   if (!question || !question.id) {
     return;
@@ -701,6 +710,7 @@ async function streamAIGuidanceMessage(question) {
   return;
 }
 
+// 更新或插入答案消息，如果無內容則刪除該消息，支持自動滾動到底部
 function upsertAnswerMessage(
   questionId,
   content,
@@ -794,6 +804,7 @@ watch(
   { immediate: true }
 );
 
+// 從傳遞映射中提取預填充值，首先查找直接對應的字段，其次查找 ::reply 格式的字段
 function extractPrefillValue(prefillMap, questionId) {
   if (!questionId) {
     return "";
@@ -810,6 +821,7 @@ function extractPrefillValue(prefillMap, questionId) {
   return "";
 }
 
+// 打開編輯答案模態框，初始化編輯狀態和表單資料
 function editAnswer(questionId) {
   if (!questionId) {
     return;
@@ -825,6 +837,7 @@ function editAnswer(questionId) {
   isEditModalVisible.value = true;
 }
 
+// 取消編輯答案，重置編輯狀態和表單資料
 function cancelEditAnswer() {
   isEditModalVisible.value = false;
   editQuestionId.value = null;
@@ -833,6 +846,7 @@ function cancelEditAnswer() {
   editAnswerDraft.value = "";
 }
 
+// 保存編輯的答案，更新問題答案狀態，同步答案消息到聊天記錄
 function saveEditedAnswer() {
   if (!editQuestionId.value) {
     return;
@@ -846,6 +860,7 @@ function saveEditedAnswer() {
   cancelEditAnswer();
 }
 
+// 獲取最後一個 AI 助手消息的內容，用作檔案匯入提示標籤，預設值為預設標籤
 function getLastAssistantMessageLabel() {
   for (let idx = messages.value.length - 1; idx >= 0; idx -= 1) {
     const message = messages.value[idx];
@@ -861,17 +876,20 @@ function getLastAssistantMessageLabel() {
   return DEFAULT_FILE_IMPORT_LABEL;
 }
 
+// 打開檔案匯入模態框，初始化欄位標籤和初始值
 function openAttachmentModal() {
   fileImportInitialValue.value = draftMessage.value || "";
   fileImportFieldLabel.value = getLastAssistantMessageLabel();
   isFileImportOpen.value = true;
 }
 
+// 處理檔案匯入確認，更新草稿消息並關閉模態框
 function handleFileImportConfirm(value) {
   draftMessage.value = value;
   isFileImportOpen.value = false;
 }
 
+// 處理 Enter 鍵按下事件，支持 Shift+Enter 換行，否則發送消息
 async function handleEnter(event) {
   if (event.shiftKey) {
     return;
@@ -884,6 +902,7 @@ async function handleEnter(event) {
   await handleSend();
 }
 
+// 發送用戶消息到 AI，添加到聊天記錄，同步到 WebSocket 連接，支持 AI 自動填寫模式
 async function handleSend(useAIFill = false) {
   if (!props.grantId || !props.templateId) {
     return;
@@ -931,6 +950,7 @@ async function handleSend(useAIFill = false) {
   draftMessage.value = "";
 }
 
+// 暫停 AI 回應，通過 WebSocket 發送暫停命令
 function handlePause() {
   if (
     window.chatWebSocket &&
@@ -944,6 +964,7 @@ function handlePause() {
   }
 }
 
+// 請求生成完整計畫書，如果有未回答問題則提示確認，後續調用推薦名稱 API
 async function requestGeneration() {
   if (!canRequestPlan.value) {
     return;
@@ -992,7 +1013,7 @@ async function requestGeneration() {
   }
 }
 
-// Called when user confirms the selected project name
+// 確認推薦的項目名稱，更新父組件的項目標題，然後生成完整計畫書
 async function handleRecommendConfirm(selectedName) {
   if (!selectedName) return;
 
@@ -1026,20 +1047,24 @@ async function handleRecommendConfirm(selectedName) {
   });
 }
 
+// 確認候選計畫選擇，發送最終確定事件
 function handleCandidateConfirm(payload) {
   emit("finalizeCandidates", payload);
 }
 
+// 構建候選消息，顯示候選計畫選擇器
 function buildCandidateMessage() {
   isCandidateSelectorVisible.value = true;
   scrollToBottom();
 }
 
+// 選擇計畫版本，打開版本詳情模態框
 function handleVersionSelect(version) {
   selectedVersion.value = version;
   isVersionModalVisible.value = true;
 }
 
+// 處理側邊欄編輯問題事件，打開編輯欄位模態框，初始化編輯狀態
 function handleEditQuestion(payload) {
   try {
     const qId = payload?.questionId ?? null;
@@ -1054,6 +1079,7 @@ function handleEditQuestion(payload) {
   }
 }
 
+// 處理編輯欄位確認，構建更新消息並自動發送給 AI
 async function handleEditConfirm(value) {
   try {
     const qLabel = editFieldLabel.value || "";
@@ -1067,10 +1093,12 @@ async function handleEditConfirm(value) {
   }
 }
 
+// 導出計畫版本，發送導出請求事件
 async function handleVersionExport(version) {
   emit("requestExport", { version });
 }
 
+// 下載計畫時間軸 PDF，通過 API 獲取 PDF 文件並下載
 async function handleTimelineDownload(version) {
   if (!props.projectId) {
     notifyError("找不到專案資料，請重新整理後再嘗試");
@@ -1130,6 +1158,7 @@ async function handleTimelineDownload(version) {
   }
 }
 
+// 構建時間軸下載檔案名稱，將計畫名稱和版本資訊組合為安全的檔案名
 function buildTimelineFilename(version) {
   const safeTitle = (version?.title || props.projectTitle || "timeline")
     .replace(/[\\/:*?"<>|]/g, "_")
@@ -1141,6 +1170,7 @@ function buildTimelineFilename(version) {
   return `${safeTitle || "timeline"}${suffix}-timeline.pdf`;
 }
 
+// 處理計畫版本更新請求，發送請求事件並關閉版本模態框
 function handleVersionUpdateRequest(version) {
   if (!version) {
     return;
@@ -1152,6 +1182,7 @@ function handleVersionUpdateRequest(version) {
   isVersionModalVisible.value = false;
 }
 
+// 滾動聊天容器到底部，使用平滑滾動動畫
 function scrollToBottom() {
   nextTick(() => {
     if (!chatContainer.value) {
@@ -1164,6 +1195,7 @@ function scrollToBottom() {
   });
 }
 
+// 規範化從數據庫加載的聊天消息，驗證角色、內容、時間戳等字段
 function normalizeStoredMessages(entries = []) {
   if (!Array.isArray(entries)) {
     return [];
@@ -1199,6 +1231,7 @@ function normalizeStoredMessages(entries = []) {
     .filter(Boolean);
 }
 
+// 規範化從數據庫加載的問題答案，驗證鍵名和值，過濾空值
 function normalizeStoredAnswers(rawAnswers = {}) {
   if (!rawAnswers || typeof rawAnswers !== "object") {
     return {};
@@ -1214,6 +1247,7 @@ function normalizeStoredAnswers(rawAnswers = {}) {
   return normalized;
 }
 
+// 應用項目狀態到本地組件狀態，包括聊天歷史和問題答案
 function applyProjectState(record = {}) {
   if (!record || typeof record !== "object") {
     return;
@@ -1234,6 +1268,7 @@ function applyProjectState(record = {}) {
   }
 }
 
+// 從 Supabase 數據庫加載項目的聊天歷史和問題答案
 async function loadProjectState(projectId) {
   if (!projectId || typeof window === "undefined") {
     return;
@@ -1256,6 +1291,7 @@ async function loadProjectState(projectId) {
   }
 }
 
+// 設置 Supabase 實時訂閱，監聽項目資料變更並同步到本地狀態
 async function setupRealtimeSubscription(projectId) {
   if (!projectId || typeof window === "undefined") {
     return;
@@ -1279,6 +1315,7 @@ async function setupRealtimeSubscription(projectId) {
     .subscribe();
 }
 
+// 清除 Supabase 實時訂閱，清理資源
 async function teardownRealtimeSubscription() {
   if (!projectRealtimeChannel.value) {
     return;
@@ -1293,6 +1330,7 @@ async function teardownRealtimeSubscription() {
   }
 }
 
+// 組件掛載時初始化 WebSocket 連接和項目狀態，發送引導問題列表事件
 onMounted(() => {
   chatInitialized.value = true;
   emit("guidedQuestionsUpdated", guidedQuestions);
@@ -1305,10 +1343,12 @@ onMounted(() => {
   }
 });
 
+// 組件卸載時清除實時訂閱和資源
 onBeforeUnmount(() => {
   void teardownRealtimeSubscription();
 });
 
+// 構建引導問題列表，從動態 Schema 提取所有字段信息，支持階層式問題組織
 function buildGuidedQuestionList() {
   const base = [
     // {
