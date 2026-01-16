@@ -285,6 +285,7 @@
         :messages="messages"
         :versions="props.savedPlanVersions"
         :question-answers="questionAnswers"
+        :question-answer-meta="questionAnswerMeta"
         @selectVersion="handleVersionSelect"
         @editQuestion="handleEditQuestion"
       />
@@ -397,6 +398,7 @@ const lastSentUserIndex = ref(null);
 const guidedQuestions = buildGuidedQuestionList();
 const totalQuestions = guidedQuestions.length;
 const questionAnswers = ref({});
+const questionAnswerMeta = ref({});
 const answeredCount = computed(() =>
   guidedQuestions.reduce((count, question) => {
     const answer = questionAnswers.value[question.id];
@@ -513,6 +515,20 @@ function getQuestionMeta(questionId) {
   return guidedQuestions.find((item) => item.id === questionId) || null;
 }
 
+function touchAnswerMeta(questionId, timestamp) {
+  if (!questionId) {
+    return;
+  }
+  const nextTimestamp = timestamp || getCurrentTimestamp();
+  questionAnswerMeta.value = {
+    ...questionAnswerMeta.value,
+    [questionId]: {
+      ...(questionAnswerMeta.value[questionId] || {}),
+      updated_at: nextTimestamp,
+    },
+  };
+}
+
 // 構建用於 AI 對話的歷史消息負載，最多包含指定數量的最近消息，並格式化答案信息
 function buildConversationHistoryPayload(limit = 8) {
   const simpleHistory = [];
@@ -588,6 +604,7 @@ async function streamAIGuidanceMessage(question) {
         project_summary: props.projectSummary || "",
         all_questions: guidedQuestions,
         current_answers: questionAnswers.value,
+        current_answers_meta: questionAnswerMeta.value,
         history: buildConversationHistoryPayload(),
       };
       window.chatWebSocket.send(JSON.stringify(payload));
@@ -634,6 +651,7 @@ async function streamAIGuidanceMessage(question) {
                 ...questionAnswers.value,
                 [fieldId]: String(value).trim(),
               };
+              touchAnswerMeta(fieldId);
               // clear last sent user index when done
               lastSentUserIndex.value = null;
             }
@@ -856,6 +874,7 @@ function saveEditedAnswer() {
     ...questionAnswers.value,
     [editQuestionId.value]: normalized,
   };
+  touchAnswerMeta(editQuestionId.value);
   upsertAnswerMessage(editQuestionId.value, normalized, "user", false);
   cancelEditAnswer();
 }
@@ -929,6 +948,7 @@ async function handleSend(useAIFill = false) {
       ...questionAnswers.value,
       [activeQuestionId.value]: messageContent,
     };
+    touchAnswerMeta(activeQuestionId.value);
     activeQuestionId.value = null;
   }
 
@@ -940,6 +960,7 @@ async function handleSend(useAIFill = false) {
     const userPayload = {
       user_message: messageContent,
       current_answers: questionAnswers.value,
+      current_answers_meta: questionAnswerMeta.value,
       project_title: props.projectTitle || "",
       project_summary: props.projectSummary || "",
     };
@@ -1247,6 +1268,29 @@ function normalizeStoredAnswers(rawAnswers = {}) {
   return normalized;
 }
 
+function normalizeStoredAnswerMeta(rawMeta = {}) {
+  if (!rawMeta || typeof rawMeta !== "object") {
+    return {};
+  }
+  const normalized = {};
+  Object.entries(rawMeta).forEach(([key, value]) => {
+    if (!key) {
+      return;
+    }
+    let timestamp = "";
+    if (typeof value === "string") {
+      timestamp = value.trim();
+    } else if (value && typeof value === "object") {
+      timestamp = String(value.updated_at || value.updatedAt || "").trim();
+    }
+    if (!timestamp) {
+      return;
+    }
+    normalized[key] = { updated_at: timestamp };
+  });
+  return normalized;
+}
+
 // 應用項目狀態到本地組件狀態，包括聊天歷史和問題答案
 function applyProjectState(record = {}) {
   if (!record || typeof record !== "object") {
@@ -1266,6 +1310,25 @@ function applyProjectState(record = {}) {
       ...storedAnswers,
     };
   }
+  const storedMeta = normalizeStoredAnswerMeta(
+    record.stored_answer?.chat_answers_meta ||
+      record.stored_answer?.chatAnswersMeta ||
+      {}
+  );
+  if (Object.keys(storedMeta).length) {
+    questionAnswerMeta.value = {
+      ...questionAnswerMeta.value,
+      ...storedMeta,
+    };
+  }
+  Object.keys(storedAnswers).forEach((key) => {
+    if (!questionAnswerMeta.value[key]) {
+      touchAnswerMeta(
+        key,
+        record.updated_at || record.updatedAt || getCurrentTimestamp()
+      );
+    }
+  });
 }
 
 // 從 Supabase 數據庫加載項目的聊天歷史和問題答案

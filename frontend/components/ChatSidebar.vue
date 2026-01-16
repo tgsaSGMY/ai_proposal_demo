@@ -101,6 +101,7 @@ interface QAItem {
   id: string;
   questionLabel: string;
   answer: string;
+  updatedAt?: string;
 }
 
 interface VersionRecord {
@@ -123,6 +124,10 @@ const props = defineProps({
     type: Object as () => Record<string, string>,
     default: () => {},
   },
+  questionAnswerMeta: {
+    type: Object as () => Record<string, { updated_at?: string }>,
+    default: () => ({}),
+  },
 });
 
 const emit = defineEmits(["selectVersion", "editQuestion"]);
@@ -131,6 +136,7 @@ const emit = defineEmits(["selectVersion", "editQuestion"]);
 const qaItems = computed(() => {
   const items: QAItem[] = [];
   const answers = props.questionAnswers || {};
+  const metaMap = props.questionAnswerMeta || {};
 
   // 中文数字顺序映射
   const chineseNumberOrder: Record<string, number> = {
@@ -147,7 +153,12 @@ const qaItems = computed(() => {
   };
 
   // 先提取所有key-value对，计算label
-  const tempItems: Array<{ key: string; label: string; answer: string }> = [];
+  const tempItems: Array<{
+    key: string;
+    label: string;
+    answer: string;
+    updatedAt?: string;
+  }> = [];
 
   Object.entries(answers).forEach(([key, value]) => {
     const answer = String(value || "").trim();
@@ -160,25 +171,35 @@ const qaItems = computed(() => {
         label = key.substring(0, lastDoubleColonIndex);
       }
 
-      tempItems.push({ key, label, answer });
+      const meta = metaMap[key] || {};
+      const updatedAt = meta.updated_at || "";
+      tempItems.push({ key, label, answer, updatedAt });
     }
   });
 
-  // 按照label中的中文数字排序
   tempItems.sort((a, b) => {
+    const aTime = a.updatedAt ? Date.parse(a.updatedAt) || 0 : 0;
+    const bTime = b.updatedAt ? Date.parse(b.updatedAt) || 0 : 0;
+    if (aTime !== bTime) {
+      return bTime - aTime;
+    }
     const aFirstChar = a.label.charAt(0);
     const bFirstChar = b.label.charAt(0);
     const aOrder = chineseNumberOrder[aFirstChar] ?? 999;
     const bOrder = chineseNumberOrder[bFirstChar] ?? 999;
-    return aOrder - bOrder;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    return a.label.localeCompare(b.label, "zh-Hant");
   });
 
   // 排序后再push到items
-  tempItems.forEach(({ key, label, answer }) => {
+  tempItems.forEach(({ key, label, answer, updatedAt }) => {
     items.push({
       id: key,
       questionLabel: label,
       answer: answer,
+      updatedAt,
     });
   });
 

@@ -505,6 +505,34 @@ def build_history_entry(role: str, content: str):
         "timestamp": get_current_timestamp(),
     }
 
+def normalize_meta_payload(meta_payload: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    normalized: Dict[str, Dict[str, str]] = {}
+    if not isinstance(meta_payload, dict):
+        return normalized
+    for field_id, raw in meta_payload.items():
+        if not field_id:
+            continue
+        timestamp = ""
+        if isinstance(raw, str):
+            timestamp = raw.strip()
+        elif isinstance(raw, dict):
+            value = raw.get("updated_at") or raw.get("updatedAt")
+            if isinstance(value, str):
+                timestamp = value.strip()
+        if not timestamp:
+            continue
+        normalized[field_id] = {"updated_at": timestamp}
+    return normalized
+
+def touch_meta_field(meta_map: Dict[str, Dict[str, str]], field_id: str, timestamp: Optional[str] = None) -> None:
+    if not field_id:
+        return
+    final_timestamp = (timestamp or get_current_timestamp()).strip()
+    if not final_timestamp:
+        return
+    existing = meta_map.get(field_id) or {}
+    meta_map[field_id] = {**existing, "updated_at": final_timestamp}
+
 def normalize_filled_fields(filled_data: dict, all_questions: list) -> dict:
     """
     將 LLM 提取的 Key (通常是 Label) 強制轉換為 all_questions 中定義的標準 ID。
@@ -815,6 +843,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
     conversation_history_records = []
     stored_answer_state = {}
     current_answers = {}
+    current_answer_meta: Dict[str, Dict[str, str]] = {}
     all_questions = []
     project_title = ""
     project_summary = ""
@@ -824,6 +853,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
             return
         try:
             previous_answers = stored_answer_state.get("chat_answers") or {}
+            previous_meta = stored_answer_state.get("chat_answers_meta") or {}
             previous_answers_snapshot = json.dumps(
                 previous_answers,
                 ensure_ascii=False,
@@ -832,6 +862,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
             current_answers_snapshot = json.dumps(current_answers, ensure_ascii=False, sort_keys=True)
             answers_changed = previous_answers_snapshot != current_answers_snapshot
             stored_answer_state["chat_answers"] = current_answers.copy()
+            stored_answer_state["chat_answers_meta"] = {
+                key: (value.copy() if isinstance(value, dict) else value)
+                for key, value in current_answer_meta.items()
+            }
             payload = {
                 "conversation_history": conversation_history_records,
                 "stored_answer": stored_answer_state,
@@ -845,6 +879,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     old_value = previous_answers.get(field_id, "")
                     new_value = current_answers.get(field_id, "")
                     if old_value != new_value:
+                        # 確保元資料存在
+                        meta_entry = current_answer_meta.get(field_id)
+                        if not meta_entry or not meta_entry.get("updated_at"):
+                            fallback = previous_meta.get(field_id, {}).get("updated_at") if isinstance(previous_meta.get(field_id), dict) else None
+                            touch_meta_field(current_answer_meta, field_id, fallback)
                         # 找到欄位標籤（如果可用）
                         field_label = None
                         for q in all_questions:
@@ -877,37 +916,60 @@ async def websocket_chat_guidance(websocket: WebSocket):
     async def analyze_user_input(history: list, client: httpx.AsyncClient):
         # 注意：这里的 history 此时已经包含了 [User Message, AI Message]
         
-        q_desc, _, _, _ = format_qa_descriptions(all_questions, current_answers)
-        
+        q_desc, a_desc, _, _ = format_qa_descriptions(all_questions, current_answers)
         # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
         system_prompt = f"""
-你是一個專業的資料歸檔員。
-你的任務是根據使用者與助理的最新對話，將已確認的資訊提取並歸檔到指定欄位中。
-需要使用繁體中文對話
+        你是一個資料歸檔員，負責從最新對話中提取已確認的欄位資訊。
 
-【欄位定義】
-{q_desc}
+        【欄位定義】
+        {q_desc}
 
-【分析策略】
+        【目前已填欄位】
+        {a_desc}
 
-觀察使用者的輸入。
+        【核心規則】
+        1. 只提取「助理已確認並跳到下一題」的欄位答案
+        2. 參考用戶輸入 + 助理回覆，以助理的確認為準
+        3. 若用戶輸入「無」且助理未追問，該欄位的答案就是「無」
+        4. 檢查前幾個對話中是否有遺漏未提取的欄位，一併提取。如果確認已經提取過的，那就不要重複提取
+        5. 不提取「助理剛詢問但用戶未回答」的欄位
 
-重點參考助理（Assistant）的回覆。如果助理在回覆中確認了欄位的答案，則該資訊一定要被提取。
-只要助理確認了某個欄位的答案，并且助理已經跳到詢問下一題了，一定要提取該答案。
-如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。
-不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
-如果用戶輸入的是“無”，并且助理沒追問下去，那麽那個待填的欄位的答案就是無。然後依照助理的回覆接著往下填下一個欄位。
-你也需要檢查前幾個聊天記錄中是否有相關資訊或欄位答案未被提取，記得一併提取。
+        【輸出格式】
+        僅輸出 JSON：
+        {{
+        "filled_fields": {{ "field_id": "提取的内容" }}
+        }}
+        """
+        
+        # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
+#         system_prompt = f"""
+# 你是一個專業的資料歸檔員。
+# 你的任務是根據使用者與助理的最新對話，將已確認的資訊提取並歸檔到指定欄位中。
+# 需要使用繁體中文對話
 
-僅輸出 JSON。
+# 【欄位定義】
+# {q_desc}
 
-【輸出格式】
-{{
-  "filled_fields": {{ "field_id": "提取的内容" }}
-}}
-"""
+# 【分析策略】
+
+# 觀察使用者的輸入。
+
+# 重點參考助理（Assistant）的回覆。如果助理在回覆中確認了欄位的答案，則該資訊一定要被提取。
+# 只要助理確認了某個欄位的答案，并且助理已經跳到詢問下一題了，一定要提取該答案。
+# 如果使用者的輸入是類似“請AI自動幫我填寫”，AI助理也填寫了，那麽請在正確的欄位中提取該資訊。
+# 不要提取助理詢問的下一個待填但是用戶還沒填寫的欄位信息。
+# 如果用戶輸入的是“無”，并且助理沒追問下去，那麽那個待填的欄位的答案就是無。然後依照助理的回覆接著往下填下一個欄位。
+# 你也需要檢查前幾個聊天記錄中是否有相關資訊或欄位答案未被提取，記得一併提取。
+
+# 僅輸出 JSON。
+
+# 【輸出格式】
+# {{
+#   "filled_fields": {{ "field_id": "提取的内容" }}
+# }}
+# """
         # 构建 Messages: 取最近的对话记录 (比如最近 4 条足矣: User -> AI -> User -> AI)
-        messages = get_chat_messages(system_prompt, history, limit=6)
+        messages = get_chat_messages(system_prompt, history, limit=4)
 
         resp, error = await llm_service.call_external_api(
             client, model_info, messages, is_json_output=True
@@ -1034,8 +1096,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     conversation_history_records = rec.get("conversation_history") or []
                     stored_answer_state = rec.get("stored_answer") or {}
                     db_answers = stored_answer_state.get("chat_answers", {})
+                    db_meta = normalize_meta_payload(stored_answer_state.get("chat_answers_meta"))
                     frontend_answers = init_data.get("current_answers", {})
+                    frontend_meta = normalize_meta_payload(init_data.get("current_answers_meta"))
                     current_answers = {**db_answers, **frontend_answers}
+                    current_answer_meta = {**db_meta, **frontend_meta}
             except Exception as e:
                 logger.error(f"Load project error: {e}")
 
@@ -1110,9 +1175,17 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     break
 
                 user_msg = payload.get("user_message", "").strip()
-                incoming_answers = payload.get("current_answers", {})
+                incoming_answers = payload.get("current_answers", {}) or {}
+                incoming_meta = normalize_meta_payload(payload.get("current_answers_meta"))
+                provided_meta_keys = set(incoming_meta.keys())
+                if incoming_meta:
+                    current_answer_meta.update(incoming_meta)
                 if incoming_answers:
-                    current_answers.update(incoming_answers)
+                    for field_id, value in incoming_answers.items():
+                        previous_value = current_answers.get(field_id)
+                        current_answers[field_id] = value
+                        if previous_value != value and field_id not in provided_meta_keys:
+                            touch_meta_field(current_answer_meta, field_id)
 
                 if not user_msg:
                     continue
@@ -1148,6 +1221,8 @@ async def websocket_chat_guidance(websocket: WebSocket):
                         clean_filled = normalize_filled_fields(filled, all_questions)
                         logger.info(f"Normalized fields: {clean_filled}")
                         current_answers.update(clean_filled)
+                        for field_id in clean_filled.keys():
+                            touch_meta_field(current_answer_meta, field_id)
 
                     await save_state_to_db()
 
