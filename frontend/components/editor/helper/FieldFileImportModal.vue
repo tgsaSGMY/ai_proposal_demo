@@ -89,7 +89,7 @@
                 </div>
                 <div>
                   <p class="text-base font-semibold text-slate-900">
-                    拖曳 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 檔案至此
+                    拖曳 PDF / TXT /JPG / JPEG / PNG 檔案至此
                   </p>
                   <p class="text-sm text-slate-500">
                     或
@@ -111,7 +111,7 @@
                   ref="fileInputRef"
                   type="file"
                   class="hidden"
-                  accept=".pdf,.txt,.ppt,.pptx,.jpg,.jpeg,.png"
+                  accept=".pdf,.txt,.jpg,.jpeg,.png"
                   multiple
                   @change="handleFileChange"
                 />
@@ -253,7 +253,7 @@ const { success: notifySuccess, error: notifyError } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-const ACCEPTED_EXTENSIONS = ["pdf", "txt", "ppt", "pptx", "jpg", "jpeg", "png"];
+const ACCEPTED_EXTENSIONS = ["pdf", "txt", "jpg", "jpeg", "png"];
 const MAX_SIZE_BYTES = 20 * 1024 * 1024;
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -364,7 +364,7 @@ function addFiles(files: File[]) {
     const ext = file.name.split(".").pop()?.toLowerCase() || "";
     if (!ACCEPTED_EXTENSIONS.includes(ext)) {
       notifyError(
-        `檔案 ${file.name} 不支援的格式（僅支援 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG）。`
+        `檔案 ${file.name} 不支援的格式（僅支援 PDF / TXT / JPG / JPEG / PNG）。`
       );
       return false;
     }

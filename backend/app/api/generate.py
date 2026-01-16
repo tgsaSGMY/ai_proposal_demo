@@ -46,8 +46,6 @@ OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses"
 ALLOWED_FILE_SUFFIXES = {
     ".pdf",
     ".txt",
-    ".ppt",
-    ".pptx",
     ".jpg",
     ".jpeg",
     ".png",
@@ -1755,7 +1753,7 @@ async def field_file_analysis(
     subfield_label: str = Form(""),
     current_value: str = Form(""),
 ):
-    # 上傳 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
+    # 上傳 PDF / TXT/ JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
 
