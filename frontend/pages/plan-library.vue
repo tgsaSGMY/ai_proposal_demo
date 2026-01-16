@@ -103,10 +103,12 @@
                 >
                   {{ project.type }}
                 </span>
-                <h3 class="mt-3 text-lg font-semibold text-gray-900">
+                <h3
+                  class="mt-3 text-lg font-semibold text-gray-900 line-clamp-2"
+                >
                   {{ project.title }}
                 </h3>
-                <p class="mt-2 text-sm text-gray-500 min-h-[48px]">
+                <p class="mt-2 text-sm text-gray-500 min-h-[48px] line-clamp-3">
                   {{ project.description }}
                 </p>
               </div>

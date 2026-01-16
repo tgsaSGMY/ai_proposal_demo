@@ -305,7 +305,7 @@
     <FieldFileImportModal
       v-model:is-open="isFileImportOpen"
       field-title="聊天輸入"
-      field-description="上傳 PDF/TXT 後可自動擷取內容填入訊息"
+      field-description="上傳文件後可自動擷取內容填入訊息"
       :field-label="fileImportFieldLabel"
       :field-value="fileImportInitialValue"
       @confirm="handleFileImportConfirm"

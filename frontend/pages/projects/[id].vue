@@ -11,14 +11,14 @@
                 >我的計畫庫</NuxtLink
               >
               <span class="text-gray-300">></span>
-              <span class="text-gray-600">{{
+              <span class="text-gray-600 line-clamp-1">{{
                 projectRecord?.title || "計畫工作區"
               }}</span>
             </p>
-            <h1 class="text-3xl font-semibold text-gray-900">
+            <h1 class="text-3xl font-semibold text-gray-900 line-clamp-1">
               {{ projectRecord?.title || "計畫工作區" }}
             </h1>
-            <p class="text-sm text-gray-500">
+            <p class="text-sm text-gray-500 line-clamp-2">
               {{ projectRecord?.description || "尚未提供計畫摘要" }}
             </p>
             <div

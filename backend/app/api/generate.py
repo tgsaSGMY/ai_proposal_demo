@@ -43,7 +43,15 @@ logger = logging.getLogger(__name__)
 
 OPENAI_FILES_ENDPOINT = "https://api.openai.com/v1/files"
 OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses"
-ALLOWED_FILE_SUFFIXES = {".pdf", ".txt"}
+ALLOWED_FILE_SUFFIXES = {
+    ".pdf",
+    ".txt",
+    ".ppt",
+    ".pptx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+}
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
 
 # ========== Helper Functions for System Prompts ==========
@@ -928,11 +936,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
         {a_desc}
 
         【核心規則】
-        1. 只提取「助理已確認並跳到下一題」的欄位答案
-        2. 參考用戶輸入 + 助理回覆，以助理的確認為準
-        3. 若用戶輸入「無」且助理未追問，該欄位的答案就是「無」
-        4. 檢查前幾個對話中是否有遺漏未提取的欄位，一併提取。如果確認已經提取過的，那就不要重複提取
-        5. 不提取「助理剛詢問但用戶未回答」的欄位
+        1. 參考用戶輸入 + 助理回覆，以助理的確認為準
+        2. 若用戶輸入「無」且助理未追問，該欄位的答案就是「無」
+        3. 檢查前幾個對話中是否有遺漏未提取的欄位，一併提取。如果確認已經提取過的，那就不要重複提取
+        4. 不提取「助理剛詢問但用戶未回答」的欄位
 
         【輸出格式】
         僅輸出 JSON：
@@ -1748,7 +1755,7 @@ async def field_file_analysis(
     subfield_label: str = Form(""),
     current_value: str = Form(""),
 ):
-    # 上傳 PDF 或 TXT 檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
+    # 上傳 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
 
@@ -1761,10 +1768,18 @@ async def field_file_analysis(
     for file in files:
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in ALLOWED_FILE_SUFFIXES:
-            raise HTTPException(status_code=400, detail="僅支援 PDF / TXT 檔案格式。")
+            raise HTTPException(
+                status_code=400,
+                detail="僅支援 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 檔案格式。",
+            )
 
+    # 區分圖像與文檔
+    image_suffixes = {".jpg", ".jpeg", ".png"}
+    
+    # 分類檔案：(file_id, file_type) 其中 file_type 為 "image" 或 "document"
+    uploaded_files = []
+    
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    uploaded_file_ids = []
     prompt = _build_field_analysis_prompt(
         field_title=field_title,
         field_description=field_description,
@@ -1781,14 +1796,18 @@ async def field_file_analysis(
                 if len(file_bytes) > MAX_FILE_SIZE_BYTES:
                     raise HTTPException(status_code=400, detail="檔案過大，請控制在 20MB 以內。")
                 
+                suffix = Path(upload_file.filename or "").suffix.lower()
+                is_image = suffix in image_suffixes
+                purpose = "vision" if is_image else "assistants"
+                
                 upload_resp = await client.post(
                     OPENAI_FILES_ENDPOINT,
                     headers=headers,
-                    data={"purpose": "assistants"},
+                    data={"purpose": purpose},
                     files={
                         "file": (
                             upload_file.filename,
-                            file_bytes,
+                            BytesIO(file_bytes),
                             upload_file.content_type or "application/octet-stream",
                         )
                     },
@@ -1797,11 +1816,26 @@ async def field_file_analysis(
                 file_id = upload_resp.json().get("id")
                 if not file_id:
                     raise HTTPException(status_code=500, detail=f"OpenAI file upload failed for {upload_file.filename}.")
-                uploaded_file_ids.append(file_id)
+                
+                uploaded_files.append({
+                    "file_id": file_id,
+                    "file_type": "image" if is_image else "document",
+                    "filename": upload_file.filename
+                })
 
+            # 構建 content_items：圖像用 input_image，文檔用 input_file
             content_items = [{"type": "input_text", "text": prompt}]
-            for fid in uploaded_file_ids:
-                content_items.append({"type": "input_file", "file_id": fid})
+            for file_info in uploaded_files:
+                if file_info["file_type"] == "image":
+                    content_items.append({
+                        "type": "input_image",
+                        "file_id": file_info["file_id"]
+                    })
+                else:
+                    content_items.append({
+                        "type": "input_file",
+                        "file_id": file_info["file_id"]
+                    })
 
             responses_resp = await client.post(
                 OPENAI_RESPONSES_ENDPOINT,
@@ -1835,12 +1869,12 @@ async def field_file_analysis(
         logger.error("Unexpected error during field file analysis: %s", repr(e))
         raise HTTPException(status_code=500, detail="分析過程發生未知錯誤。")
     finally:
-        if uploaded_file_ids:
+        if uploaded_files:
             try:
                 async with httpx.AsyncClient(timeout=30.0) as cleaner:
-                    for fid in uploaded_file_ids:
+                    for file_info in uploaded_files:
                         await cleaner.delete(
-                            f"{OPENAI_FILES_ENDPOINT}/{fid}",
+                            f"{OPENAI_FILES_ENDPOINT}/{file_info['file_id']}",
                             headers=headers,
                         )
             except Exception:
