@@ -226,7 +226,6 @@ async function handleExportToWord() {
     props.templateId
   );
 }
-阻止對已保存版本的編輯操作;
 // 禁止所有编辑
 function updateSectionContent(sectionId, newContentObject) {
   errorNotification("已保存版本不能編輯，請返回當前版本進行修改");

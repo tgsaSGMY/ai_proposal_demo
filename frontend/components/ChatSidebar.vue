@@ -1,7 +1,7 @@
 <!-- 聊天侧边栏组件：显示聊天历史列表和新建对话按钮 -->
 <template>
   <div class="flex h-screen flex-col rounded-[32px] bg-white shadow-lg">
-    <div class="flex-1 overflow-hidden border-b border-slate-200">
+    <div class="flex-[0.7] overflow-hidden border-b border-slate-200">
       <div class="px-5 py-4">
         <p class="text-sm font-semibold text-slate-900">關鍵指令</p>
       </div>
@@ -11,7 +11,7 @@
         <div
           v-for="item in qaItems"
           :key="item.id"
-          class="rounded-2xl bg-slate-50 p-3"
+          class="rounded-2xl bg-slate-50 p-3 border-2 border-red-500"
         >
           <div class="flex items-start justify-between">
             <p
@@ -58,7 +58,7 @@
       </div>
     </div>
 
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-[0.3] overflow-hidden">
       <div class="px-5 py-4">
         <p class="text-sm font-semibold text-slate-900">版本記錄</p>
       </div>
