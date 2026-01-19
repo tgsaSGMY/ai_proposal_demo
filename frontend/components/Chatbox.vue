@@ -460,8 +460,8 @@ function escapeHtml(unsafe) {
 // 格式化聊天消息用於顯示：轉義 HTML、轉換粗體標記、保留換行符
 function formatMessageForDisplay(raw) {
   const text = raw == null ? "" : String(raw);
-  // Remove Wait-to-fill markers (hidden from display)
-  let cleaned = text.replace(/Wait-to-fill:\s*\[\[([^\]]+)\]\]\s*/g, "");
+  // Remove everything from 【回復結束】 onwards (hidden reply block)
+  let cleaned = text.replace(/【回復結束】[\s\S]*/g, "");
   // escape HTML first
   let out = escapeHtml(cleaned);
   // convert **bold** to <strong> — support multiline inside ** **
@@ -643,6 +643,15 @@ async function streamAIGuidanceMessage(question) {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming) {
             lastMsg.content += msg.data;
+            
+            // Check if response end marker is reached
+            if (lastMsg.content.includes("【回復結束】")) {
+              // Stop streaming and mark as done
+              lastMsg.isStreaming = false;
+              lastSentUserIndex.value = null;
+              isFetchingNextQuestion.value = false;
+              emit("aiResponseComplete");
+            }
             scrollToBottom();
           }
         } else if (msg.event === "filled") {
