@@ -6,6 +6,8 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.models import GrantConfig
 from app.core.lifecycle import reload_configurations
+from app.api.dependencies import get_supabase_service
+from app.services.supabase_service import SupabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -56,3 +58,22 @@ async def refresh_configurations(request: Request):
     except Exception as e:
         logger.error(f"Failed to refresh configurations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to refresh configurations: {str(e)}")
+
+
+@router.get("/plan_templates", response_model=List[Dict[str, Any]], summary="取得所有計畫模板")
+async def get_plan_templates(
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """
+    從 Supabase 取得所有計畫模板列表，包含 logo、描述等資訊。
+    """
+    try:
+        response = supabase_service.client.from_("plan_templates").select("*").order("id", desc=False).execute()
+        
+        if response.data:
+            return response.data
+        return []
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch plan templates: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch plan templates")

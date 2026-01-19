@@ -39,7 +39,7 @@
             >
               <span
                 class="inline-flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden"
-                :class="plan.iconBg"
+                :style="{ backgroundColor: plan.iconBg }"
               >
                 <img
                   :src="plan.image"
@@ -391,73 +391,18 @@ interface AttachmentAutofillResult {
   mainIdea: string;
 }
 
-const planTypes: PlanTypeOption[] = [
-  {
-    id: "siir-domestic",
-    title: "SIIR",
-    subtitle: "服務業創新計畫",
-    description:
-      "協助企業優化既有產品、服務或流程，\n透過系統化研發與驗證，強化內部營運效率與市場競爭力",
-    grantId: "marketing",
-    templateId: "siir",
-    iconBg: "bg-[#fff0eb]",
-    image: "/icons/siir_logo.png",
-  },
-  {
-    id: "imdp-export",
-    title: "IMDP",
-    subtitle: "國際貿易署補助業界開發國際市場計畫",
-    description:
-      "以市場導向為核心，\n協助企業打造可複製、可輸出的商業模式，推動品牌與服務邁向國際市場。。",
-    grantId: "marketing",
-    templateId: "imdp",
-    iconBg: "bg-[#eef2ff]",
-    image: "/icons/imdp_logo.png",
-  },
-  {
-    id: "citd-rnd",
-    title: "CITD",
-    subtitle: "協助傳統產業技術開發計畫",
-    description:
-      "支持製程改良、設備升級與產品創新，\n協助企業以研發投入，提升品質穩定度與長期技術競爭力。",
-    grantId: "r&d",
-    templateId: "standard",
-    iconBg: "bg-[#e9f7ef]",
-    image: "/icons/citd_logo.png",
-  },
-  // {
-  //   id: "rnd-transform-small",
-  //   title: "研發轉型案 · 九人以下",
-  //   subtitle: "臺北市產業發展獎勵",
-  //   description: "適用於總部設於北市之研發。",
-  //   grantName: "研發轉型",
-  //   templateHint: "九人以下",
-  //   iconBg: "bg-[#f3ecff]",
-  //   image: "/icons/rnd_transform_small.png",
-  // },
-  {
-    id: "rnd-transform-large",
-    title: "美國關稅衝擊",
-    subtitle: "研發轉型補助(產發署)",
-    description:
-      "面對美國關稅調整與供應鏈重組壓力，協助企業透過研發與製程轉型，降低對單一市場與高關稅結構的依賴。",
-    grantId: "r&d_transform",
-    templateId: "over_10",
-    iconBg: "bg-[#fef3f2]",
-    image: "/icons/siti_logo.png",
-  },
-  {
-    id: "sbir-local",
-    title: "SBIR",
-    subtitle: "地方產業創新研發計畫",
-    description:
-      "結合地方產業特色與政策資源，\n協助企業進行示範型研發，打造可擴散的地方創新成果。",
-    grantId: "local",
-    templateId: "standard",
-    iconBg: "bg-[#f0f7ff]",
-    image: "/icons/sbir_logo.png",
-  },
-];
+interface PlanTemplate {
+  id: string;
+  grant_id: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  logo_storage_path?: string;
+  iconBg?: string;
+  isOpen: boolean;
+}
+
+const planTypes = ref<PlanTypeOption[]>([]);
 
 const modeOptions: ModeOption[] = [
   {
@@ -483,11 +428,60 @@ const {
   warning: notifyWarning,
 } = useNotifications();
 const { userId: currentUserId, refreshUser } = useCurrentUser();
-onMounted(() => {
+onMounted(async () => {
   refreshUser();
+  await loadPlanTypes();
 });
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const SUPABASE_BUCKET_URL = config.public.supabaseUrl;
+
+// 从数据库加载计划类型
+async function loadPlanTypes() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/plan_templates`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      console.error("Failed to fetch plan templates");
+      return;
+    }
+
+    const templates: PlanTemplate[] = await response.json();
+
+    // 过滤只显示 isOpen 为 true 的模板
+    const openTemplates = templates.filter((t) => t.isOpen === true);
+
+    planTypes.value = openTemplates.map((template) => {
+      // 根据 logo_storage_path 生成 public URL 或 signed URL
+      let logoUrl = "/icons/default_logo.png";
+      if (template.logo_storage_path) {
+        // 如果是完整的存储路径（http开头），直接使用
+        if (template.logo_storage_path.startsWith("http")) {
+          logoUrl = template.logo_storage_path;
+        } else {
+          // 尝试用 public URL 格式（如果路径在 public 区域）
+          logoUrl = `${SUPABASE_BUCKET_URL}/storage/v1/object/${template.logo_storage_path}`;
+        }
+      }
+
+      return {
+        id: template.id,
+        title: template.name,
+        subtitle: template.subtitle,
+        description: template.description,
+        grantId: template.grant_id,
+        templateId: template.id,
+        iconBg: template.iconBg || "#F8FAFC",
+        image: logoUrl,
+      };
+    });
+  } catch (error) {
+    console.error("Failed to load plan types:", error);
+    notifyError("無法載入補助計畫列表，請稍後再試");
+  }
+}
 
 const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
   usePlanGenerator();
