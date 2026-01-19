@@ -284,6 +284,25 @@
                 </svg>
                 <span>動態欄位配置</span>
               </NuxtLink>
+
+              <NuxtLink
+                to="/_builder/template-manager"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                active-class="bg-gray-900 text-white shadow-md"
+                @click.native="handleNavClick"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4z"
+                  />
+                </svg>
+                <span>主題與模板管理</span>
+              </NuxtLink>
             </div>
           </template>
 

@@ -244,6 +244,75 @@ class SupabaseService:
             return None
 
 
+    async def list_grants(self) -> List[Dict[str, Any]]:
+        """取得所有 Grant 記錄。"""
+        response = (
+            self.client
+            .from_("grants")
+            .select("*")
+            .order("id", desc=False)
+            .execute()
+        )
+        return response.data or []
+
+    async def create_grant_record(self, grant_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增 Grant 記錄。"""
+        response = self.client.from_("grants").insert(grant_data).execute()
+        return response.data[0] if response.data else None
+
+    async def update_grant_record(self, current_grant_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新既有 Grant，允許更改主鍵。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        response = (
+            self.client
+            .from_("grants")
+            .update(payload)
+            .eq("id", current_grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def list_plan_templates(self, grant_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """取得所有計畫模板，可依 Grant 過濾。"""
+        query = (
+            self.client
+            .from_("plan_templates")
+            .select("*")
+            .order("name", desc=False)
+        )
+        if grant_id:
+            query = query.eq("grant_id", grant_id)
+        response = query.execute()
+        return response.data or []
+
+    async def create_plan_template_record(self, template_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增計畫模板。"""
+        response = self.client.from_("plan_templates").insert(template_data).execute()
+        return response.data[0] if response.data else None
+
+    async def update_plan_template_record(
+        self,
+        template_id: str,
+        grant_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """更新既有模板，依照 (id, grant_id) 鎖定。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        response = (
+            self.client
+            .from_("plan_templates")
+            .update(payload)
+            .eq("id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+
     async def get_sections_by_template_id(self, template_id: str, grant_id: str) -> List[Dict[str, Any]]:
         """根据 template_id 获取其下所有 sections，并按 order 排序。"""
         if not template_id:
