@@ -460,8 +460,10 @@ function escapeHtml(unsafe) {
 // 格式化聊天消息用於顯示：轉義 HTML、轉換粗體標記、保留換行符
 function formatMessageForDisplay(raw) {
   const text = raw == null ? "" : String(raw);
+  // Remove Wait-to-fill markers (hidden from display)
+  let cleaned = text.replace(/Wait-to-fill:\s*\[\[([^\]]+)\]\]\s*/g, "");
   // escape HTML first
-  let out = escapeHtml(text);
+  let out = escapeHtml(cleaned);
   // convert **bold** to <strong> — support multiline inside ** **
   out = out.replace(/\*\*([\s\S]+?)\*\*/g, "<strong>$1</strong>");
   // preserve line breaks
