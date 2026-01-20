@@ -97,20 +97,36 @@ class SupabaseService:
             
         return all_grants
 
-    async def get_section_details(self, grant_id: str, template_id: str, section_id: str) -> Optional[SectionConfig]:
+    async def get_section_details(
+        self,
+        grant_id: str,
+        template_id: str,
+        section_id: str,
+    ) -> Optional[SectionConfig]:
         """獲取單個 section 的詳細信息。"""
-        response = await asyncio.to_thread(
-            self.client.from_("sections")
-            .select("*")
-            .eq("grant_id", grant_id)
-            .eq("template_id", template_id)
-            .eq("id", section_id)
-            .single()
-            .execute
-        )
-        if response.data:
-            return SectionConfig(**response.data)
-        return None
+        try:
+            response = (
+                self.client.from_("sections")
+                .select("*")
+                .eq("grant_id", grant_id)
+                .eq("template_id", template_id)
+                .eq("id", section_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                return SectionConfig(**response.data[0])
+            return None
+        except Exception as error:
+            logger.error(
+                "Failed to fetch section %s/%s/%s: %s",
+                grant_id,
+                template_id,
+                section_id,
+                error,
+                exc_info=True,
+            )
+            return None
 
     async def log_sft_data_point(self, grant_id: str, template_id: str,section_id: str, prompt: str, final_answer: dict, source_type: str):
         """记录一个可用于 SFT 的数据点"""
@@ -311,6 +327,49 @@ class SupabaseService:
             .execute()
         )
         return response.data[0] if response.data else None
+
+    async def create_section_record(self, section_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增章節記錄。"""
+        payload = {k: v for k, v in section_data.items() if v is not None}
+        if not payload:
+            return None
+        response = self.client.from_("sections").insert(payload).execute()
+        return response.data[0] if response.data else None
+
+    async def update_section_record(
+        self,
+        section_id: str,
+        template_id: str,
+        grant_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """更新指定章節。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        response = (
+            self.client
+            .from_("sections")
+            .update(payload)
+            .eq("id", section_id)
+            .eq("template_id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def delete_section_record(self, section_id: str, template_id: str, grant_id: str) -> bool:
+        """刪除指定章節。"""
+        response = (
+            self.client
+            .from_("sections")
+            .delete()
+            .eq("id", section_id)
+            .eq("template_id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return len(response.data) > 0
 
 
     async def get_sections_by_template_id(self, template_id: str, grant_id: str) -> List[Dict[str, Any]]:

@@ -32,6 +32,7 @@
         :grant-name-map="grantNameMap"
         @new="openTemplateModal('create')"
         @edit="(template) => startTemplateEdit(template)"
+        @sections="(template) => openSectionEditor(template)"
       />
 
       <GrantFormModal
@@ -53,6 +54,19 @@
         @submit="handleTemplateSubmit"
         @cancel="closeTemplateModal"
       />
+
+      <SectionEditorModal
+        :is-visible="showSectionModal"
+        :template="sectionModalTemplate"
+        :sections="sectionRecords"
+        :loading="sectionLoading"
+        :saving="sectionSaving"
+        @close="closeSectionModal"
+        @create="handleSectionCreate"
+        @update="handleSectionUpdate"
+        @delete="handleSectionDelete"
+        @reorder="handleSectionReorder"
+      />
     </div>
   </ClientOnly>
 </template>
@@ -63,6 +77,7 @@ import GrantListSection from "~/components/template-manager/grant-manager.vue";
 import TemplateListSection from "~/components/template-manager/template-manager.vue";
 import GrantFormModal from "~/components/template-manager/GrantFormModal.vue";
 import TemplateFormModal from "~/components/template-manager/TemplateFormModal.vue";
+import SectionEditorModal from "~/components/template-manager/SectionEditorModal.vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
@@ -115,6 +130,24 @@ interface TemplateFormState {
   isOpen: boolean;
 }
 
+interface SectionRecord {
+  id: string;
+  template_id: string;
+  grant_id: string;
+  name: string;
+  order?: number | null;
+  json_schema?: Record<string, any> | null;
+  [key: string]: any;
+}
+
+interface SectionMutationPayload {
+  id: string;
+  name: string;
+  order: number;
+  json_schema: Record<string, any> | null;
+  originalId?: string | null;
+}
+
 const grants = ref<GrantRecord[]>([]);
 const templates = ref<TemplateRecord[]>([]);
 const templateFilter = ref("");
@@ -127,6 +160,11 @@ const templateEditingKeys = ref<{ grant_id: string; id: string } | null>(null);
 const showGrantModal = ref(false);
 const showTemplateModal = ref(false);
 const templateFormModalRef = ref<any>(null);
+const showSectionModal = ref(false);
+const sectionModalTemplate = ref<TemplateRecord | null>(null);
+const sectionRecords = ref<SectionRecord[]>([]);
+const sectionLoading = ref(false);
+const sectionSaving = ref(false);
 
 const grantForm = ref<GrantFormState>({
   id: "",
@@ -152,7 +190,7 @@ const { success, error: notifyError } = useNotifications();
 const { checkIsInternal } = useInternalCheck();
 
 const grantOptions = computed(() =>
-  grants.value.map((grant) => ({ label: grant.name, value: grant.id }))
+  grants.value.map((grant) => ({ label: grant.name, value: grant.id })),
 );
 
 const grantNameMap = computed(() => {
@@ -183,7 +221,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
 async function fetchJsonWithAuth<T>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const response = await fetchWithAuth(url, options);
   if (!response.ok) {
@@ -196,7 +234,7 @@ async function fetchJsonWithAuth<T>(
 async function fetchWithFormDataAuth(
   url: string,
   formData: FormData,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ) {
   const {
     data: { session },
@@ -309,7 +347,7 @@ async function handleGrantSubmit() {
             name: payload.name,
             id: payload.id !== grantEditingId.value ? payload.id : undefined,
           }),
-        }
+        },
       );
       success("主題已更新");
     }
@@ -367,16 +405,19 @@ async function handleTemplateSubmit() {
   templateSaving.value = true;
   try {
     const formData = new FormData();
-    
+
     // 添加基本字段
     formData.append("id", templateForm.value.id.trim());
     formData.append("grant_id", templateForm.value.grant_id);
     formData.append("name", templateForm.value.name.trim());
     formData.append("subtitle", templateForm.value.subtitle?.trim() || "");
-    formData.append("description", templateForm.value.description?.trim() || "");
+    formData.append(
+      "description",
+      templateForm.value.description?.trim() || "",
+    );
     formData.append("iconBg", templateForm.value.iconBg?.trim() || "#F8FAFC");
     formData.append("isOpen", templateForm.value.isOpen ? "true" : "false");
-    
+
     // 如果有选择新文件，添加文件
     const logoFile = templateFormModalRef.value?.getSelectedLogoFile();
     if (logoFile) {
@@ -386,7 +427,7 @@ async function handleTemplateSubmit() {
     if (templateFormMode.value === "create") {
       await fetchWithFormDataAuth(
         `${TEMPLATE_MANAGER_API}/templates/upload`,
-        formData
+        formData,
       );
       success("已新增模板");
     } else if (templateEditingKeys.value) {
@@ -394,7 +435,7 @@ async function handleTemplateSubmit() {
       await fetchWithFormDataAuth(
         `${TEMPLATE_MANAGER_API}/templates/${templateEditingKeys.value.grant_id}/${templateEditingKeys.value.id}/upload`,
         formData,
-        { method: "PUT" }
+        { method: "PUT" },
       );
       success("模板已更新");
     }
@@ -405,6 +446,140 @@ async function handleTemplateSubmit() {
     notifyError(error?.message || "操作失敗");
   } finally {
     templateSaving.value = false;
+  }
+}
+
+async function openSectionEditor(template: TemplateRecord) {
+  sectionModalTemplate.value = template;
+  sectionRecords.value = [];
+  showSectionModal.value = true;
+  await fetchSectionsForTemplate(template);
+}
+
+function closeSectionModal() {
+  showSectionModal.value = false;
+  sectionModalTemplate.value = null;
+  sectionRecords.value = [];
+}
+
+async function fetchSectionsForTemplate(template: TemplateRecord) {
+  sectionLoading.value = true;
+  try {
+    const params = new URLSearchParams({
+      grant_id: template.grant_id,
+      template_id: template.id,
+    });
+    const data = await fetchJsonWithAuth<SectionRecord[]>(
+      `${TEMPLATE_MANAGER_API}/sections?${params.toString()}`,
+    );
+    sectionRecords.value = data;
+  } catch (error: any) {
+    notifyError(error?.message || "無法載入章節");
+  } finally {
+    sectionLoading.value = false;
+  }
+}
+
+async function handleSectionCreate(payload: SectionMutationPayload) {
+  const template = sectionModalTemplate.value;
+  if (!template) {
+    notifyError("請先選擇模板");
+    return;
+  }
+
+  sectionSaving.value = true;
+  try {
+    const { originalId, ...sectionPayload } = payload;
+    await fetchJsonWithAuth(`${TEMPLATE_MANAGER_API}/sections`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...sectionPayload,
+        grant_id: template.grant_id,
+        template_id: template.id,
+      }),
+    });
+    success("章節已新增");
+    await fetchSectionsForTemplate(template);
+  } catch (error: any) {
+    notifyError(error?.message || "章節新增失敗");
+  } finally {
+    sectionSaving.value = false;
+  }
+}
+
+async function handleSectionUpdate(payload: SectionMutationPayload) {
+  const template = sectionModalTemplate.value;
+  if (!template) {
+    notifyError("請先選擇模板");
+    return;
+  }
+
+  const targetId = payload.originalId || payload.id;
+  sectionSaving.value = true;
+  try {
+    const { originalId, ...sectionPayload } = payload;
+    await fetchJsonWithAuth(
+      `${TEMPLATE_MANAGER_API}/sections/${template.grant_id}/${template.id}/${targetId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(sectionPayload),
+      },
+    );
+    success("章節已更新");
+    await fetchSectionsForTemplate(template);
+  } catch (error: any) {
+    notifyError(error?.message || "章節更新失敗");
+  } finally {
+    sectionSaving.value = false;
+  }
+}
+
+async function handleSectionDelete(section: SectionRecord) {
+  sectionSaving.value = true;
+  try {
+    await fetchJsonWithAuth(
+      `${TEMPLATE_MANAGER_API}/sections/${section.grant_id}/${section.template_id}/${section.id}`,
+      { method: "DELETE" },
+    );
+    success("章節已刪除");
+    if (sectionModalTemplate.value) {
+      await fetchSectionsForTemplate(sectionModalTemplate.value);
+    }
+  } catch (error: any) {
+    notifyError(error?.message || "章節刪除失敗");
+  } finally {
+    sectionSaving.value = false;
+  }
+}
+
+async function handleSectionReorder(changedSections: SectionRecord[]) {
+  const template = sectionModalTemplate.value;
+  if (!template || !changedSections?.length) {
+    return;
+  }
+
+  sectionSaving.value = true;
+  try {
+    for (const section of changedSections) {
+      await fetchJsonWithAuth(
+        `${TEMPLATE_MANAGER_API}/sections/${template.grant_id}/${template.id}/${section.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            id: section.id,
+            name: section.name,
+            order: section.order ?? 0,
+            json_schema: section.json_schema ?? null,
+          }),
+        },
+      );
+    }
+    success("章節順序已更新");
+    await fetchSectionsForTemplate(template);
+  } catch (error: any) {
+    notifyError(error?.message || "章節排序更新失敗");
+  } finally {
+    sectionSaving.value = false;
   }
 }
 

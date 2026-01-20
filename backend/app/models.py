@@ -257,3 +257,29 @@ class PlanTemplateUpdateRequest(BaseModel):
     logo_storage_path: Optional[str] = None
     iconBg: Optional[str] = None
     isOpen: Optional[bool] = None
+
+
+class SectionBaseRequest(BaseModel):
+    """章節共用欄位。"""
+    name: str = Field(..., min_length=1, max_length=255)
+    order: int = Field(0, ge=0, description="章節顯示順序，數字越小越前面。")
+    json_schema: Optional[Dict[str, Any]] = Field(
+        default=None, description="章節使用的 JSON Schema"
+    )
+
+
+class SectionCreateRequest(SectionBaseRequest):
+    """建立新的章節。"""
+    id: str = Field(..., min_length=1, max_length=128)
+    grant_id: str = Field(..., min_length=1, max_length=64)
+    template_id: str = Field(..., min_length=1, max_length=64)
+
+
+class SectionUpdateRequest(BaseModel):
+    """更新既有章節，允許局部更新。"""
+    id: Optional[str] = Field(None, min_length=1, max_length=128)
+    grant_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    template_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    order: Optional[int] = Field(None, ge=0)
+    json_schema: Optional[Dict[str, Any]] = Field(default=None)

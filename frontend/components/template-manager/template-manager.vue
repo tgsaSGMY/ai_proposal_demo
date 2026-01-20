@@ -72,7 +72,10 @@
               </div>
             </td>
             <td class="py-3 text-center">
-              <div v-if="template.logo_storage_path" class="flex items-center justify-center">
+              <div
+                v-if="template.logo_storage_path"
+                class="flex items-center justify-center"
+              >
                 <img
                   :src="template.logo_storage_path"
                   :alt="`${template.name} Logo`"
@@ -94,13 +97,22 @@
               </span>
             </td>
             <td class="py-3 text-right">
-              <button
-                type="button"
-                class="text-xs text-indigo-600 font-semibold"
-                @click="emit('edit', template)"
-              >
-                編輯
-              </button>
+              <div class="flex justify-end gap-3">
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-indigo-600"
+                  @click="emit('edit', template)"
+                >
+                  編輯
+                </button>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                  @click="emit('sections', template)"
+                >
+                  調整章節
+                </button>
+              </div>
             </td>
           </tr>
           <tr v-if="!filteredTemplates.length">
@@ -163,6 +175,7 @@ const filteredTemplates = computed(() => {
 
 const emit = defineEmits<{
   (e: "edit", template: TemplateRecord): void;
+  (e: "sections", template: TemplateRecord): void;
   (e: "new"): void;
 }>();
 

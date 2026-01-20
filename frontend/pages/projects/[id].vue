@@ -342,7 +342,7 @@ const savedPlanVersions = computed(() => {
 // ===== 计算属性：是否为生成模式 =====
 // 检查项目是否为计划生成模式
 const isGeneratorMode = computed(
-  () => projectRecord.value?.mode === "generator"
+  () => projectRecord.value?.mode === "generator",
 );
 
 // ===== 计算属性：工作区是否就绪 =====
@@ -350,10 +350,10 @@ const isGeneratorMode = computed(
 const workspaceReady = computed(() =>
   Boolean(
     projectRecord.value &&
-      selectedGrantId.value &&
-      selectedTemplateId.value &&
-      currentSections.value.length
-  )
+    selectedGrantId.value &&
+    selectedTemplateId.value &&
+    currentSections.value.length,
+  ),
 );
 
 // ===== 计算属性：最后更新时间显示 =====
@@ -368,14 +368,14 @@ const lastUpdatedDisplay = computed(() => {
 // ===== 计算属性：模式标签 =====
 // 返回项目模式的显示标签（生成模式或互动模式）
 const modeLabel = computed(() =>
-  projectRecord.value?.mode === "generator" ? "計畫生成模式" : "互動模式"
+  projectRecord.value?.mode === "generator" ? "計畫生成模式" : "互動模式",
 );
 
 // ===== 计算属性：补助名称 =====
 // 根据选中的补助 ID，返回对应的补助名称
 const grantName = computed(() => {
   const targetGrant = allConfigs.value.find(
-    (grant) => grant.id === selectedGrantId.value
+    (grant) => grant.id === selectedGrantId.value,
   );
   return targetGrant?.name || "";
 });
@@ -384,10 +384,10 @@ const grantName = computed(() => {
 // 根据选中的模板 ID，返回对应的模板名称
 const activeTemplateName = computed(() => {
   const targetGrant = allConfigs.value.find(
-    (grant) => grant.id === selectedGrantId.value
+    (grant) => grant.id === selectedGrantId.value,
   );
   const template = targetGrant?.templates.find(
-    (tpl) => tpl.id === selectedTemplateId.value
+    (tpl) => tpl.id === selectedTemplateId.value,
   );
   return template?.name || "";
 });
@@ -448,7 +448,7 @@ function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
       {
         templateId: selectedTemplateId.value,
         templateGrantId: selectedGrantId.value,
-      }
+      },
     );
   }
 }
@@ -476,7 +476,7 @@ async function fetchProject() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     if (!response.ok) {
       const detail = await response.text();
@@ -552,7 +552,7 @@ async function handleExportWord(payload?: { version?: any }) {
       contentToExport,
       selectedGrantId.value,
       selectedTemplateId.value,
-      projectRecord.value?.title
+      projectRecord.value?.title,
     );
   } catch (error) {
     console.error("Failed to export plan", error);
@@ -645,7 +645,7 @@ async function updateProject(payload: Record<string, any>) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-      }
+      },
     );
     if (!response.ok) {
       const detail = await response.text();
@@ -895,7 +895,7 @@ async function handleVersionRevision(payload: {
 async function savePreferenceData(
   selectedData: Record<string, any>,
   rejectedData: Record<string, any>,
-  finalPrompt = ""
+  finalPrompt = "",
 ) {
   try {
     const entriesToSave = currentSections.value

@@ -9,6 +9,8 @@ from app.models import (
 	GrantUpdateRequest,
 	PlanTemplateCreateRequest,
 	PlanTemplateUpdateRequest,
+    SectionCreateRequest,
+    SectionUpdateRequest,
 )
 from app.services.supabase_service import SupabaseService
 
@@ -194,6 +196,153 @@ async def update_template(
 			exc_info=True,
 		)
 		raise HTTPException(status_code=500, detail="Unexpected error while updating template")
+
+
+@router.get(
+    "/sections",
+    response_model=List[Dict[str, Any]],
+    summary="取得指定模板的章節列表",
+)
+async def list_sections(
+    grant_id: str = Query(..., description="Grant ID"),
+    template_id: str = Query(..., description="Template ID"),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    try:
+        return await supabase_service.get_sections_by_template_id(template_id, grant_id)
+    except Exception as exc:
+        logger.error(
+            "Failed to list sections for %s/%s: %s", grant_id, template_id, exc, exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve sections")
+
+
+@router.post(
+    "/sections",
+    status_code=status.HTTP_201_CREATED,
+    response_model=Dict[str, Any],
+    summary="新增章節",
+)
+async def create_section(
+    request: Request,
+    payload: SectionCreateRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    template = await supabase_service.get_template_by_id(
+        payload.template_id, payload.grant_id
+    )
+    if not template:
+        raise HTTPException(status_code=400, detail="Template not found")
+
+    existing = await supabase_service.get_section_details(
+        payload.grant_id, payload.template_id, payload.id
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Section ID already exists")
+
+    try:
+        record = await supabase_service.create_section_record(payload.model_dump())
+        if not record:
+            raise HTTPException(status_code=500, detail="Failed to create section")
+
+        await _refresh_grant_cache(request, supabase_service)
+        return record
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Failed to create section %s/%s/%s: %s",
+            payload.grant_id,
+            payload.template_id,
+            payload.id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Unexpected error while creating section")
+
+
+@router.put(
+    "/sections/{grant_id}/{template_id}/{section_id}",
+    response_model=Dict[str, Any],
+    summary="更新章節",
+)
+async def update_section(
+    request: Request,
+    grant_id: str,
+    template_id: str,
+    section_id: str,
+    payload: SectionUpdateRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    update_data = payload.model_dump(exclude_none=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+
+    existing = await supabase_service.get_section_details(grant_id, template_id, section_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    try:
+        record = await supabase_service.update_section_record(
+            section_id,
+            template_id,
+            grant_id,
+            update_data,
+        )
+        if not record:
+            raise HTTPException(status_code=404, detail="Section not found")
+
+        await _refresh_grant_cache(request, supabase_service)
+        return record
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Failed to update section %s/%s/%s: %s",
+            grant_id,
+            template_id,
+            section_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Unexpected error while updating section")
+
+
+@router.delete(
+    "/sections/{grant_id}/{template_id}/{section_id}",
+    response_model=Dict[str, str],
+    summary="刪除章節",
+)
+async def delete_section(
+    request: Request,
+    grant_id: str,
+    template_id: str,
+    section_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    try:
+        deleted = await supabase_service.delete_section_record(section_id, template_id, grant_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Section not found")
+
+        await _refresh_grant_cache(request, supabase_service)
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Failed to delete section %s/%s/%s: %s",
+            grant_id,
+            template_id,
+            section_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Unexpected error while deleting section")
 
 @router.post(
     "/templates/upload",

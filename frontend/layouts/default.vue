@@ -210,6 +210,24 @@
                 內部作業
               </p>
               <NuxtLink
+                to="/_builder/template-manager"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                active-class="bg-gray-900 text-white shadow-md"
+                @click.native="handleNavClick"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4z"
+                  />
+                </svg>
+                <span>主題與模板管理</span>
+              </NuxtLink>
+              <NuxtLink
                 to="/_builder/model"
                 class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
                 active-class="bg-gray-900 text-white shadow-md"
@@ -227,45 +245,6 @@
                 </svg>
                 <span>模型配置</span>
               </NuxtLink>
-
-              <NuxtLink
-                to="/_builder/dataset"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
-                active-class="bg-gray-900 text-white shadow-md"
-                @click.native="handleNavClick"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                  />
-                </svg>
-                <span>資料集更新</span>
-              </NuxtLink>
-
-              <NuxtLink
-                to="/_builder/management"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
-                active-class="bg-gray-900 text-white shadow-md"
-                @click.native="handleNavClick"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                  />
-                </svg>
-                <span>數據庫更新</span>
-              </NuxtLink>
-
               <NuxtLink
                 to="/_builder/section"
                 class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
@@ -286,7 +265,7 @@
               </NuxtLink>
 
               <NuxtLink
-                to="/_builder/template-manager"
+                to="/_builder/dataset"
                 class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
                 active-class="bg-gray-900 text-white shadow-md"
                 @click.native="handleNavClick"
@@ -298,10 +277,29 @@
                   fill="currentColor"
                 >
                   <path
-                    d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4z"
+                    d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
                   />
                 </svg>
-                <span>主題與模板管理</span>
+                <span>模擬數據生成</span>
+              </NuxtLink>
+
+              <NuxtLink
+                to="/_builder/management"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                active-class="bg-gray-900 text-white shadow-md"
+                @click.native="handleNavClick"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                  />
+                </svg>
+                <span>數據庫更新</span>
               </NuxtLink>
             </div>
           </template>
@@ -414,7 +412,7 @@ watch(
       isInternalView.value = false;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // ===== 用户信息管理 =====
@@ -445,7 +443,7 @@ function handleNavClick() {
 // 管理员可以编辑方案模板、部分配置等
 async function switchToInternalView() {
   // 跳转到内部管理员的模型编辑页面
-  await router.push("/_builder/model");
+  await router.push("/_builder/template-manager");
   // 移动端上自动关闭侧边栏
   handleNavClick();
 }
@@ -471,7 +469,7 @@ async function fetchUserUsage(targetUserId) {
   try {
     // 调用 API 获取用户成本信息
     const response = await fetch(
-      `${API_BASE_URL}/user-usage?user_id=${targetUserId}`
+      `${API_BASE_URL}/user-usage?user_id=${targetUserId}`,
     );
     // 如果响应失败，抛出错误
     if (!response.ok) throw new Error("Failed to fetch usage");

@@ -292,8 +292,8 @@
                   isProcessingBackground
                     ? "解析附件中..."
                     : isCreatingProject
-                    ? "建立工作區..."
-                    : "進入工作區"
+                      ? "建立工作區..."
+                      : "進入工作區"
                 }}
               </button>
             </div>
@@ -455,7 +455,7 @@ async function loadPlanTypes() {
 
     planTypes.value = openTemplates.map((template) => {
       // 根据 logo_storage_path 生成 public URL 或 signed URL
-      let logoUrl = "/icons/default_logo.png";
+      let logoUrl = "logo.png";
       if (template.logo_storage_path) {
         // 如果是完整的存储路径（http开头），直接使用
         if (template.logo_storage_path.startsWith("http")) {
@@ -547,7 +547,7 @@ async function getUserIdOrNotify() {
 
 const configsLoaded = computed(() => allConfigs.value.length > 0);
 const canConfirmPlanType = computed(
-  () => Boolean(selectedPlanType.value) && configsLoaded.value
+  () => Boolean(selectedPlanType.value) && configsLoaded.value,
 );
 
 const resolvedTemplateName = computed(() => {
@@ -562,12 +562,12 @@ const resolvedTemplateName = computed(() => {
 const canEnterChat = computed(() =>
   Boolean(
     selectedMode.value &&
-      planName.value.trim() &&
-      planSummary.value.trim() &&
-      selectedPlanType.value &&
-      selectedGrantId.value &&
-      selectedTemplateId.value
-  )
+    planName.value.trim() &&
+    planSummary.value.trim() &&
+    selectedPlanType.value &&
+    selectedGrantId.value &&
+    selectedTemplateId.value,
+  ),
 );
 
 const modeLabel = computed(() => {
@@ -589,7 +589,7 @@ const backgroundSummary = computed(() => {
 });
 
 const combinedBackgroundNotes = computed(() =>
-  backgroundSummary.value.join("\n\n").trim()
+  backgroundSummary.value.join("\n\n").trim(),
 );
 
 const prefilledChatAnswers = computed(() => {
@@ -612,7 +612,7 @@ const prefilledChatAnswers = computed(() => {
 });
 
 async function runAttachmentAutofill(
-  userId: string
+  userId: string,
 ): Promise<AttachmentAutofillResult | null> {
   if (!backgroundFiles.value.length) {
     return null;
@@ -653,7 +653,7 @@ async function runAttachmentAutofill(
       sections: sectionsPayload,
       user_id: userId,
     },
-    API_BASE_URL
+    API_BASE_URL,
   );
 
   const accumulator = { ...baseValues };
@@ -668,13 +668,13 @@ async function runAttachmentAutofill(
       const key = makeCompositeKey(sectionId, propertyKey);
       accumulator[key] = normalized;
     },
-    () => {}
+    () => {},
   );
 
   const dynamicFields = Object.fromEntries(
     Object.entries(accumulator).filter(([, value]) =>
-      Boolean(value && value.trim())
-    )
+      Boolean(value && value.trim()),
+    ),
   ) as Record<string, string>;
 
   const mainIdea =
@@ -728,7 +728,7 @@ async function processBackgroundFiles(files: File[]) {
   const classified = files
     .map((file) => ({ file, type: detectBackgroundType(file) }))
     .filter((item): item is { file: File; type: "word" | "pdf" } =>
-      Boolean(item.type)
+      Boolean(item.type),
     );
   if (!classified.length) {
     notifyWarning("僅支援 Word (.docx) 與 PDF 檔案");
@@ -795,7 +795,7 @@ function createAttachmentId() {
 
 function removeBackgroundAttachment(id: string) {
   backgroundFiles.value = backgroundFiles.value.filter(
-    (file) => file.id !== id
+    (file) => file.id !== id,
   );
 }
 
@@ -881,7 +881,7 @@ async function enterChatStage() {
       } catch (autofillError) {
         console.error("Failed to auto-fill dynamic sections", autofillError);
         notifyWarning(
-          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。"
+          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。",
         );
       }
     }

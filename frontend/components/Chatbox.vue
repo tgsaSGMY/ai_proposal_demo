@@ -403,10 +403,10 @@ const answeredCount = computed(() =>
   guidedQuestions.reduce((count, question) => {
     const answer = questionAnswers.value[question.id];
     return answer && answer.trim() ? count + 1 : count;
-  }, 0)
+  }, 0),
 );
 const allQuestionsAnswered = computed(
-  () => totalQuestions === 0 || answeredCount.value === totalQuestions
+  () => totalQuestions === 0 || answeredCount.value === totalQuestions,
 );
 const activeQuestionId = ref(null);
 
@@ -488,9 +488,9 @@ const canSendMessage = computed(() => {
   // 项目已选择、不是生成完成状态、且AI没有正在思考下一个问题
   return Boolean(
     props.grantId &&
-      props.templateId &&
-      !isGenerationComplete.value &&
-      !isFetchingNextQuestion.value
+    props.templateId &&
+    !isGenerationComplete.value &&
+    !isFetchingNextQuestion.value,
   );
 });
 
@@ -499,7 +499,7 @@ const canRequestPlan = computed(() => {
 });
 
 const hasCandidatePlan = computed(
-  () => Object.keys(props.candidatePlan || {}).length > 0
+  () => Object.keys(props.candidatePlan || {}).length > 0,
 );
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
@@ -594,6 +594,7 @@ async function streamAIGuidanceMessage(question) {
     }
 
     window.chatWebSocket = new WebSocket(wsUrl);
+    console.log(guidedQuestions);
 
     window.chatWebSocket.onopen = () => {
       const payload = {
@@ -643,7 +644,7 @@ async function streamAIGuidanceMessage(question) {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming) {
             lastMsg.content += msg.data;
-            
+
             // Check if response end marker is reached
             if (lastMsg.content.includes("【回復結束】")) {
               // Stop streaming and mark as done
@@ -744,14 +745,14 @@ function upsertAnswerMessage(
   questionId,
   content,
   source = "user",
-  shouldScroll = true
+  shouldScroll = true,
 ) {
   if (!questionId) {
     return;
   }
   const text = (content || "").trim();
   const index = messages.value.findIndex(
-    (msg) => msg.type === "answer" && msg.questionId === questionId
+    (msg) => msg.type === "answer" && msg.questionId === questionId,
   );
   if (!text) {
     if (index >= 0) {
@@ -769,11 +770,11 @@ watch(
   (newMessages) => {
     // 過濾掉 candidates 和 final 類型的消息，不存入 conversation_history
     const filteredMessages = newMessages.filter(
-      (msg) => msg.type !== "candidates" && msg.type !== "final"
+      (msg) => msg.type !== "candidates" && msg.type !== "final",
     );
     emit("messagesUpdated", filteredMessages);
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -781,7 +782,7 @@ watch(
   (newAnswers) => {
     emit("questionAnswersUpdated", newAnswers);
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -798,7 +799,7 @@ watch(
     lastCandidateSnapshot.value = snapshot;
     buildCandidateMessage();
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -814,7 +815,7 @@ watch(
     }
     lastFinalSnapshot.value = snapshot;
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -830,7 +831,7 @@ watch(
       void teardownRealtimeSubscription();
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 從傳遞映射中提取預填充值，首先查找直接對應的字段，其次查找 ::reply 格式的字段
@@ -1165,7 +1166,7 @@ async function handleTimelineDownload(version) {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1313,7 +1314,7 @@ function applyProjectState(record = {}) {
     scrollToBottom();
   }
   const storedAnswers = normalizeStoredAnswers(
-    record.stored_answer?.chat_answers || record.stored_answer?.chatAnswers
+    record.stored_answer?.chat_answers || record.stored_answer?.chatAnswers,
   );
   if (Object.keys(storedAnswers).length) {
     questionAnswers.value = {
@@ -1324,7 +1325,7 @@ function applyProjectState(record = {}) {
   const storedMeta = normalizeStoredAnswerMeta(
     record.stored_answer?.chat_answers_meta ||
       record.stored_answer?.chatAnswersMeta ||
-      {}
+      {},
   );
   if (Object.keys(storedMeta).length) {
     questionAnswerMeta.value = {
@@ -1336,7 +1337,7 @@ function applyProjectState(record = {}) {
     if (!questionAnswerMeta.value[key]) {
       touchAnswerMeta(
         key,
-        record.updated_at || record.updatedAt || getCurrentTimestamp()
+        record.updated_at || record.updatedAt || getCurrentTimestamp(),
       );
     }
   });
@@ -1384,7 +1385,7 @@ async function setupRealtimeSubscription(projectId) {
       (payload) => {
         if (payload.new?.id !== projectId) return;
         applyProjectState(payload.new || {});
-      }
+      },
     )
     .subscribe();
 }
@@ -1424,13 +1425,7 @@ onBeforeUnmount(() => {
 
 // 構建引導問題列表，從動態 Schema 提取所有字段信息，支持階層式問題組織
 function buildGuidedQuestionList() {
-  const base = [
-    // {
-    //   id: "项目形容"",
-    //   label: "核心構想",
-    //   prompt: "請先描述計畫的主要想法、產品或服務摘要。",
-    // },
-  ];
+  const base = [];
 
   const sections = buildDynamicSections(
     createEmptyDynamicValues({
@@ -1440,7 +1435,7 @@ function buildGuidedQuestionList() {
     {
       templateId: props.templateId,
       templateGrantId: props.grantId,
-    }
+    },
   );
   sections.forEach((section) => {
     section.fields.forEach((field) => {
