@@ -44,6 +44,7 @@
       />
 
       <TemplateFormModal
+        ref="templateFormModalRef"
         v-model:template-form="templateForm"
         :is-visible="showTemplateModal"
         :grant-options="grantOptions"
@@ -57,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import GrantListSection from "~/components/template-manager/grant-manager.vue";
 import TemplateListSection from "~/components/template-manager/template-manager.vue";
 import GrantFormModal from "~/components/template-manager/GrantFormModal.vue";
@@ -125,6 +126,7 @@ const grantEditingId = ref<string | null>(null);
 const templateEditingKeys = ref<{ grant_id: string; id: string } | null>(null);
 const showGrantModal = ref(false);
 const showTemplateModal = ref(false);
+const templateFormModalRef = ref<any>(null);
 
 const grantForm = ref<GrantFormState>({
   id: "",
@@ -159,18 +161,6 @@ const grantNameMap = computed(() => {
   return map;
 });
 
-function generateLogoStoragePath(templateId: string) {
-  const normalized = templateId.trim();
-  return normalized ? `logos/${normalized}_logo.png` : "";
-}
-
-watch(
-  () => templateForm.value.id,
-  (newId = "") => {
-    templateForm.value.logo_storage_path = generateLogoStoragePath(newId);
-  }
-);
-
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const {
     data: { session },
@@ -196,6 +186,36 @@ async function fetchJsonWithAuth<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const response = await fetchWithAuth(url, options);
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.detail || "操作失敗");
+  }
+  return response.json();
+}
+
+async function fetchWithFormDataAuth(
+  url: string,
+  formData: FormData,
+  options: RequestInit = {}
+) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("請先登入");
+  }
+
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${session.access_token}`);
+  // 不設置 Content-Type，讓瀏覽器自動設置 multipart/form-data
+
+  const response = await fetch(url, {
+    ...options,
+    method: options.method || "POST",
+    headers,
+    body: formData,
+  });
+
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     throw new Error(detail.detail || "操作失敗");
@@ -345,40 +365,36 @@ async function handleTemplateSubmit() {
   }
 
   templateSaving.value = true;
-  const derivedLogoPath = generateLogoStoragePath(templateForm.value.id || "");
-  const payload = {
-    id: templateForm.value.id.trim(),
-    grant_id: templateForm.value.grant_id,
-    name: templateForm.value.name.trim(),
-    subtitle: templateForm.value.subtitle?.trim() || null,
-    description: templateForm.value.description?.trim() || null,
-    logo_storage_path: derivedLogoPath || null,
-    iconBg: templateForm.value.iconBg?.trim() || null,
-    isOpen: templateForm.value.isOpen,
-  };
-
   try {
+    const formData = new FormData();
+    
+    // 添加基本字段
+    formData.append("id", templateForm.value.id.trim());
+    formData.append("grant_id", templateForm.value.grant_id);
+    formData.append("name", templateForm.value.name.trim());
+    formData.append("subtitle", templateForm.value.subtitle?.trim() || "");
+    formData.append("description", templateForm.value.description?.trim() || "");
+    formData.append("iconBg", templateForm.value.iconBg?.trim() || "#F8FAFC");
+    formData.append("isOpen", templateForm.value.isOpen ? "true" : "false");
+    
+    // 如果有选择新文件，添加文件
+    const logoFile = templateFormModalRef.value?.getSelectedLogoFile();
+    if (logoFile) {
+      formData.append("logo_file", logoFile);
+    }
+
     if (templateFormMode.value === "create") {
-      await fetchJsonWithAuth(`${TEMPLATE_MANAGER_API}/templates`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      await fetchWithFormDataAuth(
+        `${TEMPLATE_MANAGER_API}/templates/upload`,
+        formData
+      );
       success("已新增模板");
     } else if (templateEditingKeys.value) {
-      await fetchJsonWithAuth(
-        `${TEMPLATE_MANAGER_API}/templates/${templateEditingKeys.value.grant_id}/${templateEditingKeys.value.id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            grant_id: payload.grant_id,
-            name: payload.name,
-            subtitle: payload.subtitle,
-            description: payload.description,
-            logo_storage_path: payload.logo_storage_path,
-            iconBg: payload.iconBg,
-            isOpen: payload.isOpen,
-          }),
-        }
+      formData.append("template_id", templateEditingKeys.value.id);
+      await fetchWithFormDataAuth(
+        `${TEMPLATE_MANAGER_API}/templates/${templateEditingKeys.value.grant_id}/${templateEditingKeys.value.id}/upload`,
+        formData,
+        { method: "PUT" }
       );
       success("模板已更新");
     }

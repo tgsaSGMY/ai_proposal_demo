@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Form, UploadFile, File
 
 from app.api.dependencies import get_supabase_service, verify_internal_user
 from app.models import (
@@ -194,3 +194,176 @@ async def update_template(
 			exc_info=True,
 		)
 		raise HTTPException(status_code=500, detail="Unexpected error while updating template")
+
+@router.post(
+    "/templates/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=Dict[str, Any],
+    summary="新增計畫模板（含文件上傳）",
+)
+async def create_template_with_upload(
+    request: Request,
+    id: str = Form(...),
+    grant_id: str = Form(...),
+    name: str = Form(...),
+    subtitle: str = Form(default=""),
+    description: str = Form(default=""),
+    iconBg: str = Form(default="#F8FAFC"),
+    isOpen: str = Form(default="true"),
+    logo_file: Optional[UploadFile] = File(None),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    """新增計畫模板，支援上傳 Logo 文件"""
+    try:
+        # 1. 檢查 Grant 是否存在
+        grant = await supabase_service.get_grant_by_id(grant_id)
+        if not grant:
+            raise HTTPException(status_code=400, detail="Grant not found")
+
+        # 2. 檢查模板 ID 是否重複
+        existing = await supabase_service.get_template_by_id(id, grant_id)
+        if existing:
+            raise HTTPException(status_code=409, detail="Template ID already exists for this grant")
+
+        logo_storage_path = None
+        
+        # 3. 如果有上傳文件，處理上傳
+        if logo_file:
+            try:
+                file_content = await logo_file.read()
+                # 獲取副檔名，如果沒有則預設 png
+                file_extension = logo_file.filename.split(".")[-1].lower() if logo_file.filename and "." in logo_file.filename else "png"
+                object_path = f"{id}_logo.{file_extension}"
+                
+                # 上傳到 Supabase Storage
+                # 使用 upsert='true' 以防萬一有殘留文件
+                supabase_service.client.storage.from_("logos").upload(
+                    path=object_path,
+                    file=file_content,
+                    file_options={
+                        "content-type": logo_file.content_type or f"image/{file_extension}",
+                        "upsert": "true" 
+                    }
+                )
+                
+                # 獲取公開 URL
+                logo_storage_path = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                
+            except Exception as e:
+                logger.error("Failed to upload logo file: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Failed to upload logo: {str(e)}")
+
+        # 4. 構建 Payload (修復了此處原本缺失的定義)
+        payload = {
+            "id": id,
+            "grant_id": grant_id,
+            "name": name,
+            "subtitle": subtitle or None,
+            "description": description or None,
+            "logo_storage_path": logo_storage_path,
+            "iconBg": iconBg,
+            "isOpen": isOpen.lower() == "true",
+        }
+
+        # 5. 寫入資料庫
+        record = await supabase_service.create_plan_template_record(payload)
+        if not record:
+            raise HTTPException(status_code=500, detail="Failed to create template")
+
+        await _refresh_grant_cache(request, supabase_service)
+        return record
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to create template with upload %s/%s: %s", grant_id, id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Unexpected error while creating template")
+
+
+@router.put(
+    "/templates/{grant_id}/{template_id}/upload",
+    response_model=Dict[str, Any],
+    summary="更新計畫模板（含文件上傳）",
+)
+async def update_template_with_upload(
+    request: Request,
+    grant_id: str,
+    template_id: str,
+    # 注意：這裡的 id 如果是允許修改的，請保留；如果不允許修改 ID，通常不建議在 Update 中接收 id
+    id: str = Form(...), 
+    name: str = Form(...),
+    subtitle: str = Form(default=""),
+    description: str = Form(default=""),
+    iconBg: str = Form(default="#F8FAFC"),
+    isOpen: str = Form(default="true"),
+    logo_file: Optional[UploadFile] = File(None),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    _: Any = Depends(verify_internal_user),
+):
+    """更新計畫模板，支援上傳 Logo 文件"""
+    try:
+        # 1. 檢查模板是否存在
+        existing = await supabase_service.get_template_by_id(template_id, grant_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        logo_storage_path = existing.get("logo_storage_path")
+        
+        # 2. 如果有上傳新文件，上傳並覆蓋
+        if logo_file:
+            try:
+                file_content = await logo_file.read()
+                file_extension = logo_file.filename.split(".")[-1].lower() if logo_file.filename and "." in logo_file.filename else "png"
+                # 使用 template_id 保持文件名一致性
+                object_path = f"{template_id}_logo.{file_extension}"
+                
+                # 上傳到 Supabase Storage
+                # 關鍵修復：更新時必須加入 "upsert": "true" 才能覆蓋舊圖
+                supabase_service.client.storage.from_("logos").upload(
+                    path=object_path,
+                    file=file_content,
+                    file_options={
+                        "content-type": logo_file.content_type or f"image/{file_extension}",
+                        "upsert": "true" 
+                    }
+                )
+                
+                # 獲取公開 URL
+                logo_storage_path = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+
+            except Exception as e:
+                logger.error("Failed to upload logo file: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Failed to upload logo: {str(e)}")
+
+        # 3. 準備更新資料
+        update_data = {
+            "name": name,
+            "subtitle": subtitle or None,
+            "description": description or None,
+            "logo_storage_path": logo_storage_path,
+            "iconBg": iconBg,
+            "isOpen": isOpen.lower() == "true",
+            # 如果允許修改 ID，這裡可能需要處理，如果不允許，通常不放入 update_data
+            # "id": id 
+        }
+
+        # 4. 更新資料庫
+        record = await supabase_service.update_plan_template_record(template_id, grant_id, update_data)
+        if not record:
+            raise HTTPException(status_code=404, detail="Template not found or update failed")
+
+        await _refresh_grant_cache(request, supabase_service)
+        return record
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Failed to update template with upload %s/%s: %s",
+            grant_id,
+            template_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Unexpected error while updating template")

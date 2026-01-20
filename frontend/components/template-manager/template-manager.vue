@@ -37,7 +37,7 @@
             <th class="py-2">模板</th>
             <th class="py-2">主題</th>
             <th class="py-2">圖示色</th>
-            <th class="py-2">Logo 路徑</th>
+            <th class="py-2">Logo</th>
             <th class="py-2">狀態</th>
             <th class="py-2 text-right">操作</th>
           </tr>
@@ -71,13 +71,15 @@
                 }}</span>
               </div>
             </td>
-            <td class="py-3">
-              <p
-                class="text-xs text-slate-600 truncate max-w-[220px]"
-                :title="template.logo_storage_path || '未設定'"
-              >
-                {{ template.logo_storage_path || "未設定" }}
-              </p>
+            <td class="py-3 text-center">
+              <div v-if="template.logo_storage_path" class="flex items-center justify-center">
+                <img
+                  :src="template.logo_storage_path"
+                  :alt="`${template.name} Logo`"
+                  class="max-h-10 max-w-10 object-contain"
+                />
+              </div>
+              <div v-else class="text-xs text-slate-600">未設定</div>
             </td>
             <td class="py-3">
               <span
