@@ -11,6 +11,7 @@ class SectionConfig(BaseModel):
     template_id: str
     grant_id: str
     name: str
+    current_version: Optional[int] = None
     json_schema: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
     critic_prompt: Optional[str] = None

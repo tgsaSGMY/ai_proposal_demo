@@ -102,7 +102,7 @@ const props = defineProps({
 const emit = defineEmits(["close", "save-to-dataset"]);
 
 const { isLoading, show: showLoading, hide: hideLoading } = useLoading();
-const { success, error: errorNotification } = useNotifications();
+const { success, error: errorNotification, info } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const { userId: currentUserId, refreshUser } = useCurrentUser();
@@ -123,6 +123,88 @@ const isGeneratingPlan = ref(false);
 const editableDraft = reactive(JSON.parse(JSON.stringify(props.draft)));
 let isHydratingDynamicFields = true;
 
+// --- 檢查並同步 json_schema 和 plan_content 的結構 ---
+/**
+ * 檢查 plan_content 中是否有 json_schema 中已刪除的字段
+ * 如果有，刪除這些字段並通知用戶
+ * 確保 plan_content 和 json_schema 保持同步
+ */
+async function validateAndSyncSchemaWithContent() {
+  try {
+    // 獲取當前模板的所有 sections 和它們的 json_schema
+    const grant = props.allConfigs.find((g) => g.id === props.draft.grant_id);
+    if (!grant) return;
+
+    const template = grant.templates.find(
+      (t) => t.id === props.draft.template_id,
+    );
+    if (!template || !template.sections) return;
+
+    // 遍歷每個 section，檢查 plan_content 是否符合最新的 json_schema
+    let hasChanges = false;
+    const deletedFields = [];
+
+    for (const section of template.sections) {
+      const sectionId = section.id;
+      const jsonSchema = section.json_schema;
+      const currentPlanContent = planContent.value?.[sectionId]?.content;
+
+      if (!currentPlanContent || typeof currentPlanContent !== "object") {
+        continue; // 沒有內容或不是物件，跳過
+      }
+
+      // 獲取 json_schema 中定義的所有有效字段
+      const validKeys = getValidSchemaKeys(jsonSchema);
+
+      // 檢查 plan_content 中是否有在 json_schema 中不存在的字段
+      const contentKeys = Object.keys(currentPlanContent);
+      for (const key of contentKeys) {
+        if (!validKeys.includes(key)) {
+          // 刪除不在 schema 中的字段
+          delete currentPlanContent[key];
+          deletedFields.push(`${section.name || sectionId} - ${key}`);
+          hasChanges = true;
+        }
+      }
+    }
+
+    // 如果有刪除的字段，通知用戶
+    if (hasChanges) {
+      planContent.value = { ...planContent.value }; // 觸發響應性更新
+      const message = `檢測到模板結構已更新，以下已刪除的字段已從企劃中移除：\n\n${deletedFields.map((f) => `• ${f}`).join("\n")}\n\n企劃已自動同步到最新結構。`;
+      info(message);
+    }
+  } catch (err) {
+    console.error("Error validating schema and content:", err);
+  }
+}
+
+/**
+ * 從 json_schema 中提取所有有效的頂級字段名
+ * 支持 object 和 array 類型
+ */
+function getValidSchemaKeys(schema) {
+  if (!schema) return [];
+
+  const keys = [];
+
+  if (schema.type === "object" && schema.properties) {
+    // 物件類型：直接從 properties 中提取字段名
+    keys.push(...Object.keys(schema.properties));
+  } else if (schema.type === "array" && schema.items) {
+    // 陣列類型：陣列的每個元素應該有的字段
+    const itemSchema = schema.items;
+    if (itemSchema.type === "object" && itemSchema.properties) {
+      keys.push(...Object.keys(itemSchema.properties));
+    }
+  } else if (!schema.type && schema.properties) {
+    // 沒有指定 type 但有 properties，按 object 處理
+    keys.push(...Object.keys(schema.properties));
+  }
+
+  return keys;
+}
+
 // --- State Initialization and Synchronization ---
 onMounted(async () => {
   await refreshUser();
@@ -136,7 +218,7 @@ onMounted(async () => {
     {
       templateId: selectedTemplateId.value,
       templateGrantId: selectedGrantId.value,
-    }
+    },
   );
   if (!editableDraft.user_input) {
     editableDraft.user_input = { main_idea: "", dynamic_fields: {} };
@@ -144,6 +226,9 @@ onMounted(async () => {
   editableDraft.user_input.dynamic_fields = {
     ...dynamicFieldValues.value,
   };
+
+  // 檢查並同步 json_schema 和 plan_content 的結構
+  await validateAndSyncSchemaWithContent();
 });
 
 // Main idea is a computed property for easier v-model binding
@@ -174,7 +259,7 @@ watch(
     }
     debounceSave();
   },
-  { deep: true }
+  { deep: true },
 );
 
 // 保存更新的草稿数据到数据库
@@ -310,7 +395,7 @@ async function saveRejectedAnswersToDb(rejected) {
 
     if (!res.ok) {
       console.error(
-        `Failed to save rejected answers for draft ${props.draft.id}`
+        `Failed to save rejected answers for draft ${props.draft.id}`,
       );
     }
   } catch (err) {
@@ -403,7 +488,7 @@ async function handleGeneratePlanInModal(outerPayload) {
     }
 
     const finalUserInput = buildFinalUserInputForGeneration(
-      outerPayload?.summaries
+      outerPayload?.summaries,
     );
     const sectionsToGenerate = currentSections.value.map((s) => ({
       section_id: s.id,
@@ -476,7 +561,7 @@ async function handleGenerateUserInput() {
       getDynamicFieldDefinitions(schemaOptions).map((definition) => [
         definition.compositeKey,
         definition.label,
-      ])
+      ]),
     );
     const sections = buildDynamicSections(dynamicFieldValues.value, {
       templateId: selectedTemplateId.value,
@@ -501,7 +586,7 @@ async function handleGenerateUserInput() {
       dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map(
         (label) => ({
           label,
-        })
+        }),
       ),
     };
 
@@ -534,8 +619,8 @@ async function handleGenerateUserInput() {
               typeof fieldValue === "string"
                 ? fieldValue
                 : fieldValue != null
-                ? JSON.stringify(fieldValue)
-                : "";
+                  ? JSON.stringify(fieldValue)
+                  : "";
             nextValues[compositeKey] = normalized;
             updated = true;
           }
@@ -557,11 +642,11 @@ async function handleGenerateUserInput() {
                 typeof propertyValue === "string"
                   ? propertyValue
                   : propertyValue != null
-                  ? JSON.stringify(propertyValue)
-                  : "";
+                    ? JSON.stringify(propertyValue)
+                    : "";
               nextValues[compositeKey] = normalized;
               updated = true;
-            }
+            },
           );
         });
         return updated;
@@ -577,7 +662,7 @@ async function handleGenerateUserInput() {
         isHydratingDynamicFields = true;
         dynamicFieldValues.value = mergeIntoEmptyValues(
           nextValues,
-          schemaOptions
+          schemaOptions,
         );
         debounceSave();
       }

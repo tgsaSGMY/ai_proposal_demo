@@ -97,12 +97,23 @@
           >
             <div class="flex items-start justify-between gap-4">
               <div>
-                <span
-                  class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                  :class="[project.accent.tagBg, project.accent.tagText]"
-                >
-                  {{ project.type }}
-                </span>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span
+                    class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+                    :class="[project.accent.tagBg, project.accent.tagText]"
+                  >
+                    {{ project.type }}
+                  </span>
+                  <span v-if="project.grantName" class="text-xs text-gray-500">
+                    {{ project.grantName }}
+                  </span>
+                  <span
+                    v-if="project.templateName"
+                    class="text-xs text-gray-500"
+                  >
+                    / {{ project.templateName }}
+                  </span>
+                </div>
                 <h3
                   class="mt-3 text-lg font-semibold text-gray-900 line-clamp-2"
                 >
@@ -333,6 +344,8 @@ interface ProjectRecord {
   grant_id?: string | null;
   template_id?: string | null;
   plan_type_id?: string | null;
+  grant_name?: string | null;
+  template_name?: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -345,6 +358,8 @@ interface ProjectCard {
   completeness: number;
   lastUpdate: string;
   accent: Accent;
+  grantName: string | null;
+  templateName: string | null;
   record: ProjectRecord;
 }
 
@@ -449,7 +464,7 @@ watch(
       isInternal.value = false;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 /**
@@ -466,7 +481,7 @@ watch(
 function decorateProject(
   record: ProjectRecord,
   index: number,
-  accentOverride?: Accent
+  accentOverride?: Accent,
 ): ProjectCard {
   const accent = accentOverride || accentPalette[index % accentPalette.length]!;
 
@@ -482,7 +497,7 @@ function decorateProject(
     if (record.stored_answer?.user_input?.dynamic_fields) {
       const dynamicFields = record.stored_answer.user_input.dynamic_fields;
       const filledCount = Object.values(dynamicFields).filter(
-        (field: any) => field
+        (field: any) => field,
       ).length;
       completeness =
         totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
@@ -497,9 +512,9 @@ function decorateProject(
         allKeys
           .filter(
             (key) =>
-              key.includes("::") && key !== "main_idea" && key !== "main-idea"
+              key.includes("::") && key !== "main_idea" && key !== "main-idea",
           )
-          .map((key) => key.split("::").slice(0, 2).join("::"))
+          .map((key) => key.split("::").slice(0, 2).join("::")),
       ).size;
       completeness =
         totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
@@ -521,6 +536,8 @@ function decorateProject(
     completeness,
     lastUpdate,
     accent,
+    grantName: record.grant_name || null,
+    templateName: record.template_name || null,
     record,
   };
 }
@@ -568,7 +585,7 @@ async function fetchProjects() {
     }
     const data: ProjectRecord[] = await response.json();
     projects.value = data.map((record, index) =>
-      decorateProject(record, index)
+      decorateProject(record, index),
     );
   } catch (error: any) {
     console.error("Failed to fetch projects", error);
@@ -654,7 +671,7 @@ async function handleImageGenerate(prompt: string) {
   try {
     const project = selectedProjectForImage.value;
     console.log(
-      `Generating image for project "${project.title}" with prompt: "${prompt}"`
+      `Generating image for project "${project.title}" with prompt: "${prompt}"`,
     );
 
     success(`圖片生成請求已提交：${prompt}`);
@@ -705,7 +722,7 @@ async function handleSave(payload: {
     }
     const updated: ProjectRecord = await response.json();
     const index = projects.value.findIndex(
-      (project) => project.id === payload.id
+      (project) => project.id === payload.id,
     );
     if (index !== -1) {
       const accent = projects.value[index]?.accent;
