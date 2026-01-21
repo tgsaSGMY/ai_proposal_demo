@@ -121,15 +121,15 @@
                         </button>
                       </div>
                     </div>
-                    <p class="mt-2 text-xs text-slate-500">
+                    <!-- <p class="mt-2 text-xs text-slate-500">
                       {{ jsonPreview(section.json_schema) }}
-                    </p>
+                    </p> -->
                   </li>
                 </ul>
               </div>
             </section>
 
-            <section class="md:col-span-3 space-y-4 px-6 py-6">
+            <section class="md:col-span-3 space-y-4 px-6 py-6 overflow-y-auto">
               <div>
                 <h4 class="text-sm font-semibold text-slate-900">
                   {{ isEditing ? "編輯章節" : "新增章節" }}
@@ -140,7 +140,10 @@
                 </p>
               </div>
 
-              <form class="space-y-4" @submit.prevent="handleSave">
+              <form
+                class="space-y-4 max-h-96 overflow-y-auto"
+                @submit.prevent="handleSave"
+              >
                 <div class="grid gap-4 sm:grid-cols-2">
                   <label class="text-xs font-semibold text-slate-600">
                     Section ID
@@ -175,16 +178,19 @@
                   />
                 </label>
 
-                <label class="text-xs font-semibold text-slate-600">
-                  JSON Schema
-                  <textarea
-                    v-model="formState.jsonSchemaText"
-                    rows="12"
-                    class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-900 focus:border-rose-400 focus:ring-rose-200"
-                    :placeholder="jsonSchemaPlaceholder"
-                    :disabled="saving"
-                  ></textarea>
-                </label>
+                <div>
+                  <p class="text-xs font-semibold text-slate-600">章節結構</p>
+                  <div
+                    class="mt-2 rounded-2xl border border-slate-200 bg-slate-50/60 p-4"
+                  >
+                    <SchemaStructureEditor
+                      v-model="formState.schemaTree"
+                      v-model:title="formState.schemaTitle"
+                      v-model:description="formState.schemaDescription"
+                      :disabled="saving"
+                    />
+                  </div>
+                </div>
 
                 <p v-if="formError" class="text-xs font-semibold text-rose-600">
                   {{ formError }}
@@ -228,6 +234,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { PropType } from "vue";
+import SchemaStructureEditor from "./SchemaStructureEditor.vue";
+import type { SchemaNode } from "./schema-tree";
+import {
+  buildSchemaFromEditorState,
+  createEmptySchemaState,
+  parseSchemaToEditorState,
+  validateSchemaNodes,
+} from "./schema-tree";
 
 interface TemplateSummary {
   id: string;
@@ -250,7 +264,9 @@ interface SectionFormState {
   id: string;
   name: string;
   order: number | null;
-  jsonSchemaText: string;
+  schemaTree: SchemaNode[];
+  schemaTitle: string;
+  schemaDescription: string;
   originalId: string | null;
 }
 
@@ -297,9 +313,6 @@ const localSections = ref<SectionRecord[]>([]);
 const formError = ref("");
 const formState = ref<SectionFormState>(getEmptyForm());
 const shouldAutoSelectFirst = ref(false);
-const jsonSchemaPlaceholder = `{
-  "title": "章節結構"
-}`;
 
 const isEditing = computed(() => Boolean(formState.value.originalId));
 const draggedSectionId = ref<string | null>(null);
@@ -343,11 +356,14 @@ watch(
 );
 
 function getEmptyForm(): SectionFormState {
+  const schemaState = createEmptySchemaState();
   return {
     id: "",
     name: "",
     order: 0,
-    jsonSchemaText: "",
+    schemaTree: schemaState.nodes,
+    schemaTitle: schemaState.title,
+    schemaDescription: schemaState.description,
     originalId: null,
   };
 }
@@ -378,11 +394,14 @@ function startCreate(preserveAutoSelect = false): void {
       ? lastSection.order
       : localSections.value.length;
   const suggestedOrder = baseOrder + 1;
+  const schemaState = createEmptySchemaState();
   formState.value = {
     id: "",
     name: "",
     order: suggestedOrder,
-    jsonSchemaText: "",
+    schemaTree: schemaState.nodes,
+    schemaTitle: "",
+    schemaDescription: "",
     originalId: null,
   };
 }
@@ -390,13 +409,14 @@ function startCreate(preserveAutoSelect = false): void {
 function selectSection(section: SectionRecord): void {
   formError.value = "";
   shouldAutoSelectFirst.value = false;
+  const schemaState = parseSchemaToEditorState(section.json_schema ?? null);
   formState.value = {
     id: section.id,
     name: section.name,
     order: section.order ?? 0,
-    jsonSchemaText: section.json_schema
-      ? JSON.stringify(section.json_schema, null, 2)
-      : "",
+    schemaTree: schemaState.nodes,
+    schemaTitle: schemaState.title || section.name,
+    schemaDescription: schemaState.description || "",
     originalId: section.id,
   };
 }
@@ -416,22 +436,23 @@ function handleSave(): void {
     return;
   }
 
-  let parsedSchema: Record<string, any> | null = null;
-  const rawSchema = formState.value.jsonSchemaText.trim();
-  if (rawSchema) {
-    try {
-      parsedSchema = JSON.parse(rawSchema);
-    } catch (error) {
-      formError.value = "JSON Schema 格式錯誤，請確認為合法 JSON";
-      return;
-    }
+  const schemaError = validateSchemaNodes(formState.value.schemaTree);
+  if (schemaError) {
+    formError.value = schemaError;
+    return;
   }
+
+  const schemaPayload = buildSchemaFromEditorState(formState.value.schemaTree, {
+    id,
+    title: formState.value.schemaTitle || name,
+    description: formState.value.schemaDescription,
+  });
 
   const payload: SectionMutationPayload = {
     id,
     name,
     order: orderValue,
-    json_schema: parsedSchema,
+    json_schema: schemaPayload,
     originalId: formState.value.originalId,
   };
 
