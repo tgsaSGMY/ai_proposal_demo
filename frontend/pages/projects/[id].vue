@@ -117,10 +117,9 @@
           :all-configs="allConfigs"
           :selected-grant-id="selectedGrantId"
           :selected-template-id="selectedTemplateId"
-          :user-input="userInput"
           :dynamic-field-values="dynamicFieldValues"
           :final-plan-content="finalPlanContent"
-          :current-sections="currentSections"
+          :current-sections="effectiveSections"
           :project-record="projectRecord"
           :current-grant="currentGrant"
           :current-template="currentTemplate"
@@ -137,7 +136,7 @@
           <Chatbox
             :key="projectRecord?.id"
             class="h-full"
-            :sections="currentSections"
+            :sections="effectiveSections"
             :candidate-plan="candidatePlan"
             :final-plan="finalPlanContent"
             :is-generating="isLoading"
@@ -188,6 +187,8 @@ import { supabase } from "~/utils/supabaseClient";
 const route = useRoute();
 // 项目记录数据
 const projectRecord = ref<ProjectRecord | null>(null);
+const versionedSections = ref<any[]>([]);
+const lastSectionVersionKey = ref("");
 
 const projectTitle = computed(() => {
   return projectRecord.value?.title || "計畫工作區";
@@ -240,6 +241,7 @@ interface ProjectRecord {
   grant_id?: string | null;
   template_id?: string | null;
   plan_type_id?: string | null;
+  section_versions?: Record<string, number> | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -276,6 +278,12 @@ const {
   buildFinalUserInput,
   fetchAllConfigs,
 } = usePlanGenerator();
+
+const effectiveSections = computed(() =>
+  versionedSections.value.length
+    ? versionedSections.value
+    : currentSections.value,
+);
 
 // ===== 项目编辑状态 =====
 // 存储与项目加载、编辑相关的状态
@@ -352,7 +360,7 @@ const workspaceReady = computed(() =>
     projectRecord.value &&
     selectedGrantId.value &&
     selectedTemplateId.value &&
-    currentSections.value.length,
+    effectiveSections.value.length,
   ),
 );
 
@@ -453,12 +461,98 @@ function hydrateInputStateFromStoredAnswer(record: ProjectRecord | null) {
   }
 }
 
+function buildSectionVersionKey(map?: Record<string, number> | null) {
+  if (!map) {
+    return "";
+  }
+  const entries = Object.entries(map)
+    .filter(([key, value]) => Boolean(key) && typeof value === "number")
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) {
+    return "";
+  }
+  return entries.map(([key, value]) => `${key}:${value}`).join("|");
+}
+
+async function loadVersionedSectionsFor(record: ProjectRecord | null) {
+  if (
+    !record ||
+    !record.id ||
+    !record.grant_id ||
+    !record.template_id ||
+    record.grant_id !== selectedGrantId.value ||
+    record.template_id !== selectedTemplateId.value
+  ) {
+    versionedSections.value = [];
+    lastSectionVersionKey.value = "";
+    return;
+  }
+
+  const versionKey = buildSectionVersionKey(record.section_versions);
+  if (!versionKey) {
+    versionedSections.value = [];
+    lastSectionVersionKey.value = "";
+    return;
+  }
+
+  if (
+    versionKey === lastSectionVersionKey.value &&
+    versionedSections.value.length
+  ) {
+    return;
+  }
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      versionedSections.value = [];
+      lastSectionVersionKey.value = "";
+      return;
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/projects/${record.id}/sections`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.warn("Failed to load project sections", detail);
+      versionedSections.value = [];
+      lastSectionVersionKey.value = "";
+      return;
+    }
+
+    versionedSections.value = await response.json();
+    lastSectionVersionKey.value = versionKey;
+  } catch (error) {
+    console.error("Failed to load versioned sections", error);
+    versionedSections.value = [];
+    lastSectionVersionKey.value = "";
+  }
+}
+
+watch([selectedGrantId, selectedTemplateId], () => {
+  void loadVersionedSectionsFor(projectRecord.value);
+});
+
 // ===== 获取项目数据 =====
 // 从后端 API 获取指定项目的详细信息
 async function fetchProject() {
   if (!projectId.value) return;
   isProjectLoading.value = true;
   loadError.value = "";
+  versionedSections.value = [];
+  lastSectionVersionKey.value = "";
   try {
     const {
       data: { session },
@@ -548,7 +642,7 @@ async function handleExportWord(payload?: { version?: any }) {
 
   try {
     await exportPlanToWord(
-      currentSections.value,
+      effectiveSections.value,
       contentToExport,
       selectedGrantId.value,
       selectedTemplateId.value,
@@ -655,6 +749,7 @@ async function updateProject(payload: Record<string, any>) {
     projectRecord.value = updated;
     finalPlanContent.value = updated.saved_plan || finalPlanContent.value;
     hydrateInputStateFromStoredAnswer(updated);
+    await loadVersionedSectionsFor(updated);
     return updated;
   } catch (error: any) {
     console.error("Failed to update project", error);
@@ -777,7 +872,7 @@ async function handleChatPlanGeneration(payload: {
   lastGenerationPrompt.value = payload.prompt;
 
   try {
-    const sectionsToGenerate = currentSections.value.map((section) => ({
+    const sectionsToGenerate = effectiveSections.value.map((section) => ({
       section_id: section.id,
     }));
     const {
@@ -898,7 +993,7 @@ async function savePreferenceData(
   finalPrompt = "",
 ) {
   try {
-    const entriesToSave = currentSections.value
+    const entriesToSave = effectiveSections.value
       .map((section) => {
         const chosen = selectedData[section.id];
         const rejected = rejectedData[section.id];

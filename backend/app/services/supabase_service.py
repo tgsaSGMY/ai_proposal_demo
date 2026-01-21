@@ -611,6 +611,115 @@ class SupabaseService:
             )
             return {}
 
+    async def get_section_version_overrides(
+        self,
+        *,
+        grant_id: Optional[str],
+        template_id: Optional[str],
+        section_versions: Optional[Dict[str, int]],
+    ) -> Dict[str, Dict[str, Any]]:
+        """取得指定章節版本對應的 schema 與 prompt 設定。"""
+        if not grant_id or not template_id or not section_versions:
+            return {}
+
+        overrides: Dict[str, Dict[str, Any]] = {}
+        for section_id, version in section_versions.items():
+            if not section_id or version is None:
+                continue
+            try:
+                response = (
+                    self.client.from_("section_schema_versions")
+                    .select("section_id, version, json_schema, system_prompt")
+                    .eq("grant_id", grant_id)
+                    .eq("template_id", template_id)
+                    .eq("section_id", section_id)
+                    .eq("version", version)
+                    .limit(1)
+                    .execute()
+                )
+                if response.data:
+                    overrides[section_id] = response.data[0]
+            except Exception as error:
+                logger.error(
+                    "Failed to fetch schema version for %s/%s/%s@%s: %s",
+                    grant_id,
+                    template_id,
+                    section_id,
+                    version,
+                    error,
+                    exc_info=True,
+                )
+        return overrides
+
+    async def hydrate_section_configs_with_versions(
+        self,
+        *,
+        sections: List[SectionConfig],
+        grant_id: str,
+        template_id: str,
+        section_versions: Optional[Dict[str, int]],
+    ) -> List[SectionConfig]:
+        """將指定 sections 套用歷史版本 schema/prompt。"""
+        overrides = await self.get_section_version_overrides(
+            grant_id=grant_id,
+            template_id=template_id,
+            section_versions=section_versions,
+        )
+        if not overrides:
+            return sections
+
+        hydrated: List[SectionConfig] = []
+        for section in sections:
+            override = overrides.get(section.id)
+            if not override:
+                hydrated.append(section)
+                continue
+
+            payload = section.model_dump()
+            if override.get("json_schema") is not None:
+                payload["json_schema"] = override["json_schema"]
+            if override.get("system_prompt") is not None:
+                payload["system_prompt"] = override["system_prompt"]
+            payload["current_version"] = override.get("version") or (section_versions or {}).get(section.id)
+            hydrated.append(SectionConfig(**payload))
+
+        return hydrated
+
+    async def hydrate_section_payloads_with_versions(
+        self,
+        *,
+        sections: List[Dict[str, Any]],
+        grant_id: str,
+        template_id: str,
+        section_versions: Optional[Dict[str, int]],
+    ) -> List[Dict[str, Any]]:
+        """將原始 section 字典套用歷史版本資訊，供 API 回傳使用。"""
+        overrides = await self.get_section_version_overrides(
+            grant_id=grant_id,
+            template_id=template_id,
+            section_versions=section_versions,
+        )
+        if not overrides:
+            return sections
+
+        hydrated: List[Dict[str, Any]] = []
+        for section in sections:
+            section_id = section.get("id")
+            override = overrides.get(section_id)
+            if not override:
+                hydrated.append(section)
+                continue
+
+            payload = {**section}
+            if override.get("json_schema") is not None:
+                payload["json_schema"] = override["json_schema"]
+            if override.get("system_prompt") is not None:
+                payload["system_prompt"] = override["system_prompt"]
+            payload["applied_version"] = override.get("version") or (section_versions or {}).get(section_id)
+            hydrated.append(payload)
+
+        return hydrated
+
     async def create_project_record(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         在 projects 表中新增一筆記錄。
@@ -695,25 +804,11 @@ class SupabaseService:
     async def update_project_record(self, project_id: str, user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         更新指定專案（只有擁有者能更新）。
-        如果提供了 grant_id 或 template_id，自動更新 section_versions。
+        注意：section_versions 是在項目創建時的版本快照，不應在更新時自動改變。
+        如需更改 section_versions，必須明確傳入。
         """
-        # 如果沒有明確設定 section_versions，但有 grant_id 和 template_id，則自動更新版本號
-        if "section_versions" not in data:
-            grant_id = data.get("grant_id")
-            template_id = data.get("template_id")
-            
-            # 如果都沒有提供，則從現有記錄中獲取
-            if not grant_id or not template_id:
-                existing = await self.get_project_by_id(project_id, user_id)
-                if existing:
-                    grant_id = grant_id or existing.get("grant_id")
-                    template_id = template_id or existing.get("template_id")
-            
-            # 獲取當前版本號
-            if grant_id and template_id:
-                section_versions = await self._get_section_current_versions(grant_id, template_id)
-                if section_versions:
-                    data["section_versions"] = section_versions
+        # 不要自動更新 section_versions - 它應該保持為創建時的版本快照
+        # 只有當明確在 data 中傳入 section_versions 時，才會更新
         
         response = (
             self.client.from_("projects")
@@ -1012,6 +1107,22 @@ class SupabaseService:
                         system_prompt=system_prompt,
                     )
                     update_data["current_version"] = new_version
+                    
+                    # 同時更新 section_schema_version 表中最新版本的 system_prompt
+                    try:
+                        self.client.from_("section_schema_versions").update(
+                            {"system_prompt": system_prompt}
+                        ).eq("grant_id", grant_id).eq("template_id", template_id).eq("section_id", section_id).eq("version", new_version).execute()
+                    except Exception as version_update_error:
+                        logger.warning(
+                            "Failed to update system_prompt in section_schema_versions for %s/%s/%s@%s: %s",
+                            grant_id,
+                            template_id,
+                            section_id,
+                            new_version,
+                            version_update_error,
+                        )
+                
                 update_data["system_prompt"] = system_prompt
 
             if search_external is not None:

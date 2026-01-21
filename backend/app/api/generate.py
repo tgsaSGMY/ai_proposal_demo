@@ -254,11 +254,29 @@ async def generate_plan(
             detail=f"Template {request_data.template} not found in Grant {request_data.grant}."
         )
     
+    project_section_versions: Dict[str, int] = {}
+    if request_data.project_id:
+        project_record = await supabase_service.get_project_by_id(
+            request_data.project_id,
+            user_id,
+        )
+        if not project_record:
+            raise HTTPException(status_code=404, detail="Project not found or permission denied")
+        project_section_versions = project_record.get("section_versions") or {}
+
     # 從 template_config 獲取所有 sections
     sections = template_config.sections
+    if project_section_versions:
+        sections = await supabase_service.hydrate_section_configs_with_versions(
+            sections=sections,
+            grant_id=request_data.grant,
+            template_id=request_data.template,
+            section_versions=project_section_versions,
+        )
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
 
+    
     revision_started_at = datetime.now(timezone.utc)
     revision_context = {
         "grant_id": request_data.grant,
@@ -326,7 +344,8 @@ async def generate_plan(
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
                 selected_model=request_data.selected_model,
-                project_id=request_data.project_id
+                project_id=request_data.project_id,
+                section_details_override=s,
             )
             for s in sections
             for _ in range(num_candidates)
@@ -392,6 +411,26 @@ async def revise_plan_version(
         )
 
     sections = template_config.sections
+    
+    # 加载 section_versions 并 hydrate sections
+    project_section_versions: Dict[str, int] = {}
+    if request_data.project_id:
+        project_record = await supabase_service.get_project_by_id(
+            request_data.project_id,
+            user_id,
+        )
+        if not project_record:
+            raise HTTPException(status_code=404, detail="Project not found or permission denied")
+        project_section_versions = project_record.get("section_versions") or {}
+
+    if project_section_versions:
+        sections = await supabase_service.hydrate_section_configs_with_versions(
+            sections=sections,
+            grant_id=request_data.grant,
+            template_id=request_data.template,
+            section_versions=project_section_versions,
+        )
+    
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
 
@@ -470,6 +509,7 @@ async def revise_plan_version(
                         project_id=request_data.project_id,
                         section_context=section_context,
                         disable_few_shot=True,
+                        section_details_override=section,
                     )
                 )
 

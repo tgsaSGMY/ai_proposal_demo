@@ -629,10 +629,15 @@ class LLMService:
         project_id: Optional[str] = None,
         section_context: Optional[str] = None,
         disable_few_shot: bool = False,
+        section_details_override: Optional[SectionConfig] = None,
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
-        section_details = await supabase_service.get_section_details(grant_id, template_id, section_id)
+        section_details = section_details_override or await supabase_service.get_section_details(
+            grant_id,
+            template_id,
+            section_id,
+        )
         if not section_details or not section_details.json_schema or not section_details.system_prompt:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 

@@ -186,6 +186,34 @@ async def get_project(
     return record
 
 
+@router.get("/{project_id}/sections", response_model=List[Dict[str, Any]], summary="取得專案對應的章節設定")
+async def get_project_sections(
+    project_id: str,
+    user_id: str = Depends(get_current_user_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """根據專案記錄與 section_versions 回傳對應版本的章節定義。"""
+    record = await supabase_service.get_project_by_id(project_id, user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Project not found or permission denied")
+
+    grant_id = record.get("grant_id")
+    template_id = record.get("template_id")
+    if not grant_id or not template_id:
+        raise HTTPException(status_code=400, detail="Project has no associated grant/template")
+
+    sections = await supabase_service.get_sections_by_template_id(template_id, grant_id)
+    section_versions = record.get("section_versions")
+    if section_versions:
+        sections = await supabase_service.hydrate_section_payloads_with_versions(
+            sections=sections,
+            grant_id=grant_id,
+            template_id=template_id,
+            section_versions=section_versions,
+        )
+    return sections
+
+
 @router.post("", response_model=Dict[str, Any], status_code=201, summary="新增專案記錄")
 async def create_project(
     payload: ProjectBase,
