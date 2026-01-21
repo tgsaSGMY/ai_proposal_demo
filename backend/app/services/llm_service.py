@@ -88,7 +88,7 @@ class LLMService:
             prompt = ex.get('prompt', '')
             answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
             formatted_examples.append(f"{answer}")
-        return "以下是一些高质量范例输出:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
+        return "以下是一些高质量范例输出。結構可能改變，不需要參考其結構，但重點是參考其内容:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
 
     async def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> List[Dict]:
         """建立 Actor 首次生成時的 messages"""
