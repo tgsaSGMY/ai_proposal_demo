@@ -112,6 +112,13 @@
                 >
                   調整章節
                 </button>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  @click="emit('word-editor', template)"
+                >
+                  調整文檔
+                </button>
               </div>
             </td>
           </tr>
@@ -129,6 +136,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { PropType } from "vue";
+import type { WordExportConfigEntry } from "~/types/wordExport";
 
 interface TemplateRecord {
   id: string;
@@ -139,6 +147,7 @@ interface TemplateRecord {
   logo_storage_path?: string | null;
   iconBg?: string | null;
   isOpen?: boolean | null;
+  word_export_config?: WordExportConfigEntry[] | null;
   [key: string]: any;
 }
 
@@ -176,6 +185,7 @@ const filteredTemplates = computed(() => {
 const emit = defineEmits<{
   (e: "edit", template: TemplateRecord): void;
   (e: "sections", template: TemplateRecord): void;
+  (e: "word-editor", template: TemplateRecord): void;
   (e: "new"): void;
 }>();
 

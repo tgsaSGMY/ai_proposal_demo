@@ -33,6 +33,7 @@
         @new="openTemplateModal('create')"
         @edit="(template) => startTemplateEdit(template)"
         @sections="(template) => openSectionEditor(template)"
+        @word-editor="(template) => openWordEditor(template)"
       />
 
       <GrantFormModal
@@ -67,6 +68,15 @@
         @delete="handleSectionDelete"
         @reorder="handleSectionReorder"
       />
+
+      <WordEditorForm
+        :is-visible="showWordEditorModal"
+        :template="wordEditorTemplate"
+        :sections="wordEditorSections"
+        :saving="wordEditorSaving"
+        @close="closeWordEditorModal"
+        @save="handleWordEditorSave"
+      />
     </div>
   </ClientOnly>
 </template>
@@ -78,9 +88,14 @@ import TemplateListSection from "~/components/template-manager/template-manager.
 import GrantFormModal from "~/components/template-manager/GrantFormModal.vue";
 import TemplateFormModal from "~/components/template-manager/TemplateFormModal.vue";
 import SectionEditorModal from "~/components/template-manager/SectionEditorModal.vue";
+import WordEditorForm from "~/components/template-manager/WordEditorForm.vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
+import type {
+  WordExportConfigEntry,
+  WordExportTemplateConfig,
+} from "~/types/wordExport";
 
 definePageMeta({
   middleware: "auth",
@@ -111,6 +126,7 @@ interface TemplateRecord {
   logo_storage_path?: string | null;
   iconBg?: string | null;
   isOpen?: boolean | null;
+  word_export_config?: WordExportConfigEntry[] | null;
   [key: string]: any;
 }
 
@@ -165,6 +181,10 @@ const sectionModalTemplate = ref<TemplateRecord | null>(null);
 const sectionRecords = ref<SectionRecord[]>([]);
 const sectionLoading = ref(false);
 const sectionSaving = ref(false);
+const showWordEditorModal = ref(false);
+const wordEditorTemplate = ref<TemplateRecord | null>(null);
+const wordEditorSections = ref<SectionRecord[]>([]);
+const wordEditorSaving = ref(false);
 
 const grantForm = ref<GrantFormState>({
   id: "",
@@ -229,6 +249,16 @@ async function fetchJsonWithAuth<T>(
     throw new Error(detail.detail || "操作失敗");
   }
   return response.json();
+}
+
+async function fetchSections(grantId: string, templateId: string) {
+  const params = new URLSearchParams({
+    grant_id: grantId,
+    template_id: templateId,
+  });
+  return fetchJsonWithAuth<SectionRecord[]>(
+    `${TEMPLATE_MANAGER_API}/sections?${params.toString()}`,
+  );
 }
 
 async function fetchWithFormDataAuth(
@@ -465,14 +495,7 @@ function closeSectionModal() {
 async function fetchSectionsForTemplate(template: TemplateRecord) {
   sectionLoading.value = true;
   try {
-    const params = new URLSearchParams({
-      grant_id: template.grant_id,
-      template_id: template.id,
-    });
-    const data = await fetchJsonWithAuth<SectionRecord[]>(
-      `${TEMPLATE_MANAGER_API}/sections?${params.toString()}`,
-    );
-    sectionRecords.value = data;
+    sectionRecords.value = await fetchSections(template.grant_id, template.id);
   } catch (error: any) {
     notifyError(error?.message || "無法載入章節");
   } finally {
@@ -581,6 +604,78 @@ async function handleSectionReorder(changedSections: SectionRecord[]) {
   } finally {
     sectionSaving.value = false;
   }
+}
+
+async function openWordEditor(template: TemplateRecord) {
+  try {
+    wordEditorTemplate.value = template;
+    wordEditorSections.value = await fetchSections(
+      template.grant_id,
+      template.id,
+    );
+    showWordEditorModal.value = true;
+  } catch (error: any) {
+    console.error("Failed to load sections for word editor", error);
+    notifyError(error?.message || "無法載入文檔設定");
+  }
+}
+
+function closeWordEditorModal() {
+  showWordEditorModal.value = false;
+  wordEditorTemplate.value = null;
+  wordEditorSections.value = [];
+}
+
+async function handleWordEditorSave(config: WordExportTemplateConfig) {
+  const template = wordEditorTemplate.value;
+  if (!template) {
+    notifyError("未選擇模板");
+    return;
+  }
+
+  wordEditorSaving.value = true;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const clonedConfig = JSON.parse(JSON.stringify(config));
+    const newEntry: WordExportConfigEntry = {
+      id: createWordConfigVersionId(),
+      createdAt: new Date().toISOString(),
+      createdBy: user?.email || user?.id || "internal",
+      config: clonedConfig,
+    };
+
+    const nextList = [...(template.word_export_config ?? []), newEntry];
+
+    await fetchJsonWithAuth(
+      `${TEMPLATE_MANAGER_API}/templates/${template.grant_id}/${template.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ word_export_config: nextList }),
+      },
+    );
+
+    success("Word 文檔設定已更新");
+    closeWordEditorModal();
+    await loadInitialData();
+  } catch (error: any) {
+    console.error("Failed to save word export config", error);
+    notifyError(error?.message || "儲存文檔設定失敗");
+  } finally {
+    wordEditorSaving.value = false;
+  }
+}
+
+function createWordConfigVersionId() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `wordcfg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 onMounted(async () => {

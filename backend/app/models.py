@@ -24,6 +24,12 @@ class TemplateConfig(BaseModel):
     id: str
     grant_id: str
     name: str
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    logo_storage_path: Optional[str] = None
+    iconBg: Optional[str] = None
+    isOpen: Optional[bool] = None
+    word_export_config: Optional[List[Dict[str, Any]]] = None
     sections: List[SectionConfig] = []
 
 class GrantConfig(BaseModel):
@@ -246,6 +252,7 @@ class PlanTemplateCreateRequest(BaseModel):
     logo_storage_path: Optional[str] = None
     iconBg: Optional[str] = Field(default="#F8FAFC")
     isOpen: bool = True
+    word_export_config: Optional[List[Dict[str, Any]]] = None
 
 
 class PlanTemplateUpdateRequest(BaseModel):
@@ -258,6 +265,7 @@ class PlanTemplateUpdateRequest(BaseModel):
     logo_storage_path: Optional[str] = None
     iconBg: Optional[str] = None
     isOpen: Optional[bool] = None
+    word_export_config: Optional[List[Dict[str, Any]]] = None
 
 
 class SectionBaseRequest(BaseModel):
