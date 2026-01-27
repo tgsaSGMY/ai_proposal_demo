@@ -27,12 +27,42 @@ export interface WordNodeSortConfig {
   direction?: "asc" | "desc";
 }
 
+// 清單項渲染配置
+export interface WordDocumentNodeListItemConfig {
+  // 當清單項是對象時，使用子節點定義如何渲染
+  useSubNodes?: boolean; // 是否使用子節點渲染對象
+  itemTemplate?: string; // 模板語法，如 "{{title}}: {{description}}"
+  displayField?: string; // 簡單模式：只顯示某個字段
+}
+
+// 表格固定布局單元格配置
+export interface WordTableFixedLayoutCell {
+  row: number;
+  col: number;
+  rowSpan?: number;
+  colSpan?: number;
+  dataPath?: string; // 數據路徑，如 "strength.items"
+  label?: string; // 固定標籤（如 "Strength 優勢"）
+  isHeader?: boolean; // 是否為標題單元格
+}
+
+// 表格固定布局配置
+export interface WordTableFixedLayout {
+  rows: number;
+  cols: number;
+  cells: WordTableFixedLayoutCell[];
+}
+
 export interface WordDocumentNodeTableConfig {
   title?: string;
   columns: WordTableColumn[];
   groupBy?: string;
   sortBy?: WordNodeSortConfig[];
-  layout?: "auto" | "grid";
+  layout?: "auto" | "grid" | "fixed"; // 新增 fixed 布局模式
+  // 固定布局配置
+  fixedLayout?: WordTableFixedLayout;
+  // 允許自定義列標題
+  customHeaders?: boolean; // 是否啟用自定義標題
 }
 
 export type WordListStyle =
@@ -47,6 +77,7 @@ export interface WordDocumentNodeListConfig {
   numbering?: boolean;
   style?: WordListStyle;
   divider?: string;
+  itemConfig?: WordDocumentNodeListItemConfig; // 新增：清單項配置
 }
 
 export interface WordDocumentNodeStyleOverrides extends Partial<WordDocumentStyle> {
@@ -67,6 +98,9 @@ export interface WordDocumentNode {
   style?: WordDocumentNodeStyleOverrides;
   level?: number;
   children?: WordDocumentNode[];
+  // 章節分組相關字段
+  chapterMarker?: boolean; // 是否為手動添加的章節標記
+  chapterTitle?: string; // 手動章節標記的標題
 }
 
 export interface WordDocumentStyle {

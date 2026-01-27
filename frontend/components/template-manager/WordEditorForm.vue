@@ -5,7 +5,7 @@
     @click.self="emit('close')"
   >
     <section
-      class="w-full max-w-6xl max-h-full overflow-y-auto rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
+      class="w-full max-w-8xl max-h-full overflow-y-auto rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
     >
       <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -31,7 +31,7 @@
         </button>
       </header>
 
-      <div class="grid gap-6 lg:grid-cols-[280px,1fr]">
+      <div class="grid gap-6 lg:grid-cols-[280px,1fr,600px]">
         <aside
           class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
         >
@@ -80,13 +80,6 @@
               <h3 class="text-base font-semibold text-slate-800">
                 文件字體設定
               </h3>
-              <button
-                type="button"
-                class="text-xs text-rose-500 underline-offset-2 hover:underline"
-                @click="resetDocumentStyle"
-              >
-                還原預設
-              </button>
             </div>
             <div class="grid gap-4 md:grid-cols-3">
               <label class="space-y-1 text-sm text-slate-600">
@@ -192,7 +185,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 class="text-base font-semibold text-slate-800">
-                  文檔節點流程
+                  文檔章節流程
                 </h3>
                 <p class="text-xs text-slate-500">
                   建立節點樹以控制標題、段落、表格、清單與條件顯示，匯出時會依序渲染。
@@ -201,18 +194,10 @@
               <div class="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-                  @click="formState.nodes = generateDefaultNodes()"
-                  title="重置為自動生成的默認節點"
-                >
-                  使用默認節點
-                </button>
-                <button
-                  type="button"
                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   @click="addNode()"
                 >
-                  新增節點
+                  新增章節
                 </button>
               </div>
             </div>
@@ -226,302 +211,486 @@
 
             <div v-else class="space-y-4">
               <div
-                v-for="(node, index) in formState.nodes"
-                :key="node.id"
-                class="rounded-2xl border border-slate-200 p-4 space-y-4"
+                class="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
               >
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <label class="flex-1 space-y-1 text-sm text-slate-600">
-                    <span class="text-xs font-semibold text-slate-500">
-                      節點類型
-                    </span>
-                    <select
-                      v-model="node.type"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      @change="handleNodeTypeChange(node.id)"
+                <button
+                  v-for="chapter in groupedNodes"
+                  :key="`tab-${chapter.id}`"
+                  type="button"
+                  class="shrink-0 rounded-xl px-3 py-1 font-semibold"
+                  :class="[
+                    selectedChapterId === chapter.id
+                      ? 'bg-rose-500 text-white'
+                      : 'text-slate-600 hover:text-rose-500',
+                  ]"
+                  @click="selectedChapterId = chapter.id"
+                >
+                  {{ chapter.title || "未命名章節" }}
+                </button>
+              </div>
+
+              <details
+                v-for="(chapter, chapterIndex) in filteredChapters"
+                :key="chapter.id"
+                class="rounded-2xl border border-slate-200 bg-white overflow-hidden"
+                :open="chapterIndex === 0"
+              >
+                <summary
+                  class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm font-semibold text-slate-700">{{
+                      chapter.title || "未命名章節"
+                    }}</span>
+                    <span class="text-xs text-slate-500"
+                      >({{ chapter.contentNodes.length }} 個節點)</span
                     >
-                      <option
-                        v-for="option in NODE_TYPE_OPTIONS"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="space-y-1 text-sm text-slate-600">
-                    <span class="text-xs font-semibold text-slate-500">
-                      標題層級
-                    </span>
-                    <input
-                      v-model.number="node.level"
-                      type="number"
-                      min="1"
-                      max="5"
-                      class="w-24 rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    />
-                  </label>
-                  <div class="flex items-center gap-2 text-xs">
+                  </div>
+                  <div class="flex items-center gap-2">
                     <button
                       type="button"
-                      class="rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
-                      :disabled="index === 0"
-                      @click="moveNode(node.id, 'up')"
+                      class="text-xs text-slate-600 hover:text-slate-700 rounded-lg border border-slate-200 px-2 py-1"
+                      @click.stop="editChapterTitle(chapter.id)"
+                      title="編輯章節標題"
                     >
-                      上移
+                      編輯
                     </button>
                     <button
                       type="button"
-                      class="rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
-                      :disabled="index === (formState.nodes?.length || 0) - 1"
-                      @click="moveNode(node.id, 'down')"
+                      class="text-xs rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
+                      :disabled="getChapterGlobalIndex(chapter.id) === 0"
+                      @click.stop="moveChapter(chapter.id, 'up')"
+                      title="上移章節"
                     >
-                      下移
+                      ↑
                     </button>
                     <button
                       type="button"
-                      class="rounded-lg border border-rose-200 px-2 py-1 text-rose-600"
-                      @click="removeNode(node.id)"
+                      class="text-xs rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
+                      :disabled="
+                        getChapterGlobalIndex(chapter.id) ===
+                        groupedNodes.length - 1
+                      "
+                      @click.stop="moveChapter(chapter.id, 'down')"
+                      title="下移章節"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      class="text-xs text-rose-600 hover:text-rose-700 rounded-lg border border-rose-200 px-2 py-1"
+                      @click.stop="removeChapter(chapter.id)"
+                      title="刪除章節"
                     >
                       刪除
                     </button>
                   </div>
-                </div>
-
-                <div
-                  v-if="shouldShowNodeLabel(node)"
-                  class="space-y-1 text-sm text-slate-600"
-                >
-                  <span class="text-xs font-semibold text-slate-500"
-                    >節點標題</span
+                </summary>
+                <div class="p-4 space-y-4 border-t border-slate-200">
+                  <div
+                    v-for="(node, nodeIndex) in chapter.contentNodes"
+                    :key="node.id"
+                    class="rounded-xl border border-slate-200 p-4 space-y-4 bg-white"
                   >
-                  <input
-                    v-model="node.label"
-                    type="text"
-                    class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    placeholder="例如：壹、申請業者簡介"
-                  />
-                </div>
-
-                <div
-                  v-if="shouldShowSectionSelectors(node)"
-                  class="grid gap-4 md:grid-cols-2"
-                >
-                  <label class="space-y-1 text-sm text-slate-600">
-                    資料章節
-                    <select
-                      v-model="node.sectionId"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      @change="handleNodeSectionChange(node.id)"
+                    <div
+                      class="flex flex-wrap items-center justify-between gap-3"
                     >
-                      <option value="">無資料來源（純文字）</option>
-                      <option
-                        v-for="option in sectionOptions"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="space-y-1 text-sm text-slate-600">
-                    資料欄位
-                    <div class="space-y-2">
-                      <!-- Cascading dropdowns for nested data path selection -->
-                      <template v-if="shouldShowSectionSelectors(node)">
-                        <div
-                          v-for="(
-                            levelOptions, levelIndex
-                          ) in getDataPathLevels(node)"
-                          :key="`level-${levelIndex}`"
-                          class="flex items-center gap-2"
+                      <label class="flex-1 space-y-1 text-sm text-slate-600">
+                        <span class="text-xs font-semibold text-slate-500">
+                          節點類型
+                        </span>
+                        <select
+                          v-model="node.type"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          @change="handleNodeTypeChange(node.id)"
                         >
-                          <select
-                            :value="
-                              parseDataPath(node.dataPath)[levelIndex] || ''
-                            "
-                            class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                            @change="
-                              (event) =>
-                                handleDataPathLevelChange(
-                                  node.id,
-                                  levelIndex,
-                                  (event.target as HTMLSelectElement).value,
-                                )
-                            "
+                          <option
+                            v-for="option in NODE_TYPE_OPTIONS"
+                            :key="option.value"
+                            :value="option.value"
                           >
-                            <option value="">
-                              {{
-                                levelIndex === 0
-                                  ? "整個章節/物件"
-                                  : "選擇子欄位..."
-                              }}
-                            </option>
-                            <option
-                              v-for="option in levelOptions"
-                              :key="option.value"
-                              :value="option.value"
-                            >
-                              {{ option.label }}
-                            </option>
-                          </select>
-                          <!-- Add button to drill deeper if possible -->
-                          <button
-                            v-if="
-                              levelIndex ===
-                                parseDataPath(node.dataPath).length - 1 &&
-                              canNestDeeper(node)
-                            "
-                            type="button"
-                            class="px-3 py-2 text-sm font-semibold text-rose-600 hover:text-rose-700 rounded-xl border border-rose-200 hover:bg-rose-50"
-                            @click="handleAddDataPathLevel(node.id)"
-                            title="新增一層巢狀欄位"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </template>
-                      <!-- Simple option when section not selected -->
-                      <select
-                        v-if="!shouldShowSectionSelectors(node)"
-                        v-model="node.dataPath"
-                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                        @change="handleNodeDataPathChange(node.id)"
-                      >
-                        <option value="">無法選擇（需先選擇章節）</option>
-                      </select>
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </label>
+                      <div class="flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
+                          :disabled="nodeIndex === 0"
+                          @click="moveNode(node.id, 'up')"
+                        >
+                          上移
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-slate-600 disabled:opacity-40"
+                          :disabled="
+                            nodeIndex === chapter.contentNodes.length - 1
+                          "
+                          @click="moveNode(node.id, 'down')"
+                        >
+                          下移
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-rose-200 px-2 py-1 text-rose-600"
+                          @click="removeNode(node.id)"
+                        >
+                          刪除
+                        </button>
+                      </div>
                     </div>
-                  </label>
-                </div>
 
-                <div
-                  v-if="shouldShowTemplateInput(node)"
-                  class="space-y-1 text-sm text-slate-600"
-                >
-                  <span class="text-xs font-semibold text-slate-500"
-                    >自訂文字</span
-                  >
-                  <textarea
-                    v-model="node.template"
-                    rows="3"
-                    class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                    placeholder="輸入要顯示的內容"
-                  ></textarea>
-                </div>
-
-                <div
-                  v-if="node.type === 'table'"
-                  class="space-y-3 rounded-xl bg-slate-50 p-3"
-                >
-                  <label class="space-y-1 text-sm text-slate-600">
-                    表格標題
-                    <input
-                      v-model="ensureTableConfig(node).title"
-                      type="text"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      placeholder="可選：例如 實施方式表"
-                    />
-                  </label>
-                  <label class="space-y-1 text-sm text-slate-600">
-                    分組欄位（可選）
-                    <input
-                      v-model="ensureTableConfig(node).groupBy"
-                      type="text"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      placeholder="輸入欄位 key，以該欄位值拆表"
-                    />
-                  </label>
-                  <div>
-                    <p class="text-xs font-semibold text-slate-500">欄位內容</p>
-                    <div class="mt-2 grid gap-2 md:grid-cols-2">
-                      <label
-                        v-for="option in getNodeColumnCandidates(node)"
-                        :key="option.key"
-                        class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    <div
+                      v-if="shouldShowNodeLabel(node)"
+                      class="space-y-1 text-sm text-slate-600"
+                    >
+                      <span class="text-xs font-semibold text-slate-500"
+                        >節點標題</span
                       >
-                        <input
-                          type="checkbox"
-                          :checked="
-                            node.table?.columns?.some(
-                              (column) => column.key === option.key,
-                            )
-                          "
-                          class="h-4 w-4 rounded border-slate-300"
-                          @change="
-                            (event) =>
-                              onNodeColumnToggle(node.id, option, event)
-                          "
-                        />
-                        <span class="truncate"
-                          >{{ option.label }} ({{ option.key }})</span
+                      <input
+                        v-model="node.label"
+                        type="text"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="例如：壹、申請業者簡介"
+                      />
+                    </div>
+
+                    <div
+                      v-if="shouldShowSectionSelectors(node)"
+                      class="grid gap-4 md:grid-cols-2"
+                    >
+                      <label class="space-y-1 text-sm text-slate-600">
+                        資料章節
+                        <select
+                          v-model="node.sectionId"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          @change="handleNodeSectionChange(node.id)"
                         >
+                          <option value="">無資料來源（純文字）</option>
+                          <option
+                            v-for="option in sectionOptions"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </label>
+                      <label class="space-y-1 text-sm text-slate-600">
+                        資料欄位
+                        <div class="space-y-2">
+                          <!-- Cascading dropdowns for nested data path selection -->
+                          <template v-if="shouldShowSectionSelectors(node)">
+                            <div
+                              v-for="(
+                                levelOptions, levelIndex
+                              ) in getDataPathLevels(node)"
+                              :key="`level-${levelIndex}`"
+                              class="flex items-center gap-2"
+                            >
+                              <select
+                                :value="
+                                  parseDataPath(node.dataPath)[levelIndex] || ''
+                                "
+                                class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                @change="
+                                  (event) =>
+                                    handleDataPathLevelChange(
+                                      node.id,
+                                      levelIndex,
+                                      (event.target as HTMLSelectElement).value,
+                                    )
+                                "
+                              >
+                                <option value="">
+                                  {{
+                                    levelIndex === 0
+                                      ? "整個章節/物件"
+                                      : "選擇子欄位..."
+                                  }}
+                                </option>
+                                <option
+                                  v-for="option in levelOptions"
+                                  :key="option.value"
+                                  :value="option.value"
+                                >
+                                  {{ option.label }}
+                                </option>
+                              </select>
+                              <!-- Add button to drill deeper if possible -->
+                              <button
+                                v-if="
+                                  levelIndex ===
+                                    parseDataPath(node.dataPath).length - 1 &&
+                                  canNestDeeper(node)
+                                "
+                                type="button"
+                                class="px-3 py-2 text-sm font-semibold text-rose-600 hover:text-rose-700 rounded-xl border border-rose-200 hover:bg-rose-50"
+                                @click="handleAddDataPathLevel(node.id)"
+                                title="新增一層巢狀欄位"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </template>
+                          <!-- Simple option when section not selected -->
+                          <select
+                            v-if="!shouldShowSectionSelectors(node)"
+                            v-model="node.dataPath"
+                            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            @change="handleNodeDataPathChange(node.id)"
+                          >
+                            <option value="">無法選擇（需先選擇章節）</option>
+                          </select>
+                        </div>
                       </label>
                     </div>
-                    <p
-                      v-if="!getNodeColumnCandidates(node).length"
-                      class="text-xs text-slate-400 mt-2"
-                    >
-                      無可用欄位，請確認章節或資料來源設定。
-                    </p>
-                  </div>
-                </div>
 
-                <div
-                  v-if="node.type === 'list' || node.type === 'subHeading'"
-                  class="space-y-3 rounded-xl bg-slate-50 p-3"
-                >
-                  <label class="flex items-center gap-2 text-sm text-slate-600">
-                    <input
-                      v-model="ensureListConfig(node).numbering"
-                      type="checkbox"
-                      class="h-4 w-4 rounded border-slate-300"
-                    />
-                    使用編號
-                  </label>
-                  <label class="space-y-1 text-sm text-slate-600">
-                    清單樣式
-                    <select
-                      v-model="ensureListConfig(node).style"
-                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    <div
+                      v-if="shouldShowTemplateInput(node)"
+                      class="space-y-1 text-sm text-slate-600"
                     >
-                      <option
-                        v-for="option in LIST_STYLE_OPTIONS"
-                        :key="option.value"
-                        :value="option.value"
+                      <span class="text-xs font-semibold text-slate-500"
+                        >自訂文字</span
                       >
-                        {{ option.label }}
-                      </option>
-                    </select>
-                  </label>
-                </div>
-
-                <details
-                  class="rounded-xl border border-slate-200 p-3 text-sm text-slate-600"
-                >
-                  <summary
-                    class="cursor-pointer list-none font-semibold text-slate-700"
-                  >
-                    樣式設定（可選）
-                  </summary>
-                  <div class="mt-3 space-y-3">
-                    <label class="space-y-1 text-sm">
-                      對齊方式
-                      <select
-                        v-model="ensureNodeStyle(node).alignment"
+                      <textarea
+                        v-model="node.template"
+                        rows="3"
                         class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="輸入要顯示的內容"
+                      ></textarea>
+                    </div>
+
+                    <div
+                      v-if="node.type === 'table'"
+                      class="space-y-3 rounded-xl bg-slate-50 p-3"
+                    >
+                      <label class="space-y-1 text-sm text-slate-600">
+                        表格布局模式
+                        <select
+                          v-model="ensureTableConfig(node).layout"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        >
+                          <option value="auto">自動（基於數據）</option>
+                          <option value="grid">網格布局</option>
+                          <option value="fixed">固定布局</option>
+                        </select>
+                      </label>
+                      <label
+                        class="flex items-center gap-2 text-sm text-slate-600"
                       >
-                        <option value="">跟隨預設</option>
-                        <option value="left">靠左</option>
-                        <option value="center">置中</option>
-                        <option value="right">靠右</option>
-                      </select>
-                    </label>
+                        <input
+                          v-model="ensureTableConfig(node).customHeaders"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                        />
+                        啟用自定義列標題
+                      </label>
+
+                      <div
+                        v-if="
+                          node.table?.customHeaders &&
+                          node.table?.columns?.length
+                        "
+                        class="space-y-2 border-t border-slate-200 pt-3"
+                      >
+                        <p class="text-xs font-semibold text-slate-500">
+                          自定義列標題
+                        </p>
+                        <div class="space-y-2">
+                          <div
+                            v-for="(column, colIndex) in node.table.columns"
+                            :key="column.key"
+                            class="flex items-center gap-2"
+                          >
+                            <input
+                              v-model="column.label"
+                              type="text"
+                              class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                              :placeholder="`列 ${colIndex + 1} 標題`"
+                            />
+                            <span
+                              class="text-xs text-slate-500 whitespace-nowrap"
+                              >({{ column.key }})</span
+                            >
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p class="text-xs font-semibold text-slate-500">
+                          欄位內容
+                        </p>
+                        <div class="mt-2 grid gap-2 md:grid-cols-2">
+                          <label
+                            v-for="option in getNodeColumnCandidates(node)"
+                            :key="option.key"
+                            class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              :checked="
+                                node.table?.columns?.some(
+                                  (column) => column.key === option.key,
+                                )
+                              "
+                              class="h-4 w-4 rounded border-slate-300"
+                              @change="
+                                (event) =>
+                                  onNodeColumnToggle(node.id, option, event)
+                              "
+                            />
+                            <span class="truncate"
+                              >{{ option.label }} ({{ option.key }})</span
+                            >
+                          </label>
+                        </div>
+                        <p
+                          v-if="!getNodeColumnCandidates(node).length"
+                          class="text-xs text-slate-400 mt-2"
+                        >
+                          無可用欄位，請確認章節或資料來源設定。
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="node.type === 'list' || node.type === 'subHeading'"
+                      class="space-y-3 rounded-xl bg-slate-50 p-3"
+                    >
+                      <label
+                        class="flex items-center gap-2 text-sm text-slate-600"
+                      >
+                        <input
+                          v-model="ensureListConfig(node).numbering"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                        />
+                        使用編號
+                      </label>
+                      <label class="space-y-1 text-sm text-slate-600">
+                        清單樣式
+                        <select
+                          v-model="ensureListConfig(node).style"
+                          class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        >
+                          <option
+                            v-for="option in LIST_STYLE_OPTIONS"
+                            :key="option.value"
+                            :value="option.value"
+                          >
+                            {{ option.label }}
+                          </option>
+                        </select>
+                      </label>
+
+                      <div
+                        v-if="node.type === 'list'"
+                        class="border-t border-slate-200 pt-3 mt-3"
+                      >
+                        <label
+                          class="flex items-center gap-2 text-sm text-slate-600 mb-2"
+                        >
+                          <input
+                            v-model="ensureListItemConfig(node).useSubNodes"
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-slate-300"
+                          />
+                          使用子節點渲染對象（嵌套清單）
+                        </label>
+                        <p class="text-xs text-slate-500 mb-3">
+                          當清單項是對象時，使用子節點定義如何渲染每個字段
+                        </p>
+
+                        <div
+                          v-if="node.list?.itemConfig?.useSubNodes"
+                          class="space-y-3"
+                        >
+                          <button
+                            type="button"
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
+                            @click="addListNodeChild(node.id)"
+                          >
+                            + 添加子節點
+                          </button>
+
+                          <RecursiveNodeEditor
+                            v-for="childNode in node.children"
+                            :key="childNode.id"
+                            :node="childNode"
+                            :parent-node-id="node.id"
+                            :section-options="sectionOptions"
+                            :sections="sections"
+                            :level="0"
+                            :node-type-options="NODE_TYPE_OPTIONS"
+                            :list-style-options="LIST_STYLE_OPTIONS"
+                            @update="handleRecursiveNodeUpdate"
+                            @remove="handleRecursiveNodeRemove"
+                            @add-child="handleRecursiveNodeAddChild"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        class="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                        @click="addNodeAfterNode(node.id, chapter.id)"
+                      >
+                        + 新增節點
+                      </button>
+                    </div>
                   </div>
-                </details>
+
+                  <div
+                    class="flex justify-end pt-2"
+                    v-if="chapter.contentNodes.length === 0"
+                  >
+                    <button
+                      type="button"
+                      class="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                      @click="addNodeToChapter(chapter.id)"
+                    >
+                      + 新增節點
+                    </button>
+                  </div>
+                </div>
+              </details>
+
+              <div class="flex justify-center pt-2">
+                <button
+                  type="button"
+                  class="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                  @click="addChapterMarker"
+                >
+                  + 添加章節分組
+                </button>
               </div>
             </div>
           </section>
         </div>
+
+        <aside
+          class="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col lg:sticky lg:top-6 max-h-[calc(100vh-12rem)]"
+        >
+          <div class="flex items-center justify-between mb-3 flex-shrink-0">
+            <h3 class="text-sm font-semibold text-slate-700">即時預覽</h3>
+          </div>
+          <p class="text-xs text-slate-500 mb-4 flex-shrink-0">
+            預覽文檔的渲染效果，會即時反映您的更改。
+          </p>
+          <div
+            class="rounded-xl border border-slate-200 bg-white overflow-auto flex-1 min-h-0"
+          >
+            <iframe
+              :srcdoc="previewHtml"
+              class="w-full h-full border-0"
+              title="文檔預覽"
+            />
+          </div>
+        </aside>
       </div>
 
       <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
@@ -563,6 +732,7 @@
 import { computed, ref, watch } from "vue";
 import type { PropType } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
+import RecursiveNodeEditor from "./RecursiveNodeEditor.vue";
 import type {
   WordDocumentNode,
   WordDocumentNodeType,
@@ -653,7 +823,6 @@ const FONT_OPTIONS = [
 
 const NODE_TYPE_OPTIONS: Array<{ label: string; value: WordDocumentNodeType }> =
   [
-    { label: "章節標題", value: "sectionTitle" },
     { label: "次標題", value: "subHeading" },
     { label: "段落文字", value: "paragraph" },
     { label: "表格", value: "table" },
@@ -726,7 +895,10 @@ function formatHeadingPrefix(
   }
 }
 
-function getListBulletLabel(style: WordListStyle | undefined, index: number): string {
+function getListBulletLabel(
+  style: WordListStyle | undefined,
+  index: number,
+): string {
   switch (style) {
     case "chineseNumber":
     case "chineseComma":
@@ -754,6 +926,231 @@ const versionHistory = computed<WordExportConfigEntry[]>(() => {
   );
 });
 
+// 章節分組接口
+interface ChapterGroup {
+  id: string;
+  title: string;
+  nodes: WordDocumentNode[];
+  contentNodes: WordDocumentNode[];
+  isManual?: boolean; // 是否為手動添加的章節標記
+}
+
+// 章節分組邏輯
+const groupedNodes = computed<ChapterGroup[]>(() => {
+  if (!formState.value.nodes || formState.value.nodes.length === 0) {
+    return [];
+  }
+
+  const groups: ChapterGroup[] = [];
+  let currentChapter: ChapterGroup | null = null;
+
+  const pushCurrentChapter = () => {
+    if (currentChapter) {
+      groups.push(currentChapter);
+    }
+  };
+
+  for (const node of formState.value.nodes) {
+    const isChapterMarker =
+      node.type === "sectionTitle" || node.chapterMarker === true;
+
+    if (isChapterMarker) {
+      pushCurrentChapter();
+      currentChapter = {
+        id: node.id,
+        title: node.chapterTitle ?? node.label ?? "未命名章節",
+        nodes: [node],
+        contentNodes: [],
+        isManual: node.chapterMarker === true,
+      };
+      continue;
+    }
+
+    if (!currentChapter) {
+      currentChapter = {
+        id: `default-${groups.length}`,
+        title: "未分組",
+        nodes: [],
+        contentNodes: [],
+        isManual: false,
+      };
+    }
+
+    currentChapter.nodes.push(node);
+    currentChapter.contentNodes.push(node);
+  }
+
+  pushCurrentChapter();
+
+  return groups;
+});
+
+const selectedChapterId = ref<string>("");
+
+const filteredChapters = computed(() => {
+  return groupedNodes.value.filter(
+    (group) => group.id === selectedChapterId.value,
+  );
+});
+
+function getNodeGlobalIndex(nodeId: string): number {
+  if (!formState.value.nodes) return -1;
+  return formState.value.nodes.findIndex((n) => n.id === nodeId);
+}
+
+function getChapterGlobalIndex(chapterId: string): number {
+  return groupedNodes.value.findIndex((group) => group.id === chapterId);
+}
+
+function moveChapter(chapterId: string, direction: "up" | "down") {
+  const allNodes = ensureNodesRoot();
+  const currentChapterIndex = getChapterGlobalIndex(chapterId);
+
+  if (direction === "up" && currentChapterIndex <= 0) return;
+  if (
+    direction === "down" &&
+    currentChapterIndex >= groupedNodes.value.length - 1
+  )
+    return;
+
+  const targetChapterIndex =
+    direction === "up" ? currentChapterIndex - 1 : currentChapterIndex + 1;
+  const currentChapter = groupedNodes.value[currentChapterIndex];
+  const targetChapter = groupedNodes.value[targetChapterIndex];
+
+  if (!currentChapter || !targetChapter) return;
+
+  // 找到章节在所有节点中的范围
+  const currentStartIndex = allNodes.findIndex(
+    (n) => n.id === currentChapter.nodes[0]?.id,
+  );
+  const currentEndIndex = currentStartIndex + currentChapter.nodes.length - 1;
+
+  const targetStartIndex = allNodes.findIndex(
+    (n) => n.id === targetChapter.nodes[0]?.id,
+  );
+  const targetEndIndex = targetStartIndex + targetChapter.nodes.length - 1;
+
+  if (currentStartIndex === -1 || targetStartIndex === -1) return;
+
+  // 提取当前章节和目标章节的所有节点
+  const currentChapterNodes = allNodes.splice(
+    currentStartIndex,
+    currentChapter.nodes.length,
+  );
+
+  // 计算新的插入位置
+  let insertIndex: number;
+  if (direction === "up") {
+    // 上移：insert before 目标章节
+    insertIndex = allNodes.findIndex(
+      (n) => n.id === targetChapter.nodes[0]?.id,
+    );
+  } else {
+    // 下移：insert after 目标章节
+    const newTargetEndIndex = allNodes.findIndex(
+      (n) => n.id === targetChapter.nodes[targetChapter.nodes.length - 1]?.id,
+    );
+    insertIndex = newTargetEndIndex + 1;
+  }
+
+  allNodes.splice(insertIndex, 0, ...currentChapterNodes);
+}
+
+function addChapterMarker() {
+  const newNode: WordDocumentNode = {
+    id: generateNodeId(),
+    type: "sectionTitle",
+    label: "新章節",
+    chapterMarker: true,
+    chapterTitle: "新章節",
+    level: 1,
+  };
+  ensureNodesRoot().push(newNode);
+}
+
+function addNodeAfterNode(nodeId: string, chapterId: string) {
+  const nodes = ensureNodesRoot();
+  const chapter = groupedNodes.value.find((group) => group.id === chapterId);
+  const chapterNodes = chapter?.contentNodes ?? [];
+  const referenceNode = chapterNodes[chapterNodes.length - 1];
+  const newNode = createNode({
+    type: "paragraph",
+    label: "新節點內容",
+    level: calculateNodeLevelFromDataPath(""),
+    sectionId: referenceNode?.sectionId || props.sections[0]?.id,
+    chapterMarker: false,
+  });
+
+  const insertAfterIndex = getNodeGlobalIndex(nodeId);
+  if (insertAfterIndex === -1) {
+    nodes.push(newNode);
+    return;
+  }
+
+  nodes.splice(insertAfterIndex + 1, 0, newNode);
+}
+
+function addNodeToChapter(chapterId: string) {
+  const nodes = ensureNodesRoot();
+  const chapter = groupedNodes.value.find((group) => group.id === chapterId);
+  const chapterNodes = chapter?.nodes ?? [];
+  const referenceNode = chapterNodes[chapterNodes.length - 1];
+  const newNode = createNode({
+    type: "paragraph",
+    label: "新節點內容",
+    level: calculateNodeLevelFromDataPath(""),
+    sectionId: referenceNode?.sectionId || props.sections[0]?.id,
+    chapterMarker: false,
+  });
+
+  if (!chapter || chapterNodes.length === 0) {
+    nodes.push(newNode);
+    return;
+  }
+
+  const lastNode = chapterNodes[chapterNodes.length - 1];
+  if (!lastNode) {
+    nodes.push(newNode);
+    return;
+  }
+
+  const lastIndex = getNodeGlobalIndex(lastNode.id);
+  if (lastIndex === -1) {
+    nodes.push(newNode);
+    return;
+  }
+
+  nodes.splice(lastIndex + 1, 0, newNode);
+}
+
+function editChapterTitle(chapterId: string) {
+  const chapter = groupedNodes.value.find((group) => group.id === chapterId);
+  const currentTitle = chapter?.title ?? "";
+  const nextTitle = prompt("請輸入章節標題：", currentTitle);
+  if (nextTitle === null) return;
+  const trimmed = nextTitle.trim();
+  if (!trimmed) return;
+  updateNode(chapterId, (node) => {
+    node.chapterTitle = trimmed;
+    node.label = trimmed;
+  });
+}
+
+function removeChapter(chapterId: string) {
+  const chapter = groupedNodes.value.find((group) => group.id === chapterId);
+  if (!chapter) return;
+
+  if (!confirm("確定要刪除這個章節嗎？章節下的所有節點也會被刪除。")) {
+    return;
+  }
+
+  const nodes = ensureNodesRoot();
+  const idsToRemove = new Set(chapter.nodes.map((node) => node.id));
+
+  formState.value.nodes = nodes.filter((node) => !idsToRemove.has(node.id));
+}
+
 const sectionOptions = computed(() =>
   props.sections.map((section) => ({
     label: section.name,
@@ -771,28 +1168,57 @@ watch(
   { immediate: true },
 );
 
+watch(
+  groupedNodes,
+  (groups) => {
+    if (!groups.length) {
+      selectedChapterId.value = "";
+      return;
+    }
+    if (
+      !selectedChapterId.value ||
+      !groups.some((group) => group.id === selectedChapterId.value)
+    ) {
+      const fallback = groups[0];
+      if (fallback) {
+        selectedChapterId.value = fallback.id;
+      }
+    }
+  },
+  { immediate: true },
+);
+
 function hydrateForm(base?: WordExportTemplateConfig) {
-  const documentStyle = {
-    ...DEFAULT_STYLE,
-    ...(base?.documentStyle || {}),
-  };
+  try {
+    const documentStyle = {
+      ...DEFAULT_STYLE,
+      ...(base?.documentStyle || {}),
+    };
 
-  const layouts = deepClone(base?.sectionLayouts || []);
-  // 如果没有现成的节点，则生成默认节点
-  const nodes =
-    base?.nodes && base.nodes.length > 0
-      ? deepClone(base.nodes)
-      : generateDefaultNodes();
+    // 使用 JSON 序列化确保数据可用，避免 Vue 响应式代理问题
+    const layouts = base?.sectionLayouts
+      ? JSON.parse(JSON.stringify(base.sectionLayouts))
+      : [];
 
-  formState.value = {
-    documentStyle,
-    sectionLayouts: layouts,
-    nodes,
-  };
-}
+    const nodes =
+      base?.nodes && base.nodes.length > 0
+        ? JSON.parse(JSON.stringify(base.nodes))
+        : generateDefaultNodes();
 
-function resetDocumentStyle() {
-  formState.value.documentStyle = { ...DEFAULT_STYLE };
+    formState.value = {
+      documentStyle,
+      sectionLayouts: layouts,
+      nodes,
+    };
+  } catch (error) {
+    console.error("Error hydrating form:", error);
+    // 使用默认值
+    formState.value = {
+      documentStyle: { ...DEFAULT_STYLE },
+      sectionLayouts: [],
+      nodes: generateDefaultNodes(),
+    };
+  }
 }
 
 function applyVersion(version: WordExportConfigEntry) {
@@ -830,14 +1256,17 @@ function getNestedPathOptions(
 function getColumnCandidates(sectionId: string, dataPath?: string) {
   const target = getPropertySchema(sectionId, dataPath);
   if (!target) return [];
-  
+
   const candidates: Array<{ key: string; label: string }> = [];
-  
-  const flattenProperties = (props: Record<string, SchemaField>, prefix = "") => {
+
+  const flattenProperties = (
+    props: Record<string, SchemaField>,
+    prefix = "",
+  ) => {
     for (const [key, meta] of Object.entries(props)) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
       const label = meta?.title || key;
-      
+
       // 只添加叶子节点（非对象、非数组类型的字段）
       if (meta?.type !== "object" && meta?.type !== "array") {
         candidates.push({
@@ -845,14 +1274,14 @@ function getColumnCandidates(sectionId: string, dataPath?: string) {
           label: prefix ? `${prefix} > ${label}` : label,
         });
       }
-      
+
       // 如果是物件，递迴展平
       if (meta?.type === "object" && meta?.properties) {
         flattenProperties(meta.properties, fullKey);
       }
     }
   };
-  
+
   flattenProperties(target);
   return candidates;
 }
@@ -988,12 +1417,17 @@ function generateNodesFromSchema(
       if (field.items?.properties) {
         // 数组of对象 → 表格，自动展平嵌套对象字段到叶子节点
         const columns: WordTableColumn[] = [];
-        
-        const flattenTableColumns = (props: Record<string, SchemaField>, prefix = "") => {
+
+        const flattenTableColumns = (
+          props: Record<string, SchemaField>,
+          prefix = "",
+        ) => {
           for (const [itemKey, itemField] of Object.entries(props)) {
             const fullKey = prefix ? `${prefix}.${itemKey}` : itemKey;
-            const fullLabel = prefix ? `${prefix} > ${itemField.title || itemKey}` : (itemField.title || itemKey);
-            
+            const fullLabel = prefix
+              ? `${prefix} > ${itemField.title || itemKey}`
+              : itemField.title || itemKey;
+
             // 只添加叶子节点（非对象、非数组类型的字段）
             if (itemField?.type !== "object" && itemField?.type !== "array") {
               columns.push({
@@ -1001,14 +1435,14 @@ function generateNodesFromSchema(
                 label: fullLabel,
               });
             }
-            
+
             // 如果嵌套字段是物件，继续展平
             if (itemField?.type === "object" && itemField?.properties) {
               flattenTableColumns(itemField.properties, fullKey);
             }
           }
         };
-        
+
         flattenTableColumns(field.items.properties);
 
         nodes.push({
@@ -1069,14 +1503,17 @@ function ensureNodesRoot(): WordDocumentNode[] {
   return formState.value.nodes;
 }
 
-function createNode(): WordDocumentNode {
+function createNode(
+  overrides: Partial<WordDocumentNode> = {},
+): WordDocumentNode {
   return {
     id: generateNodeId(),
-    label: "新節點",
-    type: "sectionTitle",
-    sectionId: props.sections[0]?.id,
-    level: 1,
-    children: [],
+    label: overrides.label ?? "新節點",
+    type: overrides.type ?? "paragraph",
+    sectionId: overrides.sectionId ?? props.sections[0]?.id,
+    level: overrides.level ?? 1,
+    children: overrides.children ?? [],
+    ...overrides,
   };
 }
 
@@ -1145,6 +1582,7 @@ function moveNode(nodeId: string, direction: "up" | "down") {
 function handleNodeSectionChange(nodeId: string) {
   updateNode(nodeId, (node) => {
     node.dataPath = "";
+    node.level = calculateNodeLevelFromDataPath(node.dataPath);
     handleNodeDataPathChange(nodeId);
   });
 }
@@ -1234,6 +1672,14 @@ function canNestDeeper(node: WordDocumentNode): boolean {
 /**
  * Handle cascading dropdown level change
  */
+function calculateNodeLevelFromDataPath(dataPath: string | undefined): number {
+  if (!dataPath) return 2;
+  const segments = parseDataPath(dataPath);
+  // level = 2 + depth of dataPath (starting from level 2 as subheading)
+  // e.g., "section" -> level 3, "section.subsection" -> level 4
+  return Math.min(2 + segments.length, 5);
+}
+
 function handleDataPathLevelChange(
   nodeId: string,
   levelIndex: number,
@@ -1252,6 +1698,7 @@ function handleDataPathLevelChange(
     }
 
     node.dataPath = buildDataPath(segments);
+    node.level = calculateNodeLevelFromDataPath(node.dataPath);
     handleNodeDataPathChange(nodeId);
   });
 }
@@ -1282,7 +1729,159 @@ function ensureTableConfig(node: WordDocumentNode) {
   if (!node.table.columns) {
     node.table.columns = [];
   }
+  if (!node.table.layout) {
+    node.table.layout = "auto";
+  }
   return node.table;
+}
+
+function ensureListItemConfig(node: WordDocumentNode) {
+  const listConfig = ensureListConfig(node);
+  if (!listConfig.itemConfig) {
+    listConfig.itemConfig = {
+      useSubNodes: false,
+    };
+  }
+  return listConfig.itemConfig;
+}
+
+function ensureTableFixedLayout(node: WordDocumentNode) {
+  const table = ensureTableConfig(node);
+  if (!table.fixedLayout) {
+    table.fixedLayout = {
+      rows: 2,
+      cols: 2,
+      cells: [],
+    };
+  }
+  return table.fixedLayout;
+}
+
+function addListNodeChild(nodeId: string) {
+  updateNode(nodeId, (node) => {
+    if (!node.children) {
+      node.children = [];
+    }
+    const childNode: WordDocumentNode = {
+      id: generateNodeId(),
+      type: "paragraph",
+      sectionId: node.sectionId,
+      level: (node.level || 1) + 1,
+    };
+    node.children.push(childNode);
+  });
+}
+
+/**
+ * 處理遞歸節點編輯器的事件
+ */
+function handleRecursiveNodeUpdate(
+  nodeId: string,
+  updater: (node: WordDocumentNode) => void,
+) {
+  // 遞歸查找節點（包括子節點）
+  const findAndUpdate = (
+    nodes: WordDocumentNode[] | undefined,
+    targetId: string,
+  ): boolean => {
+    if (!nodes) return false;
+    for (const node of nodes) {
+      if (!node) continue;
+      if (node.id === targetId) {
+        try {
+          updater(node);
+        } catch (error) {
+          console.error("Error updating node:", error);
+          throw error;
+        }
+        return true;
+      }
+      if (node.children && findAndUpdate(node.children, targetId)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  findAndUpdate(formState.value.nodes, nodeId);
+}
+
+function handleRecursiveNodeRemove(nodeId: string) {
+  // 遞歸查找並刪除節點（包括子節點）
+  const findAndRemove = (
+    nodes: WordDocumentNode[] | undefined,
+    targetId: string,
+  ): boolean => {
+    if (!nodes) return false;
+    for (let i = 0; i < nodes.length; i++) {
+      const currentNode = nodes[i];
+      if (!currentNode) continue;
+      if (currentNode.id === targetId) {
+        nodes.splice(i, 1);
+        return true;
+      }
+      if (
+        currentNode.children &&
+        findAndRemove(currentNode.children, targetId)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  findAndRemove(formState.value.nodes, nodeId);
+}
+
+function handleRecursiveNodeAddChild(nodeId: string) {
+  // 遞歸查找節點並添加子節點
+  const findAndAddChild = (
+    nodes: WordDocumentNode[] | undefined,
+    targetId: string,
+  ): boolean => {
+    if (!nodes) return false;
+    for (const node of nodes) {
+      if (!node) continue;
+      if (node.id === targetId) {
+        if (!node.children) {
+          node.children = [];
+        }
+        const childNode: WordDocumentNode = {
+          id: generateNodeId(),
+          type: "paragraph",
+          sectionId: node.sectionId,
+          level: (node.level || 1) + 1,
+        };
+        node.children.push(childNode);
+        return true;
+      }
+      if (node.children && findAndAddChild(node.children, targetId)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  findAndAddChild(formState.value.nodes, nodeId);
+}
+
+function addTableCell(nodeId: string) {
+  updateNode(nodeId, (node) => {
+    const fixedLayout = ensureTableFixedLayout(node);
+    fixedLayout.cells.push({
+      row: 0,
+      col: 0,
+      isHeader: false,
+    });
+  });
+}
+
+function removeTableCell(nodeId: string, cellIndex: number) {
+  updateNode(nodeId, (node) => {
+    if (node.table?.fixedLayout?.cells) {
+      node.table.fixedLayout.cells.splice(cellIndex, 1);
+    }
+  });
 }
 
 function ensureListConfig(node: WordDocumentNode) {
@@ -1353,6 +1952,7 @@ function walkNodes(
 ): boolean {
   if (!nodes) return false;
   for (const node of nodes) {
+    if (!node) continue;
     const shouldStop = callback(node);
     if (shouldStop) {
       return true;
@@ -1365,30 +1965,84 @@ function walkNodes(
 }
 
 function deepClone<T>(value: T): T {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
+  try {
+    // 先尝试 structuredClone（更安全）
+    if (typeof structuredClone === "function") {
+      return structuredClone(value);
+    }
+  } catch (error) {
+    console.warn("structuredClone failed, falling back to JSON method:", error);
+  }
+
+  // 使用 JSON 序列化作为 fallback（这会自动剔除函数和不可序列化的对象）
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    console.error("deepClone failed completely:", error);
+    // 最后的 fallback：返回原值
+    return value;
+  }
+}
+
+function sanitizeForClone(
+  data: WordExportTemplateConfig,
+): WordExportTemplateConfig {
+  // 创建一个清洁的副本，只包含可序列化的数据
+  return {
+    documentStyle: {
+      headingFont: data.documentStyle?.headingFont,
+      headingSizePt: data.documentStyle?.headingSizePt,
+      headingBold: data.documentStyle?.headingBold,
+      subHeadingFont: data.documentStyle?.subHeadingFont,
+      subHeadingSizePt: data.documentStyle?.subHeadingSizePt,
+      subHeadingBold: data.documentStyle?.subHeadingBold,
+      bodyFont: data.documentStyle?.bodyFont,
+      bodySizePt: data.documentStyle?.bodySizePt,
+      bodyBold: data.documentStyle?.bodyBold,
+    },
+    sectionLayouts: data.sectionLayouts
+      ? JSON.parse(JSON.stringify(data.sectionLayouts))
+      : [],
+    nodes: data.nodes ? JSON.parse(JSON.stringify(data.nodes)) : [],
+  };
 }
 
 function handleSave() {
-  let invalidNodes = false;
-  walkNodes(formState.value.nodes, (node) => {
-    if (
-      node.type === "table" &&
-      (!node.table?.columns || !node.table.columns.length)
-    ) {
-      invalidNodes = true;
-      return true;
+  try {
+    let invalidNodes = false;
+    walkNodes(formState.value.nodes, (node) => {
+      if (!node) {
+        console.warn("Found null/undefined node in node tree");
+        return false;
+      }
+      if (
+        node.type === "table" &&
+        (!node.table?.columns || !node.table.columns.length)
+      ) {
+        invalidNodes = true;
+        return true;
+      }
+      return false;
+    });
+
+    if (invalidNodes) {
+      notifyError("有節點的表格尚未選擇欄位");
+      return;
     }
-    return false;
-  });
 
-  if (invalidNodes) {
-    notifyError("有節點的表格尚未選擇欄位");
-    return;
+    // 使用 sanitize 函数確保數據可被序列化
+    const cleanData = sanitizeForClone(formState.value);
+    if (!cleanData || !cleanData.documentStyle) {
+      throw new Error("保存數據不完整");
+    }
+
+    emit("save", cleanData);
+  } catch (error) {
+    console.error("Error in handleSave:", error);
+    notifyError(
+      error instanceof Error ? error.message : "保存失敗，請稍後重試",
+    );
   }
-
-  emit("save", deepClone(formState.value));
 }
 
 function formatDate(value: string) {
@@ -1468,21 +2122,19 @@ function renderNodePreview(
 
   if (node.type === "sectionTitle") {
     resetHeadingCounters(headingCounters);
-    const fontSize = formState.value.documentStyle.headingSizePt || 18;
+    const fontSize = (formState.value.documentStyle.headingSizePt || 18) / 2;
     html += `<h2 style="font-size: ${fontSize}pt; font-weight: bold; margin: 12px 0;">
       ${node.label || "章節標題"}
     </h2>`;
   } else if (node.type === "subHeading") {
-    const fontSize = formState.value.documentStyle.subHeadingSizePt || 14;
+    const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
     const prefix = formatHeadingPrefix(node.level, headingCounters);
     html += `<h3 style="font-size: ${fontSize}pt; font-weight: bold; margin: 8px 0;">
       ${prefix}${node.label || "次標題"}
     </h3>`;
   } else if (node.type === "paragraph") {
-    const fontSize = formState.value.documentStyle.bodySizePt || 12;
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const fontSize = (formState.value.documentStyle.bodySizePt || 12) / 2;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
@@ -1490,9 +2142,7 @@ function renderNodePreview(
       ${node.label}: ${value}
     </p>`;
   } else if (node.type === "table") {
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const tableData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : [];
@@ -1509,16 +2159,15 @@ function renderNodePreview(
     for (const row of rows) {
       html += `<tr>`;
       for (const col of columns) {
-        const cellValue = typeof row === "object" ? getValueByPath(row, col.key) : row;
+        const cellValue =
+          typeof row === "object" ? getValueByPath(row, col.key) : row;
         html += `<td style="border: 1px solid #ccc; padding: 6px;">${cellValue}</td>`;
       }
       html += `</tr>`;
     }
     html += `</tbody></table>`;
   } else if (node.type === "list") {
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : [];
@@ -1530,13 +2179,63 @@ function renderNodePreview(
       const bullet = node.list?.numbering
         ? getListBulletLabel(node.list?.style, i)
         : "•";
-      html += `<li>${bullet} ${item}</li>`;
+
+      // 如果啟用了子節點渲染且項目是對象
+      if (
+        node.list?.itemConfig?.useSubNodes &&
+        typeof item === "object" &&
+        item !== null &&
+        !Array.isArray(item) &&
+        node.children?.length
+      ) {
+        // 使用子節點遞歸渲染對象
+        html += `<li style="margin-bottom: 8px;">${bullet}`;
+        // 創建一個臨時的 sectionDataMap，將當前項目作為數據源
+        const itemDataMap: Record<string, Record<string, any>> = {};
+        if (node.sectionId) {
+          itemDataMap[node.sectionId] = item;
+        }
+        // 遞歸渲染子節點，需要調整子節點的 dataPath 以移除父路徑前綴
+        for (const childNode of node.children) {
+          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
+          let adjustedChildNode = { ...childNode };
+          if (node.dataPath && childNode.dataPath) {
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+          }
+          html += renderNodePreview(
+            adjustedChildNode,
+            itemDataMap,
+            headingCounters,
+          );
+        }
+        html += `</li>`;
+      } else {
+        // 簡單渲染
+        const displayValue =
+          typeof item === "object" && item !== null
+            ? JSON.stringify(item)
+            : String(item);
+        html += `<li>${bullet} ${displayValue}</li>`;
+      }
     }
     html += `</ul>`;
   } else if (node.type === "customText") {
     html += `<div style="margin: 6px 0;">
       ${node.template || "自訂文字"}
     </div>`;
+  }
+
+  // 遞歸渲染子節點（適用於所有節點類型，但清單類型的子節點已經在清單項處理中處理過了）
+  if (node.children?.length && node.type !== "list") {
+    for (const childNode of node.children) {
+      html += renderNodePreview(childNode, sectionDataMap, headingCounters);
+    }
   }
 
   html += `</div>`;
@@ -1547,10 +2246,7 @@ function renderNodePreview(
 /**
  * Get value from object by dot-notation path
  */
-function getValueByPath(
-  obj: Record<string, any>,
-  path?: string,
-): any {
+function getValueByPath(obj: Record<string, any>, path?: string): any {
   if (!path || !obj) return obj;
   const parts = path.split(".");
   let current = obj;
@@ -1586,7 +2282,7 @@ function generatePreviewHtml(): string {
       <style>
         body {
           font-family: ${formState.value.documentStyle.bodyFont || "Times New Roman"};
-          font-size: ${formState.value.documentStyle.bodySizePt || 12}pt;
+          font-size: ${(formState.value.documentStyle.bodySizePt || 12) / 2}pt;
           margin: 40px;
           line-height: 1.6;
           color: #333;
@@ -1600,14 +2296,14 @@ function generatePreviewHtml(): string {
         }
         h2 {
           font-family: ${formState.value.documentStyle.headingFont || "Times New Roman"};
-          font-size: ${formState.value.documentStyle.headingSizePt || 18}pt;
+          font-size: ${(formState.value.documentStyle.headingSizePt || 18) / 2}pt;
           font-weight: ${formState.value.documentStyle.headingBold ? "bold" : "normal"};
           margin-top: 20px;
           margin-bottom: 12px;
         }
         h3 {
           font-family: ${formState.value.documentStyle.subHeadingFont || "Times New Roman"};
-          font-size: ${formState.value.documentStyle.subHeadingSizePt || 14}pt;
+          font-size: ${(formState.value.documentStyle.subHeadingSizePt || 14) / 2}pt;
           font-weight: ${formState.value.documentStyle.subHeadingBold ? "bold" : "normal"};
           margin-top: 14px;
           margin-bottom: 8px;
@@ -1616,7 +2312,7 @@ function generatePreviewHtml(): string {
           width: 100%;
           border-collapse: collapse;
           margin: 12px 0;
-          font-size: ${formState.value.documentStyle.bodySizePt || 12}pt;
+          font-size: ${(formState.value.documentStyle.bodySizePt || 12) / 2}pt;
         }
         th, td {
           border: 1px solid #999;
@@ -1660,6 +2356,11 @@ function generatePreviewHtml(): string {
   return html;
 }
 
+// 即時預覽 HTML
+const previewHtml = computed(() => {
+  return generatePreviewHtml();
+});
+
 async function handlePreviewExport() {
   try {
     const previewHtml = generatePreviewHtml();
@@ -1698,7 +2399,8 @@ function buildParagraphsFromNode(
             text: node.label || "章節標題",
             bold: formState.value.documentStyle.headingBold ?? true,
             size: (formState.value.documentStyle.headingSizePt ?? 18) * 2,
-            font: formState.value.documentStyle.headingFont || "Times New Roman",
+            font:
+              formState.value.documentStyle.headingFont || "Times New Roman",
           }),
         ],
         spacing: { before: 200, after: 120 },
@@ -1713,16 +2415,15 @@ function buildParagraphsFromNode(
             text: `${prefix}${node.label || "次標題"}`,
             bold: formState.value.documentStyle.subHeadingBold ?? true,
             size: (formState.value.documentStyle.subHeadingSizePt ?? 14) * 2,
-            font: formState.value.documentStyle.subHeadingFont || "Times New Roman",
+            font:
+              formState.value.documentStyle.subHeadingFont || "Times New Roman",
           }),
         ],
         spacing: { before: 120, after: 80 },
       }),
     );
   } else if (node.type === "paragraph") {
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
@@ -1745,9 +2446,7 @@ function buildParagraphsFromNode(
       }),
     );
   } else if (node.type === "table") {
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const tableData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : [];
@@ -1785,10 +2484,13 @@ function buildParagraphsFromNode(
                       children: [
                         new TextRun({
                           text: String(
-                            typeof row === "object" ? (getValueByPath(row, col.key) ?? "") : row,
+                            typeof row === "object"
+                              ? (getValueByPath(row, col.key) ?? "")
+                              : row,
                           ),
-                          size: (formState.value.documentStyle.bodySizePt ??
-                            12) * 2,
+                          size:
+                            (formState.value.documentStyle.bodySizePt ?? 12) *
+                            2,
                         }),
                       ],
                     }),
@@ -1806,9 +2508,7 @@ function buildParagraphsFromNode(
       );
     }
   } else if (node.type === "list") {
-    const sectionData = node.sectionId
-      ? sectionDataMap[node.sectionId]
-      : null;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : [];
@@ -1820,19 +2520,162 @@ function buildParagraphsFromNode(
         ? getListBulletLabel(node.list?.style, i)
         : "•";
 
-      elements.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `${bullet} ${item}`,
-              size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
-              font: formState.value.documentStyle.bodyFont || "Times New Roman",
+      // 如果啟用了子節點渲染且項目是對象
+      if (
+        node.list?.itemConfig?.useSubNodes &&
+        typeof item === "object" &&
+        item !== null &&
+        !Array.isArray(item) &&
+        node.children?.length
+      ) {
+        // 創建一個臨時的 sectionDataMap，將當前項目作為數據源
+        const itemDataMap: Record<string, Record<string, any>> = {};
+        if (node.sectionId) {
+          itemDataMap[node.sectionId] = item;
+        }
+
+        // 收集所有子節點的內容
+        const childParagraphNodes: WordDocumentNode[] = [];
+        const childOtherNodes: WordDocumentNode[] = [];
+
+        for (const childNode of node.children) {
+          if (!childNode) continue;
+          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
+          let adjustedChildNode = { ...childNode };
+          if (node.dataPath && childNode.dataPath) {
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+          }
+
+          // 分離段落類型的子節點和其他類型的子節點
+          if (adjustedChildNode.type === "paragraph") {
+            childParagraphNodes.push(adjustedChildNode);
+          } else {
+            childOtherNodes.push(adjustedChildNode);
+          }
+        }
+
+        // 創建主清單項段落（只包含編號）
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: bullet,
+                size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                font:
+                  formState.value.documentStyle.bodyFont || "Times New Roman",
+              }),
+            ],
+            spacing: { after: childParagraphNodes.length > 0 ? 0 : 120 },
+            indent: { left: 720 },
+          }),
+        );
+
+        // 為段落類型的子節點創建獨立的段落（沒有額外縮進，段落間有空行）
+        for (const childNode of childParagraphNodes) {
+          if (!childNode) continue;
+          const childSectionData = childNode.sectionId
+            ? itemDataMap[childNode.sectionId]
+            : null;
+          let value: any = null;
+
+          if (childSectionData) {
+            if (childNode.dataPath && childNode.dataPath.trim()) {
+              value = getValueByPath(childSectionData, childNode.dataPath);
+            }
+          }
+
+          let displayValue: string;
+          if (value === null || value === undefined) {
+            displayValue = childNode.label
+              ? `${childNode.label} (無資料)`
+              : "段落內容 (無資料)";
+          } else if (typeof value === "object" && !Array.isArray(value)) {
+            const keys = Object.keys(value);
+            if (keys.length === 0) {
+              displayValue = childNode.label || "空對象";
+            } else {
+              displayValue = JSON.stringify(value);
+            }
+          } else if (Array.isArray(value)) {
+            displayValue = value.length > 0 ? value.join(", ") : "空數組";
+          } else {
+            displayValue = String(value);
+          }
+
+          // 創建獨立的段落，與清單項相同的縮進，段落間有空行
+          elements.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: displayValue,
+                  size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                  font:
+                    formState.value.documentStyle.bodyFont || "Times New Roman",
+                }),
+              ],
+              spacing: {
+                after: childOtherNodes.length === 0 ? 120 : 240,
+              },
+              indent: { left: 720 }, // 與清單項相同的縮進，沒有額外縮進
             }),
-          ],
-          spacing: { after: 40 },
-          indent: { left: 720 },
-        }),
-      );
+          );
+        }
+
+        // 處理非段落類型的子節點
+        for (const childNode of childOtherNodes) {
+          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
+          let adjustedChildNode = { ...childNode };
+          if (node.dataPath && childNode.dataPath) {
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+          }
+          const childElements = buildParagraphsFromNode(
+            adjustedChildNode,
+            itemDataMap,
+            headingCounters,
+          );
+          // 為子節點設置與清單項相同的縮進，沒有額外縮進
+          childElements.forEach((element) => {
+            if (element instanceof Paragraph) {
+              const paragraph = element as any;
+              paragraph.indent = { left: 720 }; // 與清單項相同的縮進
+            }
+          });
+          elements.push(...childElements);
+        }
+      } else {
+        // 簡單渲染
+        const displayValue =
+          typeof item === "object" && item !== null
+            ? JSON.stringify(item)
+            : String(item);
+
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${bullet} ${displayValue}`,
+                size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                font:
+                  formState.value.documentStyle.bodyFont || "Times New Roman",
+              }),
+            ],
+            spacing: { after: 40 },
+            indent: { left: 720 },
+          }),
+        );
+      }
     }
   } else if (node.type === "customText") {
     elements.push(
@@ -1857,7 +2700,7 @@ function buildParagraphsFromNode(
  */
 function getAlignmentType(
   alignment?: string,
-): typeof AlignmentType[keyof typeof AlignmentType] {
+): (typeof AlignmentType)[keyof typeof AlignmentType] {
   switch (alignment) {
     case "center":
       return AlignmentType.CENTER;
@@ -1944,9 +2787,7 @@ async function handleDownloadWord() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   } catch (err) {
-    notifyError(
-      `下載失敗: ${err instanceof Error ? err.message : "未知錯誤"}`,
-    );
+    notifyError(`下載失敗: ${err instanceof Error ? err.message : "未知錯誤"}`);
   }
 }
 </script>

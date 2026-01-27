@@ -657,9 +657,10 @@ async function handleWordEditorSave(config: WordExportTemplateConfig) {
       },
     );
 
+    // 先刷新數據，再關閉模態框和顯示提示
+    await loadInitialData();
     success("Word 文檔設定已更新");
     closeWordEditorModal();
-    await loadInitialData();
   } catch (error: any) {
     console.error("Failed to save word export config", error);
     notifyError(error?.message || "儲存文檔設定失敗");

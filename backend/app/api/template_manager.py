@@ -157,6 +157,34 @@ async def create_template(
 		raise HTTPException(status_code=500, detail="Unexpected error while creating template")
 
 
+@router.get(
+	"/templates/{grant_id}/{template_id}",
+	response_model=Dict[str, Any],
+	summary="取得計畫模板詳細資訊",
+)
+async def get_template(
+	grant_id: str,
+	template_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service)
+):
+	try:
+		record = await supabase_service.get_template_by_id(template_id, grant_id)
+		if not record:
+			raise HTTPException(status_code=404, detail="Template not found")
+		return record
+	except HTTPException:
+		raise
+	except Exception as exc:
+		logger.error(
+			"Failed to get template %s/%s: %s",
+			grant_id,
+			template_id,
+			exc,
+			exc_info=True,
+		)
+		raise HTTPException(status_code=500, detail="Unexpected error while retrieving template")
+
+
 @router.put(
 	"/templates/{grant_id}/{template_id}",
 	response_model=Dict[str, Any],
