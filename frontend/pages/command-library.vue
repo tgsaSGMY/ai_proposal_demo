@@ -3,13 +3,13 @@
     <div class="mx-auto max-w-6xl space-y-6">
       <header class="space-y-3">
         <!-- 頁首區：顯示導覽路徑與頁面統計（已啟用 / 全部指令） -->
-        <p
+        <div
           class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
           <span class="text-gray-600">我的指令庫</span>
-        </p>
+        </div>
         <div
           class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
         >
@@ -144,9 +144,9 @@
               <h3 class="text-lg font-semibold text-gray-900">
                 {{ command.title }}
               </h3>
-              <p class="text-sm text-gray-500 h-[60px] overflow-hidden">
+              <div class="text-sm text-gray-500 h-[60px] overflow-hidden">
                 {{ command.description }}
-              </p>
+              </div>
             </div>
             <div class="relative" @click.stop>
               <button
