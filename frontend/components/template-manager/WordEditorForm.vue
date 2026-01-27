@@ -621,6 +621,11 @@
                             :key="childNode.id"
                             :node="childNode"
                             :parent-node-id="node.id"
+                            :parent-level="
+                              node.level != null
+                                ? Math.max(node.level - 1, 0)
+                                : 0
+                            "
                             :section-options="sectionOptions"
                             :sections="sections"
                             :level="0"
@@ -869,21 +874,66 @@ function formatChineseNumeral(value: number): string {
   return String(value);
 }
 
+function getImplicitLevelFromStyle(style: WordListStyle): number {
+  switch (style) {
+    case "chineseNumber": // 一、二、三、
+    case "chineseComma":
+      return 2; // 強制視為第二層
+    case "arabicNumber": // 1. 2. 3.
+    case "numberedDot":
+      return 3; // 強制視為第三層
+    case "parenNumbered": // (1) (2) (3)
+      return 4; // 強制視為第四層
+    default:
+      return 3; // 預設值
+  }
+}
+
 function formatHeadingPrefix(
   level: number | undefined,
   state: HeadingCounterState,
+  style?: WordListStyle,
 ): string {
-  if (!level) return "";
-  state[level] = (state[level] ?? 0) + 1;
+  // 1. 決定「有效層級 (Effective Level)」
+  // 如果有傳入樣式，優先使用樣式對應的層級來計數 (例如選了「一、二、」就強制用 Level 2 計數器)
+  // 如果沒有樣式，才退回使用節點原本的 level
+  const rawLevel = level || 2;
+  const effectiveLevel = style ? getImplicitLevelFromStyle(style) : rawLevel;
+
+  // 2. 針對「有效層級」進行計數 (關鍵修正：這裡不再使用 rawLevel)
+  state[effectiveLevel] = (state[effectiveLevel] ?? 0) + 1;
+
+  // 3. 重置所有比「有效層級」更深的計數器
+  // 例如：現在數到「五、」(Level 2)，底下的 (1) (Level 4) 必須歸零
   Object.keys(state).forEach((key) => {
-    const currentLevel = Number(key);
-    if (currentLevel > level) {
-      delete state[currentLevel];
+    const keyNum = Number(key);
+    if (keyNum > effectiveLevel) {
+      delete state[keyNum];
     }
   });
 
-  const count = state[level];
-  switch (level) {
+  const count = state[effectiveLevel];
+
+  // 4. 根據樣式或層級回傳格式化字串
+  if (style) {
+    switch (style) {
+      case "chineseNumber":
+      case "chineseComma":
+        return `${formatChineseNumeral(count)}、`;
+      case "arabicNumber":
+      case "numberedDot":
+        return `${count}. `;
+      case "parenNumbered":
+        return `（${count}）`;
+      case "bullet":
+        return "";
+      default:
+        break;
+    }
+  }
+
+  // Fallback: 如果沒有指定樣式，依據層級給預設格式
+  switch (effectiveLevel) {
     case 2:
       return `${formatChineseNumeral(count)}、`;
     case 3:
@@ -891,7 +941,7 @@ function formatHeadingPrefix(
     case 4:
       return `（${count}）`;
     default:
-      return "";
+      return `${count}. `;
   }
 }
 
@@ -1467,7 +1517,7 @@ function generateNodesFromSchema(
           level: level + 1,
           list: {
             numbering: true,
-            style: getListStyleForLevel(level + 1),
+            style: "chineseNumber",
           },
         });
       }
@@ -1888,13 +1938,11 @@ function ensureListConfig(node: WordDocumentNode) {
   if (!node.list) {
     node.list = {
       numbering: true,
-      style: node.level ? getListStyleForLevel(node.level) : "chineseNumber",
+      style: "chineseNumber",
     };
   }
   if (!node.list.style) {
-    node.list.style = node.level
-      ? getListStyleForLevel(node.level)
-      : "chineseNumber";
+    node.list.style = "chineseNumber";
   }
   return node.list;
 }
@@ -2116,7 +2164,7 @@ function renderNodePreview(
   sectionDataMap: Record<string, Record<string, any>>,
   headingCounters: HeadingCounterState,
 ): string {
-  const indent = (node.level || 1) * 20;
+  const indent = 0;
 
   let html = `<div style="margin-left: ${indent}px; margin-bottom: 12px;">`;
 
@@ -2128,7 +2176,11 @@ function renderNodePreview(
     </h2>`;
   } else if (node.type === "subHeading") {
     const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
-    const prefix = formatHeadingPrefix(node.level, headingCounters);
+    const showNumbering = node.list?.numbering !== false; // 預設 true
+    const prefix = showNumbering
+      ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
+      : "";
+
     html += `<h3 style="font-size: ${fontSize}pt; font-weight: bold; margin: 8px 0;">
       ${prefix}${node.label || "次標題"}
     </h3>`;
@@ -2173,58 +2225,131 @@ function renderNodePreview(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    html += `<ul style="margin: 6px 0; padding-left: 20px;">`;
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const bullet = node.list?.numbering
-        ? getListBulletLabel(node.list?.style, i)
-        : "•";
+    // 根據節點層級決定是否使用有序列表
+    const isNumbered = node.list?.numbering || (node.level && node.level > 1);
+    const listTag = isNumbered ? "ol" : "ul";
+    const getBulletText = (index: number) =>
+      isNumbered ? getListBulletLabel(node.list?.style, index) : "";
 
-      // 如果啟用了子節點渲染且項目是對象
-      if (
-        node.list?.itemConfig?.useSubNodes &&
-        typeof item === "object" &&
-        item !== null &&
-        !Array.isArray(item) &&
-        node.children?.length
-      ) {
-        // 使用子節點遞歸渲染對象
-        html += `<li style="margin-bottom: 8px;">${bullet}`;
-        // 創建一個臨時的 sectionDataMap，將當前項目作為數據源
+    html += `<${listTag} style="margin: 6px 0; padding-left: 0; list-style: none;">`;
+
+    // 如果啟用了子節點渲染且項目是對象
+    if (
+      node.list?.itemConfig?.useSubNodes &&
+      items.length > 0 &&
+      typeof items[0] === "object" &&
+      items[0] !== null &&
+      !Array.isArray(items[0]) &&
+      node.children?.length
+    ) {
+      // 對於每個數據項，將第一個子節點放在同一行
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         const itemDataMap: Record<string, Record<string, any>> = {};
         if (node.sectionId) {
           itemDataMap[node.sectionId] = item;
         }
-        // 遞歸渲染子節點，需要調整子節點的 dataPath 以移除父路徑前綴
-        for (const childNode of node.children) {
-          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
-          let adjustedChildNode = { ...childNode };
-          if (node.dataPath && childNode.dataPath) {
+
+        // 獲取第一個子節點的數據
+        const firstChild = node.children[0];
+        let firstChildValue = "";
+
+        if (firstChild) {
+          let adjustedFirstChild = { ...firstChild };
+          if (node.dataPath && firstChild.dataPath) {
             const parentPathPrefix = node.dataPath + ".";
-            if (childNode.dataPath.startsWith(parentPathPrefix)) {
-              adjustedChildNode = {
-                ...childNode,
-                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+            if (firstChild.dataPath.startsWith(parentPathPrefix)) {
+              adjustedFirstChild = {
+                ...firstChild,
+                dataPath: firstChild.dataPath.substring(
+                  parentPathPrefix.length,
+                ),
               };
             }
           }
-          html += renderNodePreview(
-            adjustedChildNode,
-            itemDataMap,
-            headingCounters,
-          );
+
+          if (adjustedFirstChild.type === "paragraph") {
+            const childSectionData = adjustedFirstChild.sectionId
+              ? itemDataMap[adjustedFirstChild.sectionId]
+              : null;
+            firstChildValue = childSectionData
+              ? getValueByPath(childSectionData, adjustedFirstChild.dataPath)
+              : adjustedFirstChild.label || "段落內容";
+          }
         }
+
+        // 主項和第一個子項在同一行
+        const bullet = getBulletText(i);
+        const displayFirstChild =
+          firstChildValue === undefined || firstChildValue === null
+            ? ""
+            : String(firstChildValue);
+        html += `<li style="margin: 4px 0;">${bullet} ${displayFirstChild}`;
+
+        // 其餘子節點形成嵌套列表
+        if (node.children.length > 1) {
+          html += `<ul style="margin: 6px 0; padding-left: 1.25em; list-style: none;">`;
+          for (
+            let childIndex = 1;
+            childIndex < node.children.length;
+            childIndex++
+          ) {
+            const childNode = node.children[childIndex];
+            if (!childNode) continue;
+            let adjustedChildNode = { ...childNode };
+            if (node.dataPath && childNode.dataPath) {
+              const parentPathPrefix = node.dataPath + ".";
+              if (childNode.dataPath.startsWith(parentPathPrefix)) {
+                adjustedChildNode = {
+                  ...childNode,
+                  dataPath: childNode.dataPath.substring(
+                    parentPathPrefix.length,
+                  ),
+                };
+              }
+            }
+
+            if (adjustedChildNode.type === "paragraph") {
+              const childSectionData = adjustedChildNode.sectionId
+                ? itemDataMap[adjustedChildNode.sectionId]
+                : null;
+              const value = childSectionData
+                ? getValueByPath(childSectionData, adjustedChildNode.dataPath)
+                : adjustedChildNode.label || "段落內容";
+              const nestedDisplay =
+                value === undefined || value === null ? "" : String(value);
+              html += `<li style="margin: 0px 0;">${nestedDisplay}</li>`;
+            } else {
+              const childHtml = renderNodePreview(
+                adjustedChildNode,
+                itemDataMap,
+                headingCounters,
+              );
+              const innerContent = childHtml.replace(
+                /^<div[^>]*>|<\/div>$/g,
+                "",
+              );
+              html += `<li>${innerContent}</li>`;
+            }
+          }
+          html += `</ul>`;
+        }
+
         html += `</li>`;
-      } else {
-        // 簡單渲染
+      }
+    } else {
+      // 簡單列表渲染（沒有子節點）
+      items.forEach((item, index) => {
         const displayValue =
           typeof item === "object" && item !== null
             ? JSON.stringify(item)
-            : String(item);
-        html += `<li>${bullet} ${displayValue}</li>`;
-      }
+            : String(item ?? "");
+        const bullet = getBulletText(index);
+        html += `<li style="margin: 4px 0;">${bullet} ${displayValue}</li>`;
+      });
     }
-    html += `</ul>`;
+
+    html += `</${listTag}>`;
   } else if (node.type === "customText") {
     html += `<div style="margin: 6px 0;">
       ${node.template || "自訂文字"}
@@ -2323,9 +2448,10 @@ function generatePreviewHtml(): string {
           background-color: #e8e8e8;
           font-weight: bold;
         }
-        ul {
+        ul, ol {
           margin: 8px 0;
-          padding-left: 24px;
+          padding-left: 0;
+          list-style-position: inside;
         }
         li {
           margin: 4px 0;
@@ -2407,7 +2533,12 @@ function buildParagraphsFromNode(
       }),
     );
   } else if (node.type === "subHeading") {
-    const prefix = formatHeadingPrefix(node.level, headingCounters);
+    // 修改這裡：傳入樣式並檢查開關
+    const showNumbering = node.list?.numbering !== false;
+    const prefix = showNumbering
+      ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
+      : "";
+
     elements.push(
       new Paragraph({
         children: [
@@ -2560,25 +2691,9 @@ function buildParagraphsFromNode(
           }
         }
 
-        // 創建主清單項段落（只包含編號）
-        elements.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: bullet,
-                size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
-                font:
-                  formState.value.documentStyle.bodyFont || "Times New Roman",
-              }),
-            ],
-            spacing: { after: childParagraphNodes.length > 0 ? 0 : 120 },
-            indent: { left: 720 },
-          }),
-        );
-
         // 為段落類型的子節點創建獨立的段落（沒有額外縮進，段落間有空行）
-        for (const childNode of childParagraphNodes) {
-          if (!childNode) continue;
+        childParagraphNodes.forEach((childNode, index) => {
+          if (!childNode) return;
           const childSectionData = childNode.sectionId
             ? itemDataMap[childNode.sectionId]
             : null;
@@ -2609,23 +2724,26 @@ function buildParagraphsFromNode(
           }
 
           // 創建獨立的段落，與清單項相同的縮進，段落間有空行
+          const prefixText = index === 0 ? `${bullet} ` : "";
+
           elements.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: displayValue,
+                  text: prefixText + displayValue, // 將編號與內容合併
                   size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
                   font:
                     formState.value.documentStyle.bodyFont || "Times New Roman",
                 }),
               ],
               spacing: {
+                // 如果後面還有非段落節點，間距大一點，否則小一點
                 after: childOtherNodes.length === 0 ? 120 : 240,
               },
-              indent: { left: 720 }, // 與清單項相同的縮進，沒有額外縮進
+              indent: { left: 0 }, // 依照您之前的要求，移除縮排 (原本是 720)
             }),
           );
-        }
+        });
 
         // 處理非段落類型的子節點
         for (const childNode of childOtherNodes) {
@@ -2672,7 +2790,7 @@ function buildParagraphsFromNode(
               }),
             ],
             spacing: { after: 40 },
-            indent: { left: 720 },
+            indent: { left: 0 }, // 修改：原本是 720，改為 0 移除縮排
           }),
         );
       }

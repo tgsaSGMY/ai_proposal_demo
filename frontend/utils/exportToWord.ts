@@ -491,29 +491,34 @@ function buildParagraphFromNode(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const bullet = node.list?.numbering
-        ? getListBulletLabel(node.list?.style, i)
-        : "•";
+    // 根據節點層級決定是否使用有序列表
+    const isNumbered = node.list?.numbering || (node.level && node.level > 1);
 
-      if (
-        node.list?.itemConfig?.useSubNodes &&
-        typeof item === "object" &&
-        item !== null &&
-        !Array.isArray(item) &&
-        node.children?.length
-      ) {
+    if (
+      node.list?.itemConfig?.useSubNodes &&
+      items.length > 0 &&
+      typeof items[0] === "object" &&
+      items[0] !== null &&
+      !Array.isArray(items[0]) &&
+      node.children?.length
+    ) {
+      // 對於每個數據項，將其子節點展開為嵌套列表
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         const itemDataMap: Record<string, Record<string, any>> = {};
         if (node.sectionId) {
           itemDataMap[node.sectionId] = item as Record<string, any>;
         }
 
-        const childParagraphNodes: WordDocumentNode[] = [];
-        const childOtherNodes: WordDocumentNode[] = [];
+        // 主項編號
+        const bullet = isNumbered
+          ? getListBulletLabel(node.list?.style, i)
+          : "•";
 
-        for (const childNode of node.children) {
-          if (!childNode) continue;
+        // 處理所有子節點
+        node.children.forEach((childNode, childIndex) => {
+          if (!childNode) return;
+
           let adjustedChildNode = { ...childNode };
           if (node.dataPath && childNode.dataPath) {
             const parentPathPrefix = node.dataPath + ".";
@@ -525,101 +530,79 @@ function buildParagraphFromNode(
             }
           }
 
+          // 如果是 paragraph 類型的子節點
           if (adjustedChildNode.type === "paragraph") {
-            childParagraphNodes.push(adjustedChildNode);
-          } else {
-            childOtherNodes.push(adjustedChildNode);
-          }
-        }
+            const childSectionData = adjustedChildNode.sectionId
+              ? itemDataMap[adjustedChildNode.sectionId]
+              : null;
+            let value: any = null;
 
-        elements.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: bullet,
-                size: bodySize,
-                font: resolvedStyle.bodyFont,
+            if (childSectionData && adjustedChildNode.dataPath) {
+              value = getValueByPath(
+                childSectionData,
+                adjustedChildNode.dataPath,
+              );
+            }
+
+            let displayValue: string;
+            if (value === null || value === undefined) {
+              displayValue = adjustedChildNode.label
+                ? `${adjustedChildNode.label} (無資料)`
+                : "段落內容 (無資料)";
+            } else if (typeof value === "object" && !Array.isArray(value)) {
+              displayValue = JSON.stringify(value);
+            } else if (Array.isArray(value)) {
+              displayValue = value.join(", ");
+            } else {
+              displayValue = String(value);
+            }
+
+            // 如果是第一個子節點，前面加上編號；否則加上 bullet
+            const prefixText = childIndex === 0 ? `${bullet} ` : "";
+            const isLastChild = childIndex === node.children!.length - 1;
+            const isLastItem = i === items.length - 1;
+
+            elements.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: prefixText + displayValue,
+                    size: bodySize,
+                    font: resolvedStyle.bodyFont,
+                  }),
+                ],
+                spacing: { after: isLastChild && isLastItem ? 120 : 40 },
+                indent: { left: 0 },
               }),
-            ],
-            spacing: { after: childParagraphNodes.length > 0 ? 0 : 120 },
-            indent: { left: 720 },
-          }),
-        );
-
-        for (const childNode of childParagraphNodes) {
-          const childSectionData = childNode.sectionId
-            ? itemDataMap[childNode.sectionId]
-            : null;
-          let value: any = null;
-
-          if (childSectionData) {
-            if (childNode.dataPath && childNode.dataPath.trim()) {
-              value = getValueByPath(childSectionData, childNode.dataPath);
-            }
-          }
-
-          let displayValue: string;
-          if (value === null || value === undefined) {
-            displayValue = childNode.label
-              ? `${childNode.label} (無資料)`
-              : "段落內容 (無資料)";
-          } else if (typeof value === "object" && !Array.isArray(value)) {
-            const keys = Object.keys(value);
-            displayValue =
-              keys.length === 0
-                ? childNode.label || "空對象"
-                : JSON.stringify(value);
-          } else if (Array.isArray(value)) {
-            displayValue = value.length > 0 ? value.join(", ") : "空數組";
+            );
           } else {
-            displayValue = String(value);
+            // 其他類型的子節點，遞歸構建
+            const childElements = buildParagraphFromNode(
+              adjustedChildNode,
+              itemDataMap,
+              { documentStyle: resolvedStyle, headingCounters },
+            );
+            childElements.forEach((element, idx) => {
+              if (element instanceof Paragraph) {
+                (element as any).indent = { left: 0 };
+              }
+            });
+            elements.push(...childElements);
           }
-
-          elements.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: displayValue,
-                  size: bodySize,
-                  font: resolvedStyle.bodyFont,
-                }),
-              ],
-              spacing: {
-                after: childOtherNodes.length === 0 ? 120 : 240,
-              },
-              indent: { left: 720 },
-            }),
-          );
-        }
-
-        for (const childNode of childOtherNodes) {
-          let adjustedChildNode = { ...childNode };
-          if (node.dataPath && childNode.dataPath) {
-            const parentPathPrefix = node.dataPath + ".";
-            if (childNode.dataPath.startsWith(parentPathPrefix)) {
-              adjustedChildNode = {
-                ...childNode,
-                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
-              };
-            }
-          }
-          const childElements = buildParagraphFromNode(
-            adjustedChildNode,
-            itemDataMap,
-            { documentStyle: resolvedStyle, headingCounters },
-          );
-          childElements.forEach((element) => {
-            if (element instanceof Paragraph) {
-              (element as any).indent = { left: 720 };
-            }
-          });
-          elements.push(...childElements);
-        }
-      } else {
+        });
+      }
+    } else {
+      // 簡單列表模式：遍歷每個 item 直接顯示
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         const displayValue =
           typeof item === "object" && item !== null
             ? JSON.stringify(item)
             : String(item ?? "");
+
+        const bullet = isNumbered
+          ? getListBulletLabel(node.list?.style, i)
+          : "•";
 
         elements.push(
           new Paragraph({
@@ -631,7 +614,7 @@ function buildParagraphFromNode(
               }),
             ],
             spacing: { after: 40 },
-            indent: { left: 720 },
+            indent: { left: 0 },
           }),
         );
       }

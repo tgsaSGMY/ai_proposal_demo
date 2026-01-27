@@ -25,17 +25,6 @@
             </option>
           </select>
         </label>
-        <label class="space-y-1 text-sm text-slate-600">
-          <span class="text-xs font-semibold text-slate-500"> 標題層級 </span>
-          <input
-            :value="node.level"
-            type="number"
-            min="1"
-            max="5"
-            class="w-24 rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            @input="handleLevelChange"
-          />
-        </label>
         <div class="flex items-center gap-2 text-xs">
           <button
             type="button"
@@ -418,6 +407,13 @@
         :key="childNode.id"
         :node="childNode"
         :parent-node-id="node.id"
+        :parent-level="
+          node.level != null
+            ? node.level
+            : parentLevel != null
+              ? parentLevel + 1
+              : 1
+        "
         :section-options="sectionOptions"
         :sections="sections"
         :level="level + 1"
@@ -432,7 +428,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { onMounted, watch } from "vue";
 import type { PropType } from "vue";
 import type {
   WordDocumentNode,
@@ -466,6 +462,10 @@ const props = defineProps({
   parentNodeId: {
     type: String,
     required: true,
+  },
+  parentLevel: {
+    type: Number,
+    default: 1,
   },
   sectionOptions: {
     type: Array as PropType<Array<{ label: string; value: string }>>,
@@ -501,6 +501,33 @@ const emit = defineEmits<{
   (e: "add-child", nodeId: string): void;
 }>();
 
+const MAX_LEVEL = 5;
+
+function getNextLevel(baseLevel?: number) {
+  const resolvedBase = baseLevel ?? props.parentLevel ?? 1;
+  return Math.min(resolvedBase + 1, MAX_LEVEL);
+}
+
+function ensureNodeLevel() {
+  const targetLevel = getNextLevel(props.parentLevel);
+  if (props.node.level === targetLevel) {
+    return;
+  }
+  updateNode((node) => {
+    node.level = targetLevel;
+  });
+}
+
+onMounted(ensureNodeLevel);
+
+watch(
+  () => props.parentLevel,
+  () => {
+    ensureNodeLevel();
+  },
+  { immediate: true },
+);
+
 function updateNode(updater: (node: WordDocumentNode) => void) {
   emit("update", props.node.id, updater);
 }
@@ -519,13 +546,6 @@ function handleTypeChange(event: Event) {
       node.sectionId = "";
       node.dataPath = "";
     }
-  });
-}
-
-function handleLevelChange(event: Event) {
-  const target = event.target as HTMLInputElement;
-  updateNode((node) => {
-    node.level = Number(target.value);
   });
 }
 
@@ -789,7 +809,7 @@ function handleAddChild(childNodeId: string) {
         id: generateNodeId(),
         type: "paragraph",
         sectionId: node.sectionId,
-        level: (node.level || 1) + 1,
+        level: getNextLevel(node.level),
       };
       node.children.push(newChildNode);
     });
@@ -806,7 +826,7 @@ function handleAddChild(childNodeId: string) {
             id: generateNodeId(),
             type: "paragraph",
             sectionId: node.sectionId,
-            level: (node.level || 1) + 1,
+            level: getNextLevel(node.level),
           };
           node.children.push(newChildNode);
         });
