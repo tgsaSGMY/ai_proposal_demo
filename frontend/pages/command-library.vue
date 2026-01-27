@@ -3,13 +3,13 @@
     <div class="mx-auto max-w-6xl space-y-6">
       <header class="space-y-3">
         <!-- 頁首區：顯示導覽路徑與頁面統計（已啟用 / 全部指令） -->
-        <p
+        <div
           class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
           <span class="text-gray-600">我的指令庫</span>
-        </p>
+        </div>
         <div
           class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
         >
@@ -144,9 +144,9 @@
               <h3 class="text-lg font-semibold text-gray-900">
                 {{ command.title }}
               </h3>
-              <p class="text-sm text-gray-500 h-[60px] overflow-hidden">
+              <div class="text-sm text-gray-500 h-[60px] overflow-hidden">
                 {{ command.description }}
-              </p>
+              </div>
             </div>
             <div class="relative" @click.stop>
               <button
@@ -246,10 +246,12 @@
               />
             </svg>
           </span>
-          <p class="text-base font-semibold text-gray-600">新增自訂指令</p>
-          <p class="mt-1 text-sm text-gray-400">
+          <span class="text-base font-semibold text-gray-600"
+            >新增自訂指令</span
+          >
+          <span class="mt-1 text-sm text-gray-400">
             建立新的策略說明，馬上指向企業規範
-          </p>
+          </span>
         </button>
       </section>
     </div>
@@ -273,14 +275,14 @@ import { supabase } from "~/utils/supabaseClient";
 
 definePageMeta({
   middleware: "auth",
+  ssr: false,
 });
-// 本頁需驗證（登入）後才可存取與編輯指令
 
+// 本頁需驗證（登入）後才可存取與編輯指令
 useHead({
   title: "我的指令庫 - TGSA 補助引擎",
   meta: [
     // SEO 與分享資訊：說明該頁面的用途與關鍵字，改善搜尋結果顯示
-
     {
       name: "description",
       content:

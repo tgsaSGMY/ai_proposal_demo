@@ -440,6 +440,7 @@ const handleDocumentClick = () => {
 
 definePageMeta({
   middleware: "auth",
+  ssr: false,
 });
 
 onMounted(async () => {
