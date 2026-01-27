@@ -418,6 +418,23 @@ async function exportPlanUsingWordConfig(
     // 构建文档元素
     const documentElements: Array<Paragraph | Table> = [];
 
+    // 在文档最上面添加标题
+    if (projectTitle) {
+      documentElements.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: projectTitle,
+              bold: true,
+              size: 36,
+            }),
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 240 },
+        }),
+      );
+    }
+
     if (config.nodes && config.nodes.length > 0) {
       for (const node of config.nodes) {
         const elements = buildParagraphFromNode(node, sectionDataMap);
@@ -569,6 +586,11 @@ async function exportPlanToWordDefault(
   projectTitle?: string,
 ) {
   const docxRenderer = new DocxRenderer();
+
+  // 在文檔最上面添加標題
+  if (projectTitle) {
+    docxRenderer.addSectionTitle(projectTitle);
+  }
 
   for (const section of sections) {
     const sectionData = planContent[section.id]?.content;
