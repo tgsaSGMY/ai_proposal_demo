@@ -273,6 +273,7 @@ import { supabase } from "~/utils/supabaseClient";
 
 definePageMeta({
   middleware: "auth",
+  ssr: false,
 });
 // 本頁需驗證（登入）後才可存取與編輯指令
 
