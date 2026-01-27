@@ -425,6 +425,7 @@ const handleDocumentClick = () => {
 
 definePageMeta({
   middleware: "auth",
+  ssr: false,
 });
 
 onMounted(async () => {
@@ -449,7 +450,7 @@ watch(
       isInternal.value = false;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 /**
@@ -466,7 +467,7 @@ watch(
 function decorateProject(
   record: ProjectRecord,
   index: number,
-  accentOverride?: Accent
+  accentOverride?: Accent,
 ): ProjectCard {
   const accent = accentOverride || accentPalette[index % accentPalette.length]!;
 
@@ -482,7 +483,7 @@ function decorateProject(
     if (record.stored_answer?.user_input?.dynamic_fields) {
       const dynamicFields = record.stored_answer.user_input.dynamic_fields;
       const filledCount = Object.values(dynamicFields).filter(
-        (field: any) => field
+        (field: any) => field,
       ).length;
       completeness =
         totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
@@ -497,9 +498,9 @@ function decorateProject(
         allKeys
           .filter(
             (key) =>
-              key.includes("::") && key !== "main_idea" && key !== "main-idea"
+              key.includes("::") && key !== "main_idea" && key !== "main-idea",
           )
-          .map((key) => key.split("::").slice(0, 2).join("::"))
+          .map((key) => key.split("::").slice(0, 2).join("::")),
       ).size;
       completeness =
         totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
@@ -568,7 +569,7 @@ async function fetchProjects() {
     }
     const data: ProjectRecord[] = await response.json();
     projects.value = data.map((record, index) =>
-      decorateProject(record, index)
+      decorateProject(record, index),
     );
   } catch (error: any) {
     console.error("Failed to fetch projects", error);
@@ -654,7 +655,7 @@ async function handleImageGenerate(prompt: string) {
   try {
     const project = selectedProjectForImage.value;
     console.log(
-      `Generating image for project "${project.title}" with prompt: "${prompt}"`
+      `Generating image for project "${project.title}" with prompt: "${prompt}"`,
     );
 
     success(`圖片生成請求已提交：${prompt}`);
@@ -705,7 +706,7 @@ async function handleSave(payload: {
     }
     const updated: ProjectRecord = await response.json();
     const index = projects.value.findIndex(
-      (project) => project.id === payload.id
+      (project) => project.id === payload.id,
     );
     if (index !== -1) {
       const accent = projects.value[index]?.accent;
