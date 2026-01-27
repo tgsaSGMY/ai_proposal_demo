@@ -5,7 +5,6 @@ import {
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
   AlignmentType,
   Table,
   TableRow,
@@ -17,7 +16,9 @@ import type { ContentRenderer } from "./contentRenderer";
 import { DocxRenderer, HtmlRenderer } from "./contentRenderer";
 import type {
   WordDocumentNode,
+  WordDocumentStyle,
   WordExportTemplateConfig,
+  WordListStyle,
 } from "~/types/wordExport";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
@@ -149,6 +150,131 @@ function renderSectionContent(
 
 type ExportableSection = { id: string; name: string; json_schema?: any };
 
+type HeadingCounterState = Record<number, number>;
+
+const DEFAULT_DOCUMENT_STYLE: Required<WordDocumentStyle> = {
+  headingFont: "Times New Roman",
+  headingSizePt: 18,
+  headingBold: true,
+  subHeadingFont: "Times New Roman",
+  subHeadingSizePt: 14,
+  subHeadingBold: true,
+  bodyFont: "Times New Roman",
+  bodySizePt: 12,
+  bodyBold: false,
+};
+
+function resolveDocumentStyle(style?: WordDocumentStyle) {
+  return {
+    ...DEFAULT_DOCUMENT_STYLE,
+    ...(style || {}),
+  } as Required<WordDocumentStyle>;
+}
+
+function createHeadingCounterState(): HeadingCounterState {
+  return {};
+}
+
+function resetHeadingCounters(state: HeadingCounterState) {
+  Object.keys(state).forEach((key) => delete state[Number(key)]);
+}
+
+function formatChineseNumeral(value: number): string {
+  if (value <= 0) return "";
+  const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+  if (value <= 10) {
+    return value === 10 ? "十" : digits[value] || "";
+  }
+  if (value < 20) {
+    return `十${digits[value - 10]}`;
+  }
+  if (value < 100) {
+    const tens = Math.floor(value / 10);
+    const units = value % 10;
+    let result = `${digits[tens]}十`;
+    if (units !== 0) {
+      result += digits[units];
+    }
+    return result;
+  }
+  return String(value);
+}
+
+function formatHeadingPrefix(
+  level: number | undefined,
+  state: HeadingCounterState,
+): string {
+  if (!level) return "";
+  state[level] = (state[level] ?? 0) + 1;
+  Object.keys(state).forEach((key) => {
+    const currentLevel = Number(key);
+    if (currentLevel > level) {
+      delete state[currentLevel];
+    }
+  });
+
+  const count = state[level];
+  switch (level) {
+    case 2:
+      return `${formatChineseNumeral(count)}、`;
+    case 3:
+      return `${count}. `;
+    case 4:
+      return `（${count}）`;
+    default:
+      return "";
+  }
+}
+
+function getListBulletLabel(
+  style: WordListStyle | undefined,
+  index: number,
+): string {
+  switch (style) {
+    case "chineseNumber":
+    case "chineseComma":
+      return `${formatChineseNumeral(index + 1)}、`;
+    case "arabicNumber":
+    case "numberedDot":
+      return `${index + 1}.`;
+    case "parenNumbered":
+      return `（${index + 1}）`;
+    default:
+      return "•";
+  }
+}
+
+function getAlignmentType(
+  alignment?: string,
+): (typeof AlignmentType)[keyof typeof AlignmentType] {
+  switch (alignment) {
+    case "center":
+      return AlignmentType.CENTER;
+    case "right":
+      return AlignmentType.RIGHT;
+    case "left":
+    default:
+      return AlignmentType.LEFT;
+  }
+}
+
+function getValueByPath(
+  obj: Record<string, any> | null | undefined,
+  path?: string,
+): any {
+  if (!path || !obj) return obj;
+  const parts = path.split(".");
+  let current: any = obj;
+  for (const part of parts) {
+    if (current && typeof current === "object") {
+      current = current[part];
+    } else {
+      return null;
+    }
+  }
+  return current;
+}
+
 /**
  * 从 backend 获取 plan template 的 word export config
  */
@@ -227,51 +353,49 @@ async function fetchWordExportConfig(
 function buildParagraphFromNode(
   node: WordDocumentNode,
   sectionDataMap: Record<string, Record<string, any>>,
+  options: {
+    documentStyle?: WordDocumentStyle;
+    headingCounters: HeadingCounterState;
+  },
 ): Array<Paragraph | Table> {
   const elements: Array<Paragraph | Table> = [];
-
   if (!node) return elements;
 
-  const getValueByPath = (obj: Record<string, any>, path?: string): any => {
-    if (!path || !obj) return obj;
-    const parts = path.split(".");
-    let current = obj;
-    for (const part of parts) {
-      if (current && typeof current === "object") {
-        current = current[part];
-      } else {
-        return null;
-      }
-    }
-    return current;
-  };
+  const resolvedStyle = resolveDocumentStyle(options.documentStyle);
 
-  // 根据节点类型生成对应的文档元素
+  const headingCounters = options.headingCounters;
+
+  const headingSize = resolvedStyle.headingSizePt * 2;
+  const subHeadingSize = resolvedStyle.subHeadingSizePt * 2;
+  const bodySize = resolvedStyle.bodySizePt * 2;
+
   if (node.type === "sectionTitle") {
+    resetHeadingCounters(headingCounters);
     elements.push(
       new Paragraph({
         children: [
           new TextRun({
             text: node.label || "章節標題",
-            bold: true,
-            size: 32,
+            bold: resolvedStyle.headingBold,
+            size: headingSize,
+            font: resolvedStyle.headingFont,
           }),
         ],
-        style: "Heading1",
         spacing: { before: 200, after: 120 },
       }),
     );
   } else if (node.type === "subHeading") {
+    const prefix = formatHeadingPrefix(node.level, headingCounters);
     elements.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: node.label || "次標題",
-            bold: true,
-            size: 28,
+            text: `${prefix}${node.label || "次標題"}`,
+            bold: resolvedStyle.subHeadingBold,
+            size: subHeadingSize,
+            font: resolvedStyle.subHeadingFont,
           }),
         ],
-        style: "Heading2",
         spacing: { before: 120, after: 80 },
       }),
     );
@@ -280,16 +404,24 @@ function buildParagraphFromNode(
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"}`;
+    const displayValue = node.label
+      ? `${node.label}: ${value ?? ""}`
+      : String(value ?? "");
 
     elements.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: String(value || ""),
-            size: 22,
+            text: displayValue,
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
+            bold: resolvedStyle.bodyBold,
           }),
         ],
         spacing: { after: 60 },
+        alignment: node.style?.alignment
+          ? getAlignmentType(node.style.alignment)
+          : AlignmentType.LEFT,
       }),
     );
   } else if (node.type === "table") {
@@ -300,7 +432,7 @@ function buildParagraphFromNode(
     const rows = Array.isArray(tableData) ? tableData : [];
     const columns = node.table?.columns || [];
 
-    if (columns.length > 0 && rows.length > 0) {
+    if (columns.length > 0) {
       const headerCells = columns.map(
         (col) =>
           new TableCell({
@@ -310,6 +442,8 @@ function buildParagraphFromNode(
                   new TextRun({
                     text: col.label || col.key,
                     bold: true,
+                    size: bodySize,
+                    font: resolvedStyle.bodyFont,
                   }),
                 ],
               }),
@@ -317,37 +451,35 @@ function buildParagraphFromNode(
           }),
       );
 
-      const tableRows = [
-        new TableRow({ children: headerCells }),
-        ...rows.map(
-          (row) =>
-            new TableRow({
-              children: columns.map(
-                (col) =>
-                  new TableCell({
-                    children: [
-                      new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: String(
-                              typeof row === "object" && row !== null
-                                ? getValueByPath(row, col.key) || ""
-                                : row || "",
-                            ),
-                            size: 22,
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-              ),
-            }),
-        ),
-      ];
+      const dataRows = rows.map(
+        (row) =>
+          new TableRow({
+            children: columns.map(
+              (col) =>
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: String(
+                            typeof row === "object" && row !== null
+                              ? (getValueByPath(row, col.key) ?? "")
+                              : (row ?? ""),
+                          ),
+                          size: bodySize,
+                          font: resolvedStyle.bodyFont,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+            ),
+          }),
+      );
 
       elements.push(
         new Table({
-          rows: tableRows,
+          rows: [new TableRow({ children: headerCells }), ...dataRows],
           width: { size: 100, type: "pct" },
         }),
       );
@@ -361,19 +493,148 @@ function buildParagraphFromNode(
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const numbering = node.list?.numbering ? `${i + 1}. ` : "• ";
+      const bullet = node.list?.numbering
+        ? getListBulletLabel(node.list?.style, i)
+        : "•";
 
-      elements.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: numbering + String(item || ""),
-              size: 22,
+      if (
+        node.list?.itemConfig?.useSubNodes &&
+        typeof item === "object" &&
+        item !== null &&
+        !Array.isArray(item) &&
+        node.children?.length
+      ) {
+        const itemDataMap: Record<string, Record<string, any>> = {};
+        if (node.sectionId) {
+          itemDataMap[node.sectionId] = item as Record<string, any>;
+        }
+
+        const childParagraphNodes: WordDocumentNode[] = [];
+        const childOtherNodes: WordDocumentNode[] = [];
+
+        for (const childNode of node.children) {
+          if (!childNode) continue;
+          let adjustedChildNode = { ...childNode };
+          if (node.dataPath && childNode.dataPath) {
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+          }
+
+          if (adjustedChildNode.type === "paragraph") {
+            childParagraphNodes.push(adjustedChildNode);
+          } else {
+            childOtherNodes.push(adjustedChildNode);
+          }
+        }
+
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: bullet,
+                size: bodySize,
+                font: resolvedStyle.bodyFont,
+              }),
+            ],
+            spacing: { after: childParagraphNodes.length > 0 ? 0 : 120 },
+            indent: { left: 720 },
+          }),
+        );
+
+        for (const childNode of childParagraphNodes) {
+          const childSectionData = childNode.sectionId
+            ? itemDataMap[childNode.sectionId]
+            : null;
+          let value: any = null;
+
+          if (childSectionData) {
+            if (childNode.dataPath && childNode.dataPath.trim()) {
+              value = getValueByPath(childSectionData, childNode.dataPath);
+            }
+          }
+
+          let displayValue: string;
+          if (value === null || value === undefined) {
+            displayValue = childNode.label
+              ? `${childNode.label} (無資料)`
+              : "段落內容 (無資料)";
+          } else if (typeof value === "object" && !Array.isArray(value)) {
+            const keys = Object.keys(value);
+            displayValue =
+              keys.length === 0
+                ? childNode.label || "空對象"
+                : JSON.stringify(value);
+          } else if (Array.isArray(value)) {
+            displayValue = value.length > 0 ? value.join(", ") : "空數組";
+          } else {
+            displayValue = String(value);
+          }
+
+          elements.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: displayValue,
+                  size: bodySize,
+                  font: resolvedStyle.bodyFont,
+                }),
+              ],
+              spacing: {
+                after: childOtherNodes.length === 0 ? 120 : 240,
+              },
+              indent: { left: 720 },
             }),
-          ],
-          indent: { left: 720 },
-        }),
-      );
+          );
+        }
+
+        for (const childNode of childOtherNodes) {
+          let adjustedChildNode = { ...childNode };
+          if (node.dataPath && childNode.dataPath) {
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+          }
+          const childElements = buildParagraphFromNode(
+            adjustedChildNode,
+            itemDataMap,
+            { documentStyle: resolvedStyle, headingCounters },
+          );
+          childElements.forEach((element) => {
+            if (element instanceof Paragraph) {
+              (element as any).indent = { left: 720 };
+            }
+          });
+          elements.push(...childElements);
+        }
+      } else {
+        const displayValue =
+          typeof item === "object" && item !== null
+            ? JSON.stringify(item)
+            : String(item ?? "");
+
+        elements.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${bullet} ${displayValue}`,
+                size: bodySize,
+                font: resolvedStyle.bodyFont,
+              }),
+            ],
+            spacing: { after: 40 },
+            indent: { left: 720 },
+          }),
+        );
+      }
     }
   } else if (node.type === "customText") {
     elements.push(
@@ -381,17 +642,35 @@ function buildParagraphFromNode(
         children: [
           new TextRun({
             text: node.template || "自訂文字",
-            size: 22,
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
           }),
         ],
+        spacing: { after: 60 },
+      }),
+    );
+  } else if (node.type === "imagePlaceholder") {
+    elements.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: node.label || "【圖：請插入圖片】",
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
+            highlight: "yellow",
+          }),
+        ],
+        spacing: { after: 80 },
       }),
     );
   }
 
-  // 递归处理子节点
-  if (node.children && node.children.length > 0) {
+  if (node.children && node.children.length > 0 && node.type !== "list") {
     for (const child of node.children) {
-      const childElements = buildParagraphFromNode(child, sectionDataMap);
+      const childElements = buildParagraphFromNode(child, sectionDataMap, {
+        documentStyle: resolvedStyle,
+        headingCounters,
+      });
       elements.push(...childElements);
     }
   }
@@ -417,6 +696,7 @@ async function exportPlanUsingWordConfig(
 
     // 构建文档元素
     const documentElements: Array<Paragraph | Table> = [];
+    const headingCounters = createHeadingCounterState();
 
     // 在文档最上面添加标题
     if (projectTitle) {
@@ -437,7 +717,10 @@ async function exportPlanUsingWordConfig(
 
     if (config.nodes && config.nodes.length > 0) {
       for (const node of config.nodes) {
-        const elements = buildParagraphFromNode(node, sectionDataMap);
+        const elements = buildParagraphFromNode(node, sectionDataMap, {
+          documentStyle: config.documentStyle,
+          headingCounters,
+        });
         documentElements.push(...elements);
       }
     } else {
