@@ -369,33 +369,31 @@ const dateFormatter = new Intl.DateTimeFormat("zh-TW", {
   day: "2-digit",
 });
 
-if (process.client) {
-  useHead({
-    title: "我的計畫庫 - TGSA 補助引擎",
-    meta: [
-      {
-        name: "description",
-        content:
-          "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
-      },
-      {
-        name: "keywords",
-        content: "計畫庫, 計畫管理, 計畫追蹤, TGSA, AI 企劃",
-      },
-      {
-        property: "og:title",
-        content: "我的計畫庫 - TGSA 補助引擎",
-      },
-      {
-        property: "og:description",
-        content:
-          "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
-      },
-      { property: "og:type", content: "website" },
-      { name: "robots", content: "index, follow" },
-    ],
-  });
-}
+useHead({
+  title: "我的計畫庫 - TGSA 補助引擎",
+  meta: [
+    {
+      name: "description",
+      content:
+        "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
+    },
+    {
+      name: "keywords",
+      content: "計畫庫, 計畫管理, 計畫追蹤, TGSA, AI 企劃",
+    },
+    {
+      property: "og:title",
+      content: "我的計畫庫 - TGSA 補助引擎",
+    },
+    {
+      property: "og:description",
+      content:
+        "集中檢視所有計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "index, follow" },
+  ],
+});
 
 const projects = ref<ProjectCard[]>([]);
 const isLoadingProjects = ref(false);
@@ -441,21 +439,19 @@ onBeforeUnmount(() => {
   document.removeEventListener("click", handleDocumentClick);
 });
 
-if (process.client) {
-  watch(
-    () => currentUserId.value,
-    async (userId) => {
-      if (userId) {
-        await fetchProjects();
-        isInternal.value = await checkIsInternal();
-      } else {
-        projects.value = [];
-        isInternal.value = false;
-      }
-    },
-    { immediate: true },
-  );
-}
+watch(
+  () => currentUserId.value,
+  async (userId) => {
+    if (userId) {
+      await fetchProjects();
+      isInternal.value = await checkIsInternal();
+    } else {
+      projects.value = [];
+      isInternal.value = false;
+    }
+  },
+  { immediate: true },
+);
 
 /**
  * 將後端的 ProjectRecord 轉換為供 UI 顯示的 ProjectCard

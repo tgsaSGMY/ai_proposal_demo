@@ -246,10 +246,12 @@
               />
             </svg>
           </span>
-          <p class="text-base font-semibold text-gray-600">新增自訂指令</p>
-          <p class="mt-1 text-sm text-gray-400">
+          <span class="text-base font-semibold text-gray-600"
+            >新增自訂指令</span
+          >
+          <span class="mt-1 text-sm text-gray-400">
             建立新的策略說明，馬上指向企業規範
-          </p>
+          </span>
         </button>
       </section>
     </div>
@@ -277,34 +279,32 @@ definePageMeta({
 });
 
 // 本頁需驗證（登入）後才可存取與編輯指令
-if (process.client) {
-  useHead({
-    title: "我的指令庫 - TGSA 補助引擎",
-    meta: [
-      // SEO 與分享資訊：說明該頁面的用途與關鍵字，改善搜尋結果顯示
-      {
-        name: "description",
-        content:
-          "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。管理系統規則和企業專屬指令。",
-      },
-      {
-        name: "keywords",
-        content: "指令庫, 模型參數, AI 配置, 企業 DNA, 提示詞管理",
-      },
-      {
-        property: "og:title",
-        content: "我的指令庫 - 模型參數與配置管理 - TGSA 補助引擎",
-      },
-      {
-        property: "og:description",
-        content:
-          "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。",
-      },
-      { property: "og:type", content: "website" },
-      { name: "robots", content: "index, follow" },
-    ],
-  });
-}
+useHead({
+  title: "我的指令庫 - TGSA 補助引擎",
+  meta: [
+    // SEO 與分享資訊：說明該頁面的用途與關鍵字，改善搜尋結果顯示
+    {
+      name: "description",
+      content:
+        "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。管理系統規則和企業專屬指令。",
+    },
+    {
+      name: "keywords",
+      content: "指令庫, 模型參數, AI 配置, 企業 DNA, 提示詞管理",
+    },
+    {
+      property: "og:title",
+      content: "我的指令庫 - 模型參數與配置管理 - TGSA 補助引擎",
+    },
+    {
+      property: "og:description",
+      content:
+        "定義您的企業 DNA、公司實績與邏輯偏好，讓 AI 成為最懂你的專業顧問。",
+    },
+    { property: "og:type", content: "website" },
+    { name: "robots", content: "index, follow" },
+  ],
+});
 
 // 介面定義：描述指令在前端使用的形態
 interface CommandItem {
