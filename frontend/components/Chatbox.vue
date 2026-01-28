@@ -161,13 +161,17 @@
             <textarea
               ref="composerRef"
               v-model="draftMessage"
-              class="mt-3 h-16 w-full resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 pr-14 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+              class="mt-3 w-full min-h-16 resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 pr-14 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 transition-all overflow-hidden"
               :placeholder="composerPlaceholder"
               @keydown.enter.prevent="handleEnter"
+              @input="handleTextareaInput"
+              @compositionstart="handleCompositionStart"
+              @compositionupdate="handleCompositionUpdate"
+              @compositionend="handleCompositionEnd"
             ></textarea>
             <button
               type="button"
-              class="absolute right-6 top-5 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e4e7ff] bg-white text-[#ff6b6b] shadow hover:bg-[#fff6f6]"
+              class="absolute right-6 bottom-5 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e4e7ff] bg-white text-[#ff6b6b] shadow hover:bg-[#fff6f6]"
               @click="openAttachmentModal"
               title="匯入檔案輔助填寫"
             >
@@ -403,10 +407,10 @@ const answeredCount = computed(() =>
   guidedQuestions.reduce((count, question) => {
     const answer = questionAnswers.value[question.id];
     return answer && answer.trim() ? count + 1 : count;
-  }, 0)
+  }, 0),
 );
 const allQuestionsAnswered = computed(
-  () => totalQuestions === 0 || answeredCount.value === totalQuestions
+  () => totalQuestions === 0 || answeredCount.value === totalQuestions,
 );
 const activeQuestionId = ref(null);
 
@@ -444,6 +448,8 @@ const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
 const selectedModel = ref("");
 const timelineLoading = ref(false);
+const textareaMinHeight = 64; // 4rem base height
+const textareaMaxHeight = 184; // 約 11.5rem 上限
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
@@ -488,9 +494,9 @@ const canSendMessage = computed(() => {
   // 项目已选择、不是生成完成状态、且AI没有正在思考下一个问题
   return Boolean(
     props.grantId &&
-      props.templateId &&
-      !isGenerationComplete.value &&
-      !isFetchingNextQuestion.value
+    props.templateId &&
+    !isGenerationComplete.value &&
+    !isFetchingNextQuestion.value,
   );
 });
 
@@ -499,7 +505,7 @@ const canRequestPlan = computed(() => {
 });
 
 const hasCandidatePlan = computed(
-  () => Object.keys(props.candidatePlan || {}).length > 0
+  () => Object.keys(props.candidatePlan || {}).length > 0,
 );
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
@@ -643,7 +649,7 @@ async function streamAIGuidanceMessage(question) {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming) {
             lastMsg.content += msg.data;
-            
+
             // Check if response end marker is reached
             if (lastMsg.content.includes("【回復結束】")) {
               // Stop streaming and mark as done
@@ -744,14 +750,14 @@ function upsertAnswerMessage(
   questionId,
   content,
   source = "user",
-  shouldScroll = true
+  shouldScroll = true,
 ) {
   if (!questionId) {
     return;
   }
   const text = (content || "").trim();
   const index = messages.value.findIndex(
-    (msg) => msg.type === "answer" && msg.questionId === questionId
+    (msg) => msg.type === "answer" && msg.questionId === questionId,
   );
   if (!text) {
     if (index >= 0) {
@@ -769,11 +775,11 @@ watch(
   (newMessages) => {
     // 過濾掉 candidates 和 final 類型的消息，不存入 conversation_history
     const filteredMessages = newMessages.filter(
-      (msg) => msg.type !== "candidates" && msg.type !== "final"
+      (msg) => msg.type !== "candidates" && msg.type !== "final",
     );
     emit("messagesUpdated", filteredMessages);
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -781,7 +787,15 @@ watch(
   (newAnswers) => {
     emit("questionAnswersUpdated", newAnswers);
   },
-  { deep: true }
+  { deep: true },
+);
+
+watch(
+  draftMessage,
+  () => {
+    autoResizeTextarea();
+  },
+  { immediate: true },
 );
 
 watch(
@@ -798,7 +812,7 @@ watch(
     lastCandidateSnapshot.value = snapshot;
     buildCandidateMessage();
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -814,7 +828,7 @@ watch(
     }
     lastFinalSnapshot.value = snapshot;
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -830,7 +844,7 @@ watch(
       void teardownRealtimeSubscription();
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 從傳遞映射中提取預填充值，首先查找直接對應的字段，其次查找 ::reply 格式的字段
@@ -919,9 +933,87 @@ function handleFileImportConfirm(value) {
   isFileImportOpen.value = false;
 }
 
+function resolveTextarea(target) {
+  if (target instanceof HTMLTextAreaElement) {
+    return target;
+  }
+  if (target?.target instanceof HTMLTextAreaElement) {
+    return target.target;
+  }
+  return composerRef.value;
+}
+
+// 自动调整 textarea 高度，根据内容自动扩容
+function autoResizeTextarea(target, immediate = false) {
+  const runResize = () => {
+    const textarea = resolveTextarea(target);
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    const fullHeight = textarea.scrollHeight;
+    const clampedHeight = Math.min(
+      textareaMaxHeight,
+      Math.max(fullHeight, textareaMinHeight),
+    );
+    textarea.style.height = `${clampedHeight}px`;
+    const isOverflowing = fullHeight > textareaMaxHeight;
+    textarea.style.overflowY = isOverflowing ? "auto" : "hidden";
+    if (isOverflowing) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  };
+
+  if (immediate) {
+    runResize();
+  } else {
+    nextTick(runResize);
+  }
+}
+
+function resetTextareaHeight() {
+  const textarea = composerRef.value;
+  if (!textarea) {
+    return;
+  }
+  textarea.style.height = `${textareaMinHeight}px`;
+  textarea.style.overflowY = "hidden";
+}
+
+function handleTextareaInput(event) {
+  autoResizeTextarea(event, true);
+}
+
+function handleCompositionStart(event) {
+  autoResizeTextarea(event, true);
+}
+
+function handleCompositionUpdate(event) {
+  autoResizeTextarea(event, true);
+}
+
+function handleCompositionEnd(event) {
+  autoResizeTextarea(event, true);
+}
+
 // 處理 Enter 鍵按下事件，支持 Shift+Enter 換行，否則發送消息
 async function handleEnter(event) {
   if (event.shiftKey) {
+    // Shift+Enter: 插入換行符，文字自動換行
+    const textarea = event.target;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    draftMessage.value =
+      draftMessage.value.substring(0, start) +
+      "\n" +
+      draftMessage.value.substring(end);
+
+    // 執行 input 事件以觸發自動調整高度
+    nextTick(() => {
+      textarea.setSelectionRange(start + 1, start + 1);
+      autoResizeTextarea();
+    });
     return;
   }
   if (!canSendMessage.value) {
@@ -929,6 +1021,7 @@ async function handleEnter(event) {
     return;
   }
   event.preventDefault();
+  // 發送後重置高度
   await handleSend();
 }
 
@@ -980,6 +1073,9 @@ async function handleSend(useAIFill = false) {
   }
 
   draftMessage.value = "";
+  nextTick(() => {
+    resetTextareaHeight();
+  });
 }
 
 // 暫停 AI 回應，通過 WebSocket 發送暫停命令
@@ -1165,7 +1261,7 @@ async function handleTimelineDownload(version) {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -1313,7 +1409,7 @@ function applyProjectState(record = {}) {
     scrollToBottom();
   }
   const storedAnswers = normalizeStoredAnswers(
-    record.stored_answer?.chat_answers || record.stored_answer?.chatAnswers
+    record.stored_answer?.chat_answers || record.stored_answer?.chatAnswers,
   );
   if (Object.keys(storedAnswers).length) {
     questionAnswers.value = {
@@ -1324,7 +1420,7 @@ function applyProjectState(record = {}) {
   const storedMeta = normalizeStoredAnswerMeta(
     record.stored_answer?.chat_answers_meta ||
       record.stored_answer?.chatAnswersMeta ||
-      {}
+      {},
   );
   if (Object.keys(storedMeta).length) {
     questionAnswerMeta.value = {
@@ -1336,7 +1432,7 @@ function applyProjectState(record = {}) {
     if (!questionAnswerMeta.value[key]) {
       touchAnswerMeta(
         key,
-        record.updated_at || record.updatedAt || getCurrentTimestamp()
+        record.updated_at || record.updatedAt || getCurrentTimestamp(),
       );
     }
   });
@@ -1384,7 +1480,7 @@ async function setupRealtimeSubscription(projectId) {
       (payload) => {
         if (payload.new?.id !== projectId) return;
         applyProjectState(payload.new || {});
-      }
+      },
     )
     .subscribe();
 }
@@ -1409,6 +1505,7 @@ onMounted(() => {
   chatInitialized.value = true;
   emit("guidedQuestionsUpdated", guidedQuestions);
   scrollToBottom();
+  autoResizeTextarea();
 
   // 初始化 WebSocket 连接（虚拟问题用于建立连接）
   if (props.grantId && props.templateId) {
@@ -1440,7 +1537,7 @@ function buildGuidedQuestionList() {
     {
       templateId: props.templateId,
       templateGrantId: props.grantId,
-    }
+    },
   );
   sections.forEach((section) => {
     section.fields.forEach((field) => {
