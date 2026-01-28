@@ -10,6 +10,7 @@ export type WordDocumentNodeType =
   | "subHeading"
   | "paragraph"
   | "table"
+  | "customTable"
   | "list"
   | "customText"
   | "imagePlaceholder";
@@ -80,6 +81,23 @@ export interface WordDocumentNodeListConfig {
   itemConfig?: WordDocumentNodeListItemConfig; // 新增：清單項配置
 }
 
+export type WordCustomTableCellContentType = "text" | "field";
+
+export interface WordCustomTableCell {
+  id: string;
+  row: number;
+  col: number;
+  type: WordCustomTableCellContentType;
+  text?: string;
+  dataPath?: string;
+}
+
+export interface WordCustomTableConfig {
+  rows: number;
+  cols: number;
+  cells: WordCustomTableCell[];
+}
+
 export interface WordDocumentNodeStyleOverrides extends Partial<WordDocumentStyle> {
   alignment?: "left" | "center" | "right";
   highlightPattern?: string;
@@ -94,6 +112,7 @@ export interface WordDocumentNode {
   template?: string;
   condition?: WordDocumentNodeCondition;
   table?: WordDocumentNodeTableConfig;
+  customTable?: WordCustomTableConfig;
   list?: WordDocumentNodeListConfig;
   style?: WordDocumentNodeStyleOverrides;
   level?: number;

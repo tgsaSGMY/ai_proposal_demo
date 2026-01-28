@@ -19,6 +19,7 @@ import type {
   WordDocumentStyle,
   WordExportTemplateConfig,
   WordListStyle,
+  WordCustomTableCell,
 } from "~/types/wordExport";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
@@ -262,17 +263,103 @@ function getValueByPath(
   obj: Record<string, any> | null | undefined,
   path?: string,
 ): any {
-  if (!path || !obj) return obj;
-  const parts = path.split(".");
-  let current: any = obj;
-  for (const part of parts) {
-    if (current && typeof current === "object") {
-      current = current[part];
-    } else {
+  if (!path || obj == null) return obj;
+  const parts = path.split(".").filter((segment) => segment.length > 0);
+
+  const traverse = (current: any, remaining: string[]): any => {
+    if (!remaining.length) {
+      return current;
+    }
+
+    if (Array.isArray(current)) {
+      const aggregated: any[] = [];
+      current.forEach((item) => {
+        const value = traverse(item, remaining);
+        if (Array.isArray(value)) {
+          aggregated.push(...value);
+        } else if (value !== undefined && value !== null) {
+          aggregated.push(value);
+        }
+      });
+      return aggregated.length ? aggregated : null;
+    }
+
+    if (!current || typeof current !== "object") {
       return null;
     }
+
+    const [segment, ...rest] = remaining;
+    if (segment === undefined || !(segment in current)) {
+      return null;
+    }
+    return traverse(current[segment], rest);
+  };
+
+  return traverse(obj, parts);
+}
+
+function resolveScopedPath(
+  basePath?: string,
+  relativePath?: string,
+): string | undefined {
+  if (!relativePath || !relativePath.trim()) {
+    return basePath;
   }
-  return current;
+  if (!basePath || !basePath.trim()) {
+    return relativePath;
+  }
+  const trimmedRelative = relativePath.trim();
+  const basePrefix = `${basePath}.`;
+  if (trimmedRelative.startsWith(basePrefix)) {
+    return trimmedRelative;
+  }
+  return `${basePath}.${trimmedRelative}`;
+}
+
+function formatCustomTableCellValue(
+  cell: WordCustomTableCell,
+  sectionData: Record<string, any> | null,
+  basePath?: string,
+): string {
+  if (!cell) return "";
+  if (cell.type === "text") {
+    return cell.text ?? "";
+  }
+  if (!sectionData || !cell.dataPath) {
+    return "";
+  }
+  const scopedPath = resolveScopedPath(basePath, cell.dataPath);
+  if (!scopedPath) {
+    return "";
+  }
+  const value = getValueByPath(sectionData, scopedPath);
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item === null || item === undefined) return "";
+        if (typeof item === "object") {
+          try {
+            return JSON.stringify(item);
+          } catch (error) {
+            console.warn("Failed to stringify array item", error);
+            return String(item);
+          }
+        }
+        return String(item);
+      })
+      .filter((text) => text.length > 0)
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      console.warn("Failed to stringify cell value", error);
+      return String(value);
+    }
+  }
+  return String(value);
 }
 
 /**
@@ -484,6 +571,74 @@ function buildParagraphFromNode(
         }),
       );
     }
+  } else if (node.type === "customTable") {
+    const customTable = node.customTable;
+    const sectionData = node.sectionId
+      ? (sectionDataMap[node.sectionId] ?? null)
+      : null;
+    const rows = Math.max(0, customTable?.rows ?? 0);
+    const cols = Math.max(0, customTable?.cols ?? 0);
+
+    if (!customTable || !rows || !cols) {
+      elements.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: node.label?.length
+                ? `${node.label}（自訂表格尚未設定）`
+                : "自訂表格尚未設定",
+              italics: true,
+              color: "999999",
+              size: bodySize,
+              font: resolvedStyle.bodyFont,
+            }),
+          ],
+          spacing: { after: 80 },
+        }),
+      );
+    } else {
+      const cellMap = new Map<string, WordCustomTableCell>();
+      for (const cell of customTable.cells ?? []) {
+        if (!cell) continue;
+        cellMap.set(`${cell.row}-${cell.col}`, cell);
+      }
+
+      const docxRows: TableRow[] = [];
+      for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+        const docxCells: TableCell[] = [];
+        for (let colIndex = 0; colIndex < cols; colIndex++) {
+          const cellKey = `${rowIndex}-${colIndex}`;
+          const configCell = cellMap.get(cellKey);
+          const displayValue = configCell
+            ? formatCustomTableCellValue(configCell, sectionData, node.dataPath)
+            : "";
+
+          docxCells.push(
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: displayValue,
+                      size: bodySize,
+                      font: resolvedStyle.bodyFont,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          );
+        }
+        docxRows.push(new TableRow({ children: docxCells }));
+      }
+
+      elements.push(
+        new Table({
+          rows: docxRows,
+          width: { size: 100, type: "pct" },
+        }),
+      );
+    }
   } else if (node.type === "list") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
@@ -491,8 +646,8 @@ function buildParagraphFromNode(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    // 根據節點層級決定是否使用有序列表
-    const isNumbered = node.list?.numbering || (node.level && node.level > 1);
+    // 依據清單設定決定是否使用有序列表（預設啟用）
+    const isNumbered = node.list?.numbering !== false;
 
     if (
       node.list?.itemConfig?.useSubNodes &&

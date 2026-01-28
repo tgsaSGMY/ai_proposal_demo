@@ -373,19 +373,18 @@
           </p>
 
           <div v-if="node.list?.itemConfig?.useSubNodes" class="space-y-2">
-            <button
-              type="button"
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"
-              @click="$emit('add-child', node.id)"
-            >
-              + 添加子節點
-            </button>
+            <p class="text-xs text-slate-500">
+              啟用後可在下方使用「+ 添加子節點」設定清單項內容
+            </p>
           </div>
         </div>
       </div>
 
-      <!-- 添加子節點按鈕（只有清單類型可以添加） -->
-      <div v-if="node.type === 'list'" class="border-t border-slate-200 pt-3">
+      <!-- 添加子節點按鈕（只有啟用嵌套清單時顯示） -->
+      <div
+        v-if="node.type === 'list' && node.list?.itemConfig?.useSubNodes"
+        class="border-t border-slate-200 pt-3"
+      >
         <button
           type="button"
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50"

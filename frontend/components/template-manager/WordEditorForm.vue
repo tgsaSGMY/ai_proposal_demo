@@ -557,6 +557,136 @@
                     </div>
 
                     <div
+                      v-if="node.type === 'customTable'"
+                      class="space-y-4 rounded-xl bg-slate-50 p-3"
+                    >
+                      <div class="grid gap-3 md:grid-cols-2">
+                        <label class="space-y-1 text-sm text-slate-600">
+                          列數 (1-10)
+                          <input
+                            :value="ensureCustomTableConfig(node).rows"
+                            type="number"
+                            min="1"
+                            max="10"
+                            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            @change="(event) =>
+                              handleCustomTableDimensionChange(
+                                node.id,
+                                'rows',
+                                Number(
+                                  (event.target as HTMLInputElement | null)?.value ||
+                                    1,
+                                ),
+                              )
+                            "
+                          />
+                        </label>
+                        <label class="space-y-1 text-sm text-slate-600">
+                          欄數 (1-6)
+                          <input
+                            :value="ensureCustomTableConfig(node).cols"
+                            type="number"
+                            min="1"
+                            max="6"
+                            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            @change="(event) =>
+                              handleCustomTableDimensionChange(
+                                node.id,
+                                'cols',
+                                Number(
+                                  (event.target as HTMLInputElement | null)?.value ||
+                                    1,
+                                ),
+                              )
+                            "
+                          />
+                        </label>
+                      </div>
+
+                      <div class="space-y-3">
+                        <div
+                          v-for="rowIndex in ensureCustomTableConfig(node).rows"
+                          :key="`custom-row-${node.id}-${rowIndex}`"
+                          class="space-y-2"
+                        >
+                          <p class="text-xs font-semibold text-slate-500">
+                            第 {{ rowIndex }} 列
+                          </p>
+                          <div
+                            class="grid gap-3"
+                            :style="{
+                              gridTemplateColumns:
+                                'repeat(' +
+                                ensureCustomTableConfig(node).cols +
+                                ', minmax(0, 1fr))',
+                            }"
+                          >
+                            <div
+                              v-for="cell in getCustomTableRowCells(node, rowIndex - 1)"
+                              :key="cell.id"
+                              class="rounded-xl border border-slate-200 p-3 space-y-2 bg-white"
+                            >
+                              <p class="text-xs font-semibold text-slate-500">
+                                儲存格 {{ rowIndex }}-{{ cell.col + 1 }}
+                              </p>
+                              <label class="space-y-1 text-xs text-slate-500">
+                                內容類型
+                                <select
+                                  v-model="cell.type"
+                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                  @change="handleCustomTableCellTypeChange(cell)"
+                                >
+                                  <option value="text">自訂文字</option>
+                                  <option value="field">資料欄位</option>
+                                </select>
+                              </label>
+                              <div v-if="cell.type === 'text'" class="space-y-1">
+                                <span class="text-xs text-slate-500">顯示文字</span>
+                                <input
+                                  v-model="cell.text"
+                                  type="text"
+                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                  placeholder="輸入內容"
+                                />
+                              </div>
+                              <div v-else class="space-y-1">
+                                <span class="text-xs text-slate-500">資料欄位</span>
+                                <select
+                                  v-model="cell.dataPath"
+                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                >
+                                  <option value="">選擇欄位</option>
+                                  <option
+                                    v-for="option in getNodeColumnCandidates(node)"
+                                    :key="option.key"
+                                    :value="option.key"
+                                  >
+                                    {{ option.label }}
+                                  </option>
+                                </select>
+                                <p
+                                  v-if="
+                                    !getNodeColumnCandidates(node).length &&
+                                    node.sectionId
+                                  "
+                                  class="text-xs text-slate-400"
+                                >
+                                  無可用欄位，請調整資料來源。
+                                </p>
+                                <p
+                                  v-if="!node.sectionId"
+                                  class="text-xs text-rose-500"
+                                >
+                                  需先選擇資料章節才能綁定欄位。
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
                       v-if="node.type === 'list' || node.type === 'subHeading'"
                       class="space-y-3 rounded-xl bg-slate-50 p-3"
                     >
@@ -745,6 +875,8 @@ import type {
   WordExportTemplateConfig,
   WordTableColumn,
   WordListStyle,
+  WordCustomTableConfig,
+  WordCustomTableCell,
 } from "~/types/wordExport";
 import {
   Document,
@@ -831,6 +963,7 @@ const NODE_TYPE_OPTIONS: Array<{ label: string; value: WordDocumentNodeType }> =
     { label: "次標題", value: "subHeading" },
     { label: "段落文字", value: "paragraph" },
     { label: "表格", value: "table" },
+    { label: "自訂表格", value: "customTable" },
     { label: "清單", value: "list" },
     { label: "自訂文字", value: "customText" },
   ];
@@ -1633,6 +1766,13 @@ function handleNodeSectionChange(nodeId: string) {
   updateNode(nodeId, (node) => {
     node.dataPath = "";
     node.level = calculateNodeLevelFromDataPath(node.dataPath);
+    if (node.customTable?.cells?.length) {
+      node.customTable.cells.forEach((cell) => {
+        if (cell.type === "field") {
+          cell.dataPath = "";
+        }
+      });
+    }
     handleNodeDataPathChange(nodeId);
   });
 }
@@ -1644,6 +1784,11 @@ function handleNodeTypeChange(nodeId: string) {
     }
     if (node.type !== "list") {
       delete node.list;
+    }
+    if (node.type !== "customTable") {
+      delete node.customTable;
+    } else {
+      ensureCustomTableConfig(node);
     }
     if (!shouldShowSectionSelectors(node)) {
       node.sectionId = "";
@@ -1661,6 +1806,16 @@ function handleNodeDataPathChange(nodeId: string) {
       node.table.columns = node.table.columns.filter((column) =>
         allow.has(column.key),
       );
+    }
+    if (node.type === "customTable" && node.customTable?.cells?.length) {
+      const allow = new Set(
+        getNodeColumnCandidates(node).map((option) => option.key),
+      );
+      node.customTable.cells.forEach((cell) => {
+        if (cell.type === "field" && cell.dataPath && !allow.has(cell.dataPath)) {
+          cell.dataPath = "";
+        }
+      });
     }
   });
 }
@@ -1785,6 +1940,110 @@ function ensureTableConfig(node: WordDocumentNode) {
   return node.table;
 }
 
+function normalizeCustomTableCells(config: WordCustomTableConfig) {
+  const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 10);
+  const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 6);
+  const expectedCellCount = rows * cols;
+  const existingCells = Array.isArray(config.cells) ? config.cells : [];
+  let needsRebuild = !Array.isArray(config.cells) ||
+    existingCells.length !== expectedCellCount;
+
+  const seenKeys = new Set<string>();
+  if (!needsRebuild) {
+    for (const cell of existingCells) {
+      const rowValid =
+        typeof cell.row === "number" && cell.row >= 0 && cell.row < rows;
+      const colValid =
+        typeof cell.col === "number" && cell.col >= 0 && cell.col < cols;
+      if (!rowValid || !colValid) {
+        needsRebuild = true;
+        break;
+      }
+      const key = `${cell.row}-${cell.col}`;
+      if (seenKeys.has(key)) {
+        needsRebuild = true;
+        break;
+      }
+      seenKeys.add(key);
+    }
+  }
+
+  const finalizeCell = (cell: WordCustomTableCell) => {
+    if (cell.type === "text") {
+      cell.text = cell.text ?? "";
+      cell.dataPath = "";
+    } else {
+      cell.dataPath = cell.dataPath ?? "";
+      cell.text = "";
+    }
+    return cell;
+  };
+
+  if (!needsRebuild) {
+    existingCells.forEach(finalizeCell);
+    config.rows = rows;
+    config.cols = cols;
+    return;
+  }
+
+  const existing = new Map<string, WordCustomTableCell>();
+  for (const cell of existingCells) {
+    if (
+      typeof cell.row !== "number" ||
+      typeof cell.col !== "number" ||
+      cell.row < 0 ||
+      cell.col < 0
+    ) {
+      continue;
+    }
+    const key = `${cell.row}-${cell.col}`;
+    if (!existing.has(key)) {
+      existing.set(key, cell);
+    }
+  }
+
+  const cells: WordCustomTableCell[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const key = `${row}-${col}`;
+      const cell = existing.get(key) ?? {
+        id: generateNodeId(),
+        row,
+        col,
+        type: "text",
+        text: "",
+        dataPath: "",
+      };
+      cell.row = row;
+      cell.col = col;
+      cells.push(finalizeCell(cell));
+    }
+  }
+
+  config.rows = rows;
+  config.cols = cols;
+  config.cells = cells;
+}
+
+function ensureCustomTableConfig(node: WordDocumentNode) {
+  if (!node.customTable) {
+    node.customTable = {
+      rows: 2,
+      cols: 2,
+      cells: [],
+    };
+  }
+  normalizeCustomTableCells(node.customTable);
+  return node.customTable;
+}
+
+function getCustomTableRowCells(node: WordDocumentNode, rowIndex: number) {
+  const customTable = ensureCustomTableConfig(node);
+  return customTable.cells
+    .filter((cell) => cell.row === rowIndex)
+    .sort((a, b) => a.col - b.col);
+}
+
 function ensureListItemConfig(node: WordDocumentNode) {
   const listConfig = ensureListConfig(node);
   if (!listConfig.itemConfig) {
@@ -1820,6 +2079,48 @@ function addListNodeChild(nodeId: string) {
     };
     node.children.push(childNode);
   });
+}
+
+function handleCustomTableDimensionChange(
+  nodeId: string,
+  dimension: "rows" | "cols",
+  rawValue: number,
+) {
+  const sanitized = Number.isFinite(rawValue) ? Math.floor(rawValue) : 1;
+  updateNode(nodeId, (node) => {
+    const customTable = ensureCustomTableConfig(node);
+    const clamped = dimension === "rows"
+      ? Math.min(Math.max(sanitized, 1), 10)
+      : Math.min(Math.max(sanitized, 1), 6);
+    customTable[dimension] = clamped;
+    normalizeCustomTableCells(customTable);
+  });
+}
+
+function handleCustomTableCellTypeChange(cell: WordCustomTableCell) {
+  if (cell.type === "text") {
+    cell.dataPath = "";
+  } else {
+    cell.text = "";
+  }
+}
+
+function resolveNodeScopedPath(
+  node: WordDocumentNode,
+  relativePath?: string,
+): string | undefined {
+  if (!relativePath || !relativePath.trim()) {
+    return node.dataPath;
+  }
+  if (!node.dataPath || !node.dataPath.trim()) {
+    return relativePath;
+  }
+  const trimmedRelative = relativePath.trim();
+  const basePrefix = `${node.dataPath}.`;
+  if (trimmedRelative.startsWith(basePrefix)) {
+    return trimmedRelative;
+  }
+  return `${node.dataPath}.${trimmedRelative}`;
 }
 
 /**
@@ -1987,7 +2288,9 @@ function shouldShowTemplateInput(node: WordDocumentNode) {
 }
 
 function shouldShowNodeLabel(node: WordDocumentNode) {
-  return !["paragraph", "table", "list", "customText"].includes(node.type);
+  return !["paragraph", "table", "customTable", "list", "customText"].includes(
+    node.type,
+  );
 }
 
 function shouldShowSectionSelectors(node: WordDocumentNode) {
@@ -2218,6 +2521,59 @@ function renderNodePreview(
       html += `</tr>`;
     }
     html += `</tbody></table>`;
+  } else if (node.type === "customTable") {
+    const customTable = node.customTable;
+    const rows = Math.max(0, customTable?.rows ?? 0);
+    const cols = Math.max(0, customTable?.cols ?? 0);
+    const bodyFontSize = (formState.value.documentStyle.bodySizePt || 12) / 2;
+    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
+
+    if (!rows || !cols || !customTable?.cells?.length) {
+      html += `<p style="font-size: ${bodyFontSize}pt; color: #94a3b8; margin: 6px 0;">自訂表格尚未設定內容</p>`;
+    } else {
+      const cellMap = new Map<string, WordCustomTableCell>();
+      for (const cell of customTable.cells) {
+        if (!cell) continue;
+        cellMap.set(`${cell.row}-${cell.col}`, cell);
+      }
+
+      const renderCellValue = (cell?: WordCustomTableCell | null): string => {
+        if (!cell) return "";
+        if (cell.type === "text") {
+          return cell.text?.trim() ? cell.text : "";
+        }
+        if (!sectionData || !cell.dataPath) return "";
+        const scopedPath = resolveNodeScopedPath(node, cell.dataPath);
+        if (!scopedPath) return "";
+        const value = getValueByPath(sectionData, scopedPath);
+        if (value === null || value === undefined) return "";
+        if (Array.isArray(value)) return value.join(", ");
+        if (typeof value === "object") {
+          try {
+            return JSON.stringify(value);
+          } catch (error) {
+            console.warn("Failed to stringify custom table cell value", error);
+            return "";
+          }
+        }
+        return String(value);
+      };
+
+      html += `<table style="width: 100%; border-collapse: collapse; margin: 8px 0;">`;
+      for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+        html += "<tr>";
+        for (let colIndex = 0; colIndex < cols; colIndex++) {
+          const cellKey = `${rowIndex}-${colIndex}`;
+          const cell = cellMap.get(cellKey);
+          const displayValue = renderCellValue(cell);
+          html += `<td style="border: 1px solid #cbd5f5; padding: 6px; font-size: ${bodyFontSize}pt; vertical-align: top;">${
+            displayValue || "&nbsp;"
+          }</td>`;
+        }
+        html += "</tr>";
+      }
+      html += `</table>`;
+    }
   } else if (node.type === "list") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
@@ -2225,15 +2581,13 @@ function renderNodePreview(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    // 根據節點層級決定是否使用有序列表
-    const isNumbered = node.list?.numbering || (node.level && node.level > 1);
+    const isNumbered = node.list?.numbering !== false;
     const listTag = isNumbered ? "ol" : "ul";
     const getBulletText = (index: number) =>
       isNumbered ? getListBulletLabel(node.list?.style, index) : "";
 
     html += `<${listTag} style="margin: 6px 0; padding-left: 0; list-style: none;">`;
 
-    // 如果啟用了子節點渲染且項目是對象
     if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
@@ -2242,15 +2596,14 @@ function renderNodePreview(
       !Array.isArray(items[0]) &&
       node.children?.length
     ) {
-      // 對於每個數據項，將第一個子節點放在同一行
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const itemDataMap: Record<string, Record<string, any>> = {};
-        if (node.sectionId) {
-          itemDataMap[node.sectionId] = item;
+        const currentSectionId = node.sectionId;
+        if (currentSectionId && typeof item === "object" && item !== null) {
+          itemDataMap[currentSectionId] = item as Record<string, any>;
         }
 
-        // 獲取第一個子節點的數據
         const firstChild = node.children[0];
         let firstChildValue = "";
 
@@ -2272,13 +2625,13 @@ function renderNodePreview(
             const childSectionData = adjustedFirstChild.sectionId
               ? itemDataMap[adjustedFirstChild.sectionId]
               : null;
-            firstChildValue = childSectionData
+            const value = childSectionData
               ? getValueByPath(childSectionData, adjustedFirstChild.dataPath)
               : adjustedFirstChild.label || "段落內容";
+            firstChildValue = value == null ? "" : String(value);
           }
         }
 
-        // 主項和第一個子項在同一行
         const bullet = getBulletText(i);
         const displayFirstChild =
           firstChildValue === undefined || firstChildValue === null
@@ -2286,7 +2639,6 @@ function renderNodePreview(
             : String(firstChildValue);
         html += `<li style="margin: 4px 0;">${bullet} ${displayFirstChild}`;
 
-        // 其餘子節點形成嵌套列表
         if (node.children.length > 1) {
           html += `<ul style="margin: 6px 0; padding-left: 1.25em; list-style: none;">`;
           for (
@@ -2338,7 +2690,6 @@ function renderNodePreview(
         html += `</li>`;
       }
     } else {
-      // 簡單列表渲染（沒有子節點）
       items.forEach((item, index) => {
         const displayValue =
           typeof item === "object" && item !== null
@@ -2372,17 +2723,39 @@ function renderNodePreview(
  * Get value from object by dot-notation path
  */
 function getValueByPath(obj: Record<string, any>, path?: string): any {
-  if (!path || !obj) return obj;
-  const parts = path.split(".");
-  let current = obj;
-  for (const part of parts) {
-    if (current && typeof current === "object") {
-      current = current[part];
-    } else {
+  if (!path || obj == null) return obj;
+  const parts = path.split(".").filter((segment) => segment.length > 0);
+
+  const traverse = (current: any, remaining: string[]): any => {
+    if (!remaining.length) {
+      return current;
+    }
+
+    if (Array.isArray(current)) {
+      const aggregated: any[] = [];
+      current.forEach((item) => {
+        const value = traverse(item, remaining);
+        if (Array.isArray(value)) {
+          aggregated.push(...value);
+        } else if (value !== undefined && value !== null) {
+          aggregated.push(value);
+        }
+      });
+      return aggregated.length ? aggregated : null;
+    }
+
+    if (!current || typeof current !== "object") {
       return null;
     }
-  }
-  return current;
+
+    const [segment, ...rest] = remaining;
+    if (segment === undefined || !(segment in current)) {
+      return null;
+    }
+    return traverse(current[segment], rest);
+  };
+
+  return traverse(obj, parts);
 }
 
 /**
