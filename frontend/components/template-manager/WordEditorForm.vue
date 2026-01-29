@@ -3521,118 +3521,93 @@ function buildParagraphsFromNode(
           itemDataMap[node.sectionId] = item;
         }
 
-        // 收集所有子節點的內容
-        const childParagraphNodes: WordDocumentNode[] = [];
-        const childOtherNodes: WordDocumentNode[] = [];
-
-        for (const childNode of node.children) {
-          if (!childNode) continue;
-          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
-          let adjustedChildNode = { ...childNode };
-          if (node.dataPath && childNode.dataPath) {
-            const parentPathPrefix = node.dataPath + ".";
-            if (childNode.dataPath.startsWith(parentPathPrefix)) {
-              adjustedChildNode = {
-                ...childNode,
-                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
-              };
-            }
+        // 維持子節點原有順序，依序渲染
+        let paragraphIndex = 0;
+        const adjustedChildren = node.children.map((childNode) => {
+          if (!childNode) return childNode;
+          if (!node.dataPath || !childNode.dataPath) {
+            return childNode;
           }
-
-          // 分離段落類型的子節點和其他類型的子節點
-          if (adjustedChildNode.type === "paragraph") {
-            childParagraphNodes.push(adjustedChildNode);
-          } else {
-            childOtherNodes.push(adjustedChildNode);
+          const parentPathPrefix = node.dataPath + ".";
+          if (childNode.dataPath.startsWith(parentPathPrefix)) {
+            return {
+              ...childNode,
+              dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+            };
           }
-        }
-
-        // 為段落類型的子節點創建獨立的段落（沒有額外縮進，段落間有空行）
-        childParagraphNodes.forEach((childNode, index) => {
-          if (!childNode) return;
-          const childSectionData = childNode.sectionId
-            ? itemDataMap[childNode.sectionId]
-            : null;
-          let value: any = null;
-
-          if (childSectionData) {
-            if (childNode.dataPath && childNode.dataPath.trim()) {
-              value = getValueByPath(childSectionData, childNode.dataPath);
-            }
-          }
-
-          let displayValue: string;
-          if (value === null || value === undefined) {
-            displayValue = childNode.label
-              ? `${childNode.label} (無資料)`
-              : "段落內容 (無資料)";
-          } else if (typeof value === "object" && !Array.isArray(value)) {
-            const keys = Object.keys(value);
-            if (keys.length === 0) {
-              displayValue = childNode.label || "空對象";
-            } else {
-              displayValue = JSON.stringify(value);
-            }
-          } else if (Array.isArray(value)) {
-            displayValue = value.length > 0 ? value.join(", ") : "空數組";
-          } else {
-            displayValue = String(value);
-          }
-
-          // 創建獨立的段落，與清單項相同的縮進，段落間有空行
-          const prefixText = index === 0 ? `${bullet} ` : "";
-          const childBold =
-            childNode.style?.bodyBold ??
-            formState.value.documentStyle.bodyBold ??
-            false;
-
-          elements.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: prefixText + displayValue, // 將編號與內容合併
-                  size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
-                  font:
-                    formState.value.documentStyle.bodyFont || "Times New Roman",
-                  bold: childBold,
-                }),
-              ],
-              spacing: {
-                // 如果後面還有非段落節點，間距大一點，否則小一點
-                after: childOtherNodes.length === 0 ? 120 : 240,
-              },
-              indent: { left: 0 }, // 依照您之前的要求，移除縮排 (原本是 720)
-            }),
-          );
+          return childNode;
         });
 
-        // 處理非段落類型的子節點
-        for (const childNode of childOtherNodes) {
-          // 如果子節點的 dataPath 包含父節點的 dataPath 前綴，則移除它
-          let adjustedChildNode = { ...childNode };
-          if (node.dataPath && childNode.dataPath) {
-            const parentPathPrefix = node.dataPath + ".";
-            if (childNode.dataPath.startsWith(parentPathPrefix)) {
-              adjustedChildNode = {
-                ...childNode,
-                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
-              };
+        adjustedChildren.forEach((childNode) => {
+          if (!childNode) return;
+          if (childNode.type === "paragraph") {
+            const childSectionData = childNode.sectionId
+              ? itemDataMap[childNode.sectionId]
+              : null;
+            let value: any = null;
+
+            if (childSectionData) {
+              if (childNode.dataPath && childNode.dataPath.trim()) {
+                value = getValueByPath(childSectionData, childNode.dataPath);
+              }
             }
+
+            let displayValue: string;
+            if (value === null || value === undefined) {
+              displayValue = childNode.label
+                ? `${childNode.label} (無資料)`
+                : "段落內容 (無資料)";
+            } else if (typeof value === "object" && !Array.isArray(value)) {
+              const keys = Object.keys(value);
+              if (keys.length === 0) {
+                displayValue = childNode.label || "空對象";
+              } else {
+                displayValue = JSON.stringify(value);
+              }
+            } else if (Array.isArray(value)) {
+              displayValue = value.length > 0 ? value.join(", ") : "空數組";
+            } else {
+              displayValue = String(value);
+            }
+
+            const prefixText = paragraphIndex === 0 ? `${bullet} ` : "";
+            paragraphIndex += 1;
+            const childBold =
+              childNode.style?.bodyBold ??
+              formState.value.documentStyle.bodyBold ??
+              false;
+
+            elements.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: prefixText + displayValue,
+                    size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                    font:
+                      formState.value.documentStyle.bodyFont ||
+                      "Times New Roman",
+                    bold: childBold,
+                  }),
+                ],
+                spacing: { after: 120 },
+                indent: { left: 0 },
+              }),
+            );
+          } else {
+            const childElements = buildParagraphsFromNode(
+              childNode,
+              itemDataMap,
+              headingCounters,
+            );
+            childElements.forEach((element) => {
+              if (element instanceof Paragraph) {
+                const paragraph = element as any;
+                paragraph.indent = { left: 720 };
+              }
+            });
+            elements.push(...childElements);
           }
-          const childElements = buildParagraphsFromNode(
-            adjustedChildNode,
-            itemDataMap,
-            headingCounters,
-          );
-          // 為子節點設置與清單項相同的縮進，沒有額外縮進
-          childElements.forEach((element) => {
-            if (element instanceof Paragraph) {
-              const paragraph = element as any;
-              paragraph.indent = { left: 720 }; // 與清單項相同的縮進
-            }
-          });
-          elements.push(...childElements);
-        }
+        });
       } else {
         // 簡單渲染
         const displayValue =
@@ -3672,6 +3647,74 @@ function buildParagraphsFromNode(
         spacing: { after: 60 },
       }),
     );
+  } else if (node.type === "customTable") {
+    const customTable = node.customTable;
+    const rows = Math.max(0, customTable?.rows ?? 0);
+    const cols = Math.max(0, customTable?.cols ?? 0);
+    const sectionData: Record<string, any> | null = node.sectionId
+      ? (sectionDataMap[node.sectionId] ?? null)
+      : null;
+
+    if (rows > 0 && cols > 0 && customTable?.cells?.length) {
+      const cellMap = new Map<string, WordCustomTableCell>();
+      for (const cell of customTable.cells) {
+        if (!cell) continue;
+        cellMap.set(`${cell.row}-${cell.col}`, cell);
+      }
+
+      const tableRows: TableRow[] = [];
+      for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+        const tableCells: TableCell[] = [];
+        for (let colIndex = 0; colIndex < cols; colIndex++) {
+          const cellKey = `${rowIndex}-${colIndex}`;
+          const cell = cellMap.get(cellKey);
+          const displayValue = getCustomTableCellDisplayValue(
+            node,
+            cell || undefined,
+            sectionData,
+          );
+
+          tableCells.push(
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: displayValue || "",
+                      size:
+                        (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                      font:
+                        formState.value.documentStyle.bodyFont ||
+                        "Times New Roman",
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          );
+        }
+        tableRows.push(new TableRow({ children: tableCells }));
+      }
+
+      elements.push(
+        new Table({
+          rows: tableRows,
+          width: { size: 100, type: "pct" },
+        }),
+      );
+    }
+  }
+
+  // 遞歸渲染子節點（list 類型的子節點已在上面處理過）
+  if (node.children?.length && node.type !== "list") {
+    for (const childNode of node.children) {
+      const childElements = buildParagraphsFromNode(
+        childNode,
+        sectionDataMap,
+        headingCounters,
+      );
+      elements.push(...childElements);
+    }
   }
 
   return elements;
