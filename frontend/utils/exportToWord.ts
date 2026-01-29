@@ -20,6 +20,7 @@ import type {
   WordExportTemplateConfig,
   WordListStyle,
   WordCustomTableCell,
+  WordCustomTableCellContent,
 } from "~/types/wordExport";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
@@ -365,19 +366,42 @@ function resolveScopedPath(
   return `${basePath}.${trimmedRelative}`;
 }
 
-function formatCustomTableCellValue(
+function ensureExportCellContents(
   cell: WordCustomTableCell,
+): WordCustomTableCellContent[] {
+  if (Array.isArray(cell.contents) && cell.contents.length > 0) {
+    cell.contents = cell.contents.map((content, index) => ({
+      id: content.id || `${cell.id || "cell"}-content-${index}`,
+      type: content.type ?? "text",
+      text: content.type === "text" ? (content.text ?? "") : undefined,
+      dataPath: content.type === "field" ? (content.dataPath ?? "") : undefined,
+    }));
+    return cell.contents;
+  }
+
+  const fallbackType = cell.type ?? "text";
+  const fallbackContent: WordCustomTableCellContent = {
+    id: `${cell.id || "cell"}-content-0`,
+    type: fallbackType,
+    text: fallbackType === "text" ? (cell.text ?? "") : undefined,
+    dataPath: fallbackType === "field" ? (cell.dataPath ?? "") : undefined,
+  };
+  cell.contents = [fallbackContent];
+  return cell.contents;
+}
+
+function formatCustomTableCellContent(
+  content: WordCustomTableCellContent,
   sectionData: Record<string, any> | null,
   basePath?: string,
 ): string {
-  if (!cell) return "";
-  if (cell.type === "text") {
-    return cell.text ?? "";
+  if (content.type === "text") {
+    return content.text ?? "";
   }
-  if (!sectionData || !cell.dataPath) {
+  if (!sectionData || !content.dataPath) {
     return "";
   }
-  const scopedPath = resolveScopedPath(basePath, cell.dataPath);
+  const scopedPath = resolveScopedPath(basePath, content.dataPath);
   if (!scopedPath) {
     return "";
   }
@@ -409,6 +433,20 @@ function formatCustomTableCellValue(
     }
   }
   return String(value);
+}
+
+function formatCustomTableCellValue(
+  cell: WordCustomTableCell,
+  sectionData: Record<string, any> | null,
+  basePath?: string,
+): string {
+  if (!cell) return "";
+  const contents = ensureExportCellContents(cell);
+  return contents
+    .map((content) =>
+      formatCustomTableCellContent(content, sectionData, basePath),
+    )
+    .join("");
 }
 
 /**

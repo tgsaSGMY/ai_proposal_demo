@@ -83,6 +83,13 @@ export interface WordDocumentNodeListConfig {
 
 export type WordCustomTableCellContentType = "text" | "field";
 
+export interface WordCustomTableCellContent {
+  id: string;
+  type: WordCustomTableCellContentType;
+  text?: string;
+  dataPath?: string;
+}
+
 export interface WordCustomTableCell {
   id: string;
   row: number;
@@ -90,6 +97,7 @@ export interface WordCustomTableCell {
   type: WordCustomTableCellContentType;
   text?: string;
   dataPath?: string;
+  contents?: WordCustomTableCellContent[];
 }
 
 export interface WordCustomTableConfig {

@@ -31,50 +31,50 @@
         </button>
       </header>
 
-      <div class="grid gap-6 lg:grid-cols-[280px,1fr,600px]">
-        <aside
-          class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
-        >
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-slate-700">版本歷史</h3>
-            <span class="text-xs text-slate-500"
-              >{{ versionHistory.length }} 筆</span
-            >
-          </div>
-          <p class="text-xs text-slate-500">
-            系統會依專案建立時間，找出當時最近的版本。若尚未建立版本，匯出時將落回預設版型。
-          </p>
-          <ul class="space-y-2 text-sm">
-            <li
-              v-for="version in versionHistory"
-              :key="version.id"
-              class="rounded-xl border border-slate-200 bg-white p-3"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <div>
-                  <p class="font-semibold text-slate-800">
-                    {{ formatDate(version.createdAt) }}
-                  </p>
-                  <p class="text-xs text-slate-500 truncate">
-                    {{ version.createdBy || "未記錄" }}
-                  </p>
+      <div class="grid gap-6 lg:grid-cols-[1fr,1fr]">
+        <div class="space-y-6 overflow-y-auto max-h-[calc(100vh-12rem)]">
+          <aside
+            class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+          >
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-slate-700">版本歷史</h3>
+              <span class="text-xs text-slate-500"
+                >{{ versionHistory.length }} 筆</span
+              >
+            </div>
+            <p class="text-xs text-slate-500">
+              系統會依專案建立時間，找出當時最近的版本。若尚未建立版本，匯出時將落回預設版型。
+            </p>
+            <ul class="space-y-2 text-sm">
+              <li
+                v-for="version in versionHistory"
+                :key="version.id"
+                class="rounded-xl border border-slate-200 bg-white p-3"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <div>
+                    <p class="font-semibold text-slate-800">
+                      {{ formatDate(version.createdAt) }}
+                    </p>
+                    <p class="text-xs text-slate-500 truncate">
+                      {{ version.createdBy || "未記錄" }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                    @click="applyVersion(version)"
+                  >
+                    套用
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                  @click="applyVersion(version)"
-                >
-                  套用
-                </button>
-              </div>
-            </li>
-            <li v-if="!versionHistory.length" class="text-xs text-slate-400">
-              尚未建立任何版本。
-            </li>
-          </ul>
-        </aside>
+              </li>
+              <li v-if="!versionHistory.length" class="text-xs text-slate-400">
+                尚未建立任何版本。
+              </li>
+            </ul>
+          </aside>
 
-        <div class="space-y-6">
           <section class="rounded-2xl border border-slate-200 p-4 space-y-4">
             <div class="flex items-center justify-between">
               <h3 class="text-base font-semibold text-slate-800">
@@ -600,7 +600,7 @@
                         <label class="space-y-1 text-sm text-slate-600">
                           列數 (1-10)
                           <input
-                            :value="ensureCustomTableConfig(node).rows"
+                            :value="node.customTable?.rows ?? 1"
                             type="number"
                             min="1"
                             max="10"
@@ -621,7 +621,7 @@
                         <label class="space-y-1 text-sm text-slate-600">
                           欄數 (1-6)
                           <input
-                            :value="ensureCustomTableConfig(node).cols"
+                            :value="node.customTable?.cols ?? 1"
                             type="number"
                             min="1"
                             max="6"
@@ -643,7 +643,7 @@
 
                       <div class="space-y-3">
                         <div
-                          v-for="rowIndex in ensureCustomTableConfig(node).rows"
+                          v-for="rowIndex in node.customTable?.rows || 0"
                           :key="`custom-row-${node.id}-${rowIndex}`"
                           class="space-y-2"
                         >
@@ -655,7 +655,7 @@
                             :style="{
                               gridTemplateColumns:
                                 'repeat(' +
-                                ensureCustomTableConfig(node).cols +
+                                (node.customTable?.cols || 1) +
                                 ', minmax(0, 1fr))',
                             }"
                           >
@@ -670,67 +670,164 @@
                               <p class="text-xs font-semibold text-slate-500">
                                 儲存格 {{ rowIndex }}-{{ cell.col + 1 }}
                               </p>
-                              <label class="space-y-1 text-xs text-slate-500">
-                                內容類型
-                                <select
-                                  v-model="cell.type"
-                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                  @change="
-                                    handleCustomTableCellTypeChange(cell)
-                                  "
+                              <div class="space-y-2">
+                                <div
+                                  v-for="(
+                                    content, contentIndex
+                                  ) in cell.contents"
+                                  :key="content.id"
+                                  class="rounded-lg border border-slate-200 p-2 space-y-2"
                                 >
-                                  <option value="text">自訂文字</option>
-                                  <option value="field">資料欄位</option>
-                                </select>
-                              </label>
-                              <div
-                                v-if="cell.type === 'text'"
-                                class="space-y-1"
-                              >
-                                <span class="text-xs text-slate-500"
-                                  >顯示文字</span
-                                >
-                                <input
-                                  v-model="cell.text"
-                                  type="text"
-                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                  placeholder="輸入內容"
-                                />
-                              </div>
-                              <div v-else class="space-y-1">
-                                <span class="text-xs text-slate-500"
-                                  >資料欄位</span
-                                >
-                                <select
-                                  v-model="cell.dataPath"
-                                  class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                >
-                                  <option value="">選擇欄位</option>
-                                  <option
-                                    v-for="option in getNodeColumnCandidates(
-                                      node,
-                                    )"
-                                    :key="option.key"
-                                    :value="option.key"
+                                  <div
+                                    class="flex flex-wrap items-center justify-between gap-2"
                                   >
-                                    {{ option.label }}
-                                  </option>
-                                </select>
-                                <p
-                                  v-if="
-                                    !getNodeColumnCandidates(node).length &&
-                                    node.sectionId
-                                  "
-                                  class="text-xs text-slate-400"
-                                >
-                                  無可用欄位，請調整資料來源。
-                                </p>
-                                <p
-                                  v-if="!node.sectionId"
-                                  class="text-xs text-rose-500"
-                                >
-                                  需先選擇資料章節才能綁定欄位。
-                                </p>
+                                    <div
+                                      class="flex items-center gap-2 text-xs text-slate-500"
+                                    >
+                                      <span>片段 {{ contentIndex + 1 }}</span>
+                                      <select
+                                        v-model="content.type"
+                                        class="rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                                        @change="
+                                          handleCustomTableCellContentTypeChange(
+                                            cell,
+                                            content,
+                                          )
+                                        "
+                                      >
+                                        <option value="text">自訂文字</option>
+                                        <option value="field">資料欄位</option>
+                                      </select>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                                        :disabled="contentIndex === 0"
+                                        @click="
+                                          moveCustomTableCellContent(
+                                            cell,
+                                            contentIndex,
+                                            'up',
+                                          )
+                                        "
+                                        title="上移片段"
+                                      >
+                                        ↑
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                                        :disabled="
+                                          contentIndex ===
+                                          (cell.contents?.length || 0) - 1
+                                        "
+                                        @click="
+                                          moveCustomTableCellContent(
+                                            cell,
+                                            contentIndex,
+                                            'down',
+                                          )
+                                        "
+                                        title="下移片段"
+                                      >
+                                        ↓
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 disabled:opacity-40"
+                                        :disabled="
+                                          (cell.contents?.length || 0) === 1
+                                        "
+                                        @click="
+                                          removeCustomTableCellContent(
+                                            cell,
+                                            content.id,
+                                          )
+                                        "
+                                        title="刪除此片段"
+                                      >
+                                        刪除
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div
+                                    v-if="content.type === 'text'"
+                                    class="space-y-1"
+                                  >
+                                    <span class="text-xs text-slate-500"
+                                      >顯示文字</span
+                                    >
+                                    <input
+                                      v-model="content.text"
+                                      type="text"
+                                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                      placeholder="輸入內容"
+                                      @input="
+                                        syncLegacyCustomTableCellFields(cell)
+                                      "
+                                    />
+                                  </div>
+                                  <div v-else class="space-y-1">
+                                    <span class="text-xs text-slate-500"
+                                      >資料欄位</span
+                                    >
+                                    <select
+                                      v-model="content.dataPath"
+                                      class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                      @change="
+                                        syncLegacyCustomTableCellFields(cell)
+                                      "
+                                    >
+                                      <option value="">選擇欄位</option>
+                                      <option
+                                        v-for="option in getNodeColumnCandidates(
+                                          node,
+                                        )"
+                                        :key="option.key"
+                                        :value="option.key"
+                                      >
+                                        {{ option.label }}
+                                      </option>
+                                    </select>
+                                    <p
+                                      v-if="
+                                        !getNodeColumnCandidates(node).length &&
+                                        node.sectionId
+                                      "
+                                      class="text-xs text-slate-400"
+                                    >
+                                      無可用欄位，請調整資料來源。
+                                    </p>
+                                    <p
+                                      v-if="!node.sectionId"
+                                      class="text-xs text-rose-500"
+                                    >
+                                      需先選擇資料章節才能綁定欄位。
+                                    </p>
+                                  </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    class="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                    @click="
+                                      addCustomTableCellContent(cell, 'text')
+                                    "
+                                  >
+                                    + 新增文字片段
+                                  </button>
+                                  <button
+                                    type="button"
+                                    class="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                                    :disabled="!node.sectionId"
+                                    @click="
+                                      addCustomTableCellContent(cell, 'field')
+                                    "
+                                  >
+                                    + 新增資料片段
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -932,6 +1029,8 @@ import type {
   WordListStyle,
   WordCustomTableConfig,
   WordCustomTableCell,
+  WordCustomTableCellContent,
+  WordCustomTableCellContentType,
 } from "~/types/wordExport";
 import {
   Document,
@@ -1426,6 +1525,19 @@ watch(
   { immediate: true },
 );
 
+function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
+  if (!nodes) return;
+  nodes.forEach((node) => {
+    if (!node) return;
+    if (node.type === "customTable") {
+      ensureCustomTableConfig(node);
+    }
+    if (node.children?.length) {
+      initializeNodeDefaults(node.children);
+    }
+  });
+}
+
 function hydrateForm(base?: WordExportTemplateConfig) {
   try {
     const documentStyle = {
@@ -1442,6 +1554,8 @@ function hydrateForm(base?: WordExportTemplateConfig) {
       base?.nodes && base.nodes.length > 0
         ? JSON.parse(JSON.stringify(base.nodes))
         : generateDefaultNodes();
+
+    initializeNodeDefaults(nodes);
 
     formState.value = {
       documentStyle,
@@ -1823,9 +1937,12 @@ function handleNodeSectionChange(nodeId: string) {
     node.level = calculateNodeLevelFromDataPath(node.dataPath);
     if (node.customTable?.cells?.length) {
       node.customTable.cells.forEach((cell) => {
-        if (cell.type === "field") {
-          cell.dataPath = "";
-        }
+        cell.contents?.forEach((content) => {
+          if (content.type === "field") {
+            content.dataPath = "";
+          }
+        });
+        ensureCustomTableCellContents(cell);
       });
     }
     handleNodeDataPathChange(nodeId);
@@ -1867,12 +1984,19 @@ function handleNodeDataPathChange(nodeId: string) {
         getNodeColumnCandidates(node).map((option) => option.key),
       );
       node.customTable.cells.forEach((cell) => {
-        if (
-          cell.type === "field" &&
-          cell.dataPath &&
-          !allow.has(cell.dataPath)
-        ) {
-          cell.dataPath = "";
+        let changed = false;
+        cell.contents?.forEach((content) => {
+          if (
+            content.type === "field" &&
+            content.dataPath &&
+            !allow.has(content.dataPath)
+          ) {
+            content.dataPath = "";
+            changed = true;
+          }
+        });
+        if (changed) {
+          ensureCustomTableCellContents(cell);
         }
       });
     }
@@ -2006,6 +2130,130 @@ function ensureTableConfig(node: WordDocumentNode) {
   return node.table;
 }
 
+function syncLegacyCustomTableCellFields(cell: WordCustomTableCell) {
+  const primary = cell.contents?.[0];
+  if (!primary) {
+    cell.type = "text";
+    cell.text = "";
+    cell.dataPath = "";
+    return;
+  }
+
+  cell.type = primary.type;
+  if (primary.type === "text") {
+    cell.text = primary.text ?? "";
+    cell.dataPath = "";
+  } else {
+    cell.dataPath = primary.dataPath ?? "";
+    cell.text = "";
+  }
+}
+
+function ensureCustomTableCellContents(cell: WordCustomTableCell) {
+  const buildContent = (
+    base?: Partial<WordCustomTableCellContent> & {
+      type?: WordCustomTableCellContentType;
+    },
+  ): WordCustomTableCellContent => {
+    const resolvedType = base?.type ?? "text";
+    return {
+      id: base?.id || generateNodeId(),
+      type: resolvedType,
+      text: resolvedType === "text" ? (base?.text ?? "") : undefined,
+      dataPath: resolvedType === "field" ? (base?.dataPath ?? "") : undefined,
+    };
+  };
+
+  if (!Array.isArray(cell.contents) || cell.contents.length === 0) {
+    const fallbackType = cell.type ?? "text";
+    cell.contents = [
+      buildContent({
+        type: fallbackType,
+        text: cell.text,
+        dataPath: cell.dataPath,
+      }),
+    ];
+  } else {
+    cell.contents = cell.contents.map((content) =>
+      buildContent({
+        id: content.id,
+        type: content.type,
+        text: content.text,
+        dataPath: content.dataPath,
+      }),
+    );
+  }
+
+  syncLegacyCustomTableCellFields(cell);
+  return cell.contents;
+}
+
+function formatCustomTableFieldValue(value: any): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) =>
+        typeof item === "object" ? JSON.stringify(item) : String(item ?? ""),
+      )
+      .filter((text) => text.length > 0)
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      console.warn("Failed to stringify value", error);
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function getCustomTableCellContentValue(
+  node: WordDocumentNode,
+  sectionData: Record<string, any> | null,
+  content: WordCustomTableCellContent,
+): string {
+  if (!content) return "";
+  if (content.type === "text") {
+    return content.text ?? "";
+  }
+  if (!sectionData || !content.dataPath) return "";
+  const scopedPath = resolveNodeScopedPath(node, content.dataPath);
+  if (!scopedPath) return "";
+  const value = getValueByPath(sectionData, scopedPath);
+  return formatCustomTableFieldValue(value);
+}
+
+function getCustomTableCellDisplayValue(
+  node: WordDocumentNode,
+  cell: WordCustomTableCell | undefined,
+  sectionData: Record<string, any> | null,
+): string {
+  if (!cell) return "";
+
+  // Read contents without mutating - use existing contents or fallback to legacy fields
+  let contents: WordCustomTableCellContent[];
+  if (Array.isArray(cell.contents) && cell.contents.length > 0) {
+    contents = cell.contents;
+  } else {
+    contents = [
+      {
+        id: "",
+        type: cell.type ?? "text",
+        text: cell.text,
+        dataPath: cell.dataPath,
+      } as WordCustomTableCellContent,
+    ];
+  }
+
+  return contents
+    .map((content) =>
+      getCustomTableCellContentValue(node, sectionData, content),
+    )
+    .join("");
+}
+
 function normalizeCustomTableCells(config: WordCustomTableConfig) {
   const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 10);
   const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 6);
@@ -2035,13 +2283,10 @@ function normalizeCustomTableCells(config: WordCustomTableConfig) {
   }
 
   const finalizeCell = (cell: WordCustomTableCell) => {
-    if (cell.type === "text") {
-      cell.text = cell.text ?? "";
-      cell.dataPath = "";
-    } else {
-      cell.dataPath = cell.dataPath ?? "";
-      cell.text = "";
+    if (!cell.id) {
+      cell.id = generateNodeId();
     }
+    ensureCustomTableCellContents(cell);
     return cell;
   };
 
@@ -2104,8 +2349,10 @@ function ensureCustomTableConfig(node: WordDocumentNode) {
 }
 
 function getCustomTableRowCells(node: WordDocumentNode, rowIndex: number) {
-  const customTable = ensureCustomTableConfig(node);
-  return customTable.cells
+  if (!node.customTable?.cells) {
+    return [];
+  }
+  return node.customTable.cells
     .filter((cell) => cell.row === rowIndex)
     .sort((a, b) => a.col - b.col);
 }
@@ -2164,12 +2411,86 @@ function handleCustomTableDimensionChange(
   });
 }
 
-function handleCustomTableCellTypeChange(cell: WordCustomTableCell) {
-  if (cell.type === "text") {
-    cell.dataPath = "";
-  } else {
-    cell.text = "";
+function addCustomTableCellContent(
+  cell: WordCustomTableCell,
+  type: WordCustomTableCellContentType,
+) {
+  if (!cell.contents) {
+    cell.contents = [];
   }
+  cell.contents.push({
+    id: generateNodeId(),
+    type,
+    text: type === "text" ? "" : undefined,
+    dataPath: type === "field" ? "" : undefined,
+  });
+  ensureCustomTableCellContents(cell);
+}
+
+function removeCustomTableCellContent(
+  cell: WordCustomTableCell,
+  contentId: string,
+) {
+  if (!cell.contents || cell.contents.length === 0) {
+    cell.contents = [
+      {
+        id: generateNodeId(),
+        type: "text",
+        text: "",
+      },
+    ];
+  }
+  if (cell.contents.length === 1) {
+    const first = cell.contents[0];
+    if (first) {
+      first.type = "text";
+      first.text = "";
+      first.dataPath = "";
+    }
+    syncLegacyCustomTableCellFields(cell);
+    return;
+  }
+  cell.contents = cell.contents.filter((content) => content.id !== contentId);
+  if (!cell.contents.length) {
+    cell.contents = [
+      {
+        id: generateNodeId(),
+        type: "text",
+        text: "",
+      },
+    ];
+  }
+  ensureCustomTableCellContents(cell);
+}
+
+function moveCustomTableCellContent(
+  cell: WordCustomTableCell,
+  contentIndex: number,
+  direction: "up" | "down",
+) {
+  if (!cell.contents || cell.contents.length < 2) return;
+  const newIndex = direction === "up" ? contentIndex - 1 : contentIndex + 1;
+  if (newIndex < 0 || newIndex >= cell.contents.length) return;
+  const current = cell.contents[contentIndex];
+  const target = cell.contents[newIndex];
+  if (!current || !target) return;
+  cell.contents[contentIndex] = target;
+  cell.contents[newIndex] = current;
+  ensureCustomTableCellContents(cell);
+}
+
+function handleCustomTableCellContentTypeChange(
+  cell: WordCustomTableCell,
+  content: WordCustomTableCellContent,
+) {
+  if (content.type === "text") {
+    content.text = content.text ?? "";
+    content.dataPath = "";
+  } else {
+    content.dataPath = content.dataPath ?? "";
+    content.text = "";
+  }
+  ensureCustomTableCellContents(cell);
 }
 
 function resolveNodeScopedPath(
@@ -2584,7 +2905,9 @@ function renderNodePreview(
     </h3>`;
   } else if (node.type === "paragraph") {
     const fontSize = (formState.value.documentStyle.bodySizePt || 12) / 2;
-    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
+    const sectionData = node.sectionId
+      ? (sectionDataMap[node.sectionId] ?? null)
+      : null;
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
@@ -2624,7 +2947,9 @@ function renderNodePreview(
     const rows = Math.max(0, customTable?.rows ?? 0);
     const cols = Math.max(0, customTable?.cols ?? 0);
     const bodyFontSize = (formState.value.documentStyle.bodySizePt || 12) / 2;
-    const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
+    const sectionData: Record<string, any> | null = node.sectionId
+      ? (sectionDataMap[node.sectionId] ?? null)
+      : null;
 
     if (!rows || !cols || !customTable?.cells?.length) {
       html += `<p style="font-size: ${bodyFontSize}pt; color: #94a3b8; margin: 6px 0;">自訂表格尚未設定內容</p>`;
@@ -2635,27 +2960,8 @@ function renderNodePreview(
         cellMap.set(`${cell.row}-${cell.col}`, cell);
       }
 
-      const renderCellValue = (cell?: WordCustomTableCell | null): string => {
-        if (!cell) return "";
-        if (cell.type === "text") {
-          return cell.text?.trim() ? cell.text : "";
-        }
-        if (!sectionData || !cell.dataPath) return "";
-        const scopedPath = resolveNodeScopedPath(node, cell.dataPath);
-        if (!scopedPath) return "";
-        const value = getValueByPath(sectionData, scopedPath);
-        if (value === null || value === undefined) return "";
-        if (Array.isArray(value)) return value.join(", ");
-        if (typeof value === "object") {
-          try {
-            return JSON.stringify(value);
-          } catch (error) {
-            console.warn("Failed to stringify custom table cell value", error);
-            return "";
-          }
-        }
-        return String(value);
-      };
+      const renderCellValue = (cell?: WordCustomTableCell | null): string =>
+        getCustomTableCellDisplayValue(node, cell || undefined, sectionData);
 
       html += `<table style="width: 100%; border-collapse: collapse; margin: 8px 0;">`;
       for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
@@ -3023,11 +3329,7 @@ function handleIframeLoad() {
 
 // 監聽 formState 變化，但使用防抖延遲更新
 watch(
-  () => [
-    formState.value.documentStyle,
-    formState.value.nodes,
-    groupedNodes.value,
-  ],
+  () => [formState.value.documentStyle, formState.value.nodes],
   () => {
     updatePreviewWithDebounce();
   },
