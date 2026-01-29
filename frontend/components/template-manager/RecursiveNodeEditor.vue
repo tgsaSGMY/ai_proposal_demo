@@ -136,6 +136,19 @@
         />
       </div>
 
+      <label
+        v-if="node.type === 'paragraph' || node.type === 'customText'"
+        class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"
+      >
+        <input
+          type="checkbox"
+          class="h-4 w-4 rounded border-slate-300"
+          :checked="node.style?.bodyBold === true"
+          @change="handleBoldToggle"
+        />
+        使用粗體
+      </label>
+
       <!-- 表格配置 -->
       <div
         v-if="node.type === 'table'"
@@ -574,6 +587,16 @@ function handleTemplateChange(event: Event) {
   const target = event.target as HTMLTextAreaElement;
   updateNode((node) => {
     node.template = target.value;
+  });
+}
+
+function handleBoldToggle(event: Event) {
+  const target = event.target as HTMLInputElement;
+  updateNode((node) => {
+    if (!node.style) {
+      node.style = {};
+    }
+    node.style.bodyBold = target.checked;
   });
 }
 

@@ -201,21 +201,70 @@ function formatChineseNumeral(value: number): string {
   return String(value);
 }
 
+/**
+ * 根據列表樣式決定有效層級
+ * 這樣可以確保相同樣式的列表共享同一個計數器
+ */
+function getImplicitLevelFromStyle(style: WordListStyle | undefined): number {
+  switch (style) {
+    case "chineseNumber": // 一、二、三、
+    case "chineseComma":
+      return 2; // 強制視為第二層
+    case "arabicNumber": // 1. 2. 3.
+    case "numberedDot":
+      return 3; // 強制視為第三層
+    case "parenNumbered": // (1) (2) (3)
+      return 4; // 強制視為第四層
+    default:
+      return 3; // 預設值
+  }
+}
+
 function formatHeadingPrefix(
   level: number | undefined,
   state: HeadingCounterState,
+  style?: WordListStyle,
 ): string {
-  if (!level) return "";
-  state[level] = (state[level] ?? 0) + 1;
+  // 1. 決定「有效層級 (Effective Level)」
+  // 如果有傳入樣式，優先使用樣式對應的層級來計數 (例如選了「一、二、」就強制用 Level 2 計數器)
+  // 如果沒有樣式，才退回使用節點原本的 level
+  const rawLevel = level || 2;
+  const effectiveLevel = style ? getImplicitLevelFromStyle(style) : rawLevel;
+
+  // 2. 針對「有效層級」進行計數 (關鍵修正：這裡不再使用 rawLevel)
+  state[effectiveLevel] = (state[effectiveLevel] ?? 0) + 1;
+
+  // 3. 重置所有比「有效層級」更深的計數器
+  // 例如：現在數到「五、」(Level 2)，底下的 (1) (Level 4) 必須歸零
   Object.keys(state).forEach((key) => {
-    const currentLevel = Number(key);
-    if (currentLevel > level) {
-      delete state[currentLevel];
+    const keyNum = Number(key);
+    if (keyNum > effectiveLevel) {
+      delete state[keyNum];
     }
   });
 
-  const count = state[level];
-  switch (level) {
+  const count = state[effectiveLevel];
+
+  // 4. 根據樣式或層級回傳格式化字串
+  if (style) {
+    switch (style) {
+      case "chineseNumber":
+      case "chineseComma":
+        return `${formatChineseNumeral(count)}、`;
+      case "arabicNumber":
+      case "numberedDot":
+        return `${count}. `;
+      case "parenNumbered":
+        return `（${count}）`;
+      case "bullet":
+        return "";
+      default:
+        break;
+    }
+  }
+
+  // Fallback: 如果沒有指定樣式，依據層級給預設格式
+  switch (effectiveLevel) {
     case 2:
       return `${formatChineseNumeral(count)}、`;
     case 3:
@@ -223,7 +272,7 @@ function formatHeadingPrefix(
     case 4:
       return `（${count}）`;
     default:
-      return "";
+      return `${count}. `;
   }
 }
 
@@ -435,6 +484,119 @@ async function fetchWordExportConfig(
 }
 
 /**
+ * 根据文本中的干线符渲染一行，处理图片占位符高亮
+ * 仿照 local_standard.ts 中 renderTextWithHighlightedImages 的逻辑
+ */
+function renderTextWithHighlightedImages(
+  text: string,
+  elements: Array<Paragraph | Table>,
+  size: number,
+  font: string,
+  bold: boolean,
+  alignment: (typeof AlignmentType)[keyof typeof AlignmentType],
+): void {
+  if (!text) return;
+
+  const imagePattern = /【圖[:：][^】]+】/g;
+  const parts: Array<{ text: string; isImage: boolean }> = [];
+  let lastIndex = 0;
+  let match;
+
+  imagePattern.lastIndex = 0;
+
+  while ((match = imagePattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        text: text.substring(lastIndex, match.index),
+        isImage: false,
+      });
+    }
+    parts.push({ text: match[0], isImage: true });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ text: text.substring(lastIndex), isImage: false });
+  }
+
+  if (parts.length === 0 || parts.every((p) => !p.isImage)) {
+    elements.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: text,
+            size: size,
+            font: font,
+            bold: bold,
+          }),
+        ],
+        spacing: { after: 60 },
+        alignment: alignment,
+      }),
+    );
+    return;
+  }
+
+  const textRuns: TextRun[] = parts.map(
+    (part) =>
+      new TextRun({
+        text: part.text,
+        size: size,
+        font: font,
+        bold: bold,
+        highlight: part.isImage ? "yellow" : undefined,
+      }),
+  );
+
+  elements.push(
+    new Paragraph({
+      children: textRuns,
+      spacing: { after: 60 },
+      alignment: alignment,
+    }),
+  );
+}
+
+/**
+ * 根据文本中的换行符创建多个 Paragraph 元素
+ * 仿照 marketing_imdp.ts 中 renderTextWithLineBreaks 的逻辑
+ * 保留空行和多行文本的格式
+ */
+function renderTextWithLineBreaksToParagraphs(
+  text: string,
+  elements: Array<Paragraph | Table>,
+  size: number,
+  font: string,
+  bold: boolean,
+  alignment: (typeof AlignmentType)[keyof typeof AlignmentType],
+): void {
+  if (!text) return;
+
+  // 规范化：将多个连续换行符替换为双换行符
+  const normalized = text.replace(/\n{2,}/g, "\n\n");
+  const segments = normalized.split("\n\n");
+
+  segments.forEach((segment) => {
+    if (!segment.trim()) return;
+
+    const lines = segment.split("\n");
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed) {
+        renderTextWithHighlightedImages(
+          trimmed,
+          elements,
+          size,
+          font,
+          bold,
+          alignment,
+        );
+      }
+    });
+  });
+}
+
+/**
  * 创建文档段落/表格的辅助函数（参考 WordEditorForm 的 buildParagraphsFromNode）
  */
 function buildParagraphFromNode(
@@ -472,7 +634,10 @@ function buildParagraphFromNode(
       }),
     );
   } else if (node.type === "subHeading") {
-    const prefix = formatHeadingPrefix(node.level, headingCounters);
+    const showNumbering = node.list?.numbering !== false;
+    const prefix = showNumbering
+      ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
+      : "";
     elements.push(
       new Paragraph({
         children: [
@@ -490,27 +655,21 @@ function buildParagraphFromNode(
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
-      : `${node.label || "段落內容"}`;
-    const displayValue = node.label
-      ? `${node.label}: ${value ?? ""}`
-      : String(value ?? "");
+      : node.label || "";
+    const textValue = String(value ?? "");
 
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: displayValue,
-            size: bodySize,
-            font: resolvedStyle.bodyFont,
-            bold: resolvedStyle.bodyBold,
-          }),
-        ],
-        spacing: { after: 60 },
-        alignment: node.style?.alignment
+    if (textValue) {
+      renderTextWithLineBreaksToParagraphs(
+        textValue,
+        elements,
+        bodySize,
+        resolvedStyle.bodyFont,
+        node.style?.bodyBold ?? resolvedStyle.bodyBold,
+        node.style?.alignment
           ? getAlignmentType(node.style.alignment)
           : AlignmentType.LEFT,
-      }),
-    );
+      );
+    }
   } else if (node.type === "table") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const tableData = sectionData
@@ -541,26 +700,43 @@ function buildParagraphFromNode(
       const dataRows = rows.map(
         (row) =>
           new TableRow({
-            children: columns.map(
-              (col) =>
-                new TableCell({
-                  children: [
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: String(
-                            typeof row === "object" && row !== null
-                              ? (getValueByPath(row, col.key) ?? "")
-                              : (row ?? ""),
-                          ),
-                          size: bodySize,
-                          font: resolvedStyle.bodyFont,
+            children: columns.map((col) => {
+              const cellValue = String(
+                typeof row === "object" && row !== null
+                  ? (getValueByPath(row, col.key) ?? "")
+                  : (row ?? ""),
+              );
+
+              // 使用 line break helper 處理單元格內容
+              const cellElements: Array<Paragraph | Table> = [];
+              renderTextWithLineBreaksToParagraphs(
+                cellValue,
+                cellElements,
+                bodySize,
+                resolvedStyle.bodyFont,
+                false,
+                AlignmentType.LEFT,
+              );
+
+              return new TableCell({
+                children:
+                  cellElements.length > 0
+                    ? (cellElements.filter(
+                        (e) => e instanceof Paragraph,
+                      ) as Paragraph[])
+                    : [
+                        new Paragraph({
+                          children: [
+                            new TextRun({
+                              text: cellValue,
+                              size: bodySize,
+                              font: resolvedStyle.bodyFont,
+                            }),
+                          ],
                         }),
                       ],
-                    }),
-                  ],
-                }),
-            ),
+              });
+            }),
           }),
       );
 
@@ -613,19 +789,35 @@ function buildParagraphFromNode(
             ? formatCustomTableCellValue(configCell, sectionData, node.dataPath)
             : "";
 
+          // 使用 line break helper 處理單元格內容
+          const cellElements: Array<Paragraph | Table> = [];
+          renderTextWithLineBreaksToParagraphs(
+            displayValue,
+            cellElements,
+            bodySize,
+            resolvedStyle.bodyFont,
+            false,
+            AlignmentType.LEFT,
+          );
+
           docxCells.push(
             new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: displayValue,
-                      size: bodySize,
-                      font: resolvedStyle.bodyFont,
-                    }),
-                  ],
-                }),
-              ],
+              children:
+                cellElements.length > 0
+                  ? (cellElements.filter(
+                      (e) => e instanceof Paragraph,
+                    ) as Paragraph[])
+                  : [
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: displayValue,
+                            size: bodySize,
+                            font: resolvedStyle.bodyFont,
+                          }),
+                        ],
+                      }),
+                    ],
             }),
           );
         }
@@ -668,7 +860,7 @@ function buildParagraphFromNode(
         // 主項編號
         const bullet = isNumbered
           ? getListBulletLabel(node.list?.style, i)
-          : "•";
+          : "";
 
         // 處理所有子節點
         node.children.forEach((childNode, childIndex) => {
@@ -713,9 +905,12 @@ function buildParagraphFromNode(
             }
 
             // 如果是第一個子節點，前面加上編號；否則加上 bullet
-            const prefixText = childIndex === 0 ? `${bullet} ` : "";
+            const prefixText =
+              childIndex === 0 ? (bullet ? `${bullet} ` : "") : "";
             const isLastChild = childIndex === node.children!.length - 1;
             const isLastItem = i === items.length - 1;
+            const childBold =
+              adjustedChildNode.style?.bodyBold ?? resolvedStyle.bodyBold;
 
             elements.push(
               new Paragraph({
@@ -724,6 +919,7 @@ function buildParagraphFromNode(
                     text: prefixText + displayValue,
                     size: bodySize,
                     font: resolvedStyle.bodyFont,
+                    bold: childBold,
                   }),
                 ],
                 spacing: { after: isLastChild && isLastItem ? 120 : 40 },
@@ -732,11 +928,57 @@ function buildParagraphFromNode(
             );
           } else {
             // 其他類型的子節點，遞歸構建
-            const childElements = buildParagraphFromNode(
-              adjustedChildNode,
-              itemDataMap,
-              { documentStyle: resolvedStyle, headingCounters },
-            );
+            // 如果是 subHeading，使用列表樣式決定層級
+            let childElements: Array<Paragraph | Table> = [];
+
+            if (adjustedChildNode.type === "subHeading" && node.list?.style) {
+              // 特殊處理：list 中的 subHeading，根據列表樣式決定編號層級
+              const showNumbering = node.list?.numbering !== false;
+              const styleLevel = getImplicitLevelFromStyle(node.list.style);
+              const prefix = showNumbering
+                ? formatHeadingPrefix(
+                    styleLevel,
+                    headingCounters,
+                    node.list.style,
+                  )
+                : "";
+
+              childElements.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${prefix}${adjustedChildNode.label || "次標題"}`,
+                      bold: resolvedStyle.subHeadingBold,
+                      size: subHeadingSize,
+                      font: resolvedStyle.subHeadingFont,
+                    }),
+                  ],
+                  spacing: { before: 120, after: 80 },
+                }),
+              );
+
+              // 遞歸處理該 subHeading 的子節點（如果有）
+              if (adjustedChildNode.children?.length) {
+                for (const subChild of adjustedChildNode.children) {
+                  const subElements = buildParagraphFromNode(
+                    subChild,
+                    itemDataMap,
+                    {
+                      documentStyle: resolvedStyle,
+                      headingCounters,
+                    },
+                  );
+                  childElements.push(...subElements);
+                }
+              }
+            } else {
+              childElements = buildParagraphFromNode(
+                adjustedChildNode,
+                itemDataMap,
+                { documentStyle: resolvedStyle, headingCounters },
+              );
+            }
+
             childElements.forEach((element, idx) => {
               if (element instanceof Paragraph) {
                 (element as any).indent = { left: 0 };
@@ -757,13 +999,15 @@ function buildParagraphFromNode(
 
         const bullet = isNumbered
           ? getListBulletLabel(node.list?.style, i)
-          : "•";
+          : "";
+
+        const displayText = bullet ? `${bullet} ${displayValue}` : displayValue;
 
         elements.push(
           new Paragraph({
             children: [
               new TextRun({
-                text: `${bullet} ${displayValue}`,
+                text: displayText,
                 size: bodySize,
                 font: resolvedStyle.bodyFont,
               }),
@@ -775,18 +1019,17 @@ function buildParagraphFromNode(
       }
     }
   } else if (node.type === "customText") {
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: node.template || "自訂文字",
-            size: bodySize,
-            font: resolvedStyle.bodyFont,
-          }),
-        ],
-        spacing: { after: 60 },
-      }),
-    );
+    const textValue = node.template || "";
+    if (textValue) {
+      renderTextWithLineBreaksToParagraphs(
+        textValue,
+        elements,
+        bodySize,
+        resolvedStyle.bodyFont,
+        node.style?.bodyBold ?? resolvedStyle.bodyBold,
+        AlignmentType.LEFT,
+      );
+    }
   } else if (node.type === "imagePlaceholder") {
     elements.push(
       new Paragraph({

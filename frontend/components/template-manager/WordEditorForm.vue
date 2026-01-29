@@ -463,6 +463,27 @@
                       ></textarea>
                     </div>
 
+                    <label
+                      v-if="
+                        node.type === 'paragraph' || node.type === 'customText'
+                      "
+                      class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4 rounded border-slate-300"
+                        :checked="node.style?.bodyBold === true"
+                        @change="
+                          (event) =>
+                            handleNodeBoldToggle(
+                              node.id,
+                              (event.target as HTMLInputElement).checked,
+                            )
+                        "
+                      />
+                      使用粗體
+                    </label>
+
                     <div
                       v-if="node.type === 'table'"
                       class="space-y-3 rounded-xl bg-slate-50 p-3"
@@ -569,15 +590,16 @@
                             min="1"
                             max="10"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                            @change="(event) =>
-                              handleCustomTableDimensionChange(
-                                node.id,
-                                'rows',
-                                Number(
-                                  (event.target as HTMLInputElement | null)?.value ||
-                                    1,
-                                ),
-                              )
+                            @change="
+                              (event) =>
+                                handleCustomTableDimensionChange(
+                                  node.id,
+                                  'rows',
+                                  Number(
+                                    (event.target as HTMLInputElement | null)
+                                      ?.value || 1,
+                                  ),
+                                )
                             "
                           />
                         </label>
@@ -589,15 +611,16 @@
                             min="1"
                             max="6"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                            @change="(event) =>
-                              handleCustomTableDimensionChange(
-                                node.id,
-                                'cols',
-                                Number(
-                                  (event.target as HTMLInputElement | null)?.value ||
-                                    1,
-                                ),
-                              )
+                            @change="
+                              (event) =>
+                                handleCustomTableDimensionChange(
+                                  node.id,
+                                  'cols',
+                                  Number(
+                                    (event.target as HTMLInputElement | null)
+                                      ?.value || 1,
+                                  ),
+                                )
                             "
                           />
                         </label>
@@ -622,7 +645,10 @@
                             }"
                           >
                             <div
-                              v-for="cell in getCustomTableRowCells(node, rowIndex - 1)"
+                              v-for="cell in getCustomTableRowCells(
+                                node,
+                                rowIndex - 1,
+                              )"
                               :key="cell.id"
                               class="rounded-xl border border-slate-200 p-3 space-y-2 bg-white"
                             >
@@ -634,14 +660,21 @@
                                 <select
                                   v-model="cell.type"
                                   class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                                  @change="handleCustomTableCellTypeChange(cell)"
+                                  @change="
+                                    handleCustomTableCellTypeChange(cell)
+                                  "
                                 >
                                   <option value="text">自訂文字</option>
                                   <option value="field">資料欄位</option>
                                 </select>
                               </label>
-                              <div v-if="cell.type === 'text'" class="space-y-1">
-                                <span class="text-xs text-slate-500">顯示文字</span>
+                              <div
+                                v-if="cell.type === 'text'"
+                                class="space-y-1"
+                              >
+                                <span class="text-xs text-slate-500"
+                                  >顯示文字</span
+                                >
                                 <input
                                   v-model="cell.text"
                                   type="text"
@@ -650,14 +683,18 @@
                                 />
                               </div>
                               <div v-else class="space-y-1">
-                                <span class="text-xs text-slate-500">資料欄位</span>
+                                <span class="text-xs text-slate-500"
+                                  >資料欄位</span
+                                >
                                 <select
                                   v-model="cell.dataPath"
                                   class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 >
                                   <option value="">選擇欄位</option>
                                   <option
-                                    v-for="option in getNodeColumnCandidates(node)"
+                                    v-for="option in getNodeColumnCandidates(
+                                      node,
+                                    )"
                                     :key="option.key"
                                     :value="option.key"
                                   >
@@ -818,11 +855,14 @@
           </p>
           <div
             class="rounded-xl border border-slate-200 bg-white overflow-auto flex-1 min-h-0"
+            ref="previewContainerRef"
           >
             <iframe
-              :srcdoc="previewHtml"
+              ref="previewIframeRef"
+              :srcdoc="debouncedPreviewHtml"
               class="w-full h-full border-0"
               title="文檔預覽"
+              @load="handleIframeLoad"
             />
           </div>
         </aside>
@@ -864,7 +904,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted, nextTick } from "vue";
 import type { PropType } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
 import RecursiveNodeEditor from "./RecursiveNodeEditor.vue";
@@ -1812,11 +1852,22 @@ function handleNodeDataPathChange(nodeId: string) {
         getNodeColumnCandidates(node).map((option) => option.key),
       );
       node.customTable.cells.forEach((cell) => {
-        if (cell.type === "field" && cell.dataPath && !allow.has(cell.dataPath)) {
+        if (
+          cell.type === "field" &&
+          cell.dataPath &&
+          !allow.has(cell.dataPath)
+        ) {
           cell.dataPath = "";
         }
       });
     }
+  });
+}
+
+function handleNodeBoldToggle(nodeId: string, value: boolean) {
+  updateNode(nodeId, (node) => {
+    const style = ensureNodeStyle(node);
+    style.bodyBold = value;
   });
 }
 
@@ -1945,8 +1996,8 @@ function normalizeCustomTableCells(config: WordCustomTableConfig) {
   const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 6);
   const expectedCellCount = rows * cols;
   const existingCells = Array.isArray(config.cells) ? config.cells : [];
-  let needsRebuild = !Array.isArray(config.cells) ||
-    existingCells.length !== expectedCellCount;
+  let needsRebuild =
+    !Array.isArray(config.cells) || existingCells.length !== expectedCellCount;
 
   const seenKeys = new Set<string>();
   if (!needsRebuild) {
@@ -2089,9 +2140,10 @@ function handleCustomTableDimensionChange(
   const sanitized = Number.isFinite(rawValue) ? Math.floor(rawValue) : 1;
   updateNode(nodeId, (node) => {
     const customTable = ensureCustomTableConfig(node);
-    const clamped = dimension === "rows"
-      ? Math.min(Math.max(sanitized, 1), 10)
-      : Math.min(Math.max(sanitized, 1), 6);
+    const clamped =
+      dimension === "rows"
+        ? Math.min(Math.max(sanitized, 1), 10)
+        : Math.min(Math.max(sanitized, 1), 6);
     customTable[dimension] = clamped;
     normalizeCustomTableCells(customTable);
   });
@@ -2493,7 +2545,10 @@ function renderNodePreview(
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
-    html += `<p style="font-size: ${fontSize}pt; margin: 6px 0;">
+    const boldSetting =
+      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
+    const fontWeight = boldSetting ? "bold" : "normal";
+    html += `<p style="font-size: ${fontSize}pt; margin: 6px 0; font-weight: ${fontWeight};">
       ${node.label}: ${value}
     </p>`;
   } else if (node.type === "table") {
@@ -2605,7 +2660,7 @@ function renderNodePreview(
         }
 
         const firstChild = node.children[0];
-        let firstChildValue = "";
+        let firstChildDisplayHtml = "";
 
         if (firstChild) {
           let adjustedFirstChild = { ...firstChild };
@@ -2628,15 +2683,18 @@ function renderNodePreview(
             const value = childSectionData
               ? getValueByPath(childSectionData, adjustedFirstChild.dataPath)
               : adjustedFirstChild.label || "段落內容";
-            firstChildValue = value == null ? "" : String(value);
+            const textContent = value == null ? "" : String(value);
+            const childBold =
+              adjustedFirstChild.style?.bodyBold ??
+              formState.value.documentStyle.bodyBold ??
+              false;
+            const fontWeight = childBold ? "bold" : "normal";
+            firstChildDisplayHtml = `<span style="font-weight: ${fontWeight};">${textContent}</span>`;
           }
         }
 
         const bullet = getBulletText(i);
-        const displayFirstChild =
-          firstChildValue === undefined || firstChildValue === null
-            ? ""
-            : String(firstChildValue);
+        const displayFirstChild = firstChildDisplayHtml || "";
         html += `<li style="margin: 4px 0;">${bullet} ${displayFirstChild}`;
 
         if (node.children.length > 1) {
@@ -2670,7 +2728,12 @@ function renderNodePreview(
                 : adjustedChildNode.label || "段落內容";
               const nestedDisplay =
                 value === undefined || value === null ? "" : String(value);
-              html += `<li style="margin: 0px 0;">${nestedDisplay}</li>`;
+              const childBold =
+                adjustedChildNode.style?.bodyBold ??
+                formState.value.documentStyle.bodyBold ??
+                false;
+              const fontWeight = childBold ? "bold" : "normal";
+              html += `<li style="margin: 0px 0;"><span style="font-weight: ${fontWeight};">${nestedDisplay}</span></li>`;
             } else {
               const childHtml = renderNodePreview(
                 adjustedChildNode,
@@ -2702,7 +2765,10 @@ function renderNodePreview(
 
     html += `</${listTag}>`;
   } else if (node.type === "customText") {
-    html += `<div style="margin: 6px 0;">
+    const boldSetting =
+      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
+    const fontWeight = boldSetting ? "bold" : "normal";
+    html += `<div style="margin: 6px 0; font-weight: ${fontWeight};">
       ${node.template || "自訂文字"}
     </div>`;
   }
@@ -2855,9 +2921,79 @@ function generatePreviewHtml(): string {
   return html;
 }
 
-// 即時預覽 HTML
-const previewHtml = computed(() => {
-  return generatePreviewHtml();
+// 即時預覽 HTML - 使用防抖避免 iframe 頻繁重載導致滾動位置重置
+const debouncedPreviewHtml = ref<string>("");
+const previewIframeRef = ref<HTMLIFrameElement | null>(null);
+const previewContainerRef = ref<HTMLDivElement | null>(null);
+
+// 防抖計時器
+let previewDebounceTimer: NodeJS.Timeout | null = null;
+
+// 保存 iframe 內部的滾動位置
+let savedIframeScrollPosition = 0;
+
+// 防抖函數：延遲更新預覽，避免頻繁重新加載 iframe
+function updatePreviewWithDebounce() {
+  // 清除上一個計時器
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer);
+  }
+
+  // 設置新的計時器（800ms 延遲 - 更長的延遲，減少更新頻率）
+  previewDebounceTimer = setTimeout(() => {
+    try {
+      // 保存 iframe 內部的滾動位置
+      if (previewIframeRef.value && previewIframeRef.value.contentDocument) {
+        const scrollElement =
+          previewIframeRef.value.contentDocument.documentElement ||
+          previewIframeRef.value.contentDocument.body;
+        if (scrollElement) {
+          savedIframeScrollPosition = scrollElement.scrollTop;
+        }
+      }
+
+      // 更新預覽 HTML - 這會導致 iframe 重新加載
+      debouncedPreviewHtml.value = generatePreviewHtml();
+    } catch (error) {
+      console.error("Error generating preview:", error);
+    }
+  }, 800);
+}
+
+// 當 iframe 加載完成時恢復滾動位置
+function handleIframeLoad() {
+  if (
+    previewIframeRef.value &&
+    previewIframeRef.value.contentDocument &&
+    savedIframeScrollPosition > 0
+  ) {
+    const scrollElement =
+      previewIframeRef.value.contentDocument.documentElement ||
+      previewIframeRef.value.contentDocument.body;
+    if (scrollElement) {
+      nextTick(() => {
+        scrollElement.scrollTop = savedIframeScrollPosition;
+      });
+    }
+  }
+}
+
+// 監聽 formState 變化，但使用防抖延遲更新
+watch(
+  () => [
+    formState.value.documentStyle,
+    formState.value.nodes,
+    groupedNodes.value,
+  ],
+  () => {
+    updatePreviewWithDebounce();
+  },
+  { deep: true },
+);
+
+// 初始化預覽
+onMounted(() => {
+  debouncedPreviewHtml.value = generatePreviewHtml();
 });
 
 async function handlePreviewExport() {
@@ -2932,6 +3068,8 @@ function buildParagraphsFromNode(
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
     const text = `${node.label}: ${value}`;
+    const paragraphBold =
+      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
 
     elements.push(
       new Paragraph({
@@ -2940,7 +3078,7 @@ function buildParagraphsFromNode(
             text,
             size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
             font: formState.value.documentStyle.bodyFont || "Times New Roman",
-            bold: formState.value.documentStyle.bodyBold ?? false,
+            bold: paragraphBold,
           }),
         ],
         spacing: { after: 60 },
@@ -3098,6 +3236,10 @@ function buildParagraphsFromNode(
 
           // 創建獨立的段落，與清單項相同的縮進，段落間有空行
           const prefixText = index === 0 ? `${bullet} ` : "";
+          const childBold =
+            childNode.style?.bodyBold ??
+            formState.value.documentStyle.bodyBold ??
+            false;
 
           elements.push(
             new Paragraph({
@@ -3107,6 +3249,7 @@ function buildParagraphsFromNode(
                   size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
                   font:
                     formState.value.documentStyle.bodyFont || "Times New Roman",
+                  bold: childBold,
                 }),
               ],
               spacing: {
@@ -3169,6 +3312,8 @@ function buildParagraphsFromNode(
       }
     }
   } else if (node.type === "customText") {
+    const paragraphBold =
+      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
     elements.push(
       new Paragraph({
         children: [
@@ -3176,6 +3321,7 @@ function buildParagraphsFromNode(
             text: node.template || "自訂文字",
             size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
             font: formState.value.documentStyle.bodyFont || "Times New Roman",
+            bold: paragraphBold,
           }),
         ],
         spacing: { after: 60 },
