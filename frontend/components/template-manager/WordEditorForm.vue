@@ -3065,6 +3065,7 @@ function renderNodePreview(
       html += `</table>`;
     }
   } else if (node.type === "list") {
+    console.log("Rendering list node:", node);
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
@@ -3078,24 +3079,8 @@ function renderNodePreview(
 
     html += `<${listTag} style="margin: 6px 0; padding-left: 0; list-style: none;">`;
 
-    // 如果有嵌套列表（children中有list类型），先处理它们
+    // 清單內為對象且使用子節點時：依「每個 list item」逐項渲染，每項用 itemDataMap 渲染所有 children（含段落與內層清單），避免把多項用逗號合併或把內層清單壓平
     if (
-      node.children?.length &&
-      node.children.some((child) => child?.type === "list")
-    ) {
-      console.log(node.children);
-      // 嵌套列表模式
-      for (const childNode of node.children) {
-        if (!childNode) continue;
-        const childHtml = renderNodePreview(
-          childNode,
-          sectionDataMap,
-          headingCounters,
-        );
-        const innerContent = childHtml.replace(/^<div[^>]*>|<\/div>$/g, "");
-        html += `<li style="margin: 4px 0;">${innerContent}</li>`;
-      }
-    } else if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
       typeof items[0] === "object" &&
@@ -3124,6 +3109,15 @@ function renderNodePreview(
                 dataPath: firstChild.dataPath.substring(
                   parentPathPrefix.length,
                 ),
+              };
+            } else if (firstChild.dataPath.includes(parentPathPrefix)) {
+              // 子節點可能是從 section 起的完整路徑（如 執行步驟及方法.細分方法.細分名稱），當前 item 已是 list 項，取「細分方法.」之後的相對路徑
+              const after =
+                firstChild.dataPath.indexOf(parentPathPrefix) +
+                parentPathPrefix.length;
+              adjustedFirstChild = {
+                ...firstChild,
+                dataPath: firstChild.dataPath.substring(after),
               };
             }
           }
@@ -3167,6 +3161,15 @@ function renderNodePreview(
                   dataPath: childNode.dataPath.substring(
                     parentPathPrefix.length,
                   ),
+                };
+              } else if (childNode.dataPath.includes(parentPathPrefix)) {
+                // 子節點為完整路徑（如 執行步驟及方法.細分方法.說明）時，取 list 項相對路徑
+                const after =
+                  childNode.dataPath.indexOf(parentPathPrefix) +
+                  parentPathPrefix.length;
+                adjustedChildNode = {
+                  ...childNode,
+                  dataPath: childNode.dataPath.substring(after),
                 };
               }
             }
@@ -3621,22 +3624,8 @@ function buildParagraphsFromNode(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    // 如果有嵌套列表（children中有list类型），先处理它们
-    if (
-      node.children?.length &&
-      node.children.some((child) => child?.type === "list")
-    ) {
-      // 嵌套列表模式：递归处理嵌套列表
-      for (const childNode of node.children) {
-        if (!childNode) continue;
-        const childElements = buildParagraphsFromNode(
-          childNode,
-          sectionDataMap,
-          headingCounters,
-        );
-        elements.push(...childElements);
-      }
-    } else if (node.list?.itemConfig?.useSubNodes && items.length > 0) {
+    // 清單內為對象且使用子節點時：依每個 list item 逐項渲染，每項用 itemDataMap 渲染所有 children（含段落與內層清單）
+    if (node.list?.itemConfig?.useSubNodes && items.length > 0) {
       // 使用子节点渲染
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -3668,6 +3657,16 @@ function buildParagraphsFromNode(
               return {
                 ...childNode,
                 dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
+            if (childNode.dataPath.includes(parentPathPrefix)) {
+              // 子節點為完整路徑（如 執行步驟及方法.細分方法.說明）時，取 list 項相對路徑
+              const after =
+                childNode.dataPath.indexOf(parentPathPrefix) +
+                parentPathPrefix.length;
+              return {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(after),
               };
             }
             return childNode;

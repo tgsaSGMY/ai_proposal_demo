@@ -939,25 +939,8 @@ function buildParagraphFromNode(
     // 依據清單設定決定是否使用有序列表（預設啟用）
     const isNumbered = node.list?.numbering !== false;
 
-    // 如果有嵌套列表（children中有list类型），先处理它们
+    // 清單內為對象且使用子節點時：依每個 list item 逐項渲染，每項用 itemDataMap 渲染所有 children（含段落與內層清單），與 WordEditorForm 預覽一致
     if (
-      node.children?.length &&
-      node.children.some((child) => child?.type === "list")
-    ) {
-      // 嵌套列表模式：递归处理嵌套列表
-      for (const childNode of node.children) {
-        if (!childNode) continue;
-        const childElements = buildParagraphFromNode(
-          childNode,
-          sectionDataMap,
-          {
-            documentStyle: resolvedStyle,
-            headingCounters,
-          },
-        );
-        elements.push(...childElements);
-      }
-    } else if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
       typeof items[0] === "object" &&
@@ -989,6 +972,15 @@ function buildParagraphFromNode(
               adjustedChildNode = {
                 ...childNode,
                 dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            } else if (childNode.dataPath.includes(parentPathPrefix)) {
+              // 子節點為完整路徑（如 執行步驟及方法.細分方法.細分名稱）時，取 list 項相對路徑
+              const after =
+                childNode.dataPath.indexOf(parentPathPrefix) +
+                parentPathPrefix.length;
+              adjustedChildNode = {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(after),
               };
             }
           }
