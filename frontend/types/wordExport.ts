@@ -125,6 +125,8 @@ export interface WordDocumentNode {
   style?: WordDocumentNodeStyleOverrides;
   level?: number;
   children?: WordDocumentNode[];
+  paragraphNumbering?: boolean;
+  paragraphNumberStyle?: WordListStyle;
   // 章節分組相關字段
   chapterMarker?: boolean; // 是否為手動添加的章節標記
   chapterTitle?: string; // 手動章節標記的標題

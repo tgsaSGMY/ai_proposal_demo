@@ -485,6 +485,40 @@
                     </label>
 
                     <div
+                      v-if="node.type === 'paragraph'"
+                      class="flex flex-wrap items-center gap-2 text-sm text-slate-600"
+                    >
+                      <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                          :checked="node.paragraphNumbering === true"
+                          @change="
+                            (event) =>
+                              handleParagraphNumberingToggle(
+                                node.id,
+                                (event.target as HTMLInputElement).checked,
+                              )
+                          "
+                        />
+                        使用編號
+                      </label>
+                      <select
+                        v-if="node.paragraphNumbering"
+                        v-model="node.paragraphNumberStyle"
+                        class="rounded-xl border border-slate-200 px-3 py-1 text-xs"
+                      >
+                        <option
+                          v-for="option in LIST_STYLE_OPTIONS"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </div>
+
+                    <div
                       v-if="node.type === 'table'"
                       class="space-y-3 rounded-xl bg-slate-50 p-3"
                     >
@@ -598,12 +632,12 @@
                     >
                       <div class="grid gap-3 md:grid-cols-2">
                         <label class="space-y-1 text-sm text-slate-600">
-                          列數 (1-10)
+                          列數 (1-20)
                           <input
                             :value="node.customTable?.rows ?? 1"
                             type="number"
                             min="1"
-                            max="10"
+                            max="20"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                             @change="
                               (event) =>
@@ -1248,6 +1282,23 @@ function getListBulletLabel(
     default:
       return "•";
   }
+}
+
+const PARAGRAPH_SUB_HEADING_MAX_LEVEL = 3;
+
+function resolveParagraphEffectiveLevel(node: WordDocumentNode): number {
+  if (node.paragraphNumberStyle) {
+    return getImplicitLevelFromStyle(node.paragraphNumberStyle);
+  }
+  return node.level ?? 3;
+}
+
+function shouldUseParagraphSubHeadingStyle(node: WordDocumentNode): boolean {
+  if (node.type !== "paragraph") return false;
+  if (node.paragraphNumbering !== true) return false;
+  return (
+    resolveParagraphEffectiveLevel(node) <= PARAGRAPH_SUB_HEADING_MAX_LEVEL
+  );
 }
 
 const formState = ref<WordExportTemplateConfig>({
@@ -1962,6 +2013,10 @@ function handleNodeTypeChange(nodeId: string) {
     } else {
       ensureCustomTableConfig(node);
     }
+    if (node.type !== "paragraph") {
+      delete node.paragraphNumbering;
+      delete node.paragraphNumberStyle;
+    }
     if (!shouldShowSectionSelectors(node)) {
       node.sectionId = "";
       node.dataPath = "";
@@ -2007,6 +2062,17 @@ function handleNodeBoldToggle(nodeId: string, value: boolean) {
   updateNode(nodeId, (node) => {
     const style = ensureNodeStyle(node);
     style.bodyBold = value;
+  });
+}
+
+function handleParagraphNumberingToggle(nodeId: string, value: boolean) {
+  updateNode(nodeId, (node) => {
+    node.paragraphNumbering = value;
+    if (value) {
+      node.paragraphNumberStyle = node.paragraphNumberStyle || "arabicNumber";
+    } else {
+      delete node.paragraphNumberStyle;
+    }
   });
 }
 
@@ -2255,7 +2321,7 @@ function getCustomTableCellDisplayValue(
 }
 
 function normalizeCustomTableCells(config: WordCustomTableConfig) {
-  const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 10);
+  const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 20);
   const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 6);
   const expectedCellCount = rows * cols;
   const existingCells = Array.isArray(config.cells) ? config.cells : [];
@@ -2404,7 +2470,7 @@ function handleCustomTableDimensionChange(
     const customTable = ensureCustomTableConfig(node);
     const clamped =
       dimension === "rows"
-        ? Math.min(Math.max(sanitized, 1), 10)
+        ? Math.min(Math.max(sanitized, 1), 20)
         : Math.min(Math.max(sanitized, 1), 6);
     customTable[dimension] = clamped;
     normalizeCustomTableCells(customTable);
@@ -2904,18 +2970,38 @@ function renderNodePreview(
       ${prefix}${node.label || "次標題"}
     </h3>`;
   } else if (node.type === "paragraph") {
-    const fontSize = (formState.value.documentStyle.bodySizePt || 12) / 2;
+    const docStyle = formState.value.documentStyle;
     const sectionData = node.sectionId
       ? (sectionDataMap[node.sectionId] ?? null)
       : null;
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
-    const boldSetting =
-      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
-    const fontWeight = boldSetting ? "bold" : "normal";
-    html += `<p style="font-size: ${fontSize}pt; margin: 6px 0; font-weight: ${fontWeight};">
-      ${node.label}: ${value}
+    const formattedValue =
+      value === undefined || value === null ? "" : String(value);
+    const numberingEnabled = node.paragraphNumbering === true;
+    const numberingStyle = node.paragraphNumberStyle || "arabicNumber";
+    const useSubHeadingTypography = shouldUseParagraphSubHeadingStyle(node);
+    const baseFontSizePt = useSubHeadingTypography
+      ? docStyle.subHeadingSizePt || 14
+      : docStyle.bodySizePt || 12;
+    const fontSize = baseFontSizePt / 2;
+    const weightValue = useSubHeadingTypography
+      ? docStyle.subHeadingBold !== false
+      : (node.style?.bodyBold ?? docStyle.bodyBold ?? false);
+    const fontWeight = weightValue ? "bold" : "normal";
+    const fontFamily = useSubHeadingTypography
+      ? docStyle.subHeadingFont || "Times New Roman"
+      : docStyle.bodyFont || "Times New Roman";
+    const fontFamilyCss = fontFamily.includes(" ")
+      ? `'${fontFamily}'`
+      : fontFamily;
+    const prefix = numberingEnabled
+      ? formatHeadingPrefix(node.level ?? 3, headingCounters, numberingStyle)
+      : "";
+    const labelText = node.label ? `${node.label}: ` : "";
+    html += `<p style="font-size: ${fontSize}pt; margin: 6px 0; font-weight: ${fontWeight}; font-family: ${fontFamilyCss};">
+      ${prefix}${labelText}${formattedValue}
     </p>`;
   } else if (node.type === "table") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
@@ -3412,17 +3498,34 @@ function buildParagraphsFromNode(
     const value = sectionData
       ? getValueByPath(sectionData, node.dataPath)
       : `${node.label || "段落內容"} (無資料)`;
-    const text = `${node.label}: ${value}`;
-    const paragraphBold =
-      node.style?.bodyBold ?? formState.value.documentStyle.bodyBold ?? false;
+    const formattedValue =
+      value === undefined || value === null ? "" : String(value);
+    const numberingEnabled = node.paragraphNumbering === true;
+    const numberingStyle = node.paragraphNumberStyle || "arabicNumber";
+    const prefix = numberingEnabled
+      ? formatHeadingPrefix(node.level ?? 3, headingCounters, numberingStyle)
+      : "";
+    const labelText = node.label ? `${node.label}: ` : "";
+    const text = `${prefix}${labelText}${formattedValue}`;
+    const docStyle = formState.value.documentStyle;
+    const useSubHeadingTypography = shouldUseParagraphSubHeadingStyle(node);
+    const paragraphBold = useSubHeadingTypography
+      ? docStyle.subHeadingBold !== false
+      : (node.style?.bodyBold ?? docStyle.bodyBold ?? false);
+    const paragraphFont = useSubHeadingTypography
+      ? docStyle.subHeadingFont || "Times New Roman"
+      : docStyle.bodyFont || "Times New Roman";
+    const paragraphSizePt = useSubHeadingTypography
+      ? docStyle.subHeadingSizePt || 14
+      : docStyle.bodySizePt || 12;
 
     elements.push(
       new Paragraph({
         children: [
           new TextRun({
             text,
-            size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
-            font: formState.value.documentStyle.bodyFont || "Times New Roman",
+            size: paragraphSizePt * 2,
+            font: paragraphFont,
             bold: paragraphBold,
           }),
         ],

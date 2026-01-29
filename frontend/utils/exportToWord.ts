@@ -166,6 +166,23 @@ const DEFAULT_DOCUMENT_STYLE: Required<WordDocumentStyle> = {
   bodyBold: false,
 };
 
+const PARAGRAPH_SUB_HEADING_MAX_LEVEL = 3;
+
+function resolveParagraphEffectiveLevel(node: WordDocumentNode): number {
+  if (node.paragraphNumberStyle) {
+    return getImplicitLevelFromStyle(node.paragraphNumberStyle);
+  }
+  return node.level ?? 3;
+}
+
+function shouldUseParagraphSubHeadingStyle(node: WordDocumentNode): boolean {
+  return (
+    node.type === "paragraph" &&
+    node.paragraphNumbering === true &&
+    resolveParagraphEffectiveLevel(node) <= PARAGRAPH_SUB_HEADING_MAX_LEVEL
+  );
+}
+
 function resolveDocumentStyle(style?: WordDocumentStyle) {
   return {
     ...DEFAULT_DOCUMENT_STYLE,
@@ -695,14 +712,35 @@ function buildParagraphFromNode(
       ? getValueByPath(sectionData, node.dataPath)
       : node.label || "";
     const textValue = String(value ?? "");
+    const numberingEnabled = node.paragraphNumbering === true;
+    let finalText = textValue;
+    if (numberingEnabled) {
+      const numberingStyle = node.paragraphNumberStyle || "arabicNumber";
+      const prefix = formatHeadingPrefix(
+        node.level ?? 3,
+        headingCounters,
+        numberingStyle,
+      );
+      finalText = `${prefix}${textValue}`;
+    }
 
-    if (textValue) {
+    if (finalText) {
+      const useSubHeadingTypography = shouldUseParagraphSubHeadingStyle(node);
+      const paragraphSize = useSubHeadingTypography
+        ? (resolvedStyle.subHeadingSizePt ?? 14) * 2
+        : bodySize;
+      const paragraphFont = useSubHeadingTypography
+        ? resolvedStyle.subHeadingFont
+        : resolvedStyle.bodyFont;
+      const paragraphBold = useSubHeadingTypography
+        ? resolvedStyle.subHeadingBold
+        : (node.style?.bodyBold ?? resolvedStyle.bodyBold);
       renderTextWithLineBreaksToParagraphs(
-        textValue,
+        finalText,
         elements,
-        bodySize,
-        resolvedStyle.bodyFont,
-        node.style?.bodyBold ?? resolvedStyle.bodyBold,
+        paragraphSize,
+        paragraphFont,
+        paragraphBold,
         node.style?.alignment
           ? getAlignmentType(node.style.alignment)
           : AlignmentType.LEFT,
@@ -735,48 +773,70 @@ function buildParagraphFromNode(
           }),
       );
 
-      const dataRows = rows.map(
-        (row) =>
-          new TableRow({
-            children: columns.map((col) => {
-              const cellValue = String(
-                typeof row === "object" && row !== null
-                  ? (getValueByPath(row, col.key) ?? "")
-                  : (row ?? ""),
-              );
-
-              // 使用 line break helper 處理單元格內容
-              const cellElements: Array<Paragraph | Table> = [];
-              renderTextWithLineBreaksToParagraphs(
-                cellValue,
-                cellElements,
-                bodySize,
-                resolvedStyle.bodyFont,
-                false,
-                AlignmentType.LEFT,
-              );
-
-              return new TableCell({
-                children:
-                  cellElements.length > 0
-                    ? (cellElements.filter(
-                        (e) => e instanceof Paragraph,
-                      ) as Paragraph[])
-                    : [
+      let dataRows =
+        rows.length === 0
+          ? [
+              new TableRow({
+                children: columns.map(
+                  () =>
+                    new TableCell({
+                      children: [
                         new Paragraph({
                           children: [
                             new TextRun({
-                              text: cellValue,
+                              text: "無",
                               size: bodySize,
                               font: resolvedStyle.bodyFont,
                             }),
                           ],
                         }),
                       ],
-              });
-            }),
-          }),
-      );
+                    }),
+                ),
+              }),
+            ]
+          : rows.map(
+              (row) =>
+                new TableRow({
+                  children: columns.map((col) => {
+                    const cellValue = String(
+                      typeof row === "object" && row !== null
+                        ? (getValueByPath(row, col.key) ?? "")
+                        : (row ?? ""),
+                    );
+
+                    // 使用 line break helper 處理單元格內容
+                    const cellElements: Array<Paragraph | Table> = [];
+                    renderTextWithLineBreaksToParagraphs(
+                      cellValue,
+                      cellElements,
+                      bodySize,
+                      resolvedStyle.bodyFont,
+                      false,
+                      AlignmentType.LEFT,
+                    );
+
+                    return new TableCell({
+                      children:
+                        cellElements.length > 0
+                          ? (cellElements.filter(
+                              (e) => e instanceof Paragraph,
+                            ) as Paragraph[])
+                          : [
+                              new Paragraph({
+                                children: [
+                                  new TextRun({
+                                    text: cellValue,
+                                    size: bodySize,
+                                    font: resolvedStyle.bodyFont,
+                                  }),
+                                ],
+                              }),
+                            ],
+                    });
+                  }),
+                }),
+            );
 
       elements.push(
         new Table({
