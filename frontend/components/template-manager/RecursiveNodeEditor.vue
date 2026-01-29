@@ -154,18 +154,6 @@
         v-if="node.type === 'table'"
         class="space-y-3 rounded-xl bg-slate-50 p-3"
       >
-        <label class="space-y-1 text-sm text-slate-600">
-          表格布局模式
-          <select
-            :value="node.table?.layout || 'auto'"
-            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            @change="handleTableLayoutChange"
-          >
-            <option value="auto">自動（基於數據）</option>
-            <option value="grid">網格布局</option>
-            <option value="fixed">固定布局</option>
-          </select>
-        </label>
         <label class="flex items-center gap-2 text-sm text-slate-600">
           <input
             :checked="node.table?.customHeaders"
@@ -197,6 +185,26 @@
               <span class="text-xs text-slate-500 whitespace-nowrap"
                 >({{ column.key }})</span
               >
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                  :disabled="colIndex === 0"
+                  @click="moveTableColumn(colIndex, 'up')"
+                  title="上移列"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                  :disabled="colIndex === node.table.columns.length - 1"
+                  @click="moveTableColumn(colIndex, 'down')"
+                  title="下移列"
+                >
+                  ↓
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -639,6 +647,26 @@ function handleColumnLabelChange(colIndex: number, event: Event) {
     if (node.table?.columns?.[colIndex]) {
       node.table.columns[colIndex].label = target.value;
     }
+  });
+}
+
+function moveTableColumn(columnIndex: number, direction: "up" | "down") {
+  updateNode((node) => {
+    if (!node.table?.columns) return;
+
+    const columns = node.table.columns;
+    const newIndex = direction === "up" ? columnIndex - 1 : columnIndex + 1;
+
+    if (newIndex < 0 || newIndex >= columns.length) return;
+
+    const colAtIndex = columns[columnIndex];
+    const colAtNewIndex = columns[newIndex];
+
+    if (!colAtIndex || !colAtNewIndex) return;
+
+    // 交換列的位置
+    columns[columnIndex] = colAtNewIndex;
+    columns[newIndex] = colAtIndex;
   });
 }
 
