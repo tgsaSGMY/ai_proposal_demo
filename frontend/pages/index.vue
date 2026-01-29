@@ -31,7 +31,7 @@
               :key="plan.id"
               class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
               :class="
-                selectedPlanType?.id === plan.id
+                isPlanSelected(plan)
                   ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
                   : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
               "
@@ -499,20 +499,22 @@ const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
 const isCreatingProject = ref(false);
 
 // Double-click tracking for plan buttons: two clicks within this threshold
-const lastClickedPlanId = ref<string | null>(null);
+const lastClickedPlanKey = ref<string>("");
 const lastClickTime = ref<number>(0);
 const DOUBLE_CLICK_THRESHOLD = 600; // ms
 
 function handlePlanClick(plan: PlanTypeOption) {
+  const planKey = getPlanKey(plan);
   const now = Date.now();
   if (
-    lastClickedPlanId.value === plan.id &&
+    planKey &&
+    lastClickedPlanKey.value === planKey &&
     now - lastClickTime.value <= DOUBLE_CLICK_THRESHOLD
   ) {
     // treat as double-click: ensure selected and advance
     selectedPlanType.value = plan;
     // reset tracking
-    lastClickedPlanId.value = null;
+    lastClickedPlanKey.value = "";
     lastClickTime.value = 0;
     // proceed to next step
     handlePlanTypeConfirm();
@@ -521,15 +523,15 @@ function handlePlanClick(plan: PlanTypeOption) {
 
   // single click: select and record timestamp
   selectedPlanType.value = plan;
-  lastClickedPlanId.value = plan.id;
+  lastClickedPlanKey.value = planKey;
   lastClickTime.value = now;
   // clear tracking after threshold to avoid stale state
   setTimeout(() => {
     if (
-      lastClickedPlanId.value === plan.id &&
+      lastClickedPlanKey.value === planKey &&
       Date.now() - lastClickTime.value >= DOUBLE_CLICK_THRESHOLD
     ) {
-      lastClickedPlanId.value = null;
+      lastClickedPlanKey.value = "";
       lastClickTime.value = 0;
     }
   }, DOUBLE_CLICK_THRESHOLD + 50);
@@ -805,6 +807,35 @@ function clearBackgroundAttachments() {
 
 function selectPlanType(plan: PlanTypeOption) {
   selectedPlanType.value = plan;
+}
+
+function buildSelectionKey(
+  grantId?: string | null,
+  templateId?: string | null,
+): string {
+  return `${grantId ?? ""}::${templateId ?? ""}`;
+}
+
+function getPlanKey(plan: PlanTypeOption | null): string {
+  if (!plan) return "";
+  const templateId = plan.templateId || plan.id;
+  return buildSelectionKey(plan.grantId, templateId);
+}
+
+function isPlanSelected(plan: PlanTypeOption): boolean {
+  const planKey = getPlanKey(plan);
+  if (!planKey) return false;
+
+  const localSelectionKey = getPlanKey(selectedPlanType.value);
+  if (localSelectionKey && localSelectionKey === planKey) {
+    return true;
+  }
+
+  const generatorSelectionKey = buildSelectionKey(
+    selectedGrantId.value,
+    selectedTemplateId.value,
+  );
+  return Boolean(generatorSelectionKey && generatorSelectionKey === planKey);
 }
 
 function resolvePlanConfig(plan: PlanTypeOption | null) {
