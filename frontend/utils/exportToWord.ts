@@ -939,7 +939,25 @@ function buildParagraphFromNode(
     // 依據清單設定決定是否使用有序列表（預設啟用）
     const isNumbered = node.list?.numbering !== false;
 
+    // 如果有嵌套列表（children中有list类型），先处理它们
     if (
+      node.children?.length &&
+      node.children.some((child) => child?.type === "list")
+    ) {
+      // 嵌套列表模式：递归处理嵌套列表
+      for (const childNode of node.children) {
+        if (!childNode) continue;
+        const childElements = buildParagraphFromNode(
+          childNode,
+          sectionDataMap,
+          {
+            documentStyle: resolvedStyle,
+            headingCounters,
+          },
+        );
+        elements.push(...childElements);
+      }
+    } else if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
       typeof items[0] === "object" &&
@@ -1144,6 +1162,7 @@ function buildParagraphFromNode(
     );
   }
 
+  // 处理剩余的children（list类型已在上面处理过）
   if (node.children && node.children.length > 0 && node.type !== "list") {
     for (const child of node.children) {
       const childElements = buildParagraphFromNode(child, sectionDataMap, {

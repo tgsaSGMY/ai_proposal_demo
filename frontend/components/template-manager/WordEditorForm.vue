@@ -3078,7 +3078,24 @@ function renderNodePreview(
 
     html += `<${listTag} style="margin: 6px 0; padding-left: 0; list-style: none;">`;
 
+    // 如果有嵌套列表（children中有list类型），先处理它们
     if (
+      node.children?.length &&
+      node.children.some((child) => child?.type === "list")
+    ) {
+      console.log(node.children);
+      // 嵌套列表模式
+      for (const childNode of node.children) {
+        if (!childNode) continue;
+        const childHtml = renderNodePreview(
+          childNode,
+          sectionDataMap,
+          headingCounters,
+        );
+        const innerContent = childHtml.replace(/^<div[^>]*>|<\/div>$/g, "");
+        html += `<li style="margin: 4px 0;">${innerContent}</li>`;
+      }
+    } else if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
       typeof items[0] === "object" &&
@@ -3604,115 +3621,138 @@ function buildParagraphsFromNode(
       : [];
     const items = Array.isArray(listData) ? listData : [listData];
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const bullet = node.list?.numbering
-        ? getListBulletLabel(node.list?.style, i)
-        : "•";
+    // 如果有嵌套列表（children中有list类型），先处理它们
+    if (
+      node.children?.length &&
+      node.children.some((child) => child?.type === "list")
+    ) {
+      // 嵌套列表模式：递归处理嵌套列表
+      for (const childNode of node.children) {
+        if (!childNode) continue;
+        const childElements = buildParagraphsFromNode(
+          childNode,
+          sectionDataMap,
+          headingCounters,
+        );
+        elements.push(...childElements);
+      }
+    } else if (node.list?.itemConfig?.useSubNodes && items.length > 0) {
+      // 使用子节点渲染
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const bullet = node.list?.numbering
+          ? getListBulletLabel(node.list?.style, i)
+          : "•";
 
-      // 如果啟用了子節點渲染且項目是對象
-      if (
-        node.list?.itemConfig?.useSubNodes &&
-        typeof item === "object" &&
-        item !== null &&
-        !Array.isArray(item) &&
-        node.children?.length
-      ) {
-        // 創建一個臨時的 sectionDataMap，將當前項目作為數據源
-        const itemDataMap: Record<string, Record<string, any>> = {};
-        if (node.sectionId) {
-          itemDataMap[node.sectionId] = item;
-        }
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          !Array.isArray(item) &&
+          node.children?.length
+        ) {
+          // 創建一個臨時的 sectionDataMap，將當前項目作為數據源
+          const itemDataMap: Record<string, Record<string, any>> = {};
+          if (node.sectionId) {
+            itemDataMap[node.sectionId] = item;
+          }
 
-        // 維持子節點原有順序，依序渲染
-        let paragraphIndex = 0;
-        const adjustedChildren = node.children.map((childNode) => {
-          if (!childNode) return childNode;
-          if (!node.dataPath || !childNode.dataPath) {
+          // 維持子節點原有順序，依序渲染
+          let paragraphIndex = 0;
+          const adjustedChildren = node.children.map((childNode) => {
+            if (!childNode) return childNode;
+            if (!node.dataPath || !childNode.dataPath) {
+              return childNode;
+            }
+            const parentPathPrefix = node.dataPath + ".";
+            if (childNode.dataPath.startsWith(parentPathPrefix)) {
+              return {
+                ...childNode,
+                dataPath: childNode.dataPath.substring(parentPathPrefix.length),
+              };
+            }
             return childNode;
-          }
-          const parentPathPrefix = node.dataPath + ".";
-          if (childNode.dataPath.startsWith(parentPathPrefix)) {
-            return {
-              ...childNode,
-              dataPath: childNode.dataPath.substring(parentPathPrefix.length),
-            };
-          }
-          return childNode;
-        });
+          });
 
-        adjustedChildren.forEach((childNode) => {
-          if (!childNode) return;
-          if (childNode.type === "paragraph") {
-            const childSectionData = childNode.sectionId
-              ? itemDataMap[childNode.sectionId]
-              : null;
-            let value: any = null;
+          adjustedChildren.forEach((childNode) => {
+            if (!childNode) return;
+            if (childNode.type === "paragraph") {
+              const childSectionData = childNode.sectionId
+                ? itemDataMap[childNode.sectionId]
+                : null;
+              let value: any = null;
 
-            if (childSectionData) {
-              if (childNode.dataPath && childNode.dataPath.trim()) {
-                value = getValueByPath(childSectionData, childNode.dataPath);
+              if (childSectionData) {
+                if (childNode.dataPath && childNode.dataPath.trim()) {
+                  value = getValueByPath(childSectionData, childNode.dataPath);
+                }
               }
-            }
 
-            let displayValue: string;
-            if (value === null || value === undefined) {
-              displayValue = childNode.label
-                ? `${childNode.label} (無資料)`
-                : "段落內容 (無資料)";
-            } else if (typeof value === "object" && !Array.isArray(value)) {
-              const keys = Object.keys(value);
-              if (keys.length === 0) {
-                displayValue = childNode.label || "空對象";
+              let displayValue: string;
+              if (value === null || value === undefined) {
+                displayValue = childNode.label
+                  ? `${childNode.label} (無資料)`
+                  : "段落內容 (無資料)";
+              } else if (typeof value === "object" && !Array.isArray(value)) {
+                const keys = Object.keys(value);
+                if (keys.length === 0) {
+                  displayValue = childNode.label || "空對象";
+                } else {
+                  displayValue = JSON.stringify(value);
+                }
+              } else if (Array.isArray(value)) {
+                displayValue = value.length > 0 ? value.join(", ") : "空數組";
               } else {
-                displayValue = JSON.stringify(value);
+                displayValue = String(value);
               }
-            } else if (Array.isArray(value)) {
-              displayValue = value.length > 0 ? value.join(", ") : "空數組";
+
+              const prefixText = paragraphIndex === 0 ? `${bullet} ` : "";
+              paragraphIndex += 1;
+              const childBold =
+                childNode.style?.bodyBold ??
+                formState.value.documentStyle.bodyBold ??
+                false;
+
+              elements.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: prefixText + displayValue,
+                      size:
+                        (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                      font:
+                        formState.value.documentStyle.bodyFont ||
+                        "Times New Roman",
+                      bold: childBold,
+                    }),
+                  ],
+                  spacing: { after: 120 },
+                  indent: { left: 0 },
+                }),
+              );
             } else {
-              displayValue = String(value);
+              const childElements = buildParagraphsFromNode(
+                childNode,
+                itemDataMap,
+                headingCounters,
+              );
+              childElements.forEach((element) => {
+                if (element instanceof Paragraph) {
+                  const paragraph = element as any;
+                  paragraph.indent = { left: 720 };
+                }
+              });
+              elements.push(...childElements);
             }
-
-            const prefixText = paragraphIndex === 0 ? `${bullet} ` : "";
-            paragraphIndex += 1;
-            const childBold =
-              childNode.style?.bodyBold ??
-              formState.value.documentStyle.bodyBold ??
-              false;
-
-            elements.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: prefixText + displayValue,
-                    size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
-                    font:
-                      formState.value.documentStyle.bodyFont ||
-                      "Times New Roman",
-                    bold: childBold,
-                  }),
-                ],
-                spacing: { after: 120 },
-                indent: { left: 0 },
-              }),
-            );
-          } else {
-            const childElements = buildParagraphsFromNode(
-              childNode,
-              itemDataMap,
-              headingCounters,
-            );
-            childElements.forEach((element) => {
-              if (element instanceof Paragraph) {
-                const paragraph = element as any;
-                paragraph.indent = { left: 720 };
-              }
-            });
-            elements.push(...childElements);
-          }
-        });
-      } else {
-        // 簡單渲染
+          });
+        }
+      }
+    } else {
+      // 簡單渲染
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const bullet = node.list?.numbering
+          ? getListBulletLabel(node.list?.style, i)
+          : "•";
         const displayValue =
           typeof item === "object" && item !== null
             ? JSON.stringify(item)
@@ -3729,7 +3769,7 @@ function buildParagraphsFromNode(
               }),
             ],
             spacing: { after: 40 },
-            indent: { left: 0 }, // 修改：原本是 720，改為 0 移除縮排
+            indent: { left: 0 },
           }),
         );
       }
