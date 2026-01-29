@@ -64,6 +64,8 @@ export interface WordDocumentNodeTableConfig {
   fixedLayout?: WordTableFixedLayout;
   // 允許自定義列標題
   customHeaders?: boolean; // 是否啟用自定義標題
+  // 倒置表格：列與欄互換（預設 false）
+  transpose?: boolean;
 }
 
 export type WordListStyle =

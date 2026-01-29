@@ -163,6 +163,15 @@
           />
           啟用自定義列標題
         </label>
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            :checked="node.table?.transpose"
+            type="checkbox"
+            class="h-4 w-4 rounded border-slate-300"
+            @change="handleTransposeChange"
+          />
+          倒置表格（列↔欄互換）
+        </label>
 
         <div
           v-if="node.table?.customHeaders && node.table?.columns?.length"
@@ -638,6 +647,19 @@ function handleCustomHeadersChange(event: Event) {
       node.table.columns = [];
     }
     node.table.customHeaders = target.checked;
+  });
+}
+
+function handleTransposeChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  updateNode((node) => {
+    if (!node.table) {
+      node.table = { columns: [] };
+    }
+    if (!node.table.columns) {
+      node.table.columns = [];
+    }
+    node.table.transpose = target.checked;
   });
 }
 

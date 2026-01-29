@@ -532,6 +532,16 @@
                         />
                         啟用自定義列標題
                       </label>
+                      <label
+                        class="flex items-center gap-2 text-sm text-slate-600"
+                      >
+                        <input
+                          v-model="ensureTableConfig(node).transpose"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                        />
+                        倒置表格（列↔欄互換）
+                      </label>
 
                       <div
                         v-if="
@@ -3010,22 +3020,40 @@ function renderNodePreview(
       : [];
     const rows = Array.isArray(tableData) ? tableData : [];
     const columns = node.table?.columns || [];
+    const transpose = node.table?.transpose === true;
 
-    html += `<table style="width: 100%; border-collapse: collapse; margin: 8px 0;">
-      <thead>
+    html += `<table style="width: 100%; border-collapse: collapse; margin: 8px 0;">`;
+
+    if (!transpose) {
+      html += `<thead>
         <tr style="background-color: #f0f0f0;">`;
-    for (const col of columns) {
-      html += `<th style="border: 1px solid #ccc; padding: 6px;">${col.label}</th>`;
-    }
-    html += `</tr></thead><tbody>`;
-    for (const row of rows) {
-      html += `<tr>`;
       for (const col of columns) {
-        const cellValue =
-          typeof row === "object" ? getValueByPath(row, col.key) : row;
-        html += `<td style="border: 1px solid #ccc; padding: 6px;">${cellValue}</td>`;
+        html += `<th style="border: 1px solid #ccc; padding: 6px;">${col.label}</th>`;
       }
-      html += `</tr>`;
+      html += `</tr></thead>`;
+    }
+
+    html += `<tbody>`;
+    if (transpose) {
+      for (const col of columns) {
+        html += `<tr><td style="border: 1px solid #ccc; padding: 6px; font-weight: bold;">${col.label}</td>`;
+        for (const row of rows) {
+          const cellValue =
+            typeof row === "object" ? getValueByPath(row, col.key) : row;
+          html += `<td style="border: 1px solid #ccc; padding: 6px;">${cellValue}</td>`;
+        }
+        html += `</tr>`;
+      }
+    } else {
+      for (const row of rows) {
+        html += `<tr>`;
+        for (const col of columns) {
+          const cellValue =
+            typeof row === "object" ? getValueByPath(row, col.key) : row;
+          html += `<td style="border: 1px solid #ccc; padding: 6px;">${cellValue}</td>`;
+        }
+        html += `</tr>`;
+      }
     }
     html += `</tbody></table>`;
   } else if (node.type === "customTable") {
@@ -3562,57 +3590,136 @@ function buildParagraphsFromNode(
       : [];
     const rows = Array.isArray(tableData) ? tableData : [];
     const columns = node.table?.columns || [];
+    const transpose = node.table?.transpose === true;
+    const bodySize = (formState.value.documentStyle.bodySizePt ?? 12) * 2;
 
     if (columns.length > 0) {
-      // Build table header
-      const headerCells = columns.map(
-        (col) =>
+      let headerCells: TableCell[];
+      let dataRows: TableRow[];
+
+      if (transpose) {
+        // 倒置：表頭 = 欄位 + 原資料列序號
+        headerCells = [
           new TableCell({
             children: [
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: col.label,
+                    text: "欄位",
                     bold: true,
-                    size: (formState.value.documentStyle.bodySizePt ?? 12) * 2,
+                    size: bodySize,
                   }),
                 ],
               }),
             ],
           }),
-      );
-
-      // Build table rows
-      const dataCells = rows.map(
-        (row) =>
-          new TableRow({
-            children: columns.map(
-              (col) =>
+          ...rows.map(
+            (_, r) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: String(r + 1),
+                        bold: true,
+                        size: bodySize,
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+          ),
+        ];
+        // 倒置：每一列 = 原欄位標題 + 各資料列在該欄位的值
+        dataRows = columns.map(
+          (col) =>
+            new TableRow({
+              children: [
                 new TableCell({
                   children: [
                     new Paragraph({
                       children: [
                         new TextRun({
-                          text: String(
-                            typeof row === "object"
-                              ? (getValueByPath(row, col.key) ?? "")
-                              : row,
-                          ),
-                          size:
-                            (formState.value.documentStyle.bodySizePt ?? 12) *
-                            2,
+                          text: col.label,
+                          bold: true,
+                          size: bodySize,
                         }),
                       ],
                     }),
                   ],
                 }),
-            ),
-          }),
-      );
+                ...rows.map(
+                  (row) =>
+                    new TableCell({
+                      children: [
+                        new Paragraph({
+                          children: [
+                            new TextRun({
+                              text: String(
+                                typeof row === "object"
+                                  ? (getValueByPath(row, col.key) ?? "")
+                                  : row,
+                              ),
+                              size: bodySize,
+                            }),
+                          ],
+                        }),
+                      ],
+                    }),
+                ),
+              ],
+            }),
+        );
+      } else {
+        headerCells = columns.map(
+          (col) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: col.label,
+                      bold: true,
+                      size: bodySize,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+        );
+        dataRows = rows.map(
+          (row) =>
+            new TableRow({
+              children: columns.map(
+                (col) =>
+                  new TableCell({
+                    children: [
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: String(
+                              typeof row === "object"
+                                ? (getValueByPath(row, col.key) ?? "")
+                                : row,
+                            ),
+                            size: bodySize,
+                          }),
+                        ],
+                      }),
+                    ],
+                  }),
+              ),
+            }),
+        );
+      }
+
+      const tableRows = transpose
+        ? dataRows
+        : [new TableRow({ children: headerCells }), ...dataRows];
 
       elements.push(
         new Table({
-          rows: [new TableRow({ children: headerCells }), ...dataCells],
+          rows: tableRows,
           width: { size: 100, type: "pct" },
         }),
       );

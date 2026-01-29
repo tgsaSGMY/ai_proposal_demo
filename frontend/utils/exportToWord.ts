@@ -753,16 +753,21 @@ function buildParagraphFromNode(
       : [];
     const rows = Array.isArray(tableData) ? tableData : [];
     const columns = node.table?.columns || [];
+    const transpose = node.table?.transpose === true;
 
     if (columns.length > 0) {
-      const headerCells = columns.map(
-        (col) =>
+      let headerCells: TableCell[];
+      let dataRows: TableRow[];
+
+      if (transpose) {
+        // 倒置：表頭 = 欄位 + 原資料列序號
+        headerCells = [
           new TableCell({
             children: [
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: col.label || col.key,
+                    text: "欄位",
                     bold: true,
                     size: bodySize,
                     font: resolvedStyle.bodyFont,
@@ -771,20 +776,55 @@ function buildParagraphFromNode(
               }),
             ],
           }),
-      );
-
-      let dataRows =
-        rows.length === 0
-          ? [
-              new TableRow({
-                children: columns.map(
-                  () =>
+          ...rows.map(
+            (_, r) =>
+              new TableCell({
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: String(r + 1),
+                        bold: true,
+                        size: bodySize,
+                        font: resolvedStyle.bodyFont,
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+          ),
+        ];
+        // 倒置：每一列 = 原欄位標題 + 各資料列在該欄位的值
+        dataRows = columns.map(
+          (col) =>
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: col.label || col.key,
+                          bold: true,
+                          size: bodySize,
+                          font: resolvedStyle.bodyFont,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+                ...rows.map(
+                  (row) =>
                     new TableCell({
                       children: [
                         new Paragraph({
                           children: [
                             new TextRun({
-                              text: "無",
+                              text: String(
+                                typeof row === "object" && row !== null
+                                  ? (getValueByPath(row, col.key) ?? "")
+                                  : (row ?? ""),
+                              ),
                               size: bodySize,
                               font: resolvedStyle.bodyFont,
                             }),
@@ -793,54 +833,102 @@ function buildParagraphFromNode(
                       ],
                     }),
                 ),
-              }),
-            ]
-          : rows.map(
-              (row) =>
+              ],
+            }),
+        );
+      } else {
+        // 正常：表頭 = 欄位標題
+        headerCells = columns.map(
+          (col) =>
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: col.label || col.key,
+                      bold: true,
+                      size: bodySize,
+                      font: resolvedStyle.bodyFont,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+        );
+        // 正常：數據行
+        dataRows =
+          rows.length === 0
+            ? [
                 new TableRow({
-                  children: columns.map((col) => {
-                    const cellValue = String(
-                      typeof row === "object" && row !== null
-                        ? (getValueByPath(row, col.key) ?? "")
-                        : (row ?? ""),
-                    );
-
-                    // 使用 line break helper 處理單元格內容
-                    const cellElements: Array<Paragraph | Table> = [];
-                    renderTextWithLineBreaksToParagraphs(
-                      cellValue,
-                      cellElements,
-                      bodySize,
-                      resolvedStyle.bodyFont,
-                      false,
-                      AlignmentType.LEFT,
-                    );
-
-                    return new TableCell({
-                      children:
-                        cellElements.length > 0
-                          ? (cellElements.filter(
-                              (e) => e instanceof Paragraph,
-                            ) as Paragraph[])
-                          : [
-                              new Paragraph({
-                                children: [
-                                  new TextRun({
-                                    text: cellValue,
-                                    size: bodySize,
-                                    font: resolvedStyle.bodyFont,
-                                  }),
-                                ],
+                  children: columns.map(
+                    () =>
+                      new TableCell({
+                        children: [
+                          new Paragraph({
+                            children: [
+                              new TextRun({
+                                text: "無",
+                                size: bodySize,
+                                font: resolvedStyle.bodyFont,
                               }),
                             ],
-                    });
-                  }),
+                          }),
+                        ],
+                      }),
+                  ),
                 }),
-            );
+              ]
+            : rows.map(
+                (row) =>
+                  new TableRow({
+                    children: columns.map((col) => {
+                      const cellValue = String(
+                        typeof row === "object" && row !== null
+                          ? (getValueByPath(row, col.key) ?? "")
+                          : (row ?? ""),
+                      );
+
+                      // 使用 line break helper 處理單元格內容
+                      const cellElements: Array<Paragraph | Table> = [];
+                      renderTextWithLineBreaksToParagraphs(
+                        cellValue,
+                        cellElements,
+                        bodySize,
+                        resolvedStyle.bodyFont,
+                        false,
+                        AlignmentType.LEFT,
+                      );
+
+                      return new TableCell({
+                        children:
+                          cellElements.length > 0
+                            ? (cellElements.filter(
+                                (e) => e instanceof Paragraph,
+                              ) as Paragraph[])
+                            : [
+                                new Paragraph({
+                                  children: [
+                                    new TextRun({
+                                      text: cellValue,
+                                      size: bodySize,
+                                      font: resolvedStyle.bodyFont,
+                                    }),
+                                  ],
+                                }),
+                              ],
+                      });
+                    }),
+                  }),
+              );
+      }
+
+      const tableRows = transpose
+        ? dataRows
+        : [new TableRow({ children: headerCells }), ...dataRows];
 
       elements.push(
         new Table({
-          rows: [new TableRow({ children: headerCells }), ...dataRows],
+          rows: tableRows,
           width: { size: 100, type: "pct" },
         }),
       );
