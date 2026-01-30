@@ -466,12 +466,57 @@ function formatCustomTableCellValue(
     .join("");
 }
 
+function parseTimestamp(value?: string | Date | null): number | null {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function selectConfigByProjectCreatedAt(
+  configs: Array<{
+    id: string;
+    createdAt: string;
+    config: WordExportTemplateConfig;
+  }>,
+  projectCreatedAt?: string | Date,
+): WordExportTemplateConfig | null {
+  if (!configs.length) {
+    return null;
+  }
+
+  const sortedAsc = [...configs].sort((a, b) => {
+    const aTime = parseTimestamp(a.createdAt) ?? -Infinity;
+    const bTime = parseTimestamp(b.createdAt) ?? -Infinity;
+    return aTime - bTime;
+  });
+
+  const projectTime = parseTimestamp(projectCreatedAt);
+
+  if (projectTime != null) {
+    const eligible = sortedAsc.filter((entry) => {
+      const entryTime = parseTimestamp(entry.createdAt);
+      return entryTime != null && entryTime <= projectTime;
+    });
+
+    if (eligible.length) {
+      return eligible[eligible.length - 1]?.config ?? null;
+    }
+
+    // 沒有早於專案建立時間的版本時，回退到最早的設定
+    return sortedAsc[0]?.config ?? null;
+  }
+
+  // 若沒有專案建立時間，使用最新的設定
+  return sortedAsc[sortedAsc.length - 1]?.config ?? null;
+}
+
 /**
  * 从 backend 获取 plan template 的 word export config
  */
 async function fetchWordExportConfig(
   grantId?: string,
   templateId?: string,
+  projectCreatedAt?: string | Date,
 ): Promise<WordExportTemplateConfig | null> {
   if (!grantId || !templateId) return null;
 
@@ -524,14 +569,15 @@ async function fetchWordExportConfig(
       return null;
     }
 
-    // 按时间排序，返回最新的配置
-    const sorted = [...configs].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    const selectedConfig = selectConfigByProjectCreatedAt(
+      configs,
+      projectCreatedAt,
     );
 
-    console.log("Successfully loaded word export config from backend");
-    return sorted[0]?.config || null;
+    if (selectedConfig) {
+      console.log("Successfully loaded word export config from backend");
+    }
+    return selectedConfig;
   } catch (error: any) {
     console.warn("Error fetching word export config:", error?.message || error);
     return null;
@@ -1356,11 +1402,16 @@ export async function exportPlanToWord(
   grantId?: string,
   templateId?: string,
   projectTitle?: string,
+  projectCreatedAt?: string | Date,
 ) {
   // 第一優先級：嘗試從 backend 獲取 word export config
   if (grantId && templateId) {
     try {
-      const wordConfig = await fetchWordExportConfig(grantId, templateId);
+      const wordConfig = await fetchWordExportConfig(
+        grantId,
+        templateId,
+        projectCreatedAt,
+      );
       if (wordConfig) {
         console.log("Using word export config from backend");
         return await exportPlanUsingWordConfig(

@@ -130,6 +130,7 @@ const props = defineProps({
   grantId: { type: String, required: false },
   templateId: { type: String, required: false },
   savedPlanVersions: { type: Array, default: () => [] },
+  projectCreatedAt: { type: String, required: false },
 });
 
 const fileInput = ref(null);
@@ -222,6 +223,8 @@ async function handleExportToWord() {
       : "",
     props.grantId,
     props.templateId,
+    undefined,
+    props.projectCreatedAt || undefined,
   );
 }
 // 禁止所有编辑

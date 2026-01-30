@@ -162,6 +162,7 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   grantId: { type: String, required: false },
   templateId: { type: String, required: false },
+  projectCreatedAt: { type: String, required: false },
 });
 
 const fileInput = ref(null);
@@ -221,7 +222,9 @@ async function handleExportToWord() {
     props.sections,
     props.planContent,
     props.grantId,
-    props.templateId
+    props.templateId,
+    undefined,
+    props.projectCreatedAt || undefined,
   );
 }
 
@@ -296,7 +299,7 @@ async function callAutoFillApi(payload) {
 async function extractTextFromFile(file) {
   if (file.type === "application/pdf" && !pdfjsLib) {
     throw new Error(
-      "PDF library is not loaded yet. Please try again in a moment."
+      "PDF library is not loaded yet. Please try again in a moment.",
     );
   }
   if (file.type === "application/pdf") {

@@ -647,6 +647,7 @@ async function handleExportWord(payload?: { version?: any }) {
       selectedGrantId.value,
       selectedTemplateId.value,
       projectRecord.value?.title,
+      projectRecord.value?.created_at,
     );
   } catch (error) {
     console.error("Failed to export plan", error);
