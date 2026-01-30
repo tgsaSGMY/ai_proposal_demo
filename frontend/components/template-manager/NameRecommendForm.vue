@@ -54,7 +54,7 @@
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-sm font-semibold text-slate-800">
-                    Few-shot 範例 (最多 {{ MAX_EXAMPLES }} 筆)
+                    範例 (最多 {{ MAX_EXAMPLES }} 筆)
                   </p>
                   <p class="text-xs text-slate-500">
                     這些名稱會放進提示中，協助模型模仿命名風格。
