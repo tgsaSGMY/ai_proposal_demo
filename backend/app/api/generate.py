@@ -46,43 +46,13 @@ OPENAI_RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses"
 ALLOWED_FILE_SUFFIXES = {
     ".pdf",
     ".txt",
+    ".ppt",
+    ".pptx",
     ".jpg",
     ".jpeg",
     ".png",
 }
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
-
-HIDDEN_REPLY_BLOCK_PATTERN = re.compile(
-    r"【回復結束】【隱藏回復欄位\+答案】(.*?)【隱藏回復結束】",
-    re.DOTALL,
-)
-RESPONSE_END_MARKER = "【回復結束】"
-
-
-def extract_hidden_field_responses(text: Optional[str]) -> Dict[str, str]:
-    if not text:
-        return {}
-    match = HIDDEN_REPLY_BLOCK_PATTERN.search(text)
-    if not match:
-        return {}
-    block_content = match.group(1)
-    extracted: Dict[str, str] = {}
-    for raw_line in block_content.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line.startswith("-"):
-            line = line[1:].strip()
-        if not line:
-            continue
-        if " -- " not in line:
-            continue
-        field_id, value = line.split(" -- ", 1)
-        field_key = field_id.strip()
-        field_value = value.strip()
-        if field_key:
-            extracted[field_key] = field_value
-    return extracted
 
 # ========== Helper Functions for System Prompts ==========
 
@@ -284,11 +254,29 @@ async def generate_plan(
             detail=f"Template {request_data.template} not found in Grant {request_data.grant}."
         )
     
+    project_section_versions: Dict[str, int] = {}
+    if request_data.project_id:
+        project_record = await supabase_service.get_project_by_id(
+            request_data.project_id,
+            user_id,
+        )
+        if not project_record:
+            raise HTTPException(status_code=404, detail="Project not found or permission denied")
+        project_section_versions = project_record.get("section_versions") or {}
+
     # 從 template_config 獲取所有 sections
     sections = template_config.sections
+    if project_section_versions:
+        sections = await supabase_service.hydrate_section_configs_with_versions(
+            sections=sections,
+            grant_id=request_data.grant,
+            template_id=request_data.template,
+            section_versions=project_section_versions,
+        )
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
 
+    
     revision_started_at = datetime.now(timezone.utc)
     revision_context = {
         "grant_id": request_data.grant,
@@ -356,7 +344,8 @@ async def generate_plan(
                 supabase_service=supabase_service,
                 is_external=request_data.is_external,
                 selected_model=request_data.selected_model,
-                project_id=request_data.project_id
+                project_id=request_data.project_id,
+                section_details_override=s,
             )
             for s in sections
             for _ in range(num_candidates)
@@ -422,6 +411,26 @@ async def revise_plan_version(
         )
 
     sections = template_config.sections
+    
+    # 加载 section_versions 并 hydrate sections
+    project_section_versions: Dict[str, int] = {}
+    if request_data.project_id:
+        project_record = await supabase_service.get_project_by_id(
+            request_data.project_id,
+            user_id,
+        )
+        if not project_record:
+            raise HTTPException(status_code=404, detail="Project not found or permission denied")
+        project_section_versions = project_record.get("section_versions") or {}
+
+    if project_section_versions:
+        sections = await supabase_service.hydrate_section_configs_with_versions(
+            sections=sections,
+            grant_id=request_data.grant,
+            template_id=request_data.template,
+            section_versions=project_section_versions,
+        )
+    
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
 
@@ -500,6 +509,7 @@ async def revise_plan_version(
                         project_id=request_data.project_id,
                         section_context=section_context,
                         disable_few_shot=True,
+                        section_details_override=section,
                     )
                 )
 
@@ -930,7 +940,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                                 break
                         field_display = field_label or field_id
                         field_changes.append({
-                            "field_id": field_id,
+                            "field_id": field_id, 
                             "field_label": field_display,
                             "old_value": old_value,
                             "new_value": new_value,
@@ -950,10 +960,56 @@ async def websocket_chat_guidance(websocket: WebSocket):
         except Exception as exc:
             logger.error(f"DB Save Error: {exc}")
 
+    # --- 分析用户意图 (注入历史) ---
+    async def analyze_user_input(history: list, client: httpx.AsyncClient):
+        # 注意：这里的 history 此时已经包含了 [User Message, AI Message]
+        
+        q_desc, a_desc, _, _ = format_qa_descriptions(all_questions, current_answers)
+        # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
+        system_prompt = f"""
+        你是一個資料歸檔員，負責從最新對話中提取已確認的欄位資訊。
+
+        【欄位定義】
+        {q_desc}
+
+        【目前已填欄位】
+        {a_desc}
+
+        【核心規則】
+        1. 參考用戶輸入 + 助理回覆，以助理的確認為準
+        2. 若用戶輸入「無」且助理未追問，該欄位的答案就是「無」
+        3. 檢查前幾個對話中是否有遺漏未提取的欄位，一併提取。如果確認已經提取過的，那就不要重複提取
+        4. 不提取「助理剛詢問但用戶未回答」的欄位
+
+        【輸出格式】
+        僅輸出 JSON：
+        {{
+        "filled_fields": {{ "field_id": "提取的内容" }}
+        }}
+        """
+        
+        # 构建 Messages: 取最近的对话记录 (比如最近 4 条足矣: User -> AI -> User -> AI)
+        messages = get_chat_messages(system_prompt, history, limit=4)
+
+        resp, error = await llm_service.call_external_api(
+            client, model_info, messages, is_json_output=True
+        )
+        
+        if error:
+            logger.error(f"Analysis failed: {error}")
+            return {}
+        
+        try:
+            data = json.loads(resp)
+            return data.get("filled_fields", {})
+        except:
+            return {}
+        
     # --- 生成回答 (注入历史) ---
     async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str, paused_flag: dict):
       
         _, a_desc, ua_desc, ua_list = format_qa_descriptions(all_questions, current_answers)
+     
         
         next_q_label = "（请检查是否还有未填项）"
         if ua_list:
@@ -1000,13 +1056,6 @@ async def websocket_chat_guidance(websocket: WebSocket):
     在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計劃書內容。
     完成後，推薦用戶點擊右下角的「輸出完整推演」按鈕來產出完整計劃書文本，不需要推薦幫忙其他東西了，因爲你負責的是完善欄位，而這時候你的任務完成了。
     
-    【隱藏回復欄位格式】
-    - 當你確認某個欄位已完成或你代為生成了內容或優化內容時，請在可見回覆結束後追加一段隱藏資訊，必須要和你回復用戶的資訊一摸一樣。
-    - 不需要畫分割綫，首行輸出 `【回復結束】【隱藏回復欄位+答案】`，末行輸出 `【隱藏回復結束】`。
-    - 隱藏段落中每行輸出 `欄位ID -- 答案內容`（用雙空格加連字號來分隔），可列出多個欄位。
-    - 欄位 ID 請使用系統提供的問題 ID（例如 三、解決辦法::商業模式運作流程），不要自行取名。
-    - 這段文字僅供系統讀取，前端會自動隱藏，因此務必精準輸出。
-
     【排版】
     排版不要那麽鬆散，盡量維持緊凑。
     如果是重點内容/副標題，請使用「粗體」標記。
@@ -1187,9 +1236,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     if ai_reply:
                         conversation_history_records.append(build_history_entry("assistant", ai_reply))
 
-                    hidden_answers = extract_hidden_field_responses(ai_reply)
-                    if hidden_answers:
-                        clean_filled = normalize_filled_fields(hidden_answers, all_questions)
+                    # Background extraction
+                    filled = await analyze_user_input(conversation_history_records, client)
+                    if filled:
+                        clean_filled = normalize_filled_fields(filled, all_questions)
                         logger.info(f"Normalized fields: {clean_filled}")
                         current_answers.update(clean_filled)
                         for field_id in clean_filled.keys():
@@ -1372,6 +1422,7 @@ async def recommend_project_names(
     payload: Dict[str, Any],
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
@@ -1384,77 +1435,86 @@ async def recommend_project_names(
     project_title = payload.get("project_title", "") or ""
     grant_name = payload.get("grant_name", "") or ""
     template_name = payload.get("template_name", "") or ""
+    grant_id = payload.get("grant_id", "") or ""
+    template_id = payload.get("template_id", "") or ""
+
+    name_config: Optional[Dict[str, Any]] = None
+    if grant_id and template_id:
+        try:
+            template_record = await supabase_service.get_template_by_id(
+                template_id, grant_id
+            )
+            if template_record:
+                raw_config = template_record.get("name_recommend_config")
+                if isinstance(raw_config, dict):
+                    name_config = raw_config
+        except Exception as exc:
+            logger.warning(
+                "Failed to load name recommend config for %s/%s: %s",
+                grant_id,
+                template_id,
+                exc,
+            )
+
+    custom_traits = ""
+    custom_examples: List[str] = []
+    if name_config:
+        traits_value = name_config.get("traits")
+        if isinstance(traits_value, str):
+            custom_traits = traits_value.strip()
+
+        raw_examples = name_config.get("examples")
+        if isinstance(raw_examples, list):
+            for example in raw_examples:
+                if not isinstance(example, str):
+                    continue
+                trimmed = example.strip()
+                if trimmed and trimmed not in custom_examples:
+                    custom_examples.append(trimmed)
+                if len(custom_examples) >= 5:
+                    break
 
     # build a compact context
     filled_items = []
     for k, v in current_answers.items():
         if v and str(v).strip():
             filled_items.append(f"- {k}: {str(v)[:120]}")
-    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"  # 限制最多8項以避免過長
+    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"  
 
-    # Few-shot examples 按補助主題分類
-    few_shot_examples = {
-        "CITD": [
-            "發泡材料開片測厚堆疊全自動智能產線設備開發計畫",
-            "半導體蝕刻製程之舊石英板再利用：多點位式光源智慧快篩校正穿透率量測儀開發計畫",
-            "橡膠電容用高穩定性酚醛板開發計畫",
-            "回彈高度≧1.65mm之六角螺帽結合高回彈力錐形彈簧華司製程優化與效益提升開發計畫",
-            "永續循環再利用紙及紙質文物修復手工紙技術標準化與製程開發計畫",
-        ],
-        "美國關稅衝擊": [
-            "肉品隧道式急速冷凍產線升級轉型計畫",
-            "真空鍍膜低碳塗佈製程與影像辨識數據管理系統智慧整合升級轉型計畫",
-            "智慧倉儲系統與高精度CNC開料機導入 - 客製化系統木板材工廠智慧升級轉型計畫",
-            "線性滑塊高效率自動化專用設備整合GUI智慧化控制介面升級轉型計畫",
-            "高大鮮乳新鮮屋導入充填機CIP與自動包裝系統升級轉型計畫",
-        ],
-        "SBIR": [
-            "AI智慧助教2.0 - 紙本考卷數位轉化與個別化學習系統創新研發計畫",
-            "燈具業運用AI預生成照明規劃升級體驗服務計畫",
-            "第三代智慧化管製程設備開發與軍用可彎式天線結構件應用計畫",
-            "以台灣無毒嘉寶果為原料之花青素機能性保健粉體創新研發計畫",
-            "以台南偏鄉特色設計創新典藏台南肌秘面膜禮盒開發計畫"
-        ],
-        "IMDP": [
-            "以 Sample Case 高效能啟動車用燈具開發市場創新經驗工程推廣計畫",
-            "廣宏水產日本市場B2B關係建設與業務拓展計畫",
-            "臺灣珍奶-紮根美國手搖飲料技術與物料調配供應指導營運計畫",
-            "熱轉印特殊材質產品美國洛杉磯行銷深耕計劃",
-            "大安化學─越南全境之畜牧業預防性用藥普及暨AI客服診斷支援推廣計畫",
-            "熱轉印特殊材質產品美國洛杉磯行銷深耕計劃",
-        ],
-        "SIIR": [
-            "2倍速之AI自主建模及客智慧化櫥櫃智慧推薦創新應用服務",
-            "病床2.0再利用，亞護翻新病床社區型店家活絡行銷計畫",
-            "茶香世界 - AI 智慧陪伴式會員經營與永續回收機制之平臺創新服務計畫",
-            "鳳梨3天華麗變身-天然發酵飲料多元產品加速AI溝通委製平台及行銷推廣計畫",
-            "AI社群智慧化之智能Google評論回覆創新服務應用計畫",
-            "預約效率2倍提升-雲端排程與綠色回收服務之行車紀錄器智能安裝創新體驗行銷服務計畫"
-        ],
-    }
+    selected_examples = custom_examples
+    few_shot_text = (
+        "\n".join([f"  - {ex}" for ex in selected_examples])
+        if selected_examples
+        else "  - （尚未提供範例）"
+    )
 
-    # 根據補助主題選擇合適的 few-shot examples
-    selected_examples = few_shot_examples.get(template_name, few_shot_examples.get("SIIR", []))
-    few_shot_text = "\n".join([f"  - {ex}" for ex in selected_examples])
+    custom_trait_block = (
+        f"\n6. **模板自訂特性**：{custom_traits}"
+        if custom_traits
+        else ""
+    )
 
-    system_prompt = """你是一位資深的政府補助計畫命名專家，擁有豐富的企劃書撰寫經驗。
+    system_prompt = f"""你是一位資深的政府補助計畫命名專家，擁有豐富的企劃書撰寫經驗。
 你的任務是根據專案的核心內容、補助計畫類型和已填寫的欄位信息，生成專業、具有吸引力的計畫名稱。
 
 ## 命名原則：
+1. **清晰傳達**：名稱需在一讀之間說明核心價值或成果
 2. **突出創新**：凸顯技術創新、服務升級或市場拓展等亮點
-3. **符合計畫特性**：
-   - CITD（傳產研發）：強調製程、技術改良、設備開發
-   - SBIR（創新服務）：突出 AI、數位化、創新應用、服務升級
-   - IMDP（外銷拓展）：凸顯國際市場、拓展、出口、特定國家或市場
-   - SIIR（內銷型）：強調服務創新、應用、平臺、會員經營等本地服務
-   - 美國關稅衝擊：突出轉型升級、自動化、智慧化等、不需要包含“美國關稅衝擊”或相關字樣
+3. **符合計畫特性**：依補助主題與模板特性挑選關鍵語彙，避免偏離既定範疇
 4. **避免重複**：不照搬或過度相似現有計畫名稱
-5. **使用繁體中文**：專業用語準確，避免生僻字"""
+5. **使用繁體中文**：專業用語準確，避免生僻字{custom_trait_block}"""
+
+    trait_section = (
+        f"\n**模板命名特性說明**：\n{custom_traits}\n"
+        if custom_traits
+        else ""
+    )
 
     user_prompt = f"""## 補助計畫背景
 
 **補助主題**：{grant_name}
 **計畫模板**：{template_name}
+{trait_section}
 
 
 ## 目前專案信息
@@ -1485,7 +1545,7 @@ async def recommend_project_names(
 
     try:
         async with httpx.AsyncClient() as client:
-            print(user_prompt)
+            print(user_prompt,system_prompt )
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -1563,7 +1623,7 @@ async def autofill_from_document(
     """
 
     model_registry = request.app.state.model_registry
-    model_to_use = model_registry.get("gpt-4.1") or model_registry.get("gpt-5-mini")
+    model_to_use = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.1-mini")
     if not model_to_use:
         raise HTTPException(status_code=500, detail="A powerful model like GPT-4/5 is required for this feature.")
 
@@ -1719,7 +1779,7 @@ async def field_file_analysis(
     subfield_label: str = Form(""),
     current_value: str = Form(""),
 ):
-    # 上傳 PDF / TXT/ JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
+    # 上傳 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
 

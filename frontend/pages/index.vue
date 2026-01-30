@@ -31,7 +31,7 @@
               :key="plan.id"
               class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
               :class="
-                selectedPlanType?.id === plan.id
+                isPlanSelected(plan)
                   ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
                   : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
               "
@@ -292,8 +292,8 @@
                   isProcessingBackground
                     ? "解析附件中..."
                     : isCreatingProject
-                    ? "建立工作區..."
-                    : "進入工作區"
+                      ? "建立工作區..."
+                      : "進入工作區"
                 }}
               </button>
             </div>
@@ -455,7 +455,7 @@ async function loadPlanTypes() {
 
     planTypes.value = openTemplates.map((template) => {
       // 根据 logo_storage_path 生成 public URL 或 signed URL
-      let logoUrl = "/icons/default_logo.png";
+      let logoUrl = "logo.png";
       if (template.logo_storage_path) {
         // 如果是完整的存储路径（http开头），直接使用
         if (template.logo_storage_path.startsWith("http")) {
@@ -499,20 +499,22 @@ const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
 const isCreatingProject = ref(false);
 
 // Double-click tracking for plan buttons: two clicks within this threshold
-const lastClickedPlanId = ref<string | null>(null);
+const lastClickedPlanKey = ref<string>("");
 const lastClickTime = ref<number>(0);
 const DOUBLE_CLICK_THRESHOLD = 600; // ms
 
 function handlePlanClick(plan: PlanTypeOption) {
+  const planKey = getPlanKey(plan);
   const now = Date.now();
   if (
-    lastClickedPlanId.value === plan.id &&
+    planKey &&
+    lastClickedPlanKey.value === planKey &&
     now - lastClickTime.value <= DOUBLE_CLICK_THRESHOLD
   ) {
     // treat as double-click: ensure selected and advance
     selectedPlanType.value = plan;
     // reset tracking
-    lastClickedPlanId.value = null;
+    lastClickedPlanKey.value = "";
     lastClickTime.value = 0;
     // proceed to next step
     handlePlanTypeConfirm();
@@ -521,15 +523,15 @@ function handlePlanClick(plan: PlanTypeOption) {
 
   // single click: select and record timestamp
   selectedPlanType.value = plan;
-  lastClickedPlanId.value = plan.id;
+  lastClickedPlanKey.value = planKey;
   lastClickTime.value = now;
   // clear tracking after threshold to avoid stale state
   setTimeout(() => {
     if (
-      lastClickedPlanId.value === plan.id &&
+      lastClickedPlanKey.value === planKey &&
       Date.now() - lastClickTime.value >= DOUBLE_CLICK_THRESHOLD
     ) {
-      lastClickedPlanId.value = null;
+      lastClickedPlanKey.value = "";
       lastClickTime.value = 0;
     }
   }, DOUBLE_CLICK_THRESHOLD + 50);
@@ -547,7 +549,7 @@ async function getUserIdOrNotify() {
 
 const configsLoaded = computed(() => allConfigs.value.length > 0);
 const canConfirmPlanType = computed(
-  () => Boolean(selectedPlanType.value) && configsLoaded.value
+  () => Boolean(selectedPlanType.value) && configsLoaded.value,
 );
 
 const resolvedTemplateName = computed(() => {
@@ -562,12 +564,12 @@ const resolvedTemplateName = computed(() => {
 const canEnterChat = computed(() =>
   Boolean(
     selectedMode.value &&
-      planName.value.trim() &&
-      planSummary.value.trim() &&
-      selectedPlanType.value &&
-      selectedGrantId.value &&
-      selectedTemplateId.value
-  )
+    planName.value.trim() &&
+    planSummary.value.trim() &&
+    selectedPlanType.value &&
+    selectedGrantId.value &&
+    selectedTemplateId.value,
+  ),
 );
 
 const modeLabel = computed(() => {
@@ -589,7 +591,7 @@ const backgroundSummary = computed(() => {
 });
 
 const combinedBackgroundNotes = computed(() =>
-  backgroundSummary.value.join("\n\n").trim()
+  backgroundSummary.value.join("\n\n").trim(),
 );
 
 const prefilledChatAnswers = computed(() => {
@@ -612,7 +614,7 @@ const prefilledChatAnswers = computed(() => {
 });
 
 async function runAttachmentAutofill(
-  userId: string
+  userId: string,
 ): Promise<AttachmentAutofillResult | null> {
   if (!backgroundFiles.value.length) {
     return null;
@@ -653,7 +655,7 @@ async function runAttachmentAutofill(
       sections: sectionsPayload,
       user_id: userId,
     },
-    API_BASE_URL
+    API_BASE_URL,
   );
 
   const accumulator = { ...baseValues };
@@ -668,13 +670,13 @@ async function runAttachmentAutofill(
       const key = makeCompositeKey(sectionId, propertyKey);
       accumulator[key] = normalized;
     },
-    () => {}
+    () => {},
   );
 
   const dynamicFields = Object.fromEntries(
     Object.entries(accumulator).filter(([, value]) =>
-      Boolean(value && value.trim())
-    )
+      Boolean(value && value.trim()),
+    ),
   ) as Record<string, string>;
 
   const mainIdea =
@@ -728,7 +730,7 @@ async function processBackgroundFiles(files: File[]) {
   const classified = files
     .map((file) => ({ file, type: detectBackgroundType(file) }))
     .filter((item): item is { file: File; type: "word" | "pdf" } =>
-      Boolean(item.type)
+      Boolean(item.type),
     );
   if (!classified.length) {
     notifyWarning("僅支援 Word (.docx) 與 PDF 檔案");
@@ -795,7 +797,7 @@ function createAttachmentId() {
 
 function removeBackgroundAttachment(id: string) {
   backgroundFiles.value = backgroundFiles.value.filter(
-    (file) => file.id !== id
+    (file) => file.id !== id,
   );
 }
 
@@ -805,6 +807,35 @@ function clearBackgroundAttachments() {
 
 function selectPlanType(plan: PlanTypeOption) {
   selectedPlanType.value = plan;
+}
+
+function buildSelectionKey(
+  grantId?: string | null,
+  templateId?: string | null,
+): string {
+  return `${grantId ?? ""}::${templateId ?? ""}`;
+}
+
+function getPlanKey(plan: PlanTypeOption | null): string {
+  if (!plan) return "";
+  const templateId = plan.templateId || plan.id;
+  return buildSelectionKey(plan.grantId, templateId);
+}
+
+function isPlanSelected(plan: PlanTypeOption): boolean {
+  const planKey = getPlanKey(plan);
+  if (!planKey) return false;
+
+  const localSelectionKey = getPlanKey(selectedPlanType.value);
+  if (localSelectionKey && localSelectionKey === planKey) {
+    return true;
+  }
+
+  const generatorSelectionKey = buildSelectionKey(
+    selectedGrantId.value,
+    selectedTemplateId.value,
+  );
+  return Boolean(generatorSelectionKey && generatorSelectionKey === planKey);
 }
 
 function resolvePlanConfig(plan: PlanTypeOption | null) {
@@ -881,7 +912,7 @@ async function enterChatStage() {
       } catch (autofillError) {
         console.error("Failed to auto-fill dynamic sections", autofillError);
         notifyWarning(
-          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。"
+          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。",
         );
       }
     }

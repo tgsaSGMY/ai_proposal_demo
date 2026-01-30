@@ -88,7 +88,7 @@ class LLMService:
             prompt = ex.get('prompt', '')
             answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
             formatted_examples.append(f"{answer}")
-        return "以下是一些高质量范例输出:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
+        return "以下是一些高质量范例输出。結構可能改變，不需要參考其結構，但重點是參考其内容:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
 
     async def _build_initial_actor_messages(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> List[Dict]:
         """建立 Actor 首次生成時的 messages"""
@@ -629,10 +629,15 @@ class LLMService:
         project_id: Optional[str] = None,
         section_context: Optional[str] = None,
         disable_few_shot: bool = False,
+        section_details_override: Optional[SectionConfig] = None,
     ) -> SectionGenerateResponse:
         
         # 1. --- 获取配置 ---
-        section_details = await supabase_service.get_section_details(grant_id, template_id, section_id)
+        section_details = section_details_override or await supabase_service.get_section_details(
+            grant_id,
+            template_id,
+            section_id,
+        )
         if not section_details or not section_details.json_schema or not section_details.system_prompt:
             return SectionGenerateResponse(section_id=section_id, error="Configuration error for section.")
 

@@ -3,9 +3,7 @@
   <div
     class="bg-white shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col"
   >
-    <div
-      class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 min-h-0 my-2"
-    >
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6 mb-4 sm:mb-6">
       <div>
         <h2 class="text-lg sm:text-2xl font-bold text-gray-800 mb-3">
           生成結果
@@ -132,6 +130,7 @@ const props = defineProps({
   grantId: { type: String, required: false },
   templateId: { type: String, required: false },
   savedPlanVersions: { type: Array, default: () => [] },
+  projectCreatedAt: { type: String, required: false },
 });
 
 const fileInput = ref(null);
@@ -175,7 +174,7 @@ watch(
       selectedVersionIndex.value = -1;
     }
   },
-  { deep: true }
+  { deep: true },
 );
 
 const emit = defineEmits([
@@ -223,7 +222,9 @@ async function handleExportToWord() {
       ? props.savedPlanVersions[selectedVersionIndex.value].data
       : "",
     props.grantId,
-    props.templateId
+    props.templateId,
+    undefined,
+    props.projectCreatedAt || undefined,
   );
 }
 // 禁止所有编辑
@@ -298,7 +299,7 @@ async function callAutoFillApi(payload) {
 async function extractTextFromFile(file) {
   if (file.type === "application/pdf" && !pdfjsLib) {
     throw new Error(
-      "PDF library is not loaded yet. Please try again in a moment."
+      "PDF library is not loaded yet. Please try again in a moment.",
     );
   }
   if (file.type === "application/pdf") {

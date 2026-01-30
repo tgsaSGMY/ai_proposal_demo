@@ -97,12 +97,23 @@
           >
             <div class="flex items-start justify-between gap-4">
               <div>
-                <span
-                  class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                  :class="[project.accent.tagBg, project.accent.tagText]"
-                >
-                  {{ project.type }}
-                </span>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span
+                    class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+                    :class="[project.accent.tagBg, project.accent.tagText]"
+                  >
+                    {{ project.type }}
+                  </span>
+                  <span v-if="project.grantName" class="text-xs text-gray-500">
+                    {{ project.grantName }}
+                  </span>
+                  <span
+                    v-if="project.templateName"
+                    class="text-xs text-gray-500"
+                  >
+                    / {{ project.templateName }}
+                  </span>
+                </div>
                 <h3
                   class="mt-3 text-lg font-semibold text-gray-900 line-clamp-2"
                 >
@@ -333,6 +344,8 @@ interface ProjectRecord {
   grant_id?: string | null;
   template_id?: string | null;
   plan_type_id?: string | null;
+  grant_name?: string | null;
+  template_name?: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -345,6 +358,8 @@ interface ProjectCard {
   completeness: number;
   lastUpdate: string;
   accent: Accent;
+  grantName: string | null;
+  templateName: string | null;
   record: ProjectRecord;
 }
 
@@ -522,6 +537,8 @@ function decorateProject(
     completeness,
     lastUpdate,
     accent,
+    grantName: record.grant_name || null,
+    templateName: record.template_name || null,
     record,
   };
 }

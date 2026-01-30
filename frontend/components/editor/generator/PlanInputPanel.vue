@@ -74,7 +74,7 @@
               class="text-xs text-gray-400"
               v-if="
                 section.fields.some(
-                  (field) => field.value && field.value.trim() !== ''
+                  (field) => field.value && field.value.trim() !== '',
                 )
               "
             >
@@ -105,7 +105,7 @@
                 :class="{
                   'rotate-90': isFieldExpanded(
                     section.sectionId,
-                    field.propertyKey
+                    field.propertyKey,
                   ),
                 }"
                 xmlns="http://www.w3.org/2000/svg"
@@ -219,7 +219,7 @@
                       updateDynamicValue(
                         section.sectionId,
                         field.propertyKey,
-                        $event.target.value
+                        $event.target.value,
                       )
                     "
                     rows="4"
@@ -287,7 +287,6 @@ import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useRuntimeConfig } from "#app";
 import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModal.vue";
 
-const modelValue = defineModel();
 const dynamicValuesModel = defineModel("dynamicValues", {
   type: Object,
   default: () => createEmptyDynamicValues(),
@@ -304,7 +303,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  "update:modelValue",
   "selectionChange",
   "generatePlan",
   "generateUserInput",
@@ -325,11 +323,7 @@ const displayPlanName = computed(() => {
 
 const displayPlanSummary = computed(() => {
   const provided = (props.projectSummary || "").trim();
-  if (provided) {
-    return provided;
-  }
-  const fallback = (modelValue.value || "").trim();
-  return fallback || "尚未提供摘要";
+  return provided || "尚未提供摘要";
 });
 
 // 內部狀態
@@ -359,7 +353,7 @@ watch(
       templateGrantId: selectedGrantId.value,
     });
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 function resetDynamicValues() {
@@ -374,7 +368,7 @@ watch(
     if (selectedGrantId.value !== newVal) {
       selectedGrantId.value = newVal;
     }
-  }
+  },
 );
 
 watch(
@@ -383,7 +377,7 @@ watch(
     if (selectedTemplateId.value !== newVal) {
       selectedTemplateId.value = newVal;
     }
-  }
+  },
 );
 
 // 計算屬性（模板和章節）
@@ -404,33 +398,29 @@ const selectedTemplate = computed(() => {
   }
   return (
     availableTemplates.value.find(
-      (tpl) => tpl.id === selectedTemplateId.value
+      (tpl) => tpl.id === selectedTemplateId.value,
     ) || null
   );
 });
 
 // 計算屬性：獲取選中的主題和模板名稱
 const selectedGrantName = computed(
-  () => selectedGrant.value?.name || "尚未選擇"
+  () => selectedGrant.value?.name || "尚未選擇",
 );
 
 const selectedTemplateName = computed(
-  () => selectedTemplate.value?.name || "尚未選擇"
+  () => selectedTemplate.value?.name || "尚未選擇",
 );
 
 const dynamicSections = computed(() =>
   buildDynamicSections(internalDynamicValues.value, {
     templateId: selectedTemplateId.value,
     templateGrantId: selectedGrantId.value,
-  })
+  }),
 );
 
 const isReadyToGenerate = computed(() => {
-  return (
-    selectedTemplateId.value &&
-    modelValue.value &&
-    modelValue.value.trim() !== ""
-  );
+  return selectedTemplateId.value;
 });
 
 watch(
@@ -445,7 +435,7 @@ watch(
         grantChanged &&
         selectedTemplateId.value &&
         !availableTemplates.value.some(
-          (tpl) => tpl.id === selectedTemplateId.value
+          (tpl) => tpl.id === selectedTemplateId.value,
         )
       ) {
         selectedTemplateId.value = "";
@@ -456,7 +446,7 @@ watch(
         templateId: selectedTemplateId.value,
       });
     }
-  }
+  },
 );
 
 // 更新指定章節字段的值，同步到父組件
@@ -547,7 +537,7 @@ watch(
     if (!isOpen && wasOpen) {
       fileImportState.value = createFileImportState();
     }
-  }
+  },
 );
 
 async function generateFieldWithAI(sectionId, field) {

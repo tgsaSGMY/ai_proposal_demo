@@ -97,20 +97,36 @@ class SupabaseService:
             
         return all_grants
 
-    async def get_section_details(self, grant_id: str, template_id: str, section_id: str) -> Optional[SectionConfig]:
+    async def get_section_details(
+        self,
+        grant_id: str,
+        template_id: str,
+        section_id: str,
+    ) -> Optional[SectionConfig]:
         """獲取單個 section 的詳細信息。"""
-        response = await asyncio.to_thread(
-            self.client.from_("sections")
-            .select("*")
-            .eq("grant_id", grant_id)
-            .eq("template_id", template_id)
-            .eq("id", section_id)
-            .single()
-            .execute
-        )
-        if response.data:
-            return SectionConfig(**response.data)
-        return None
+        try:
+            response = (
+                self.client.from_("sections")
+                .select("*")
+                .eq("grant_id", grant_id)
+                .eq("template_id", template_id)
+                .eq("id", section_id)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                return SectionConfig(**response.data[0])
+            return None
+        except Exception as error:
+            logger.error(
+                "Failed to fetch section %s/%s/%s: %s",
+                grant_id,
+                template_id,
+                section_id,
+                error,
+                exc_info=True,
+            )
+            return None
 
     async def log_sft_data_point(self, grant_id: str, template_id: str,section_id: str, prompt: str, final_answer: dict, source_type: str):
         """记录一个可用于 SFT 的数据点"""
@@ -244,6 +260,251 @@ class SupabaseService:
             return None
 
 
+    async def list_grants(self) -> List[Dict[str, Any]]:
+        """取得所有 Grant 記錄。"""
+        response = (
+            self.client
+            .from_("grants")
+            .select("*")
+            .order("id", desc=False)
+            .execute()
+        )
+        return response.data or []
+
+    async def create_grant_record(self, grant_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增 Grant 記錄。"""
+        response = self.client.from_("grants").insert(grant_data).execute()
+        return response.data[0] if response.data else None
+
+    async def update_grant_record(self, current_grant_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """更新既有 Grant，允許更改主鍵。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        response = (
+            self.client
+            .from_("grants")
+            .update(payload)
+            .eq("id", current_grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def list_plan_templates(self, grant_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """取得所有計畫模板，可依 Grant 過濾。"""
+        query = (
+            self.client
+            .from_("plan_templates")
+            .select("*")
+            .order("name", desc=False)
+        )
+        if grant_id:
+            query = query.eq("grant_id", grant_id)
+        response = query.execute()
+        return response.data or []
+
+    async def create_plan_template_record(self, template_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增計畫模板。"""
+        response = self.client.from_("plan_templates").insert(template_data).execute()
+        return response.data[0] if response.data else None
+
+    async def update_plan_template_record(
+        self,
+        template_id: str,
+        grant_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """更新既有模板，依照 (id, grant_id) 鎖定。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        response = (
+            self.client
+            .from_("plan_templates")
+            .update(payload)
+            .eq("id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def create_section_record(self, section_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """新增章節記錄。"""
+        payload = {k: v for k, v in section_data.items() if v is not None}
+        if not payload:
+            return None
+        if "current_version" not in payload:
+            payload["current_version"] = 1
+        if not payload.get("system_prompt"):
+            payload["system_prompt"] = self._compose_system_prompt(
+                grant_id=payload.get("grant_id", ""),
+                template_id=payload.get("template_id", ""),
+                section_id=payload.get("id", ""),
+                section_name=payload.get("name"),
+                schema_json=payload.get("json_schema"),
+            )
+        response = self.client.from_("sections").insert(payload).execute()
+        record = response.data[0] if response.data else None
+        if record:
+            await self._insert_section_schema_version(
+                section_id=record["id"],
+                template_id=record["template_id"],
+                grant_id=record["grant_id"],
+                version=record.get("current_version") or 1,
+                json_schema=record.get("json_schema"),
+                system_prompt=record.get("system_prompt"),
+            )
+        return record
+
+    async def update_section_record(
+        self,
+        section_id: str,
+        template_id: str,
+        grant_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """更新指定章節。"""
+        payload = {k: v for k, v in data.items() if v is not None}
+        if not payload:
+            return None
+        existing = await self.get_section_details(grant_id, template_id, section_id)
+        if not existing:
+            return None
+
+        schema_changed = "json_schema" in payload and payload["json_schema"] != existing.json_schema
+        prompt_changed = "system_prompt" in payload and payload["system_prompt"] != existing.system_prompt
+        if schema_changed and "system_prompt" not in payload:
+            payload["system_prompt"] = self._compose_system_prompt(
+                grant_id=grant_id,
+                template_id=template_id,
+                section_id=section_id,
+                section_name=existing.name,
+                schema_json=payload.get("json_schema", existing.json_schema),
+                existing_prompt=existing.system_prompt,
+            )
+            prompt_changed = payload["system_prompt"] != existing.system_prompt
+        if schema_changed or prompt_changed:
+            current_version = existing.current_version or 0
+            new_version = current_version + 1
+            await self._insert_section_schema_version(
+                section_id=section_id,
+                template_id=template_id,
+                grant_id=grant_id,
+                version=new_version,
+                json_schema=payload.get("json_schema", existing.json_schema),
+                system_prompt=payload.get("system_prompt", existing.system_prompt),
+            )
+            payload["current_version"] = new_version
+        response = (
+            self.client
+            .from_("sections")
+            .update(payload)
+            .eq("id", section_id)
+            .eq("template_id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def _insert_section_schema_version(
+        self,
+        *,
+        section_id: str,
+        template_id: str,
+        grant_id: str,
+        version: int,
+        json_schema: Optional[Dict[str, Any]],
+        system_prompt: Optional[str],
+        created_by: Optional[str] = None,
+    ) -> None:
+        """插入章節 Schema 版本記錄。"""
+        payload: Dict[str, Any] = {
+            "section_id": section_id,
+            "template_id": template_id,
+            "grant_id": grant_id,
+            "version": version,
+            "json_schema": json_schema,
+            "system_prompt": system_prompt,
+        }
+        if created_by:
+            payload["created_by"] = created_by
+        await asyncio.to_thread(
+            lambda: self.client.from_("section_schema_versions").insert(payload).execute()
+        )
+
+    def _compose_system_prompt(
+        self,
+        *,
+        grant_id: str,
+        template_id: str,
+        section_id: str,
+        section_name: Optional[str],
+        schema_json: Optional[Dict[str, Any]],
+        existing_prompt: Optional[str] = None,
+    ) -> str:
+        example_structure = self._schema_to_description_example(schema_json)
+        schema_str = json.dumps(example_structure, ensure_ascii=False, indent=2)
+        if existing_prompt:
+            block_start = existing_prompt.find("```json")
+            if block_start != -1:
+                block_end = existing_prompt.find("```", block_start + len("```json"))
+                if block_end != -1:
+                    prefix = existing_prompt[:block_start].rstrip()
+                    suffix = existing_prompt[block_end + 3 :].lstrip()
+                    parts = [part for part in [prefix, f"```json\n{schema_str}\n```", suffix] if part]
+                    return "\n\n".join(parts).strip()
+
+        section_label = section_name or section_id or "指定章節"
+        base_intro = (
+            f"你是一位頂尖的政府補助案企劃書撰寫專家。你的任務是為一份主題爲「{grant_id}」，模板為 「{template_id}」的計畫書，生成「{section_label}」章節的內容。\n\n"
+            "請嚴格依照以下 JSON Schema 結構與說明進行輸出，除了 JSON 物件本身，不得包含任何額外的說明、開頭、或結尾文字。"
+        )
+        return f"{base_intro}\n\n```json\n{schema_str}\n```".strip()
+
+    def _schema_to_description_example(self, schema_json: Optional[Dict[str, Any]]) -> Any:
+        """將 JSON Schema 轉為僅保留描述文字的示例結構。"""
+        if not schema_json:
+            return {}
+
+        schema_type = (schema_json.get("type") or "object").lower()
+
+        if schema_type == "object":
+            properties = schema_json.get("properties") or {}
+            if properties:
+                return {
+                    key: self._schema_to_description_example(value)
+                    for key, value in properties.items()
+                }
+            desc = schema_json.get("description") or schema_json.get("title")
+            return desc or {}
+
+        if schema_type == "array":
+            items = schema_json.get("items")
+            if items:
+                return [self._schema_to_description_example(items)]
+            desc = schema_json.get("description") or schema_json.get("title")
+            return [desc] if desc else []
+
+        return (
+            schema_json.get("description")
+            or schema_json.get("title")
+            or "請填寫此欄位內容。"
+        )
+
+    async def delete_section_record(self, section_id: str, template_id: str, grant_id: str) -> bool:
+        """刪除指定章節。"""
+        response = (
+            self.client
+            .from_("sections")
+            .delete()
+            .eq("id", section_id)
+            .eq("template_id", template_id)
+            .eq("grant_id", grant_id)
+            .execute()
+        )
+        return len(response.data) > 0
+
+
     async def get_sections_by_template_id(self, template_id: str, grant_id: str) -> List[Dict[str, Any]]:
         """根据 template_id 获取其下所有 sections，并按 order 排序。"""
         if not template_id:
@@ -310,8 +571,168 @@ class SupabaseService:
         response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
         return len(response.data) > 0
 
+    async def _get_section_current_versions(self, grant_id: Optional[str], template_id: Optional[str]) -> Dict[str, int]:
+        """
+        獲取指定 grant 和 template 下所有 sections 的當前版本號。
+        返回格式：{ "section_id": version_number, ... }
+        """
+        if not grant_id or not template_id:
+            return {}
+        
+        try:
+            # 從 sections 表獲取所有屬於此 grant+template 的 section
+            sections_response = (
+                self.client.from_("sections")
+                .select("id, current_version")
+                .eq("grant_id", grant_id)
+                .eq("template_id", template_id)
+                .execute()
+            )
+            
+            if not sections_response.data:
+                return {}
+            
+            # 構建版本號映射表
+            section_versions = {}
+            for section in sections_response.data:
+                section_id = section.get("id")
+                current_version = section.get("current_version")
+                if section_id and current_version:
+                    section_versions[section_id] = current_version
+            
+            return section_versions
+        except Exception as error:
+            logger.error(
+                "Failed to get section versions for grant %s, template %s: %s",
+                grant_id,
+                template_id,
+                error,
+                exc_info=True,
+            )
+            return {}
+
+    async def get_section_version_overrides(
+        self,
+        *,
+        grant_id: Optional[str],
+        template_id: Optional[str],
+        section_versions: Optional[Dict[str, int]],
+    ) -> Dict[str, Dict[str, Any]]:
+        """取得指定章節版本對應的 schema 與 prompt 設定。"""
+        if not grant_id or not template_id or not section_versions:
+            return {}
+
+        overrides: Dict[str, Dict[str, Any]] = {}
+        for section_id, version in section_versions.items():
+            if not section_id or version is None:
+                continue
+            try:
+                response = (
+                    self.client.from_("section_schema_versions")
+                    .select("section_id, version, json_schema, system_prompt")
+                    .eq("grant_id", grant_id)
+                    .eq("template_id", template_id)
+                    .eq("section_id", section_id)
+                    .eq("version", version)
+                    .limit(1)
+                    .execute()
+                )
+                if response.data:
+                    overrides[section_id] = response.data[0]
+            except Exception as error:
+                logger.error(
+                    "Failed to fetch schema version for %s/%s/%s@%s: %s",
+                    grant_id,
+                    template_id,
+                    section_id,
+                    version,
+                    error,
+                    exc_info=True,
+                )
+        return overrides
+
+    async def hydrate_section_configs_with_versions(
+        self,
+        *,
+        sections: List[SectionConfig],
+        grant_id: str,
+        template_id: str,
+        section_versions: Optional[Dict[str, int]],
+    ) -> List[SectionConfig]:
+        """將指定 sections 套用歷史版本 schema/prompt。"""
+        overrides = await self.get_section_version_overrides(
+            grant_id=grant_id,
+            template_id=template_id,
+            section_versions=section_versions,
+        )
+        if not overrides:
+            return sections
+
+        hydrated: List[SectionConfig] = []
+        for section in sections:
+            override = overrides.get(section.id)
+            if not override:
+                hydrated.append(section)
+                continue
+
+            payload = section.model_dump()
+            if override.get("json_schema") is not None:
+                payload["json_schema"] = override["json_schema"]
+            if override.get("system_prompt") is not None:
+                payload["system_prompt"] = override["system_prompt"]
+            payload["current_version"] = override.get("version") or (section_versions or {}).get(section.id)
+            hydrated.append(SectionConfig(**payload))
+
+        return hydrated
+
+    async def hydrate_section_payloads_with_versions(
+        self,
+        *,
+        sections: List[Dict[str, Any]],
+        grant_id: str,
+        template_id: str,
+        section_versions: Optional[Dict[str, int]],
+    ) -> List[Dict[str, Any]]:
+        """將原始 section 字典套用歷史版本資訊，供 API 回傳使用。"""
+        overrides = await self.get_section_version_overrides(
+            grant_id=grant_id,
+            template_id=template_id,
+            section_versions=section_versions,
+        )
+        if not overrides:
+            return sections
+
+        hydrated: List[Dict[str, Any]] = []
+        for section in sections:
+            section_id = section.get("id")
+            override = overrides.get(section_id)
+            if not override:
+                hydrated.append(section)
+                continue
+
+            payload = {**section}
+            if override.get("json_schema") is not None:
+                payload["json_schema"] = override["json_schema"]
+            if override.get("system_prompt") is not None:
+                payload["system_prompt"] = override["system_prompt"]
+            payload["applied_version"] = override.get("version") or (section_versions or {}).get(section_id)
+            hydrated.append(payload)
+
+        return hydrated
+
     async def create_project_record(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """在 projects 表中新增一筆記錄。"""
+        """
+        在 projects 表中新增一筆記錄。
+        自動記錄當前的 section 版本號到 section_versions 欄位。
+        """
+        # 獲取當前的 section 版本號
+        grant_id = data.get("grant_id")
+        template_id = data.get("template_id")
+        section_versions = await self._get_section_current_versions(grant_id, template_id)
+        
+        # 添加版本號資訊到 data
+        data["section_versions"] = section_versions
+        
         response = (
             self.client.from_("projects")
             .insert({k: v for k, v in data.items() if v is not None})
@@ -337,7 +758,7 @@ class SupabaseService:
             return None
 
     async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """取得指定使用者的所有專案，依更新時間排序。"""
+        """取得指定使用者的所有專案，依更新時間排序。補充 grant_name 和 template_name。"""
         response = (
             self.client.from_("projects")
             .select("*")
@@ -345,10 +766,50 @@ class SupabaseService:
             .order("updated_at", desc=True)
             .execute()
         )
-        return response.data if response.data else []
+        
+        if not response.data:
+            return []
+        
+        # 獲取所有 grants 配置以查詢 grant name 和 template name
+        all_grants = await self.get_all_grants_config()
+        
+        # 建立快速查詢表：{grant_id: grant_config}
+        grants_lookup = {g.id: g for g in all_grants}
+        
+        # 建立快速查詢表：{(grant_id, template_id): template_config}
+        templates_lookup = {}
+        for grant in all_grants:
+            for template in grant.templates:
+                templates_lookup[(grant.id, template.id)] = template
+        
+        # 為每個專案補充 grant_name 和 template_name
+        projects = response.data
+        for project in projects:
+            grant_id = project.get("grant_id")
+            template_id = project.get("template_id")
+            
+            # 從查詢表中找到對應的 grant name 和 template name
+            if grant_id and grant_id in grants_lookup:
+                project["grant_name"] = grants_lookup[grant_id].name
+            else:
+                project["grant_name"] = None
+            
+            if grant_id and template_id and (grant_id, template_id) in templates_lookup:
+                project["template_name"] = templates_lookup[(grant_id, template_id)].name
+            else:
+                project["template_name"] = None
+        
+        return projects
 
     async def update_project_record(self, project_id: str, user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """更新指定專案（只有擁有者能更新）。"""
+        """
+        更新指定專案（只有擁有者能更新）。
+        注意：section_versions 是在項目創建時的版本快照，不應在更新時自動改變。
+        如需更改 section_versions，必須明確傳入。
+        """
+        # 不要自動更新 section_versions - 它應該保持為創建時的版本快照
+        # 只有當明確在 data 中傳入 section_versions 時，才會更新
+        
         response = (
             self.client.from_("projects")
             .update({k: v for k, v in data.items() if v is not None})
@@ -631,6 +1092,37 @@ class SupabaseService:
             }
             # 只有當 system_prompt 不是 None 時才更新它
             if system_prompt is not None:
+                existing = await self.get_section_details(grant_id, template_id, section_id)
+                if not existing:
+                    return False
+                if system_prompt != existing.system_prompt:
+                    current_version = existing.current_version or 0
+                    new_version = current_version + 1
+                    await self._insert_section_schema_version(
+                        section_id=section_id,
+                        template_id=template_id,
+                        grant_id=grant_id,
+                        version=new_version,
+                        json_schema=existing.json_schema,
+                        system_prompt=system_prompt,
+                    )
+                    update_data["current_version"] = new_version
+                    
+                    # 同時更新 section_schema_version 表中最新版本的 system_prompt
+                    try:
+                        self.client.from_("section_schema_versions").update(
+                            {"system_prompt": system_prompt}
+                        ).eq("grant_id", grant_id).eq("template_id", template_id).eq("section_id", section_id).eq("version", new_version).execute()
+                    except Exception as version_update_error:
+                        logger.warning(
+                            "Failed to update system_prompt in section_schema_versions for %s/%s/%s@%s: %s",
+                            grant_id,
+                            template_id,
+                            section_id,
+                            new_version,
+                            version_update_error,
+                        )
+                
                 update_data["system_prompt"] = system_prompt
 
             if search_external is not None:

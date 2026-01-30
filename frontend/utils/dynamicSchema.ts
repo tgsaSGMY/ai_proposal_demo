@@ -340,8 +340,6 @@ interface RemoteDynamicSection {
 // ===== 缓存和状态管理常量 =====
 // 默认 Schema ID（当没有指定时使用）
 const DEFAULT_SCHEMA_ID = "default";
-// Schema 缓存有效期：5 分钟（超过此时间后重新从后端加载）
-const SCHEMA_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
 // ===== 静态 Schema 初始化 =====
 /**
@@ -353,7 +351,7 @@ const SCHEMA_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
  *   - 这样即使网络问题也能保证应用继续工作
  */
 const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
-  RAW_DYNAMIC_SCHEMA
+  RAW_DYNAMIC_SCHEMA,
 ).map(([sectionKey, sectionValue]) => ({
   id: sectionKey,
   title: sectionValue.title,
@@ -362,22 +360,9 @@ const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
       key: propertyKey,
       title: propertyValue.title,
       description: propertyValue.description,
-    })
+    }),
   ),
 }));
-
-// ===== 缓存数据结构 =====
-/**
- * Schema 缓存条目
- *
- * 说明：
- *   - 存储 Schema 及其加载时间戳
- *   - 用于缓存过期检查
- */
-interface SchemaCacheEntry {
-  sections: DynamicSchemaSection[]; // 缓存的 Schema 章节数据
-  loadedAt: number; // 加载时间戳（用于过期判断）
-}
 
 // ===== 全局状态管理 =====
 // 当前活跃的 Schema 章节（内存中的副本）
@@ -386,29 +371,10 @@ let schemaSections: DynamicSchemaSection[] = [...FALLBACK_SCHEMA_SECTIONS];
 let activeTemplateId: string | null = null;
 // 当前活跃的补助金 ID（用于字段过滤）
 let activeTemplateGrantId: string | null = null;
-// Schema 缓存：以缓存键为 key，缓存条目为 value
-const schemaCache: Record<string, SchemaCacheEntry> = {};
-// 正在加载的 Promise：避免重复发起相同的网络请求
-const schemaLoadPromises: Record<string, Promise<DynamicSchemaSection[]>> = {};
 
 interface SchemaFilterOptions {
   templateId?: string | null;
   templateGrantId?: string | null;
-}
-
-function buildCacheKey({
-  schemaId,
-  templateId,
-  templateGrantId,
-}: {
-  schemaId: string;
-  templateId?: string | null;
-  templateGrantId?: string | null;
-}) {
-  const normalizedSchema = schemaId || DEFAULT_SCHEMA_ID;
-  const normalizedGrant = templateGrantId || "all-grants";
-  const normalizedTemplate = templateId || "all-templates";
-  return `${normalizedGrant}::${normalizedTemplate}::${normalizedSchema}`;
 }
 
 function cloneFallbackSections(): DynamicSchemaSection[] {
@@ -421,7 +387,7 @@ function cloneFallbackSections(): DynamicSchemaSection[] {
 function matchesTemplate(
   section: DynamicSchemaSection,
   templateId?: string | null,
-  templateGrantId?: string | null
+  templateGrantId?: string | null,
 ): boolean {
   if (!templateId && !templateGrantId) {
     return true;
@@ -434,7 +400,7 @@ function matchesTemplate(
   }
   return Boolean(
     (!templateId || section.templateId === templateId) &&
-      (!templateGrantId || section.templateGrantId === templateGrantId)
+    (!templateGrantId || section.templateGrantId === templateGrantId),
   );
 }
 
@@ -442,13 +408,14 @@ function getRenderableSections(options?: SchemaFilterOptions) {
   const targetTemplateId = options?.templateId ?? activeTemplateId;
   const targetTemplateGrantId =
     options?.templateGrantId ?? activeTemplateGrantId;
+
   return schemaSections.filter((section) =>
-    matchesTemplate(section, targetTemplateId, targetTemplateGrantId)
+    matchesTemplate(section, targetTemplateId, targetTemplateGrantId),
   );
 }
 
 function mapRemoteSections(
-  sections: RemoteDynamicSection[]
+  sections: RemoteDynamicSection[],
 ): DynamicSchemaSection[] {
   return sections
     .slice()
@@ -508,7 +475,6 @@ async function fetchRemoteSchema({
 
 export async function ensureDynamicSchemaLoaded(options?: {
   schemaId?: string;
-  forceRefresh?: boolean;
   apiBaseUrl?: string;
   templateId?: string | null;
   templateGrantId?: string | null;
@@ -517,66 +483,30 @@ export async function ensureDynamicSchemaLoaded(options?: {
   const apiBaseUrl = options?.apiBaseUrl || "http://localhost:8000";
   const templateId = options?.templateId ?? null;
   const templateGrantId = options?.templateGrantId ?? null;
-  const cacheKey = buildCacheKey({
-    schemaId: targetSchemaId,
-    templateId,
-    templateGrantId,
-  });
-  const now = Date.now();
   activeTemplateId = templateId;
   activeTemplateGrantId = templateGrantId;
 
-  const cachedEntry = schemaCache[cacheKey];
-  if (
-    !options?.forceRefresh &&
-    cachedEntry &&
-    now - cachedEntry.loadedAt < SCHEMA_CACHE_TTL
-  ) {
-    schemaSections = cachedEntry.sections;
-    return cachedEntry.sections;
+  try {
+    const remoteSections = await fetchRemoteSchema({
+      schemaId: targetSchemaId,
+      templateId,
+      templateGrantId,
+      apiBaseUrl,
+    });
+    const resolvedSections =
+      remoteSections.length > 0 ? remoteSections : cloneFallbackSections();
+    schemaSections = resolvedSections;
+    return resolvedSections;
+  } catch (error) {
+    console.warn(
+      "Failed to load dynamic schema from API, fallback to static definition.",
+      error,
+    );
+    const fallbackSections = cloneFallbackSections();
+    schemaSections = fallbackSections;
+    return fallbackSections;
   }
-
-  if (!options?.forceRefresh && schemaLoadPromises[cacheKey]) {
-    return schemaLoadPromises[cacheKey];
-  }
-
-  const loadPromise = (async () => {
-    try {
-      const remoteSections = await fetchRemoteSchema({
-        schemaId: targetSchemaId,
-        templateId,
-        templateGrantId,
-        apiBaseUrl,
-      });
-      const resolvedSections =
-        remoteSections.length > 0 ? remoteSections : cloneFallbackSections();
-      schemaCache[cacheKey] = {
-        sections: resolvedSections,
-        loadedAt: Date.now(),
-      };
-      schemaSections = resolvedSections;
-      return resolvedSections;
-    } catch (error) {
-      console.warn(
-        "Failed to load dynamic schema from API, fallback to static definition.",
-        error
-      );
-      const fallbackSections = cloneFallbackSections();
-      schemaCache[cacheKey] = {
-        sections: fallbackSections,
-        loadedAt: Date.now(),
-      };
-      schemaSections = fallbackSections;
-      return fallbackSections;
-    }
-  })().finally(() => {
-    delete schemaLoadPromises[cacheKey];
-  });
-
-  schemaLoadPromises[cacheKey] = loadPromise;
-  return loadPromise;
 }
-
 /**
  * 生成複合鍵，作為欄位的唯一識別
  *
@@ -585,7 +515,7 @@ export async function ensureDynamicSchemaLoaded(options?: {
  */
 export function makeCompositeKey(
   sectionId: string,
-  propertyKey: string
+  propertyKey: string,
 ): string {
   return `${sectionId}::${propertyKey}`;
 }
@@ -645,7 +575,7 @@ function buildPlaceholder(fieldTitle: string, description: string): string {
  *     }
  */
 export function createEmptyDynamicValues(
-  options?: SchemaFilterOptions
+  options?: SchemaFilterOptions,
 ): DynamicValueMap {
   const values: DynamicValueMap = {};
   const sections = getRenderableSections(options);
@@ -695,7 +625,7 @@ export function createEmptyDynamicValues(
  */
 export function buildDynamicSections(
   values: DynamicValueMap = {},
-  options?: SchemaFilterOptions
+  options?: SchemaFilterOptions,
 ): DynamicSectionViewModel[] {
   const sections = getRenderableSections(options);
   return sections.map((section) => ({
@@ -725,7 +655,7 @@ export function buildDynamicSections(
  */
 export function mergeIntoEmptyValues(
   values: DynamicValueMap | undefined,
-  options?: SchemaFilterOptions
+  options?: SchemaFilterOptions,
 ): DynamicValueMap {
   const merged = createEmptyDynamicValues(options);
   if (!values) {
@@ -740,7 +670,7 @@ export function mergeIntoEmptyValues(
 }
 
 export function getDynamicFieldDefinitions(
-  options?: SchemaFilterOptions
+  options?: SchemaFilterOptions,
 ): DynamicFieldDefinition[] {
   return getRenderableSections(options).flatMap((section) =>
     section.properties.map((property) => ({
@@ -751,19 +681,19 @@ export function getDynamicFieldDefinitions(
       description: property.description,
       compositeKey: makeCompositeKey(section.id, property.key),
       label: buildFieldLabel(section.title, property.title),
-    }))
+    })),
   );
 }
 
 export function getDynamicFieldLabels(options?: SchemaFilterOptions): string[] {
   return getDynamicFieldDefinitions(options).map(
-    (definition) => definition.label
+    (definition) => definition.label,
   );
 }
 
 export function getCompositeKeyFromLabel(
   label?: string | null,
-  options?: SchemaFilterOptions
+  options?: SchemaFilterOptions,
 ): string | null {
   if (!label) {
     return null;
@@ -772,7 +702,7 @@ export function getCompositeKeyFromLabel(
   const definitions = getDynamicFieldDefinitions(options);
 
   const exactMatch = definitions.find(
-    (definition) => normalizeLabel(definition.label) === normalizedTarget
+    (definition) => normalizeLabel(definition.label) === normalizedTarget,
   );
   if (exactMatch) {
     return exactMatch.compositeKey;
@@ -780,14 +710,14 @@ export function getCompositeKeyFromLabel(
 
   const titleMatch = definitions.find(
     (definition) =>
-      normalizeLabel(definition.propertyTitle) === normalizedTarget
+      normalizeLabel(definition.propertyTitle) === normalizedTarget,
   );
   if (titleMatch) {
     return titleMatch.compositeKey;
   }
 
   const partialMatch = definitions.find((definition) =>
-    normalizedTarget.includes(normalizeLabel(definition.propertyTitle))
+    normalizedTarget.includes(normalizeLabel(definition.propertyTitle)),
   );
   return partialMatch ? partialMatch.compositeKey : null;
 }
@@ -795,8 +725,8 @@ export function getCompositeKeyFromLabel(
 export function getAllCompositeKeys(options?: SchemaFilterOptions): string[] {
   return getRenderableSections(options).flatMap((section) =>
     section.properties.map((property) =>
-      makeCompositeKey(section.id, property.key)
-    )
+      makeCompositeKey(section.id, property.key),
+    ),
   );
 }
 

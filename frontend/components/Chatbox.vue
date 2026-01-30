@@ -600,6 +600,7 @@ async function streamAIGuidanceMessage(question) {
     }
 
     window.chatWebSocket = new WebSocket(wsUrl);
+    console.log(guidedQuestions);
 
     window.chatWebSocket.onopen = () => {
       const payload = {
@@ -788,14 +789,6 @@ watch(
     emit("questionAnswersUpdated", newAnswers);
   },
   { deep: true },
-);
-
-watch(
-  draftMessage,
-  () => {
-    autoResizeTextarea();
-  },
-  { immediate: true },
 );
 
 watch(
@@ -1124,6 +1117,8 @@ async function requestGeneration() {
         project_title: props.projectTitle || "",
         grant_name: props.grantName || "",
         template_name: props.templateName || "",
+        grant_id: props.grantId || "",
+        template_id: props.templateId || "",
       }),
     });
     const data = await resp.json().catch(() => null);
@@ -1521,13 +1516,7 @@ onBeforeUnmount(() => {
 
 // 構建引導問題列表，從動態 Schema 提取所有字段信息，支持階層式問題組織
 function buildGuidedQuestionList() {
-  const base = [
-    // {
-    //   id: "项目形容"",
-    //   label: "核心構想",
-    //   prompt: "請先描述計畫的主要想法、產品或服務摘要。",
-    // },
-  ];
+  const base = [];
 
   const sections = buildDynamicSections(
     createEmptyDynamicValues({

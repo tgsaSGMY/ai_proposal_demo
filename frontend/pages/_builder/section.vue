@@ -539,7 +539,7 @@ const dragOverFieldIndex = ref(null);
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
   const targetGrant = grants.value.find(
-    (grant) => grant.id === selectedGrantId.value
+    (grant) => grant.id === selectedGrantId.value,
   );
   return targetGrant?.templates || [];
 });
@@ -547,7 +547,7 @@ const availableTemplates = computed(() => {
 // ===== 计算属性：是否选中模板 =====
 // 检查用户是否同时选中了补助类别和模板
 const isTemplateSelected = computed(() =>
-  Boolean(selectedGrantId.value && selectedTemplateId.value)
+  Boolean(selectedGrantId.value && selectedTemplateId.value),
 );
 
 // ===== 计算属性：当前架构标签 =====
@@ -624,13 +624,13 @@ async function fetchSections() {
     const token = await getAuthToken();
     const response = await fetch(
       `${API_BASE_URL}/dynamic-sections?template_id=${encodeURIComponent(
-        selectedTemplateId.value
+        selectedTemplateId.value,
       )}&template_grant_id=${encodeURIComponent(selectedGrantId.value)}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
@@ -661,11 +661,11 @@ function openCreateSection() {
   }
   const maxOrder = sections.value.reduce(
     (max, s) => (s.order > max ? s.order : max),
-    0
+    0,
   );
   editingSection.value = {
     id: null,
-    schema_id: selectedTemplateId.value,
+    schema_id: "default",
     section_key: "",
     title: "",
     order: maxOrder + 1,
@@ -774,7 +774,7 @@ async function confirmDeleteSection(section) {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
     if (!response.ok) throw new Error(await response.text());
 
@@ -794,7 +794,7 @@ async function confirmDeleteSection(section) {
 function openCreateField(section) {
   const maxOrder = section.fields.reduce(
     (max, f) => (f.order > max ? f.order : max),
-    0
+    0,
   );
   editingField.value = {
     id: null,
@@ -895,7 +895,7 @@ async function confirmDeleteField(field) {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      }
+      },
     );
     if (!response.ok) throw new Error(await response.text());
 
@@ -979,7 +979,7 @@ async function dropSection(targetIndex, event) {
             template_grant_id:
               section.template_grant_id || selectedGrantId.value,
           }),
-        }
+        },
       );
       if (!response.ok) throw new Error(await response.text());
     }
@@ -1060,7 +1060,7 @@ async function dropField(targetSectionId, targetFieldIndex, event) {
             description: section.fields[i].description || "",
             order: section.fields[i].order,
           }),
-        }
+        },
       );
       if (!response.ok) throw new Error(await response.text());
     }

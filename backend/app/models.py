@@ -11,6 +11,7 @@ class SectionConfig(BaseModel):
     template_id: str
     grant_id: str
     name: str
+    current_version: Optional[int] = None
     json_schema: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
     critic_prompt: Optional[str] = None
@@ -23,6 +24,13 @@ class TemplateConfig(BaseModel):
     id: str
     grant_id: str
     name: str
+    subtitle: Optional[str] = None
+    description: Optional[str] = None
+    logo_storage_path: Optional[str] = None
+    iconBg: Optional[str] = None
+    isOpen: Optional[bool] = None
+    word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
     sections: List[SectionConfig] = []
 
 class GrantConfig(BaseModel):
@@ -220,3 +228,70 @@ class GenerateFieldContentRequest(BaseModel):
     filled_fields: Dict[str, str] = Field(default_factory=dict, description="已填寫的其他欄位（標籤 -> 內容）")
     plan_name: str = Field("", description="計畫名稱")
     plan_summary: str = Field("", description="計畫摘要")
+
+
+# --- 7. Builder 管理頁面模型 (Template Manager) ---
+class GrantCreateRequest(BaseModel):
+    """建立新的 Grant 記錄。"""
+    id: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=255)
+
+
+class GrantUpdateRequest(BaseModel):
+    """更新既有 Grant 記錄，允許局部欄位。"""
+    id: Optional[str] = Field(None, min_length=1, max_length=64)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+
+
+class PlanTemplateCreateRequest(BaseModel):
+    """建立新的計畫模板。"""
+    id: str = Field(..., min_length=1, max_length=64)
+    grant_id: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=255)
+    subtitle: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = None
+    logo_storage_path: Optional[str] = None
+    iconBg: Optional[str] = Field(default="#F8FAFC")
+    isOpen: bool = True
+    word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
+
+
+class PlanTemplateUpdateRequest(BaseModel):
+    """更新既有計畫模板，允許局部更新。"""
+    id: Optional[str] = Field(None, min_length=1, max_length=64)
+    grant_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    subtitle: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = None
+    logo_storage_path: Optional[str] = None
+    iconBg: Optional[str] = None
+    isOpen: Optional[bool] = None
+    word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
+
+
+class SectionBaseRequest(BaseModel):
+    """章節共用欄位。"""
+    name: str = Field(..., min_length=1, max_length=255)
+    order: int = Field(0, ge=0, description="章節顯示順序，數字越小越前面。")
+    json_schema: Optional[Dict[str, Any]] = Field(
+        default=None, description="章節使用的 JSON Schema"
+    )
+
+
+class SectionCreateRequest(SectionBaseRequest):
+    """建立新的章節。"""
+    id: str = Field(..., min_length=1, max_length=128)
+    grant_id: str = Field(..., min_length=1, max_length=64)
+    template_id: str = Field(..., min_length=1, max_length=64)
+
+
+class SectionUpdateRequest(BaseModel):
+    """更新既有章節，允許局部更新。"""
+    id: Optional[str] = Field(None, min_length=1, max_length=128)
+    grant_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    template_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    order: Optional[int] = Field(None, ge=0)
+    json_schema: Optional[Dict[str, Any]] = Field(default=None)

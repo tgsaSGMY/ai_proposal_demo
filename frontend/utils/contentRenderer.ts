@@ -10,6 +10,24 @@ import {
   AlignmentType,
 } from "docx";
 
+type StyleKey = "sectionHeading" | "subHeading" | "body";
+
+interface TextRunStyle {
+  font: string;
+  size: number;
+  bold?: boolean;
+}
+
+export type DocxRendererOptions = Partial<
+  Record<StyleKey, Partial<TextRunStyle>>
+>;
+
+const DEFAULT_RENDERER_STYLES: Record<StyleKey, TextRunStyle> = {
+  sectionHeading: { font: "Times New Roman", size: 32, bold: true },
+  subHeading: { font: "Times New Roman", size: 24, bold: true },
+  body: { font: "Times New Roman", size: 24 },
+};
+
 // 渲染器的通用介面
 export interface ContentRenderer<T> {
   addSectionTitle(text: string): void;
@@ -20,7 +38,7 @@ export interface ContentRenderer<T> {
   // 處理數組項目，可以是簡單字串或 title/desc 物件
   addNumberedListItem(
     index: number,
-    content: string | { title: string; description: string }
+    content: string | { title: string; description: string },
   ): void;
   addIndentedListItem(key: string, value: string): void;
   addTable(headers: string[], rows: string[][]): void;
@@ -32,36 +50,53 @@ export interface ContentRenderer<T> {
 export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
   private paragraphs: (Paragraph | Table)[] = [];
 
+  constructor(private readonly options: DocxRendererOptions = {}) {}
+
+  private resolveStyle(key: StyleKey): TextRunStyle {
+    return {
+      ...DEFAULT_RENDERER_STYLES[key],
+      ...(this.options[key] || {}),
+    } as TextRunStyle;
+  }
+
+  private createRun(
+    text: string,
+    key: StyleKey,
+    extras: Record<string, any> = {},
+  ): TextRun {
+    const style = this.resolveStyle(key);
+    const base: Record<string, any> = {
+      text,
+      font: style.font,
+      size: style.size,
+    };
+    if (
+      typeof style.bold !== "undefined" &&
+      typeof extras.bold === "undefined"
+    ) {
+      base.bold = style.bold;
+    }
+    return new TextRun({ ...base, ...extras });
+  }
+
   addSectionTitle(text: string): void {
     this.paragraphs.push(
       new Paragraph({
-        text: text,
+        children: [this.createRun(text, "sectionHeading")],
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 400, after: 200, line: 200 },
         style: "SectionHeading",
-        run: {
-          font: "Times New Roman",
-          size: 32,
-          bold: true,
-        },
-      })
+      }),
     );
   }
 
   addArrayTitle(text: string): void {
     this.paragraphs.push(
       new Paragraph({
-        children: [
-          new TextRun({
-            text: text,
-            font: "Times New Roman",
-            size: 24,
-            bold: true,
-          }),
-        ],
+        children: [this.createRun(text, "subHeading")],
         spacing: { before: 200, after: 100, line: 200 },
         style: "SubSectionHeading",
-      })
+      }),
     );
   }
 
@@ -84,26 +119,20 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     this.paragraphs.push(
       new Paragraph({
         children: [
-          new TextRun({ text: `${key}: `, bold: true }),
-          new TextRun(value),
+          this.createRun(`${key}: `, "body", { bold: true }),
+          this.createRun(String(value), "body"),
         ],
         spacing: { after: 100 },
-      })
+      }),
     );
   }
 
   addParagraph(text: string): void {
     this.paragraphs.push(
       new Paragraph({
-        children: [
-          new TextRun({
-            text: text,
-            font: "Times New Roman",
-            size: 24,
-          }),
-        ],
+        children: [this.createRun(text, "body")],
         spacing: { after: 120, line: 200 },
-      })
+      }),
     );
   }
 
@@ -111,30 +140,30 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     this.paragraphs.push(
       new Paragraph({
         children: [
-          new TextRun({
-            text: text,
-            font: "Times New Roman",
-            size: 24,
+          this.createRun(text, "body", {
             highlight: "yellow",
           }),
         ],
         spacing: { before: 100, after: 100, line: 200 },
-      })
+      }),
     );
   }
 
   addNumberedListItem(
     index: number,
-    content: string | { title: string; description: string }
+    content: string | { title: string; description: string },
   ): void {
     let children: TextRun[];
     if (typeof content === "object") {
       children = [
-        new TextRun({ text: `${index}. ${content.title}：`, bold: true }),
-        new TextRun({ text: content.description, break: 1 }),
+        this.createRun(`${index}. ${content.title}：`, "body", { bold: true }),
+        this.createRun(content.description, "body", { break: 1 }),
       ];
     } else {
-      children = [new TextRun({ text: `${index}. ` }), new TextRun(content)];
+      children = [
+        this.createRun(`${index}. `, "body"),
+        this.createRun(content, "body"),
+      ];
     }
     this.paragraphs.push(new Paragraph({ children }));
   }
@@ -148,8 +177,8 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     this.paragraphs.push(
       new Paragraph({
         indent: { left: 720 }, // 約 0.5 inch 縮排
-        children: [new TextRun({ text: `→${key}: ${value}` })],
-      })
+        children: [this.createRun(`→${key}: ${value}`, "body")],
+      }),
     );
   }
 
@@ -165,20 +194,18 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({
-                      text: header,
+                    this.createRun(header, "body", {
                       bold: true,
-                      font: "Times New Roman",
-                      size: 20,
+                      size: this.resolveStyle("body").size - 4,
                     }),
                   ],
                   alignment: AlignmentType.CENTER,
                 }),
               ],
               shading: { fill: "D3D3D3" },
-            })
+            }),
         ),
-      })
+      }),
     );
 
     // 表格行
@@ -199,7 +226,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             // 處理單元格內容：支持分行和圖片高亮
             const cellParagraphs = this.createCellParagraphs(
               cell,
-              Boolean(isSecondaryHeader)
+              Boolean(isSecondaryHeader),
             );
 
             return new TableCell({
@@ -207,7 +234,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               shading: isSecondaryHeader ? { fill: "D3D3D3" } : undefined,
             });
           }),
-        })
+        }),
       );
     });
 
@@ -237,7 +264,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       new Paragraph({
         text: "",
         spacing: { after: 200 },
-      })
+      }),
     );
   }
 
@@ -281,25 +308,23 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             // 構建混合段落
             const children: TextRun[] = [];
             for (let i = 0; i < parts.length; i++) {
-              if (parts[i]) {
+              const partText = parts[i];
+              if (partText) {
                 children.push(
-                  new TextRun({
-                    text: parts[i],
-                    font: "Times New Roman",
-                    size: 20,
+                  this.createRun(partText, "body", {
+                    size: this.resolveStyle("body").size - 4,
                     bold: isHeader,
-                  })
+                  }),
                 );
               }
-              if (i < images.length) {
+              const imageText = images[i];
+              if (imageText) {
                 children.push(
-                  new TextRun({
-                    text: images[i],
-                    font: "Times New Roman",
-                    size: 20,
+                  this.createRun(imageText, "body", {
+                    size: this.resolveStyle("body").size - 4,
                     highlight: "yellow",
                     bold: isHeader,
-                  })
+                  }),
                 );
               }
             }
@@ -309,23 +334,21 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 children: children,
                 spacing: { after: 100, line: 200 },
                 alignment: isHeader ? AlignmentType.CENTER : undefined,
-              })
+              }),
             );
           } else {
             // 沒有圖片，直接創建段落
             paragraphs.push(
               new Paragraph({
                 children: [
-                  new TextRun({
-                    text: line,
-                    font: "Times New Roman",
-                    size: 20,
+                  this.createRun(line, "body", {
+                    size: this.resolveStyle("body").size - 4,
                     bold: isHeader,
                   }),
                 ],
                 spacing: { after: 100, line: 200 },
                 alignment: isHeader ? AlignmentType.CENTER : undefined,
-              })
+              }),
             );
           }
         }
@@ -367,7 +390,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       items.forEach((item, index) => {
         const numberingIndex = index + 1;
         const titleEntry = Object.entries(item).find(
-          ([key]) => key === "title" || key === "name"
+          ([key]) => key === "title" || key === "name",
         );
 
         // 优先显示 title 作为编号列表项
@@ -375,15 +398,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         this.paragraphs.push(
           new Paragraph({
             children: [
-              new TextRun({
-                text: `${numberingIndex}. ${title}`,
-                font: "Times New Roman",
-                size: 24,
+              this.createRun(`${numberingIndex}. ${title}`, "body", {
                 bold: true,
               }),
             ],
             spacing: { after: 120, line: 200 },
-          })
+          }),
         );
 
         // 显示其他字段，递归处理嵌套的对象或数组
@@ -399,17 +419,10 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 // 是 array of objects，添加标题后递归调用
                 this.paragraphs.push(
                   new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: key,
-                        font: "Times New Roman",
-                        size: 22,
-                        bold: true,
-                      }),
-                    ],
+                    children: [this.createRun(key, "body", { bold: true })],
                     indent: { left: 720 },
                     spacing: { after: 80, line: 200 },
-                  })
+                  }),
                 );
                 this.addObjectsTable(value);
               } else {
@@ -418,32 +431,21 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 this.paragraphs.push(
                   new Paragraph({
                     children: [
-                      new TextRun({
-                        text: `${key}: ${displayValue}`,
-                        font: "Times New Roman",
-                        size: 22,
-                      }),
+                      this.createRun(`${key}: ${displayValue}`, "body"),
                     ],
                     indent: { left: 720 },
                     spacing: { after: 80, line: 200 },
-                  })
+                  }),
                 );
               }
             } else if (typeof value === "object" && value !== null) {
               // 如果是对象，递归调用 addNestedObject
               this.paragraphs.push(
                 new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: key,
-                      font: "Times New Roman",
-                      size: 22,
-                      bold: true,
-                    }),
-                  ],
+                  children: [this.createRun(key, "body", { bold: true })],
                   indent: { left: 720 },
                   spacing: { after: 80, line: 200 },
-                })
+                }),
               );
               this.addNestedObject(value);
             } else {
@@ -451,15 +453,11 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               this.paragraphs.push(
                 new Paragraph({
                   children: [
-                    new TextRun({
-                      text: `${key}: ${String(value)}`,
-                      font: "Times New Roman",
-                      size: 22,
-                    }),
+                    this.createRun(`${key}: ${String(value)}`, "body"),
                   ],
                   indent: { left: 720 },
                   spacing: { after: 80, line: 200 },
-                })
+                }),
               );
             }
           }
@@ -477,15 +475,9 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         if (title) {
           this.paragraphs.push(
             new Paragraph({
-              children: [
-                new TextRun({
-                  text: String(title),
-                  font: "Times New Roman",
-                  size: 24,
-                }),
-              ],
+              children: [this.createRun(String(title), "body")],
               spacing: { after: 120, line: 200 },
-            })
+            }),
           );
         }
       });
@@ -493,7 +485,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     }
 
     const hasDescField = items.some(
-      (item) => item.title || item.description || item.explanation
+      (item) => item.title || item.description || item.explanation,
     );
     if (hasDescField) {
       items.forEach((item) => {
@@ -501,15 +493,9 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         if (desc) {
           this.paragraphs.push(
             new Paragraph({
-              children: [
-                new TextRun({
-                  text: String(desc),
-                  font: "Times New Roman",
-                  size: 24,
-                }),
-              ],
+              children: [this.createRun(String(desc), "body")],
               spacing: { after: 120, line: 200 },
-            })
+            }),
           );
         }
       });
@@ -535,20 +521,18 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({
-                      text: header,
+                    this.createRun(header, "body", {
                       bold: true,
-                      font: "Times New Roman",
-                      size: 20,
+                      size: this.resolveStyle("body").size - 4,
                     }),
                   ],
                   alignment: AlignmentType.CENTER,
                 }),
               ],
               shading: { fill: "D3D3D3" },
-            })
+            }),
         ),
-      })
+      }),
     );
 
     // 表格行
@@ -561,17 +545,15 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
                 children: [
                   new Paragraph({
                     children: [
-                      new TextRun({
-                        text: String(row[header] ?? ""),
-                        font: "Times New Roman",
-                        size: 20,
+                      this.createRun(String(row[header] ?? ""), "body", {
+                        size: this.resolveStyle("body").size - 4,
                       }),
                     ],
                   }),
                 ],
-              })
+              }),
           ),
-        })
+        }),
       );
     });
 
@@ -601,7 +583,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       new Paragraph({
         text: "",
         spacing: { after: 200 },
-      })
+      }),
     );
   }
 
@@ -630,7 +612,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               ],
               indent: { left: 1440 },
               spacing: { after: 80, line: 200 },
-            })
+            }),
           );
           this.addObjectsTable(value);
         } else {
@@ -647,7 +629,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               ],
               indent: { left: 1440 },
               spacing: { after: 80, line: 200 },
-            })
+            }),
           );
         }
       } else if (typeof value === "object" && value !== null) {
@@ -664,7 +646,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             ],
             indent: { left: 1440 },
             spacing: { after: 80, line: 200 },
-          })
+          }),
         );
         this.addNestedObject(value);
       } else {
@@ -680,7 +662,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
             ],
             indent: { left: 1440 },
             spacing: { after: 80, line: 200 },
-          })
+          }),
         );
       }
     });
@@ -693,7 +675,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         children: [new TextRun({ text: "（無內容）", italics: true })],
         spacing: { after: 400 },
         style: "NormalText",
-      })
+      }),
     );
   }
 }
@@ -712,13 +694,13 @@ export class HtmlRenderer implements ContentRenderer<string> {
 
   addSectionTitle(text: string): void {
     this.html += `<h2 class="text-2xl font-bold mt-6 mb-3">${escapeHtml(
-      text
+      text,
     )}</h2>`;
   }
 
   addArrayTitle(text: string): void {
     this.html += `<h3 class="text-lg font-semibold mt-4 mb-2">${escapeHtml(
-      text
+      text,
     )}</h3>`;
   }
 
@@ -742,7 +724,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
     }
 
     this.html += `<p><strong class="font-semibold">${escapeHtml(
-      key
+      key,
     )}:</strong> ${escapeHtml(value)}</p>`;
   }
 
@@ -770,11 +752,11 @@ export class HtmlRenderer implements ContentRenderer<string> {
 
   addNumberedListItem(
     index: number,
-    content: string | { title: string; description: string }
+    content: string | { title: string; description: string },
   ): void {
     if (typeof content === "object") {
       this.html += `<p><span class="mr-2">${index}.</span><strong>${escapeHtml(
-        content.title
+        content.title,
       )}</strong></p>`;
     } else {
       // 检查是否是 array of objects
@@ -794,7 +776,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
       }
 
       this.html += `<p><span class="mr-2">${index}.</span>${escapeHtml(
-        content
+        content,
       )}</p>`;
     }
   }
@@ -813,7 +795,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
           this.html += `<div class="ml-4 my-2"><span class="font-semibold text-gray-800">${escapeHtml(
-            key
+            key,
           )}:</span>`;
           this.renderArrayOfObjects(parsed);
           this.html += "</div>";
@@ -825,7 +807,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
     }
 
     this.html += `<p class="ml-8 text-gray-700"><span class="font-semibold">${escapeHtml(
-      key
+      key,
     )}:</span> ${escapeHtml(value)}</p>`;
   }
 
@@ -834,7 +816,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
       '<table class="border-collapse border border-gray-400 w-full my-4"><thead><tr>';
     headers.forEach((header) => {
       this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold">${escapeHtml(
-        header
+        header,
       )}</th>`;
     });
     this.html += "</tr></thead><tbody>";
@@ -842,7 +824,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
       this.html += "<tr>";
       row.forEach((cell) => {
         this.html += `<td class="border border-gray-400 p-2">${escapeHtml(
-          cell
+          cell,
         )}</td>`;
       });
       this.html += "</tr>";
@@ -859,7 +841,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
 
     // 检查是否所有项都是对象
     const allObjects = items.every(
-      (item) => typeof item === "object" && item !== null
+      (item) => typeof item === "object" && item !== null,
     );
     if (!allObjects) return;
 
@@ -885,7 +867,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
           const title = item.title || item.name || "";
           if (title) {
             this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500"><strong>${escapeHtml(
-              String(title)
+              String(title),
             )}</strong></div>`;
           }
         });
@@ -893,14 +875,14 @@ export class HtmlRenderer implements ContentRenderer<string> {
       }
 
       const hasDescField = items.some(
-        (item) => item.title || item.description || item.explanation
+        (item) => item.title || item.description || item.explanation,
       );
       if (hasDescField) {
         items.forEach((item) => {
           const desc = item.title || item.description || item.explanation || "";
           if (desc) {
             this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500">${escapeHtml(
-              String(desc)
+              String(desc),
             )}</div>`;
           }
         });
@@ -919,7 +901,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         '<table class="border-collapse border border-gray-400 w-full my-3"><thead><tr>';
       headers.forEach((header) => {
         this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold text-sm">${escapeHtml(
-          header
+          header,
         )}</th>`;
       });
       this.html += "</tr></thead><tbody>";
@@ -931,7 +913,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
           const displayValue =
             value === null || value === undefined ? "" : String(value);
           this.html += `<td class="border border-gray-400 p-2 text-sm">${escapeHtml(
-            displayValue
+            displayValue,
           )}</td>`;
         });
         this.html += "</tr>";
@@ -945,7 +927,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         const title = item.title || item.name || "";
         if (title) {
           this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span><strong>${escapeHtml(
-            String(title)
+            String(title),
           )}</strong></div>`;
         } else {
           this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span></div>`;
@@ -963,25 +945,25 @@ export class HtmlRenderer implements ContentRenderer<string> {
               ) {
                 // 是 array of objects，递归调用 renderArrayOfObjects
                 this.html += `<div class="ml-8"><strong>${escapeHtml(
-                  key
+                  key,
                 )}:</strong></div>`;
                 this.renderArrayOfObjects(value);
               } else {
                 // 普通数组，作为文本显示
                 this.html += `<div class="ml-8"><strong>${escapeHtml(
-                  key
+                  key,
                 )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
               }
             } else if (typeof value === "object" && value !== null) {
               // 如果是对象，递归调用 renderNestedObject
               this.html += `<div class="ml-8"><strong>${escapeHtml(
-                key
+                key,
               )}:</strong></div>`;
               this.renderNestedObject(value);
             } else {
               // 基本类型，直接显示
               this.html += `<div class="ml-8"><strong>${escapeHtml(
-                key
+                key,
               )}:</strong> ${escapeHtml(String(value))}</div>`;
             }
           }
@@ -1004,25 +986,25 @@ export class HtmlRenderer implements ContentRenderer<string> {
         ) {
           // 是 array of objects，递归调用 renderArrayOfObjects
           this.html += `<div class="ml-12"><strong>${escapeHtml(
-            key
+            key,
           )}:</strong></div>`;
           this.renderArrayOfObjects(value);
         } else {
           // 普通数组，作为文本显示
           this.html += `<div class="ml-12"><strong>${escapeHtml(
-            key
+            key,
           )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
         }
       } else if (typeof value === "object" && value !== null) {
         // 如果是对象，继续递归
         this.html += `<div class="ml-12"><strong>${escapeHtml(
-          key
+          key,
         )}:</strong></div>`;
         this.renderNestedObject(value);
       } else {
         // 基本类型，直接显示
         this.html += `<div class="ml-12"><strong>${escapeHtml(
-          key
+          key,
         )}:</strong> ${escapeHtml(String(value))}</div>`;
       }
     });

@@ -5,7 +5,6 @@
       <div class="lg:w-1/2">
         <PlanInputPanel
           :all-configs="allConfigs"
-          v-model="userInput"
           v-model:dynamic-values="dynamicFieldValues"
           :is-generating="isGeneratingPlan"
           :mode="projectRecord?.mode || 'generator'"
@@ -13,7 +12,6 @@
           :initial-template-id="projectRecord?.template_id || ''"
           :project-title="projectPlanName"
           :project-summary="projectPlanSummary"
-          @update:modelValue="handleMainIdeaUpdate"
           @selectionChange="handleGeneratorSelectionChange"
           @generatePlan="handleGeneratorPlanRequest"
           @generateUserInput="handleGeneratorUserInput"
@@ -27,6 +25,7 @@
           :grant-id="selectedGrantId"
           :template-id="selectedTemplateId"
           :saved-plan-versions="savedPlanVersions"
+          :project-created-at="projectRecord?.created_at || null"
           @update:content="handleGeneratorContentUpdate"
           @autoFillComplete="handleGeneratorAutoFill"
           @generateUserInput="handleGeneratorUserInput"
@@ -81,7 +80,6 @@ interface GeneratorConfig {
   allConfigs: any[];
   selectedGrantId: string;
   selectedTemplateId: string;
-  userInput: string;
   dynamicFieldValues: Record<string, string>;
   finalPlanContent: Record<string, any>;
   currentSections: any[];
@@ -102,14 +100,14 @@ const emit = defineEmits<{
       template_id: string | null;
       stored_answer: Record<string, any> | null;
       // saved_plan: Record<string, any>;
-    }
+    },
   ];
   candidateConfirmed: [
     payload: {
       selected: Record<string, any>;
       rejected: Record<string, any>;
       finalPrompt?: string;
-    }
+    },
   ];
 }>();
 
@@ -124,12 +122,10 @@ const showCandidateModal = ref(false);
 const candidatePlan = ref<Record<string, any>>({});
 const generatorAutosaveTimer = ref<ReturnType<typeof setTimeout> | null>(null);
 const isGeneratingPlan = ref(false);
-let isHydratingDynamicFieldState = false;
-let isHydratingMainIdeaState = false;
 const lastFinalUserInput = ref("");
+let isHydratingDynamicFieldState = false;
 
 // Reactive copies for v-model
-const userInput = ref(props.userInput);
 const dynamicFieldValues = ref(props.dynamicFieldValues);
 const finalPlanContent = ref(props.finalPlanContent);
 
@@ -162,18 +158,6 @@ const savedPlanVersions = computed(() => {
 
 // Watchers to keep local state in sync
 watch(
-  () => props.userInput,
-  (newVal) => {
-    const normalized = newVal ?? "";
-    if (normalized === (userInput.value ?? "")) {
-      return;
-    }
-    isHydratingMainIdeaState = true;
-    userInput.value = normalized;
-  }
-);
-
-watch(
   () => props.dynamicFieldValues,
   (newVal) => {
     if (recordsAreEqual(newVal, dynamicFieldValues.value)) {
@@ -182,7 +166,7 @@ watch(
     isHydratingDynamicFieldState = true;
     dynamicFieldValues.value = { ...(newVal || {}) };
   },
-  { deep: true }
+  { deep: true },
 );
 
 watch(
@@ -190,13 +174,13 @@ watch(
   (newVal) => {
     finalPlanContent.value = { ...newVal };
   },
-  { deep: true }
+  { deep: true },
 );
 
 // 比较两个记录对象是否完全相等
 function recordsAreEqual(
   next?: Record<string, string> | null,
-  prev?: Record<string, string> | null
+  prev?: Record<string, string> | null,
 ) {
   if (next === prev) {
     return true;
@@ -216,15 +200,6 @@ function recordsAreEqual(
   return true;
 }
 
-// Watch local state changes and emit updates
-watch(userInput, () => {
-  if (isHydratingMainIdeaState) {
-    isHydratingMainIdeaState = false;
-    return;
-  }
-  scheduleGeneratorAutosave();
-});
-
 watch(
   dynamicFieldValues,
   () => {
@@ -234,7 +209,7 @@ watch(
     }
     scheduleGeneratorAutosave();
   },
-  { deep: true }
+  { deep: true },
 );
 
 onBeforeUnmount(() => {
@@ -274,7 +249,6 @@ async function persistGeneratorState() {
   try {
     const nextStoredAnswer = {
       user_input: {
-        main_idea: userInput.value || "",
         dynamic_fields: { ...dynamicFieldValues.value },
       },
     };
@@ -303,14 +277,6 @@ function serializeForStorage<T>(value: T): T | null {
   }
 }
 
-// 处理主要想法的更新，同步到本地状态
-function handleMainIdeaUpdate(value: string) {
-  if (userInput.value === value) {
-    return;
-  }
-  userInput.value = value;
-}
-
 // 处理生成器选择变更，调度自动保存
 function handleGeneratorSelectionChange(selection: {
   grantId: string;
@@ -321,7 +287,7 @@ function handleGeneratorSelectionChange(selection: {
 
 // 处理自动填充，更新方案内容
 function handleGeneratorAutoFill(
-  filledContent: Record<string, { content?: string; error?: string }>
+  filledContent: Record<string, { content?: string; error?: string }>,
 ) {
   if (!finalPlanContent.value) {
     finalPlanContent.value = {};
@@ -391,6 +357,7 @@ async function handleGeneratorPlanRequest(outerPayload?: {
         user_input: finalUserInput,
         num_candidates: 2,
         is_external: props.useModelType !== "internal",
+        project_id: projectRecord.value?.id || null,
       }),
     });
 
@@ -406,7 +373,7 @@ async function handleGeneratorPlanRequest(outerPayload?: {
         (candidate: any) => ({
           content: candidate.raw_json_content,
           error: candidate.error || null,
-        })
+        }),
       );
     }
     candidatePlan.value = processedCandidates;
@@ -445,7 +412,7 @@ async function handleGeneratorUserInput() {
       getDynamicFieldDefinitions(schemaOptions).map((definition) => [
         definition.compositeKey,
         definition.label,
-      ])
+      ]),
     );
     const sections = buildDynamicSections(dynamicFieldValues.value, {
       templateId: selectedTemplateId.value,
@@ -470,7 +437,7 @@ async function handleGeneratorUserInput() {
       dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map(
         (label) => ({
           label,
-        })
+        }),
       ),
     };
 
@@ -486,10 +453,6 @@ async function handleGeneratorUserInput() {
 
     const data = await response.json();
 
-    if (data.main_idea) {
-      isHydratingMainIdeaState = true;
-      userInput.value = data.main_idea;
-    }
     if (data.dynamic_fields) {
       const nextValues = { ...dynamicFieldValues.value };
       let hasUpdates = false;
@@ -503,8 +466,8 @@ async function handleGeneratorUserInput() {
               typeof fieldValue === "string"
                 ? fieldValue
                 : fieldValue != null
-                ? JSON.stringify(fieldValue)
-                : "";
+                  ? JSON.stringify(fieldValue)
+                  : "";
             nextValues[compositeKey] = normalized;
             updated = true;
           }
@@ -526,11 +489,11 @@ async function handleGeneratorUserInput() {
                 typeof propertyValue === "string"
                   ? propertyValue
                   : propertyValue != null
-                  ? JSON.stringify(propertyValue)
-                  : "";
+                    ? JSON.stringify(propertyValue)
+                    : "";
               nextValues[compositeKey] = normalized;
               updated = true;
-            }
+            },
           );
         });
         return updated;
@@ -546,7 +509,7 @@ async function handleGeneratorUserInput() {
         isHydratingDynamicFieldState = true;
         dynamicFieldValues.value = mergeIntoEmptyValues(
           nextValues,
-          schemaOptions
+          schemaOptions,
         );
       }
     }
