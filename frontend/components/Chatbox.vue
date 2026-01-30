@@ -1029,6 +1029,8 @@ async function requestGeneration() {
         project_title: props.projectTitle || "",
         grant_name: props.grantName || "",
         template_name: props.templateName || "",
+        grant_id: props.grantId || "",
+        template_id: props.templateId || "",
       }),
     });
     const data = await resp.json().catch(() => null);

@@ -34,6 +34,7 @@
         @edit="(template) => startTemplateEdit(template)"
         @sections="(template) => openSectionEditor(template)"
         @word-editor="(template) => openWordEditor(template)"
+        @name-config="(template) => openNameRecommendModal(template)"
       />
 
       <GrantFormModal
@@ -77,6 +78,14 @@
         @close="closeWordEditorModal"
         @save="handleWordEditorSave"
       />
+
+      <NameRecommendForm
+        :is-visible="showNameRecommendModal"
+        :template="nameRecommendTemplate"
+        :saving="nameRecommendSaving"
+        @close="closeNameRecommendModal"
+        @save="handleNameRecommendSave"
+      />
     </div>
   </ClientOnly>
 </template>
@@ -89,6 +98,7 @@ import GrantFormModal from "~/components/template-manager/GrantFormModal.vue";
 import TemplateFormModal from "~/components/template-manager/TemplateFormModal.vue";
 import SectionEditorModal from "~/components/template-manager/SectionEditorModal.vue";
 import WordEditorForm from "~/components/template-manager/WordEditorForm.vue";
+import NameRecommendForm from "~/components/template-manager/NameRecommendForm.vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
@@ -96,6 +106,7 @@ import type {
   WordExportConfigEntry,
   WordExportTemplateConfig,
 } from "~/types/wordExport";
+import type { NameRecommendConfig } from "~/types/nameRecommend";
 
 definePageMeta({
   middleware: "auth",
@@ -127,6 +138,7 @@ interface TemplateRecord {
   iconBg?: string | null;
   isOpen?: boolean | null;
   word_export_config?: WordExportConfigEntry[] | null;
+  name_recommend_config?: NameRecommendConfig | null;
   [key: string]: any;
 }
 
@@ -185,6 +197,9 @@ const showWordEditorModal = ref(false);
 const wordEditorTemplate = ref<TemplateRecord | null>(null);
 const wordEditorSections = ref<SectionRecord[]>([]);
 const wordEditorSaving = ref(false);
+const showNameRecommendModal = ref(false);
+const nameRecommendTemplate = ref<TemplateRecord | null>(null);
+const nameRecommendSaving = ref(false);
 
 const grantForm = ref<GrantFormState>({
   id: "",
@@ -666,6 +681,45 @@ async function handleWordEditorSave(config: WordExportTemplateConfig) {
     notifyError(error?.message || "儲存文檔設定失敗");
   } finally {
     wordEditorSaving.value = false;
+  }
+}
+
+function openNameRecommendModal(template: TemplateRecord) {
+  nameRecommendTemplate.value = template;
+  showNameRecommendModal.value = true;
+}
+
+function closeNameRecommendModal() {
+  showNameRecommendModal.value = false;
+  nameRecommendTemplate.value = null;
+}
+
+async function handleNameRecommendSave(config: NameRecommendConfig) {
+  const template = nameRecommendTemplate.value;
+  if (!template) {
+    notifyError("未選擇模板");
+    return;
+  }
+
+  nameRecommendSaving.value = true;
+  try {
+    const shouldClear = !config.traits && config.examples.length === 0;
+    await fetchJsonWithAuth(
+      `${TEMPLATE_MANAGER_API}/templates/${template.grant_id}/${template.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          name_recommend_config: shouldClear ? null : config,
+        }),
+      },
+    );
+    success("推薦名稱設定已更新");
+    await loadInitialData();
+    closeNameRecommendModal();
+  } catch (error: any) {
+    notifyError(error?.message || "儲存推薦設定失敗");
+  } finally {
+    nameRecommendSaving.value = false;
   }
 }
 

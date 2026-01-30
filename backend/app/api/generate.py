@@ -36,7 +36,7 @@ from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from .dependencies import get_llm_service, get_supabase_service, get_current_user_id
 from app.utils.extract_json import extract_json_block  
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -1422,6 +1422,7 @@ async def recommend_project_names(
     payload: Dict[str, Any],
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
@@ -1434,77 +1435,86 @@ async def recommend_project_names(
     project_title = payload.get("project_title", "") or ""
     grant_name = payload.get("grant_name", "") or ""
     template_name = payload.get("template_name", "") or ""
+    grant_id = payload.get("grant_id", "") or ""
+    template_id = payload.get("template_id", "") or ""
+
+    name_config: Optional[Dict[str, Any]] = None
+    if grant_id and template_id:
+        try:
+            template_record = await supabase_service.get_template_by_id(
+                template_id, grant_id
+            )
+            if template_record:
+                raw_config = template_record.get("name_recommend_config")
+                if isinstance(raw_config, dict):
+                    name_config = raw_config
+        except Exception as exc:
+            logger.warning(
+                "Failed to load name recommend config for %s/%s: %s",
+                grant_id,
+                template_id,
+                exc,
+            )
+
+    custom_traits = ""
+    custom_examples: List[str] = []
+    if name_config:
+        traits_value = name_config.get("traits")
+        if isinstance(traits_value, str):
+            custom_traits = traits_value.strip()
+
+        raw_examples = name_config.get("examples")
+        if isinstance(raw_examples, list):
+            for example in raw_examples:
+                if not isinstance(example, str):
+                    continue
+                trimmed = example.strip()
+                if trimmed and trimmed not in custom_examples:
+                    custom_examples.append(trimmed)
+                if len(custom_examples) >= 5:
+                    break
 
     # build a compact context
     filled_items = []
     for k, v in current_answers.items():
         if v and str(v).strip():
             filled_items.append(f"- {k}: {str(v)[:120]}")
-    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"  # 限制最多8項以避免過長
+    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"  
 
-    # Few-shot examples 按補助主題分類
-    few_shot_examples = {
-        "CITD": [
-            "發泡材料開片測厚堆疊全自動智能產線設備開發計畫",
-            "半導體蝕刻製程之舊石英板再利用：多點位式光源智慧快篩校正穿透率量測儀開發計畫",
-            "橡膠電容用高穩定性酚醛板開發計畫",
-            "回彈高度≧1.65mm之六角螺帽結合高回彈力錐形彈簧華司製程優化與效益提升開發計畫",
-            "永續循環再利用紙及紙質文物修復手工紙技術標準化與製程開發計畫",
-        ],
-        "美國關稅衝擊": [
-            "肉品隧道式急速冷凍產線升級轉型計畫",
-            "真空鍍膜低碳塗佈製程與影像辨識數據管理系統智慧整合升級轉型計畫",
-            "智慧倉儲系統與高精度CNC開料機導入 - 客製化系統木板材工廠智慧升級轉型計畫",
-            "線性滑塊高效率自動化專用設備整合GUI智慧化控制介面升級轉型計畫",
-            "高大鮮乳新鮮屋導入充填機CIP與自動包裝系統升級轉型計畫",
-        ],
-        "SBIR": [
-            "AI智慧助教2.0 - 紙本考卷數位轉化與個別化學習系統創新研發計畫",
-            "燈具業運用AI預生成照明規劃升級體驗服務計畫",
-            "第三代智慧化管製程設備開發與軍用可彎式天線結構件應用計畫",
-            "以台灣無毒嘉寶果為原料之花青素機能性保健粉體創新研發計畫",
-            "以台南偏鄉特色設計創新典藏台南肌秘面膜禮盒開發計畫"
-        ],
-        "IMDP": [
-            "以 Sample Case 高效能啟動車用燈具開發市場創新經驗工程推廣計畫",
-            "廣宏水產日本市場B2B關係建設與業務拓展計畫",
-            "臺灣珍奶-紮根美國手搖飲料技術與物料調配供應指導營運計畫",
-            "熱轉印特殊材質產品美國洛杉磯行銷深耕計劃",
-            "大安化學─越南全境之畜牧業預防性用藥普及暨AI客服診斷支援推廣計畫",
-            "熱轉印特殊材質產品美國洛杉磯行銷深耕計劃",
-        ],
-        "SIIR": [
-            "2倍速之AI自主建模及客智慧化櫥櫃智慧推薦創新應用服務",
-            "病床2.0再利用，亞護翻新病床社區型店家活絡行銷計畫",
-            "茶香世界 - AI 智慧陪伴式會員經營與永續回收機制之平臺創新服務計畫",
-            "鳳梨3天華麗變身-天然發酵飲料多元產品加速AI溝通委製平台及行銷推廣計畫",
-            "AI社群智慧化之智能Google評論回覆創新服務應用計畫",
-            "預約效率2倍提升-雲端排程與綠色回收服務之行車紀錄器智能安裝創新體驗行銷服務計畫"
-        ],
-    }
+    selected_examples = custom_examples
+    few_shot_text = (
+        "\n".join([f"  - {ex}" for ex in selected_examples])
+        if selected_examples
+        else "  - （尚未提供範例）"
+    )
 
-    # 根據補助主題選擇合適的 few-shot examples
-    selected_examples = few_shot_examples.get(template_name, few_shot_examples.get("SIIR", []))
-    few_shot_text = "\n".join([f"  - {ex}" for ex in selected_examples])
+    custom_trait_block = (
+        f"\n6. **模板自訂特性**：{custom_traits}"
+        if custom_traits
+        else ""
+    )
 
-    system_prompt = """你是一位資深的政府補助計畫命名專家，擁有豐富的企劃書撰寫經驗。
+    system_prompt = f"""你是一位資深的政府補助計畫命名專家，擁有豐富的企劃書撰寫經驗。
 你的任務是根據專案的核心內容、補助計畫類型和已填寫的欄位信息，生成專業、具有吸引力的計畫名稱。
 
 ## 命名原則：
+1. **清晰傳達**：名稱需在一讀之間說明核心價值或成果
 2. **突出創新**：凸顯技術創新、服務升級或市場拓展等亮點
-3. **符合計畫特性**：
-   - CITD（傳產研發）：強調製程、技術改良、設備開發
-   - SBIR（創新服務）：突出 AI、數位化、創新應用、服務升級
-   - IMDP（外銷拓展）：凸顯國際市場、拓展、出口、特定國家或市場
-   - SIIR（內銷型）：強調服務創新、應用、平臺、會員經營等本地服務
-   - 美國關稅衝擊：突出轉型升級、自動化、智慧化等、不需要包含“美國關稅衝擊”或相關字樣
+3. **符合計畫特性**：依補助主題與模板特性挑選關鍵語彙，避免偏離既定範疇
 4. **避免重複**：不照搬或過度相似現有計畫名稱
-5. **使用繁體中文**：專業用語準確，避免生僻字"""
+5. **使用繁體中文**：專業用語準確，避免生僻字{custom_trait_block}"""
+
+    trait_section = (
+        f"\n**模板命名特性說明**：\n{custom_traits}\n"
+        if custom_traits
+        else ""
+    )
 
     user_prompt = f"""## 補助計畫背景
 
 **補助主題**：{grant_name}
 **計畫模板**：{template_name}
+{trait_section}
 
 
 ## 目前專案信息
@@ -1535,7 +1545,7 @@ async def recommend_project_names(
 
     try:
         async with httpx.AsyncClient() as client:
-            print(user_prompt)
+            print(user_prompt,system_prompt )
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

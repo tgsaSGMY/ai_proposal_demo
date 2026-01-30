@@ -72,10 +72,7 @@
               </div>
             </td>
             <td class="py-3 text-center">
-              <div
-                v-if="template.logo_storage_path"
-                class="flex items-center justify-center"
-              >
+              <div v-if="template.logo_storage_path" class="flex items-left">
                 <img
                   :src="template.logo_storage_path"
                   :alt="`${template.name} Logo`"
@@ -97,28 +94,61 @@
               </span>
             </td>
             <td class="py-3 text-right">
-              <div class="flex justify-end gap-3">
+              <div class="relative inline-block">
                 <button
                   type="button"
-                  class="text-xs font-semibold text-indigo-600"
-                  @click="emit('edit', template)"
+                  class="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                  @click="toggleMenu(`${template.grant_id}-${template.id}`)"
                 >
-                  編輯
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="size-6"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 6.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 12.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5ZM12 18.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z"
+                    />
+                  </svg>
                 </button>
-                <button
-                  type="button"
-                  class="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                  @click="emit('sections', template)"
+                <div
+                  v-if="openMenuId === `${template.grant_id}-${template.id}`"
+                  class="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10"
+                  @click="closeMenu"
                 >
-                  調整章節
-                </button>
-                <button
-                  type="button"
-                  class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                  @click="emit('word-editor', template)"
-                >
-                  調整文檔
-                </button>
+                  <button
+                    type="button"
+                    class="block w-full text-left px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 first:rounded-t-lg"
+                    @click="handleAction('edit', template)"
+                  >
+                    編輯模板
+                  </button>
+                  <button
+                    type="button"
+                    class="block w-full text-left px-4 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50"
+                    @click="handleAction('name-config', template)"
+                  >
+                    名稱推薦
+                  </button>
+                  <button
+                    type="button"
+                    class="block w-full text-left px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                    @click="handleAction('sections', template)"
+                  >
+                    調整章節
+                  </button>
+                  <button
+                    type="button"
+                    class="block w-full text-left px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 last:rounded-b-lg"
+                    @click="handleAction('word-editor', template)"
+                  >
+                    調整文檔
+                  </button>
+                </div>
               </div>
             </td>
           </tr>
@@ -134,9 +164,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { PropType } from "vue";
 import type { WordExportConfigEntry } from "~/types/wordExport";
+import type { NameRecommendConfig } from "~/types/nameRecommend";
 
 interface TemplateRecord {
   id: string;
@@ -148,6 +179,7 @@ interface TemplateRecord {
   iconBg?: string | null;
   isOpen?: boolean | null;
   word_export_config?: WordExportConfigEntry[] | null;
+  name_recommend_config?: NameRecommendConfig | null;
   [key: string]: any;
 }
 
@@ -175,6 +207,8 @@ const templateFilter = defineModel<string>("templateFilter", {
   required: true,
 });
 
+const openMenuId = ref<string | null>(null);
+
 const filteredTemplates = computed(() => {
   if (!templateFilter.value) {
     return props.templates;
@@ -182,10 +216,24 @@ const filteredTemplates = computed(() => {
   return props.templates.filter((tpl) => tpl.grant_id === templateFilter.value);
 });
 
+const toggleMenu = (templateId: string) => {
+  openMenuId.value = openMenuId.value === templateId ? null : templateId;
+};
+
+const closeMenu = () => {
+  openMenuId.value = null;
+};
+
+const handleAction = (action: string, template: TemplateRecord) => {
+  emit(action as any, template);
+  closeMenu();
+};
+
 const emit = defineEmits<{
   (e: "edit", template: TemplateRecord): void;
   (e: "sections", template: TemplateRecord): void;
   (e: "word-editor", template: TemplateRecord): void;
+  (e: "name-config", template: TemplateRecord): void;
   (e: "new"): void;
 }>();
 

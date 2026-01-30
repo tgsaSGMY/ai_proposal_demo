@@ -30,6 +30,7 @@ class TemplateConfig(BaseModel):
     iconBg: Optional[str] = None
     isOpen: Optional[bool] = None
     word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
     sections: List[SectionConfig] = []
 
 class GrantConfig(BaseModel):
@@ -253,6 +254,7 @@ class PlanTemplateCreateRequest(BaseModel):
     iconBg: Optional[str] = Field(default="#F8FAFC")
     isOpen: bool = True
     word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
 
 
 class PlanTemplateUpdateRequest(BaseModel):
@@ -266,6 +268,7 @@ class PlanTemplateUpdateRequest(BaseModel):
     iconBg: Optional[str] = None
     isOpen: Optional[bool] = None
     word_export_config: Optional[List[Dict[str, Any]]] = None
+    name_recommend_config: Optional[Dict[str, Any]] = None
 
 
 class SectionBaseRequest(BaseModel):
