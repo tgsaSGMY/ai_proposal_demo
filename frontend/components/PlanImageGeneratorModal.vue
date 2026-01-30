@@ -658,7 +658,7 @@ watch(
       referenceImage.value = null;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 从后端API获取项目的图片列表
@@ -675,8 +675,6 @@ async function fetchImages() {
       throw new Error("請先登入");
     }
 
-    console.log("Fetching images for project ID:", props.projectId);
-
     // 呼叫後端 API 而不是直接查詢 Supabase
     const response = await fetch(
       `${API_BASE_URL}/images?project_id=${props.projectId}`,
@@ -686,7 +684,7 @@ async function fetchImages() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -695,7 +693,6 @@ async function fetchImages() {
     }
 
     const data: ImageRecord[] = await response.json();
-    console.log("Fetched images:", data);
 
     images.value = data || [];
   } catch (error: any) {

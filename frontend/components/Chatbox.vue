@@ -600,7 +600,6 @@ async function streamAIGuidanceMessage(question) {
     }
 
     window.chatWebSocket = new WebSocket(wsUrl);
-    console.log(guidedQuestions);
 
     window.chatWebSocket.onopen = () => {
       const payload = {

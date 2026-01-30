@@ -188,7 +188,6 @@ const handleLogin = async () => {
     });
 
     if (error) {
-      console.log("Login error:", error);
       // 根據錯誤類型提供更具體的提示
       if (error.message.includes("Invalid login credentials")) {
         errorMessage.value = "電子郵件或密碼不正確，請檢查後重試";

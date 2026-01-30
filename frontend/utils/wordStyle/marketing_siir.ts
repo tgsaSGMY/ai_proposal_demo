@@ -14,7 +14,7 @@ import { chineseNumbers, getParenthesizedNumber } from "../chineseNumbers";
 export async function exportPlanToWordMarketingSiir(
   sections: { id: string; name: string; json_schema: any }[],
   planContent: Record<string, any>,
-  projectTitle?: string
+  projectTitle?: string,
 ) {
   const docxRenderer = new DocxRenderer();
 
@@ -161,7 +161,7 @@ export async function exportPlanToWordMarketingSiir(
 function renderCompanyOverview(
   data: any,
   renderer: ContentRenderer<any>,
-  projectTitle?: string
+  projectTitle?: string,
 ) {
   const title = projectTitle || "完整内容";
   const titleParagraph = new Paragraph({
@@ -249,7 +249,6 @@ function renderInnovationContent(data: any, renderer: ContentRenderer<any>) {
   }
 
   // 計畫導入前後對比
-  console.log("計劃導入前後差異說明 data:", data.計劃導入前後差異說明);
   if (data.計劃導入前後差異說明 && Array.isArray(data.計劃導入前後差異說明)) {
     renderer.addArrayTitle("二、計畫導入前後對比");
     const headers = ["目標項目", "現況", "創新計畫完成後現況"];
@@ -413,7 +412,7 @@ function renderExecutionPlan(data: any, renderer: ContentRenderer<any>) {
     // 期中查核點
     if (checkpoints.期中查核點 && Array.isArray(checkpoints.期中查核點)) {
       renderer.addArrayTitle(
-        "二、預定查核點說明(工作項目請依計畫內容自行增列)"
+        "二、預定查核點說明(工作項目請依計畫內容自行增列)",
       );
       renderer.addArrayTitle("1. 年度結案期中查核點");
       const headers = ["查核點編號", "預定完成時間", "查核點內容", "權重(%)"];
@@ -453,7 +452,7 @@ function cleanLongText(text: string, maxLength: number): string {
 // 統一分行方法：單個\n分一行，多個\n統一分成兩行
 function renderTextWithLineBreaks(
   text: string,
-  renderer: ContentRenderer<any>
+  renderer: ContentRenderer<any>,
 ): void {
   // 先將多個換行符（2個以上）統一替換為雙換行符
   const normalizedText = text.replace(/\n{2,}/g, "\n\n");
@@ -477,7 +476,7 @@ function renderTextWithLineBreaks(
 
 function renderTextWithHighlightedImages(
   text: string,
-  renderer: ContentRenderer<any>
+  renderer: ContentRenderer<any>,
 ): void {
   // 檢測圖片占位符，在原地highlight
   const imagePattern = /【圖[:：][^】]+】/g;
@@ -496,7 +495,7 @@ function renderTextWithHighlightedImages(
             text: parts[i],
             font: "Times New Roman",
             size: 24,
-          })
+          }),
         );
       }
       if (i < images.length) {
@@ -506,7 +505,7 @@ function renderTextWithHighlightedImages(
             font: "Times New Roman",
             size: 24,
             highlight: "yellow",
-          })
+          }),
         );
       }
     }

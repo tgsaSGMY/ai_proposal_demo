@@ -375,7 +375,7 @@ const hasUppercase = computed(() => /[A-Z]/.test(password.value));
 const hasLowercase = computed(() => /[a-z]/.test(password.value));
 const hasNumber = computed(() => /[0-9]/.test(password.value));
 const hasSpecialChar = computed(() =>
-  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
+  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value),
 );
 
 /* isPasswordValid：綜合檢查密碼是否符合所有條件（長度、字元組合、與確認密碼相符） */
@@ -396,7 +396,6 @@ onMounted(async () => {
   try {
     // 檢查 URL 中是否有令牌（來自郵件鏈接）
     const hash = window.location.hash;
-    console.log("URL hash:", hash);
 
     // 如果 URL 中沒有令牌，檢查是否有現有會話
     const {

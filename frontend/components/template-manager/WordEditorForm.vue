@@ -3093,7 +3093,6 @@ function renderNodePreview(
       html += `</table>`;
     }
   } else if (node.type === "list") {
-    console.log("Rendering list node:", node);
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const listData = sectionData
       ? getValueByPath(sectionData, node.dataPath)
