@@ -94,7 +94,11 @@
               </span>
             </td>
             <td class="py-3 text-right">
-              <div class="relative inline-block">
+              <div
+                ref="menuTriggers"
+                :data-template-id="`${template.grant_id}-${template.id}`"
+                class="inline-block"
+              >
                 <button
                   type="button"
                   class="p-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -115,9 +119,14 @@
                     />
                   </svg>
                 </button>
+              </div>
+              <Teleport to="body">
                 <div
                   v-if="openMenuId === `${template.grant_id}-${template.id}`"
-                  class="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-10"
+                  class="fixed bg-white rounded-lg shadow-lg border border-slate-200 z-50 w-48"
+                  :style="
+                    getMenuPosition(`${template.grant_id}-${template.id}`)
+                  "
                   @click="closeMenu"
                 >
                   <button
@@ -149,7 +158,7 @@
                     調整文檔
                   </button>
                 </div>
-              </div>
+              </Teleport>
             </td>
           </tr>
           <tr v-if="!filteredTemplates.length">
@@ -164,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, nextTick } from "vue";
 import type { PropType } from "vue";
 import type { WordExportConfigEntry } from "~/types/wordExport";
 import type { NameRecommendConfig } from "~/types/nameRecommend";
@@ -208,6 +217,7 @@ const templateFilter = defineModel<string>("templateFilter", {
 });
 
 const openMenuId = ref<string | null>(null);
+const menuTriggers = ref<HTMLElement | null>(null);
 
 const filteredTemplates = computed(() => {
   if (!templateFilter.value) {
@@ -222,6 +232,48 @@ const toggleMenu = (templateId: string) => {
 
 const closeMenu = () => {
   openMenuId.value = null;
+};
+
+const getMenuPosition = (templateId: string) => {
+  // 尋找對應的菜單觸發按鈕
+  const trigger = document.querySelector(
+    `[data-template-id="${templateId}"]`,
+  ) as HTMLElement;
+
+  if (!trigger) {
+    return { top: "0", left: "0" };
+  }
+
+  const rect = trigger.getBoundingClientRect();
+  const menuHeight = 150; // 菜單的大約高度
+  const menuWidth = 192; // w-48 = 12rem = 192px
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+
+  // 判斷菜單是否應該顯示在上方或下方
+  const spaceBelow = viewportHeight - rect.bottom;
+  const showAbove = spaceBelow < menuHeight && rect.top > menuHeight;
+
+  // 計算頂部位置
+  const top = showAbove
+    ? `${rect.top - menuHeight - 8}px`
+    : `${rect.bottom + 8}px`;
+
+  // 判斷菜單是否會超出右邊界，如果會則調整為從右邊對齊
+  const rightPos = viewportWidth - rect.right;
+  const leftPos = rect.left - menuWidth + rect.width;
+
+  const style: Record<string, string> = { top };
+
+  if (rightPos >= 0 && rightPos + menuWidth <= viewportWidth) {
+    style.right = `${rightPos}px`;
+  } else if (leftPos >= 0) {
+    style.left = `${leftPos}px`;
+  } else {
+    style.right = "16px"; // 如果都不行就距離右邊 16px
+  }
+
+  return style;
 };
 
 const handleAction = (action: string, template: TemplateRecord) => {
