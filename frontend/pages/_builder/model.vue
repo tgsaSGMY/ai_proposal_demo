@@ -58,6 +58,122 @@
           </button>
         </div>
 
+        <!-- 全局模型配置 -->
+        <div
+          v-if="selectedTemplateId"
+          class="mb-8 sm:mb-10 p-4 sm:p-6 border-2 border-indigo-200 bg-indigo-50 rounded-lg"
+        >
+          <h2
+            class="text-lg sm:text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 text-indigo-600"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM15.657 14.243a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM11 17a1 1 0 102 0v-1a1 1 0 10-2 0v1zM5.757 15.657a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM2 10a1 1 0 011-1h1a1 1 0 110 2H3a1 1 0 01-1-1zM5.757 4.343a1 1 0 00-1.414 1.414l.707.707a1 1 0 101.414-1.414l-.707-.707z"
+              />
+            </svg>
+            全局模型配置
+          </h2>
+          <p class="text-sm text-gray-600 mb-4">
+            設定所有章節的默認模型。特定章節的配置將覆蓋此設定。
+          </p>
+
+          <div class="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 mb-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                全局外部模型
+              </label>
+              <select
+                v-model="globalExternalModelId"
+                class="w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition"
+              >
+                <option value="">未指定（外部）</option>
+                <option
+                  v-for="model in allModels"
+                  :key="model.id"
+                  :value="model.id"
+                >
+                  {{ model.display_name }}
+                </option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                當前：{{ getGlobalModel(true)?.display_name || "未指定" }}
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                全局內部模型
+              </label>
+              <select
+                v-model="globalInternalModelId"
+                class="w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 transition"
+              >
+                <option value="">未指定（內部）</option>
+                <option
+                  v-for="model in allModels"
+                  :key="model.id"
+                  :value="model.id"
+                >
+                  {{ model.display_name }}
+                </option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                當前：{{ getGlobalModel(false)?.display_name || "未指定" }}
+              </p>
+            </div>
+          </div>
+
+          <button
+            @click="saveGlobalModels"
+            :disabled="isSavingGlobal"
+            class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-400 transition flex items-center justify-center gap-2"
+          >
+            <svg
+              v-if="!isSavingGlobal"
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M19.414 3.172a2 2 0 00-2.828 0l-12 12a2 2 0 102.828 2.828l12-12a2 2 0 000-2.828z"
+              />
+              <path
+                fill-rule="evenodd"
+                d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <svg
+              v-else
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            {{ isSavingGlobal ? "保存中..." : "保存全局配置" }}
+          </button>
+        </div>
+
         <!-- 選擇器 -->
         <div
           class="grid grid-cols-1 gap-4 sm:gap-6 mb-8 sm:mb-10 md:grid-cols-2"
@@ -182,7 +298,7 @@ definePageMeta({
 
 // ===== 导入依赖库 =====
 // 导入 Vue 核心库
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 // 导入子组件和服务
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
 import { useNotifications } from "~/composables/useNotifications";
@@ -243,13 +359,18 @@ const selectedTemplateId = ref("");
 const selectedSection = ref(null);
 const isModalOpen = ref(false);
 const isRefreshing = ref(false);
+const isSavingGlobal = ref(false);
+const globalExternalModelId = ref("");
+const globalInternalModelId = ref("");
+const savedGlobalExternalModelId = ref("");
+const savedGlobalInternalModelId = ref("");
 
 // ===== 计算属性：可用模板 =====
 // 根据选中的补助类别，动态计算可用的模板列表
 const availableTemplates = computed(() => {
   if (!selectedGrantId.value) return [];
   const selectedGrant = allConfigs.value.find(
-    (g) => g.id === selectedGrantId.value
+    (g) => g.id === selectedGrantId.value,
   );
   return selectedGrant ? selectedGrant.templates : [];
 });
@@ -259,7 +380,7 @@ const availableTemplates = computed(() => {
 const currentSections = computed(() => {
   if (!selectedTemplateId.value) return [];
   const template = availableTemplates.value.find(
-    (t) => t.id === selectedTemplateId.value
+    (t) => t.id === selectedTemplateId.value,
   );
   return template ? template.sections : [];
 });
@@ -306,6 +427,25 @@ async function fetchData() {
     console.error("Data fetching error:", error);
     errorNotification("無法加載配置數據，請檢查後端服務。");
   }
+
+  // 初始化全局模型
+  initializeGlobalModels();
+}
+
+// ===== 初始化全局模型 =====
+// 从路由规则中加载全局模型设置
+function initializeGlobalModels() {
+  const externalGlobalRule = routingRules.value.find(
+    (r) => !r.grant_id && !r.section_id && r.is_external === true,
+  );
+  const internalGlobalRule = routingRules.value.find(
+    (r) => !r.grant_id && !r.section_id && r.is_external === false,
+  );
+
+  globalExternalModelId.value = externalGlobalRule?.model_id || "";
+  globalInternalModelId.value = internalGlobalRule?.model_id || "";
+  savedGlobalExternalModelId.value = externalGlobalRule?.model_id || "";
+  savedGlobalInternalModelId.value = internalGlobalRule?.model_id || "";
 }
 
 onMounted(fetchData);
@@ -348,7 +488,7 @@ async function refreshConfigurations() {
 const defaultModelId = computed(() => {
   // 通過優先級系統查找默認應用的模型 ID
   const globalRule = routingRules.value.find(
-    (r) => !r.grant_id && !r.section_id
+    (r) => !r.grant_id && !r.section_id,
   );
   return globalRule ? globalRule.model_id : null;
 });
@@ -364,13 +504,13 @@ function getAppliedRuleForSection(sectionId, isExternal) {
       r.section_id === sectionId &&
       r.is_external === isExternal &&
       r.template_id === selectedTemplateId.value &&
-      r.grant_id === selectedGrantId.value
+      r.grant_id === selectedGrantId.value,
   );
   if (specificRule) return specificRule;
 
   // 3. 如果再沒有，查找全局規則 (grant_id 和 section_id 都為空) 且 is_external 匹配
   const globalRule = routingRules.value.find(
-    (r) => !r.grant_id && !r.section_id && r.is_external === isExternal
+    (r) => !r.grant_id && !r.section_id && r.is_external === isExternal,
   );
 
   return globalRule || null;
@@ -479,7 +619,7 @@ function handleSettingsUpdated(payload) {
   const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
   if (grant) {
     const template = grant.templates.find(
-      (t) => t.id === selectedTemplateId.value
+      (t) => t.id === selectedTemplateId.value,
     );
     if (template) {
       const section = template.sections.find((s) => s.id === payload.sectionId);
@@ -491,6 +631,103 @@ function handleSettingsUpdated(payload) {
         }
       }
     }
+  }
+}
+
+// ===== 获取全局模型 =====
+// 根据类型（内部/外部）获取应用的全局模型对象（已保存的值）
+function getGlobalModel(isExternal) {
+  const modelId = isExternal
+    ? savedGlobalExternalModelId.value
+    : savedGlobalInternalModelId.value;
+  if (!modelId) return null;
+  return allModels.value.find((m) => m.id === modelId) || null;
+}
+
+// ===== 保存全局模型配置 =====
+// 调用 API 保存全局模型配置
+async function saveGlobalModels() {
+  isSavingGlobal.value = true;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("請先登入");
+
+    // 删除现有的全局规则
+    const existingGlobalRules = routingRules.value.filter(
+      (r) => !r.grant_id && !r.section_id,
+    );
+
+    for (const rule of existingGlobalRules) {
+      const deleteRes = await fetch(
+        `${API_BASE_URL}/routing-rules/${rule.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      if (!deleteRes.ok) {
+        throw new Error("Failed to delete existing global rules");
+      }
+    }
+
+    // 保存新的全局规则
+    const rulesToCreate = [];
+
+    if (globalExternalModelId.value) {
+      rulesToCreate.push({
+        model_id: globalExternalModelId.value,
+        is_external: true,
+        priority: 10,
+      });
+    }
+
+    if (globalInternalModelId.value) {
+      rulesToCreate.push({
+        model_id: globalInternalModelId.value,
+        is_external: false,
+        priority: 10,
+      });
+    }
+
+    for (const rule of rulesToCreate) {
+      const saveRes = await fetch(`${API_BASE_URL}/routing-rules`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rule),
+      });
+
+      if (!saveRes.ok) {
+        const errorData = await saveRes.json();
+        throw new Error(errorData.detail || "Failed to save global rule");
+      }
+    }
+
+    // 重新加载路由规则
+    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`, {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    routingRules.value = await rulesRes.json();
+
+    // 更新已保存的全局模型值
+    savedGlobalExternalModelId.value = globalExternalModelId.value;
+    savedGlobalInternalModelId.value = globalInternalModelId.value;
+
+    success("全局配置已成功儲存！");
+  } catch (error) {
+    console.error("Failed to save global models:", error);
+    errorNotification(`儲存失敗: ${error.message}`);
+  } finally {
+    isSavingGlobal.value = false;
   }
 }
 
