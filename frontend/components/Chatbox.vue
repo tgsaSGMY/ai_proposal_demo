@@ -216,36 +216,6 @@
               </button>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <div class="flex items-center gap-2">
-                <select
-                  v-model="selectedModel"
-                  class="rounded-full border border-[#dfe3ff] bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#f4f5ff] focus:border-[#ff4b5c] focus:outline-none"
-                >
-                  <option value="">預設模型</option>
-                  <optgroup label="GPT 模型">
-                    <option value="gpt-5.2">gpt-5.2</option>
-                    <option value="gpt-5.1">gpt-5.1</option>
-                    <option value="gpt-5-mini">
-                      gpt-5-mini（目前内部人員）
-                    </option>
-                    <option value="gpt-5-nano">gpt-5-nano</option>
-                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                    <option value="gpt-4.1-nano">
-                      gpt-4.1-nano(目前外部人員)
-                    </option>
-                  </optgroup>
-                  <optgroup label="Gemini 模型">
-                    <option value="gemini-3-pro-preview">
-                      gemini-3-pro-preview
-                    </option>
-                    <option value="gemini-3-flash-preview">
-                      gemini-3-flash-preview
-                    </option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                  </optgroup>
-                </select>
-              </div>
               <button
                 type="button"
                 class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
@@ -375,6 +345,7 @@ const props = defineProps({
   projectId: { type: String, default: "" },
   savedPlanVersions: { type: Array, default: () => [] },
   showSidebar: { type: Boolean, default: false },
+  selectedModel: { type: String, default: "" },
 });
 
 const isGenerating = computed(() => props.isGenerating);
@@ -446,7 +417,6 @@ const isFetchingNextQuestion = ref(false);
 const projectRealtimeChannel = ref(null);
 const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
-const selectedModel = ref("");
 const timelineLoading = ref(false);
 const textareaMinHeight = 64; // 4rem base height
 const textareaMaxHeight = 184; // 約 11.5rem 上限
@@ -1165,7 +1135,7 @@ async function handleRecommendConfirm(selectedName) {
     grantId: props.grantId,
     templateId: props.templateId,
     prompt: finalUserInput,
-    selectedModel: selectedModel.value || undefined,
+    selectedModel: props.selectedModel || undefined,
   });
 }
 
@@ -1299,7 +1269,7 @@ function handleVersionUpdateRequest(version) {
   }
   emit("requestVersionUpdate", {
     version,
-    selectedModel: selectedModel.value || undefined,
+    selectedModel: props.selectedModel || undefined,
   });
   isVersionModalVisible.value = false;
 }

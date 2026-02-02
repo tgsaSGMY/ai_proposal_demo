@@ -116,11 +116,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       // 如果不是 JSON，继续正常处理
     }
 
+    const baseStyle = this.resolveStyle("body");
     this.paragraphs.push(
       new Paragraph({
         children: [
           this.createRun(`${key}: `, "body", { bold: true }),
-          this.createRun(String(value), "body"),
+          ...parseMarkdownToTextRuns(String(value), baseStyle),
         ],
         spacing: { after: 100 },
       }),
@@ -128,9 +129,24 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
   }
 
   addParagraph(text: string): void {
+    // 检查 text 是否是 array of objects
+    try {
+      const parsed = typeof text === "string" ? JSON.parse(text) : text;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const firstItem = parsed[0];
+        if (typeof firstItem === "object" && firstItem !== null) {
+          this.addObjectsTable(parsed);
+          return;
+        }
+      }
+    } catch (e) {
+      // 如果不是 JSON，继续正常处理
+    }
+
+    const baseStyle = this.resolveStyle("body");
     this.paragraphs.push(
       new Paragraph({
-        children: [this.createRun(text, "body")],
+        children: parseMarkdownToTextRuns(String(text), baseStyle),
         spacing: { after: 120, line: 200 },
       }),
     );
@@ -153,16 +169,18 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     index: number,
     content: string | { title: string; description: string },
   ): void {
+    const baseStyle = this.resolveStyle("body");
     let children: TextRun[];
     if (typeof content === "object") {
       children = [
-        this.createRun(`${index}. ${content.title}：`, "body", { bold: true }),
+        this.createRun(`${index}. `, "body"),
+        ...parseMarkdownToTextRuns(`${content.title}：`, baseStyle),
         this.createRun(content.description, "body", { break: 1 }),
       ];
     } else {
       children = [
         this.createRun(`${index}. `, "body"),
-        this.createRun(content, "body"),
+        ...parseMarkdownToTextRuns(String(content), baseStyle),
       ];
     }
     this.paragraphs.push(new Paragraph({ children }));
@@ -174,10 +192,15 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       return;
     }
 
+    const baseStyle = this.resolveStyle("body");
+    const children: TextRun[] = [
+      this.createRun(`→${key}: `, "body"),
+      ...parseMarkdownToTextRuns(String(value), baseStyle),
+    ];
     this.paragraphs.push(
       new Paragraph({
         indent: { left: 720 }, // 約 0.5 inch 縮排
-        children: [this.createRun(`→${key}: ${value}`, "body")],
+        children,
       }),
     );
   }
@@ -395,12 +418,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
 
         // 优先显示 title 作为编号列表项
         const title = titleEntry ? String(titleEntry[1]) : "";
+        const baseStyle = this.resolveStyle("body");
         this.paragraphs.push(
           new Paragraph({
             children: [
-              this.createRun(`${numberingIndex}. ${title}`, "body", {
-                bold: true,
-              }),
+              this.createRun(`${numberingIndex}. `, "body"),
+              ...parseMarkdownToTextRuns(title, baseStyle),
             ],
             spacing: { after: 120, line: 200 },
           }),
@@ -428,10 +451,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               } else {
                 // 普通数组，作为文本显示
                 const displayValue = JSON.stringify(value);
+                const baseStyle = this.resolveStyle("body");
                 this.paragraphs.push(
                   new Paragraph({
                     children: [
-                      this.createRun(`${key}: ${displayValue}`, "body"),
+                      this.createRun(`${key}: `, "body"),
+                      ...parseMarkdownToTextRuns(displayValue, baseStyle),
                     ],
                     indent: { left: 720 },
                     spacing: { after: 80, line: 200 },
@@ -450,10 +475,12 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
               this.addNestedObject(value);
             } else {
               // 基本类型，直接显示
+              const baseStyle = this.resolveStyle("body");
               this.paragraphs.push(
                 new Paragraph({
                   children: [
-                    this.createRun(`${key}: ${String(value)}`, "body"),
+                    this.createRun(`${key}: `, "body"),
+                    ...parseMarkdownToTextRuns(String(value), baseStyle),
                   ],
                   indent: { left: 720 },
                   spacing: { after: 80, line: 200 },
@@ -470,12 +497,13 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     const hasTitleField = items.some((item) => item.title || item.name);
     if (hasTitleField) {
       // 只显示 title 字段
+      const baseStyle = this.resolveStyle("body");
       items.forEach((item) => {
         const title = item.title || item.name || "";
         if (title) {
           this.paragraphs.push(
             new Paragraph({
-              children: [this.createRun(String(title), "body")],
+              children: parseMarkdownToTextRuns(String(title), baseStyle),
               spacing: { after: 120, line: 200 },
             }),
           );
@@ -488,12 +516,13 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       (item) => item.title || item.description || item.explanation,
     );
     if (hasDescField) {
+      const baseStyle = this.resolveStyle("body");
       items.forEach((item) => {
         const desc = item.title || item.description || item.explanation || "";
         if (desc) {
           this.paragraphs.push(
             new Paragraph({
-              children: [this.createRun(String(desc), "body")],
+              children: parseMarkdownToTextRuns(String(desc), baseStyle),
               spacing: { after: 120, line: 200 },
             }),
           );
@@ -539,20 +568,30 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     items.forEach((row) => {
       tableRows.push(
         new TableRow({
-          children: headers.map(
-            (header) =>
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      this.createRun(String(row[header] ?? ""), "body", {
-                        size: this.resolveStyle("body").size - 4,
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-          ),
+          children: headers.map((header) => {
+            const cellValue = String(row[header] ?? "");
+            const baseStyle = this.resolveStyle("body");
+            const cellRuns = parseMarkdownToTextRuns(cellValue, baseStyle).map(
+              (run) =>
+                new TextRun({
+                  text: (run as any).text,
+                  font: (run as any).font,
+                  size:
+                    ((run as any).size ? (run as any).size : baseStyle.size) -
+                    4,
+                  bold: (run as any).bold,
+                  italics: (run as any).italics,
+                  strike: (run as any).strike,
+                }),
+            );
+            return new TableCell({
+              children: [
+                new Paragraph({
+                  children: cellRuns,
+                }),
+              ],
+            });
+          }),
         }),
       );
     });
@@ -618,14 +657,16 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         } else {
           // 普通数组，作为文本显示
           const displayValue = JSON.stringify(value);
+          const baseStyle = this.resolveStyle("body");
           this.paragraphs.push(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `${key}: ${displayValue}`,
+                  text: `${key}: `,
                   font: "Times New Roman",
                   size: 22,
                 }),
+                ...parseMarkdownToTextRuns(displayValue, baseStyle),
               ],
               indent: { left: 1440 },
               spacing: { after: 80, line: 200 },
@@ -651,14 +692,16 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         this.addNestedObject(value);
       } else {
         // 基本类型，直接显示
+        const baseStyle = this.resolveStyle("body");
         this.paragraphs.push(
           new Paragraph({
             children: [
               new TextRun({
-                text: `${key}: ${String(value)}`,
+                text: `${key}: `,
                 font: "Times New Roman",
                 size: 22,
               }),
+              ...parseMarkdownToTextRuns(String(value), baseStyle),
             ],
             indent: { left: 1440 },
             spacing: { after: 80, line: 200 },
@@ -687,6 +730,121 @@ function escapeHtml(unsafe: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// 解析 Markdown 格式的文本，返回 TextRun 数组用于 Word 文档
+function parseMarkdownToTextRuns(
+  text: string,
+  baseStyle: TextRunStyle,
+): TextRun[] {
+  const runs: TextRun[] = [];
+
+  // 支持的格式：**bold**、__bold__、*italic*、_italic_、~~strikethrough~~
+  const patterns = [
+    { regex: /\*\*(.+?)\*\*/g, format: "bold" },
+    { regex: /__(.+?)__/g, format: "bold" },
+    { regex: /\*(.+?)\*/g, format: "italic" },
+    { regex: /_(.+?)_/g, format: "italic" },
+    { regex: /~~(.+?)~~/g, format: "strikethrough" },
+  ];
+
+  let lastIndex = 0;
+  let matches: Array<{
+    index: number;
+    endIndex: number;
+    format: string;
+    text: string;
+  }> = [];
+
+  // 收集所有匹配项
+  patterns.forEach(({ regex, format }) => {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({
+        index: match.index,
+        endIndex: match.index + match[0].length,
+        format,
+        text: match[1] || "",
+      });
+    }
+  });
+
+  // 按索引排序并处理
+  matches.sort((a, b) => a.index - b.index);
+
+  for (const match of matches) {
+    // 添加匹配前的普通文本
+    if (lastIndex < match.index) {
+      runs.push(
+        new TextRun({
+          text: text.substring(lastIndex, match.index),
+          font: baseStyle.font,
+          size: baseStyle.size,
+          bold: baseStyle.bold,
+        }),
+      );
+    }
+
+    // 添加格式化的文本
+    const runConfig: any = {
+      text: match.text,
+      font: baseStyle.font,
+      size: baseStyle.size,
+    };
+
+    if (match.format === "bold") {
+      runConfig.bold = true;
+    } else if (match.format === "italic") {
+      runConfig.italics = true;
+    } else if (match.format === "strikethrough") {
+      runConfig.strike = true;
+    }
+
+    runs.push(new TextRun(runConfig));
+    lastIndex = match.endIndex;
+  }
+
+  // 添加剩余的文本
+  if (lastIndex < text.length) {
+    runs.push(
+      new TextRun({
+        text: text.substring(lastIndex),
+        font: baseStyle.font,
+        size: baseStyle.size,
+        bold: baseStyle.bold,
+      }),
+    );
+  }
+
+  // 如果没有找到任何格式，返回单个 TextRun
+  if (runs.length === 0) {
+    runs.push(
+      new TextRun({
+        text,
+        font: baseStyle.font,
+        size: baseStyle.size,
+        bold: baseStyle.bold,
+      }),
+    );
+  }
+
+  return runs;
+}
+
+// 解析 Markdown 格式的文本，处理粗体字、斜体、删除线等（用于 HTML）
+function renderMarkdownToHtml(text: string): string {
+  let html = escapeHtml(text);
+  // 处理 **bold** 格式的粗体字
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // 处理 __bold__ 格式的粗体字
+  html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+  // 处理 *italic* 格式的斜体字
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  // 处理 _italic_ 格式的斜体字
+  html = html.replace(/_(.+?)_/g, "<em>$1</em>");
+  // 处理 ~~strikethrough~~ 格式的删除线
+  html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
+  return html;
 }
 
 export class HtmlRenderer implements ContentRenderer<string> {
@@ -725,7 +883,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
 
     this.html += `<p><strong class="font-semibold">${escapeHtml(
       key,
-    )}:</strong> ${escapeHtml(value)}</p>`;
+    )}:</strong> ${renderMarkdownToHtml(value)}</p>`;
   }
 
   addParagraph(text: string): void {
@@ -743,7 +901,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
       // 如果不是 JSON，继续正常处理
     }
 
-    this.html += `<p class="my-2">${escapeHtml(text)}</p>`;
+    this.html += `<p class="my-2">${renderMarkdownToHtml(text)}</p>`;
   }
 
   addImagePlaceholder(text: string): void {
@@ -755,7 +913,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
     content: string | { title: string; description: string },
   ): void {
     if (typeof content === "object") {
-      this.html += `<p><span class="mr-2">${index}.</span><strong>${escapeHtml(
+      this.html += `<p><span class="mr-2">${index}.</span><strong>${renderMarkdownToHtml(
         content.title,
       )}</strong></p>`;
     } else {
@@ -775,7 +933,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         // 如果不是 JSON，继续正常处理
       }
 
-      this.html += `<p><span class="mr-2">${index}.</span>${escapeHtml(
+      this.html += `<p><span class="mr-2">${index}.</span>${renderMarkdownToHtml(
         content,
       )}</p>`;
     }
@@ -808,7 +966,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
 
     this.html += `<p class="ml-8 text-gray-700"><span class="font-semibold">${escapeHtml(
       key,
-    )}:</span> ${escapeHtml(value)}</p>`;
+    )}:</span> ${renderMarkdownToHtml(value)}</p>`;
   }
 
   addTable(headers: string[], rows: string[][]): void {
@@ -823,7 +981,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
     rows.forEach((row) => {
       this.html += "<tr>";
       row.forEach((cell) => {
-        this.html += `<td class="border border-gray-400 p-2">${escapeHtml(
+        this.html += `<td class="border border-gray-400 p-2">${renderMarkdownToHtml(
           cell,
         )}</td>`;
       });
@@ -866,7 +1024,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         items.forEach((item) => {
           const title = item.title || item.name || "";
           if (title) {
-            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500"><strong>${escapeHtml(
+            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500"><strong>${renderMarkdownToHtml(
               String(title),
             )}</strong></div>`;
           }
@@ -881,7 +1039,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         items.forEach((item) => {
           const desc = item.title || item.description || item.explanation || "";
           if (desc) {
-            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500">${escapeHtml(
+            this.html += `<div class="my-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500">${renderMarkdownToHtml(
               String(desc),
             )}</div>`;
           }
@@ -912,7 +1070,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
           const value = row[header];
           const displayValue =
             value === null || value === undefined ? "" : String(value);
-          this.html += `<td class="border border-gray-400 p-2 text-sm">${escapeHtml(
+          this.html += `<td class="border border-gray-400 p-2 text-sm">${renderMarkdownToHtml(
             displayValue,
           )}</td>`;
         });
@@ -926,7 +1084,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         // 优先显示 title 字段作为编号列表项的主标题
         const title = item.title || item.name || "";
         if (title) {
-          this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span><strong>${escapeHtml(
+          this.html += `<div class="my-2"><span class="mr-2 font-semibold">${numberingIndex}.</span><strong>${renderMarkdownToHtml(
             String(title),
           )}</strong></div>`;
         } else {
@@ -952,7 +1110,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
                 // 普通数组，作为文本显示
                 this.html += `<div class="ml-8"><strong>${escapeHtml(
                   key,
-                )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
+                )}:</strong> ${renderMarkdownToHtml(JSON.stringify(value))}</div>`;
               }
             } else if (typeof value === "object" && value !== null) {
               // 如果是对象，递归调用 renderNestedObject
@@ -964,7 +1122,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
               // 基本类型，直接显示
               this.html += `<div class="ml-8"><strong>${escapeHtml(
                 key,
-              )}:</strong> ${escapeHtml(String(value))}</div>`;
+              )}:</strong> ${renderMarkdownToHtml(String(value))}</div>`;
             }
           }
         });
@@ -993,7 +1151,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
           // 普通数组，作为文本显示
           this.html += `<div class="ml-12"><strong>${escapeHtml(
             key,
-          )}:</strong> ${escapeHtml(JSON.stringify(value))}</div>`;
+          )}:</strong> ${renderMarkdownToHtml(JSON.stringify(value))}</div>`;
         }
       } else if (typeof value === "object" && value !== null) {
         // 如果是对象，继续递归
@@ -1005,7 +1163,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         // 基本类型，直接显示
         this.html += `<div class="ml-12"><strong>${escapeHtml(
           key,
-        )}:</strong> ${escapeHtml(String(value))}</div>`;
+        )}:</strong> ${renderMarkdownToHtml(String(value))}</div>`;
       }
     });
   }

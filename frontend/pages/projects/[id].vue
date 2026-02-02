@@ -2,8 +2,8 @@
   <ClientOnly>
     <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
       <div class="mx-auto max-w-6xl space-y-6">
-        <header class="flex flex-wrap items-center justify-between gap-4">
-          <div class="space-y-2">
+        <header class="flex items-start justify-between gap-4">
+          <div class="flex-1 min-w-0 space-y-2">
             <p
               class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
             >
@@ -11,11 +11,11 @@
                 >我的計畫庫</NuxtLink
               >
               <span class="text-gray-300">></span>
-              <span class="text-gray-600 line-clamp-1">{{
+              <span class="text-gray-600 truncate">{{
                 projectRecord?.title || "計畫工作區"
               }}</span>
             </p>
-            <h1 class="text-3xl font-semibold text-gray-900 line-clamp-1">
+            <h1 class="text-3xl font-semibold text-gray-900 truncate">
               {{ projectRecord?.title || "計畫工作區" }}
             </h1>
             <p class="text-sm text-gray-500 line-clamp-2">
@@ -34,37 +34,60 @@
               >
             </div>
           </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <div
-              v-if="isInternal"
-              class="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2"
-            >
-              <span class="text-xs font-semibold text-gray-600">
-                {{ useModelType === "internal" ? "內部模型" : "外部模型" }}
-              </span>
-              <button
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition"
-                :class="
-                  useModelType === 'internal' ? 'bg-rose-500' : 'bg-gray-300'
-                "
-                @click="toggleModel"
+          <div class="flex-shrink-0 space-y-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <div
+                v-if="isInternal"
+                class="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2"
               >
-                <span
-                  class="inline-block h-5 w-5 transform rounded-full bg-white transition"
+                <span class="text-xs font-semibold text-gray-600">
+                  {{ useModelType === "internal" ? "內部模型" : "外部模型" }}
+                </span>
+                <button
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition"
                   :class="
-                    useModelType === 'internal'
-                      ? 'translate-x-5'
-                      : 'translate-x-1'
+                    useModelType === 'internal' ? 'bg-rose-500' : 'bg-gray-300'
                   "
-                ></span>
-              </button>
+                  @click="toggleModel"
+                >
+                  <span
+                    class="inline-block h-5 w-5 transform rounded-full bg-white transition"
+                    :class="
+                      useModelType === 'internal'
+                        ? 'translate-x-5'
+                        : 'translate-x-1'
+                    "
+                  ></span>
+                </button>
+              </div>
+              <NuxtLink
+                to="/"
+                class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
+              >
+                返回首頁
+              </NuxtLink>
             </div>
-            <NuxtLink
-              to="/"
-              class="inline-flex items-center rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 transition hover:border-rose-200 hover:text-rose-500"
-            >
-              返回首頁
-            </NuxtLink>
+            <div class="flex flex-wrap items-center gap-3" v-if="isInternal">
+              <select
+                v-model="selectedModel"
+                class="rounded-full border border-[#dfe3ff] bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-[#f4f5ff] focus:border-[#ff4b5c] focus:outline-none"
+              >
+                <option value="">預設模型</option>
+                <optgroup
+                  v-for="group in modelGroups"
+                  :key="group.label"
+                  :label="group.label"
+                >
+                  <option
+                    v-for="model in group.models"
+                    :key="model.value"
+                    :value="model.value"
+                  >
+                    {{ model.label }}
+                  </option>
+                </optgroup>
+              </select>
+            </div>
           </div>
         </header>
 
@@ -148,6 +171,7 @@
             :project-summary="projectRecord?.description || ''"
             :project-id="projectRecord?.id || ''"
             :saved-plan-versions="savedPlanVersions"
+            :selected-model="selectedModel"
             show-sidebar
             @generatePlan="handleChatPlanGeneration"
             @finalizeCandidates="onCandidateConfirm"
@@ -292,6 +316,32 @@ const loadError = ref("");
 const candidatePlan = ref<Record<string, any>>({});
 const chatMessages = ref<any[]>([]);
 const useModelType = ref("external");
+const selectedModel = ref("");
+
+// ===== 模型配置 =====
+// 定义可用的 AI 模型列表，按类别分组
+const modelGroups = ref([
+  {
+    label: "GPT 模型",
+    models: [
+      { value: "gpt-5.2", label: "gpt-5.2" },
+      { value: "gpt-5.1", label: "gpt-5.1" },
+      { value: "gpt-5-mini", label: "gpt-5-mini（目前内部人員）" },
+      { value: "gpt-5-nano", label: "gpt-5-nano" },
+      { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+      { value: "gpt-4.1-nano", label: "gpt-4.1-nano(目前外部人員)" },
+    ],
+  },
+  {
+    label: "Gemini 模型",
+    models: [
+      { value: "gemini-3-pro-preview", label: "gemini-3-pro-preview" },
+      { value: "gemini-3-flash-preview", label: "gemini-3-flash-preview" },
+      { value: "gemini-2.5-pro", label: "gemini-2.5-pro" },
+      { value: "gemini-2.5-flash", label: "gemini-2.5-flash" },
+    ],
+  },
+]);
 const isInternal = ref(false);
 const lastGenerationPrompt = ref("");
 const isPersistingProject = ref(false);
@@ -304,6 +354,11 @@ onMounted(async () => {
 
   // 執行檢查
   isInternal.value = await checkIsInternal();
+
+  // 如果是內部用戶，預設使用內部模型
+  if (isInternal.value) {
+    useModelType.value = "internal";
+  }
 });
 
 // ===== 版本时间戳格式化 =====
@@ -598,7 +653,8 @@ async function fetchProject() {
     }
     selectedGrantId.value = data.grant_id || "";
     selectedTemplateId.value = data.template_id || "";
-    useModelType.value = "external";
+    // 根據是否為內部用戶設置預設模型
+    useModelType.value = isInternal.value ? "internal" : "external";
     if (data.mode === "generator") {
       await initializeGeneratorStateFromProject(data);
     }

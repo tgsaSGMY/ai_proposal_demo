@@ -585,7 +585,7 @@ async function fetchWordExportConfig(
 }
 
 /**
- * 根据文本中的干线符渲染一行，处理图片占位符高亮
+ * 根据文本中的干线符渲染一行，处理图片占位符高亮和Markdown粗体格式
  * 仿照 local_standard.ts 中 renderTextWithHighlightedImages 的逻辑
  */
 function renderTextWithHighlightedImages(
@@ -599,28 +599,44 @@ function renderTextWithHighlightedImages(
   if (!text) return;
 
   const imagePattern = /【圖[:：][^】]+】/g;
-  const parts: Array<{ text: string; isImage: boolean }> = [];
-  let lastIndex = 0;
+  const boldPattern = /\*\*(.+?)\*\*/g;
+
+  // 收集所有匹配项（图片和粗体）
+  const matches: Array<{
+    index: number;
+    endIndex: number;
+    type: "image" | "bold";
+    text: string;
+  }> = [];
+
+  // 收集图片占位符
   let match;
-
-  imagePattern.lastIndex = 0;
-
   while ((match = imagePattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({
-        text: text.substring(lastIndex, match.index),
-        isImage: false,
-      });
-    }
-    parts.push({ text: match[0], isImage: true });
-    lastIndex = match.index + match[0].length;
+    matches.push({
+      index: match.index,
+      endIndex: match.index + match[0].length,
+      type: "image",
+      text: match[0],
+    });
   }
 
-  if (lastIndex < text.length) {
-    parts.push({ text: text.substring(lastIndex), isImage: false });
+  // 收集粗体格式
+  const boldPatternGlobal = /\*\*(.+?)\*\*/g;
+  let boldMatch: RegExpExecArray | null;
+  while ((boldMatch = boldPatternGlobal.exec(text)) !== null) {
+    matches.push({
+      index: boldMatch.index,
+      endIndex: boldMatch.index + boldMatch[0].length,
+      type: "bold",
+      text: boldMatch[1] ?? "",
+    });
   }
 
-  if (parts.length === 0 || parts.every((p) => !p.isImage)) {
+  // 按索引排序
+  matches.sort((a, b) => a.index - b.index);
+
+  // 如果没有匹配项，直接创建段落
+  if (matches.length === 0) {
     elements.push(
       new Paragraph({
         children: [
@@ -638,16 +654,59 @@ function renderTextWithHighlightedImages(
     return;
   }
 
-  const textRuns: TextRun[] = parts.map(
-    (part) =>
+  // 构建文本片段
+  const textRuns: TextRun[] = [];
+  let lastIndex = 0;
+
+  for (const match of matches) {
+    // 添加匹配前的普通文本
+    if (lastIndex < match.index) {
+      textRuns.push(
+        new TextRun({
+          text: text.substring(lastIndex, match.index),
+          size: size,
+          font: font,
+          bold: bold,
+        }),
+      );
+    }
+
+    // 添加匹配的文本（图片或粗体）
+    if (match.type === "image") {
+      textRuns.push(
+        new TextRun({
+          text: match.text,
+          size: size,
+          font: font,
+          bold: bold,
+          highlight: "yellow",
+        }),
+      );
+    } else if (match.type === "bold") {
+      textRuns.push(
+        new TextRun({
+          text: match.text ?? "",
+          size: size,
+          font: font,
+          bold: true,
+        }),
+      );
+    }
+
+    lastIndex = match.endIndex;
+  }
+
+  // 添加剩余的文本
+  if (lastIndex < text.length) {
+    textRuns.push(
       new TextRun({
-        text: part.text,
+        text: text.substring(lastIndex),
         size: size,
         font: font,
         bold: bold,
-        highlight: part.isImage ? "yellow" : undefined,
       }),
-  );
+    );
+  }
 
   elements.push(
     new Paragraph({
