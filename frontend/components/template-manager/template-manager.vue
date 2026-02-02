@@ -123,11 +123,16 @@
               <Teleport to="body">
                 <div
                   v-if="openMenuId === `${template.grant_id}-${template.id}`"
+                  class="fixed inset-0 z-40"
+                  @click="closeMenu"
+                ></div>
+                <div
+                  v-if="openMenuId === `${template.grant_id}-${template.id}`"
                   class="fixed bg-white rounded-lg shadow-lg border border-slate-200 z-50 w-48"
                   :style="
                     getMenuPosition(`${template.grant_id}-${template.id}`)
                   "
-                  @click="closeMenu"
+                  @click.stop
                 >
                   <button
                     type="button"
