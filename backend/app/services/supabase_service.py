@@ -418,6 +418,25 @@ class SupabaseService:
         created_by: Optional[str] = None,
     ) -> None:
         """插入章節 Schema 版本記錄。"""
+        # 檢查版本是否已存在以避免重複插入
+        def check_version_exists():
+            response = (
+                self.client
+                .from_("section_schema_versions")
+                .select("id")
+                .eq("section_id", section_id)
+                .eq("template_id", template_id)
+                .eq("grant_id", grant_id)
+                .eq("version", version)
+                .execute()
+            )
+            return len(response.data) > 0
+
+        version_exists = await asyncio.to_thread(check_version_exists)
+        if version_exists:
+            # 版本已存在，跳過插入
+            return
+
         payload: Dict[str, Any] = {
             "section_id": section_id,
             "template_id": template_id,

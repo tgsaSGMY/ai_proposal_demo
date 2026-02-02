@@ -82,6 +82,9 @@
                       dragOverSectionId === section.id
                         ? 'ring-2 ring-indigo-300'
                         : '',
+                      !saving && !loading
+                        ? 'cursor-grab active:cursor-grabbing'
+                        : 'cursor-default',
                     ]"
                     :draggable="!saving && !loading"
                     @dragstart="(event) => handleDragStart(section, event)"
