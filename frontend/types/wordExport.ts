@@ -166,4 +166,5 @@ export interface WordExportConfigEntry {
   createdAt: string;
   createdBy?: string;
   config: WordExportTemplateConfig;
+  section_versions?: Record<string, number>;
 }

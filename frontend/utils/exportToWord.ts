@@ -472,42 +472,82 @@ function parseTimestamp(value?: string | Date | null): number | null {
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 
-function selectConfigByProjectCreatedAt(
+function checkVersionsCompatible(
+  configVersions?: Record<string, number>,
+  projectVersions?: Record<string, number>,
+): boolean {
+  if (!projectVersions || !configVersions) {
+    return true; // 如果其中任一为空，视为兼容
+  }
+
+  // 检查 configVersions 中的所有值是否都 <= projectVersions 对应的值
+  // 这样旧的项目不会套用新的模板
+  for (const sectionId in projectVersions) {
+    const projectVersion = projectVersions[sectionId];
+    const configVersion = configVersions[sectionId];
+
+    // 如果 config 中缺少该 section，或版本号大于 project，则不兼容
+    if (
+      configVersion === undefined ||
+      projectVersion === undefined ||
+      configVersion > projectVersion
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function selectConfigByVersionAndTime(
   configs: Array<{
     id: string;
     createdAt: string;
     config: WordExportTemplateConfig;
+    section_versions?: Record<string, number>;
   }>,
+  projectSectionVersions?: Record<string, number>,
   projectCreatedAt?: string | Date,
 ): WordExportTemplateConfig | null {
   if (!configs.length) {
     return null;
   }
 
-  const sortedAsc = [...configs].sort((a, b) => {
+  const sortedByTime = [...configs].sort((a, b) => {
     const aTime = parseTimestamp(a.createdAt) ?? -Infinity;
     const bTime = parseTimestamp(b.createdAt) ?? -Infinity;
     return aTime - bTime;
   });
 
+  // 首先根据 section_versions 筛选兼容的配置
+  const versionCompatible = sortedByTime.filter((entry) =>
+    checkVersionsCompatible(entry.section_versions, projectSectionVersions),
+  );
+
+  if (versionCompatible.length > 0) {
+    // 如果有兼容的版本，选择其中最新的
+    return versionCompatible[versionCompatible.length - 1]?.config ?? null;
+  }
+
+  // Fallback：如果没有版本兼容的配置，使用原来的按时间对比逻辑
   const projectTime = parseTimestamp(projectCreatedAt);
 
   if (projectTime != null) {
-    const eligible = sortedAsc.filter((entry) => {
+    const timeEligible = sortedByTime.filter((entry) => {
       const entryTime = parseTimestamp(entry.createdAt);
       return entryTime != null && entryTime <= projectTime;
     });
 
-    if (eligible.length) {
-      return eligible[eligible.length - 1]?.config ?? null;
+    if (timeEligible.length) {
+      return timeEligible[timeEligible.length - 1]?.config ?? null;
     }
 
     // 沒有早於專案建立時間的版本時，回退到最早的設定
-    return sortedAsc[0]?.config ?? null;
+    return sortedByTime[0]?.config ?? null;
   }
 
   // 若沒有專案建立時間，使用最新的設定
-  return sortedAsc[sortedAsc.length - 1]?.config ?? null;
+  return sortedByTime[sortedByTime.length - 1]?.config ?? null;
 }
 
 /**
@@ -517,6 +557,7 @@ async function fetchWordExportConfig(
   grantId?: string,
   templateId?: string,
   projectCreatedAt?: string | Date,
+  projectSectionVersions?: Record<string, number>,
 ): Promise<WordExportTemplateConfig | null> {
   if (!grantId || !templateId) return null;
 
@@ -562,6 +603,7 @@ async function fetchWordExportConfig(
       id: string;
       createdAt: string;
       config: WordExportTemplateConfig;
+      section_versions?: Record<string, number>;
     }> | null;
 
     if (!configs || configs.length === 0) {
@@ -569,8 +611,9 @@ async function fetchWordExportConfig(
       return null;
     }
 
-    const selectedConfig = selectConfigByProjectCreatedAt(
+    const selectedConfig = selectConfigByVersionAndTime(
       configs,
+      projectSectionVersions,
       projectCreatedAt,
     );
 
@@ -1462,6 +1505,7 @@ export async function exportPlanToWord(
   templateId?: string,
   projectTitle?: string,
   projectCreatedAt?: string | Date,
+  projectSectionVersions?: Record<string, number>,
 ) {
   // 第一優先級：嘗試從 backend 獲取 word export config
   if (grantId && templateId) {
@@ -1470,6 +1514,7 @@ export async function exportPlanToWord(
         grantId,
         templateId,
         projectCreatedAt,
+        projectSectionVersions,
       );
       if (wordConfig) {
         console.log("Using word export config from backend");

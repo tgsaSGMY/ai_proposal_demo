@@ -665,11 +665,19 @@ async function handleWordEditorSave(config: WordExportTemplateConfig) {
     } = await supabase.auth.getUser();
 
     const clonedConfig = JSON.parse(JSON.stringify(config));
+
+    // 收集所有 section 的當前版本號
+    const sectionVersions: Record<string, number> = {};
+    for (const section of wordEditorSections.value) {
+      sectionVersions[section.id] = section.current_version || 1;
+    }
+
     const newEntry: WordExportConfigEntry = {
       id: createWordConfigVersionId(),
       createdAt: new Date().toISOString(),
       createdBy: user?.email || user?.id || "internal",
       config: clonedConfig,
+      section_versions: sectionVersions,
     };
 
     const nextList = [...(template.word_export_config ?? []), newEntry];
