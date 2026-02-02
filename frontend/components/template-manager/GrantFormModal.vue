@@ -24,7 +24,9 @@
       </div>
       <form class="space-y-4" @submit.prevent="emit('submit')">
         <label class="block space-y-1">
-          <span class="text-sm font-medium text-slate-700">Grant ID</span>
+          <span class="text-sm font-medium text-slate-700"
+            >主题ID（只能包含英文字母、数字和下划线）</span
+          >
           <input
             v-model="grantForm.id"
             type="text"

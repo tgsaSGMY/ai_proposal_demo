@@ -61,7 +61,7 @@ async def create_grant(
 	try:
 		existing = await supabase_service.get_grant_by_id(payload.id)
 		if existing:
-			raise HTTPException(status_code=409, detail="Grant ID already exists")
+			raise HTTPException(status_code=409, detail="Grant ID已经存在")
 
 		record = await supabase_service.create_grant_record(payload.model_dump())
 		if not record:
@@ -138,11 +138,11 @@ async def create_template(
 	try:
 		grant = await supabase_service.get_grant_by_id(payload.grant_id)
 		if not grant:
-			raise HTTPException(status_code=400, detail="Grant not found")
+			raise HTTPException(status_code=400, detail="找不到指定的Grant")
 
 		existing = await supabase_service.get_template_by_id(payload.id, payload.grant_id)
 		if existing:
-			raise HTTPException(status_code=409, detail="Template ID already exists for this grant")
+			raise HTTPException(status_code=409, detail="这个主题的模板 ID 已存在")
 
 		record = await supabase_service.create_plan_template_record(payload.model_dump())
 		if not record:

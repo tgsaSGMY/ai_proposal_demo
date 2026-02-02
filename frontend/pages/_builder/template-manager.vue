@@ -370,6 +370,11 @@ async function handleGrantSubmit() {
     return;
   }
 
+  if (!/^[a-zA-Z0-9_]+$/.test(grantForm.value.id.trim())) {
+    notifyError("Grant ID 只能包含英文字母、數字和底線");
+    return;
+  }
+
   grantSaving.value = true;
   try {
     const payload = {
@@ -444,6 +449,11 @@ async function handleTemplateSubmit() {
     !templateForm.value.name.trim()
   ) {
     notifyError("請至少填寫主題、Template ID 與名稱");
+    return;
+  }
+
+  if (!/^[a-zA-Z0-9_]+$/.test(templateForm.value.id.trim())) {
+    notifyError("Template ID 只能包含英文字母、數字和底線");
     return;
   }
 

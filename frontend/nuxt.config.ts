@@ -18,5 +18,6 @@ export default defineNuxtConfig({
     "/plan-library": { ssr: false },
     "/projects/**": { ssr: false },
     "/": { ssr: false },
+    "/_builder/**": { ssr: false },
   },
 });

@@ -40,7 +40,9 @@
           </select>
         </label>
         <label class="block space-y-1">
-          <span class="text-sm font-medium text-slate-700">模板ID</span>
+          <span class="text-sm font-medium text-slate-700"
+            >模板ID（只能包含英文字母、數字和底線）</span
+          >
           <input
             v-model="templateForm.id"
             type="text"
@@ -77,7 +79,9 @@
           ></textarea>
         </label>
         <div class="md:col-span-2 space-y-2">
-          <div class="flex items-center justify-between text-sm font-medium text-slate-700">
+          <div
+            class="flex items-center justify-between text-sm font-medium text-slate-700"
+          >
             <span>Logo 圖片</span>
             <span class="text-xs font-normal text-slate-400">
               支援 PNG / JPG，建議 1MB 內
@@ -102,7 +106,7 @@
             />
             <template v-if="true">
               <div
-                v-if="localLogoPreview "
+                v-if="localLogoPreview"
                 class="mx-auto mb-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
                 <img
@@ -112,7 +116,6 @@
                   class="h-full w-full object-contain"
                   loading="lazy"
                 />
-              
               </div>
               <p class="text-xs text-slate-500">
                 拖拽檔案到此處，或
@@ -190,13 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  onBeforeUnmount,
-  ref,
-  watch,
-  type PropType,
-} from "vue";
+import { computed, onBeforeUnmount, ref, watch, type PropType } from "vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 
@@ -269,7 +266,7 @@ const remoteLogoPreview = computed(() => {
 });
 
 const activeLogoPreview = computed(
-  () => localLogoPreview.value || remoteLogoPreview.value
+  () => localLogoPreview.value || remoteLogoPreview.value,
 );
 
 const displayStoragePath = computed(() => {
@@ -290,7 +287,7 @@ watch(
       resetLocalPreview();
       isDraggingLogo.value = false;
     }
-  }
+  },
 );
 
 function openFilePicker() {
@@ -331,7 +328,10 @@ function handleLogoSelection(file: File) {
 }
 
 function sanitizeTemplateId(rawId: string) {
-  return rawId.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+  return rawId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, "-");
 }
 
 function resolveFileExtension(file: File): string {
