@@ -327,19 +327,25 @@ const modelGroups = ref([
     models: [
       { value: "gpt-5.2", label: "gpt-5.2" },
       { value: "gpt-5.1", label: "gpt-5.1" },
-      { value: "gpt-5-mini", label: "gpt-5-mini（目前内部人員）" },
+      { value: "gpt-5-mini", label: "gpt-5-mini" },
       { value: "gpt-5-nano", label: "gpt-5-nano" },
       { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
-      { value: "gpt-4.1-nano", label: "gpt-4.1-nano(目前外部人員)" },
+      { value: "gpt-4.1-nano", label: "gpt-4.1-nano" },
     ],
   },
   {
     label: "Gemini 模型",
     models: [
       { value: "gemini-3-pro-preview", label: "gemini-3-pro-preview" },
-      { value: "gemini-3-flash-preview", label: "gemini-3-flash-preview" },
+      {
+        value: "gemini-3-flash-preview",
+        label: "gemini-3-flash-preview（内部模型）",
+      },
       { value: "gemini-2.5-pro", label: "gemini-2.5-pro" },
-      { value: "gemini-2.5-flash", label: "gemini-2.5-flash" },
+      {
+        value: "gemini-2.5-flash-lite",
+        label: "gemini-2.5-flash-lite(外部模型)",
+      },
     ],
   },
 ]);
@@ -994,9 +1000,33 @@ async function handleVersionRevision(payload: {
   showLoading("正在優化計畫版本...", true);
   finalPlanContent.value = {};
   candidatePlan.value = {};
-  lastGenerationPrompt.value = `版本更新：${
-    payload.version.title || payload.version.id || "unknown"
-  }`;
+
+  // 构建完整的版本更新提示词，包括计划名称、摘要和 stored answer
+  const projectTitle = projectRecord.value?.title || "無";
+  const projectSummary = projectRecord.value?.description || "無";
+  // 格式化 stored answer，类似 Chatbox 中的处理方式
+  // stored_answer 可能是 { user_input: { ...answers }, ...other_fields }
+  const storedAnswerObj = projectRecord.value?.stored_answer || {};
+  const answersToFormat =
+    storedAnswerObj.user_input || storedAnswerObj.chat_answers || {};
+  console.log("Stored answers for revision:", answersToFormat);
+
+  const storedAnswerText = Object.entries(answersToFormat || {})
+    .map(([key, value]) => {
+      if (!key || !value) return null;
+      const text = (value as any)?.reply ?? value;
+      return `【${key}】\n${text}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  lastGenerationPrompt.value =
+    "計劃名稱: " +
+    projectTitle +
+    "\n\n計劃摘要: " +
+    projectSummary +
+    "\n\n" +
+    (storedAnswerText ? storedAnswerText : "");
 
   try {
     const {
