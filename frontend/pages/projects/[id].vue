@@ -249,6 +249,7 @@ useHead(() => ({
 // 设置中间件验证，确保用户已登陆
 definePageMeta({
   middleware: "auth",
+  ssr: false,
 });
 
 // ===== 项目接口类型定义 =====
