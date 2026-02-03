@@ -155,7 +155,6 @@
                     class="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-100 bg-white py-2 text-sm shadow-xl"
                   >
                     <button
-                      v-if="isInternal"
                       class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
                       @click="openGenerateImage(project)"
                     >
@@ -632,11 +631,11 @@ function openEdit(project: ProjectCard) {
  */
 function openGenerateImage(project: ProjectCard) {
   // runtime guard: only internal users can open the image generator
-  if (!isInternal.value) {
-    notifyError("僅限內部人員使用圖片生成功能");
-    menuOpenId.value = null;
-    return;
-  }
+  // if (!isInternal.value) {
+  //   notifyError("僅限內部人員使用圖片生成功能");
+  //   menuOpenId.value = null;
+  //   return;
+  // }
 
   selectedProjectForImage.value = project;
   isImageGeneratorOpen.value = true;
