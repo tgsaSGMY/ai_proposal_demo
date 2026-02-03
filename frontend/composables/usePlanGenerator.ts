@@ -101,7 +101,7 @@ export function usePlanGenerator() {
     createEmptyDynamicValues({
       templateId: selectedTemplateId.value,
       templateGrantId: selectedGrantId.value,
-    })
+    }),
   );
   // 存储生成的方案内容（按部分存储）
   const planContent: Ref<PlanContent> = ref({});
@@ -130,7 +130,7 @@ export function usePlanGenerator() {
     if (!selectedTemplateId.value) return [];
     // 查找选中模板对应的对象
     const template = availableTemplates.value.find(
-      (t) => t.id === selectedTemplateId.value
+      (t) => t.id === selectedTemplateId.value,
     );
     // 返回该模板的所有部分，如果未找到则返回空数组
     return template ? template.sections : [];
@@ -238,7 +238,7 @@ export function usePlanGenerator() {
         }
 
         // 将部分名称和所有填写的字段拼接在一起
-        return `◆ ${section.sectionName}\n${filledFields.join("\n\n")}`;
+        return `${section.sectionName}\n${filledFields.join("\n\n")}`;
       })
       // 过滤掉 null 值，只保留有内容的部分
       .filter((item): item is string => Boolean(item))
@@ -247,7 +247,7 @@ export function usePlanGenerator() {
 
     // 如果有详细补充信息，添加到最终输入中
     if (additionalDetails) {
-      finalInput += `--- 詳細補充信息 ---\n${additionalDetails}`;
+      finalInput += `\n\n${additionalDetails}`;
     }
 
     // 第 3 部分：添加额外的参考资料摘要（如果有的话）
@@ -291,7 +291,6 @@ export function usePlanGenerator() {
       apiBaseUrl: config.public.apiBaseUrl,
       templateId: selection.templateId,
       templateGrantId: selection.grantId,
-      forceRefresh: false,
     }).catch((error) => {
       // 如果加载失败，打印错误但不中断程序流程
       console.error("Failed to load schema for selected template:", error);

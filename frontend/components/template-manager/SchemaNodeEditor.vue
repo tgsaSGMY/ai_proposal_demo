@@ -200,12 +200,12 @@ const typeOptions: SchemaNodeType[] = [
 ];
 
 const typeLabels: Record<SchemaNodeType, string> = {
-  string: "文字",
-  number: "數值",
+  string: "文字欄位",
+  number: "數字",
   integer: "整數",
-  boolean: "布林",
-  object: "物件",
-  array: "列表",
+  boolean: "是非題",
+  object: "複合欄位",
+  array: "清單",
 };
 
 const node = computed(() => props.node);

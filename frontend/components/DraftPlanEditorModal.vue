@@ -444,13 +444,13 @@ function buildFinalUserInputForGeneration(summaries = []) {
         return null;
       }
 
-      return `◆ ${section.sectionName}\n${filledFields.join("\n\n")}`;
+      return `${section.sectionName}\n${filledFields.join("\n\n")}`;
     })
     .filter((item) => Boolean(item))
     .join("\n\n");
 
   if (additionalDetails) {
-    finalInput += `--- 詳細補充信息 ---\n${additionalDetails}`;
+    finalInput += `\n${additionalDetails}`;
   }
 
   if (summaries && summaries.length > 0) {
