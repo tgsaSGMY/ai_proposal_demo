@@ -95,6 +95,7 @@
           下載報告
         </button>
         <button
+          v-if="isInternal"
           type="button"
           class="rounded-full border border-[#ffd4c8] px-6 py-2 text-sm font-semibold text-[#ff6b5c] hover:bg-[#fff8f6] transition disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="timelineLoading || !version"
@@ -124,6 +125,7 @@ const props = defineProps({
   planSections: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   timelineLoading: { type: Boolean, default: false },
+  isInternal: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -172,7 +174,7 @@ function generateHtmlForSection(section, content) {
         [section.id]: {
           content,
         },
-      }
+      },
     );
   } catch (error) {
     console.error("無法渲染章節", section?.id, error);

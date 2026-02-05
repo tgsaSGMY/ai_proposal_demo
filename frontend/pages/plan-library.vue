@@ -296,7 +296,6 @@
       />
 
       <PlanImageGeneratorModal
-        v-if="isInternal"
         v-model:model-value="isImageGeneratorOpen"
         :project-id="selectedProjectForImage?.id"
         @generate="handleImageGenerate"

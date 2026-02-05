@@ -271,6 +271,7 @@
       :plan-sections="sections"
       :loading="isGenerating"
       :timeline-loading="timelineLoading"
+      :is-internal="isInternal"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
       @updateVersion="handleVersionUpdateRequest"
@@ -322,6 +323,7 @@ import EditFieldModal from "~/components/editor/helper/EditFieldModal.vue";
 import RecommendNameModal from "~/components/editor/helper/RecommendNameModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
+import { useInternalCheck } from "~/composables/useInternalCheck";
 import {
   buildDynamicSections,
   createEmptyDynamicValues,
@@ -354,6 +356,7 @@ const showSidebar = computed(() => Boolean(props.showSidebar));
 
 const { confirm } = useConfirm();
 const { error: notifyError } = useNotifications();
+const { checkIsInternal } = useInternalCheck();
 
 const emit = defineEmits([
   "generatePlan",
@@ -419,6 +422,7 @@ const projectRealtimeChannel = ref(null);
 const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
 const timelineLoading = ref(false);
+const isInternal = ref(false);
 const textareaMinHeight = 64; // 4rem base height
 const textareaMaxHeight = 184; // 約 11.5rem 上限
 
@@ -1477,11 +1481,14 @@ async function teardownRealtimeSubscription() {
 }
 
 // 組件掛載時初始化 WebSocket 連接和項目狀態，發送引導問題列表事件
-onMounted(() => {
+onMounted(async () => {
   chatInitialized.value = true;
   emit("guidedQuestionsUpdated", guidedQuestions);
   scrollToBottom();
   autoResizeTextarea();
+
+  // 检查用户是否是 internal
+  isInternal.value = await checkIsInternal();
 
   // 初始化 WebSocket 连接（虚拟问题用于建立连接）
   if (props.grantId && props.templateId) {
