@@ -15,6 +15,7 @@ from app.api import (
     dynamic_section,
     section_recommender,
     template_manager,
+    usage_log,
 )
 from app.core.lifecycle import startup_event_handler, shutdown_event_handler
 
@@ -58,6 +59,7 @@ app.include_router(images.router)
 app.include_router(dynamic_section.router)
 app.include_router(section_recommender.router)
 app.include_router(template_manager.router)
+app.include_router(usage_log.router)
 
 @app.get("/", tags=["Root"])
 async def read_root():

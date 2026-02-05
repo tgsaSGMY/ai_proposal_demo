@@ -301,6 +301,26 @@
                 </svg>
                 <span>數據庫更新</span>
               </NuxtLink>
+
+              <NuxtLink
+                to="/_builder/usage-analytics"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                active-class="bg-gray-900 text-white shadow-md"
+                @click.native="handleNavClick"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"
+                  />
+                </svg>
+
+                <span>用量分析</span>
+              </NuxtLink>
             </div>
           </template>
 
