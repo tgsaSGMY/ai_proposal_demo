@@ -182,7 +182,7 @@ async def scrape_and_analyze(
 
         # 5️⃣ 調用 LLM API
         async with httpx.AsyncClient(timeout=180.0) as client:
-            summary_raw, llm_error = await llm_service.call_external_api(
+            summary_raw, llm_error, response_json = await llm_service.call_external_api(
                 client,
                 model_to_use,
                 messages,
@@ -195,7 +195,8 @@ async def scrape_and_analyze(
         if summary_raw is None:
             raise HTTPException(status_code=500, detail="LLM 回傳內容為空。")
 
-        await supabase_service.log_cost_usage(user_id, model_to_use, messages, summary_raw)
+        # if response_json and model_to_use.get('type') == 'external':
+        #     await supabase_service.log_cost_usage(user_id, model_to_use, response_json)
 
         try:
             parsed_summary = json.loads(summary_raw)

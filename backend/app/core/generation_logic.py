@@ -73,15 +73,12 @@ async def internal_generate_synthetic_input(
     
     async with httpx.AsyncClient(timeout=120.0) as client:
         messages = [{"role": "user", "content": prompt}]
-        raw_output, error = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
+        raw_output, error, response_json = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
 
         if error:
             raise HTTPException(status_code=500, detail=error.get("error", "Failed to generate synthetic input."))
          
-        response_json, parse_error = extract_json_block(raw_output, "synthetic_input")
+        response_json_parsed, parse_error = extract_json_block(raw_output, "synthetic_input")
         if parse_error:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM JSON output: {parse_error}")
-
-        await supabase_service.log_cost_usage(req.user_id, model_info, messages, raw_output)
-
-        return response_json
+        return response_json_parsed

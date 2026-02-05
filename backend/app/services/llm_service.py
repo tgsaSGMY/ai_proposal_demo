@@ -30,6 +30,7 @@ class LLMService:
         self.max_retries = 3
         self.initial_retry_delay = 1  # 秒
         self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
+        self._last_response_json = {}  # 用於儲存最後一次API呼叫的完整響應
 
     @staticmethod
     def _extract_openai_response_text(payload: Dict[str, Any]) -> str:
@@ -70,6 +71,50 @@ class LLMService:
             return "openai"
         else:
             return "openai"  # Default to openai
+
+    def _get_model_cost_info(self, model_id: str) -> Dict[str, float]:
+        """取得模型的成本資訊（每百萬tokens的美元成本）
+        
+        Returns:
+            {
+                "input": input_cost_per_million,
+                "output": output_cost_per_million
+            }
+        """
+        # OpenAI 模型成本（USD per 1M tokens）
+        openai_costs = {
+            "gpt-5.2": {"input": 1.75, "output": 14.00},
+            "gpt-5.1": {"input": 1.25, "output": 10.00},
+            "gpt-5": {"input": 1.25, "output": 10.00},
+            "gpt-5-mini": {"input": 0.25, "output": 2.00},
+            "gpt-5-nano": {"input": 0.05, "output": 0.40},
+            "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+            "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+        }
+        
+        # Gemini 模型成本（USD per 1M tokens）
+        gemini_costs = {
+            "gemini-3-pro-preview": {"input": 2.00, "output": 12.00},
+            "gemini-3-flash-preview": {"input": 0.50, "output": 3.00},
+            "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+            "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+        }
+        
+        # 合併所有成本資訊
+        all_costs = {**openai_costs, **gemini_costs}
+        
+        # 優先精確匹配，然後嘗試前綴匹配
+        if model_id in all_costs:
+            return all_costs[model_id]
+        
+        # 前綴匹配（例如 "gpt-5-mini" 匹配 "gpt-5-mini"）
+        for model_name, cost in all_costs.items():
+            if model_id.startswith(model_name):
+                return cost
+        
+        # 默認成本（如果找不到）
+        logger.warning(f"Cost info not found for model {model_id}, using default")
+        return {"input": 0.0, "output": 0.0}
 
 
     async def _format_few_shot_examples(self, user_input: str, section_details: SectionConfig, supabase_service: "SupabaseService") -> str:
@@ -206,7 +251,12 @@ class LLMService:
         raise ValueError(f"Unsupported external provider: {provider}")
 
     async def stream_external_api(self, session: httpx.AsyncClient, model_info: Dict, messages: List[Dict]):
-        """流式調用 OpenAI GPT-4o-mini，逐段推送 delta。"""
+        """流式調用 OpenAI GPT-4o-mini，逐段推送 delta。
+        
+        為了支持成本記錄，此方法返回一個包含：
+        - 文本塊（通過 yield）
+        - 最終響應對象（設置到 self._last_response_json）
+        """
         provider = model_info.get("provider")
         if provider != "openai":
             raise ValueError(f"Streaming only supported for OpenAI, got {provider}")
@@ -220,10 +270,12 @@ class LLMService:
             "model": model_info.get("id"),
             "messages": messages,
             "stream": True,
+            "stream_options": {"include_usage": True}
             # "temperature": 0.7,
         }
         
         try:
+            last_response_json = {}
             async with session.stream("POST", url, json=payload, headers=headers, timeout=300) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
@@ -239,12 +291,22 @@ class LLMService:
                     
                     try:
                         chunk = json.loads(data_str)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield content
+                        # 保存最後一條包含usage的響應（包括choices為空但有usage的最後chunk）
+                        if "usage" in chunk:
+                            last_response_json = chunk
+                        
+                        # 安全地提取delta內容，處理空choices陣列
+                        choices = chunk.get("choices", [])
+                        if choices and len(choices) > 0:
+                            delta = choices[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield content
                     except json.JSONDecodeError:
                         continue
+            
+            # 保存最終響應供外部使用
+            self._last_response_json = last_response_json
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
             raise
@@ -257,8 +319,15 @@ class LLMService:
         is_json_output: bool = False,
         enable_grounding: bool = False,
         response_hook: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Tuple[Optional[str], Optional[Dict]]:
-        """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。"""
+    ) -> Tuple[Optional[str], Optional[Dict], Optional[Dict]]:
+        """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。
+        
+        Returns:
+            Tuple of (text_output, error_dict, response_json)
+            - text_output: 提取的文本輸出
+            - error_dict: 錯誤信息（如果有）
+            - response_json: 完整的 API 響應（用於提取 token 計數）
+        """
         async with self.request_semaphore:  # 限制并发请求数
             for attempt in range(self.max_retries): 
                 try:
@@ -286,13 +355,13 @@ class LLMService:
                         content = response_json.get("candidates", [{}])[0].get("content", {})
                         parts = content.get("parts", [{}])
                         text = parts[0].get("text", "") if parts else ""
-                        return text, None
+                        return text, None, response_json
                     elif provider == "openai":
                         text_output = self._extract_openai_response_text(response_json)
-                        return text_output, None
+                        return text_output, None, response_json
                     else:
                         # Ollama 或其他 Chat-Completions 相容 API
-                        return response_json["choices"][0]["message"]["content"], None
+                        return response_json["choices"][0]["message"]["content"], None, response_json
                     
                 except httpx.HTTPStatusError as e:
                     # 处理 429 速率限制错误
@@ -314,22 +383,22 @@ class LLMService:
                         else:
                             error_msg = f"API rate limited (429) for model {model_info.get('id')} after {self.max_retries} attempts"
                             logger.error(error_msg)
-                            return None, {"error": error_msg}
+                            return None, {"error": error_msg}, None
                     
                     # 其他 HTTP 错误
                     error_msg = f"API call failed for model {model_info.get('id')}: {e}"
                     logger.error(error_msg, exc_info=True)
-                    return None, {"error": error_msg}
+                    return None, {"error": error_msg}, None
                     
                 except ValueError as e:
                     error_msg = f"Configuration error for model {model_info.get('id')}: {e}"
                     logger.error(error_msg, exc_info=True)
-                    return None, {"error": error_msg}
+                    return None, {"error": error_msg}, None
                     
                 except Exception as e:
                     error_msg = f"An unexpected error occurred during API call: {repr(e)}"
                     logger.error(error_msg, exc_info=True)
-                    return None, {"error": error_msg}
+                    return None, {"error": error_msg}, None
 
     @staticmethod
     def _extract_external_sources(provider: Optional[str], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -448,7 +517,7 @@ class LLMService:
     
     def _optimize_image_prompt(self, description: str) -> str:
         """優化圖片描述為詳細的 prompt（繁體中文專業版本）"""
-        return f"""請生成一張專業、高品質的圖片，用於企劃書或商務提案文件中：
+        return f"""請生成一張專業、高品質的圖片：
 
 圖片描述：{description}
 
@@ -461,8 +530,12 @@ class LLMService:
         self,
         prompt: str,
         image=None,
-    ) -> tuple[Optional[bytes], Optional[str]]:
-        """使用 Google Gemini API 呼叫圖片生成（imagen-4.0-generate-001）"""
+    ) -> tuple[Optional[bytes], Optional[str], Optional[Dict]]:
+        """使用 Google Gemini API 呼叫圖片生成（imagen-4.0-generate-001）
+        
+        Returns:
+            (image_bytes, error_msg, response_json)
+        """
         try:
             if not GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY not set")
@@ -492,14 +565,27 @@ class LLMService:
                     break
             
             if not image_bytes:
-                return None, "No image generated"
+                return None, "No image generated", None
             
-            return image_bytes, None
+            # 構建響應 JSON 格式（用於成本記錄）
+            response_json = {}
+            try:
+                if hasattr(response, 'usage_metadata'):
+                    response_json = {
+                        "usageMetadata": {
+                            "promptTokenCount": response.usage_metadata.prompt_token_count,
+                            "candidatesTokenCount": response.usage_metadata.candidates_token_count,
+                        }
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to extract usage metadata: {e}")
+            
+            return image_bytes, None, response_json
                 
         except Exception as e:
             error_msg = f"Failed to generate image: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return None, error_msg
+            return None, error_msg, None
     
     async def generate_section_content(
         self,  
@@ -533,12 +619,14 @@ class LLMService:
 
         # 2. --- 路由与配额检查 ---
         if selected_model:
-            # 根据 model_id 判断 provider
+            # 根据 model_id 判断 provider，並取得成本資訊
             provider = self._get_provider_for_model(selected_model)
+            cost_info = self._get_model_cost_info(selected_model)
             original_model_info = {
                 "id": selected_model,
                 "provider": provider,
-                "type": "external"
+                "type": "external",
+                "cost_info": cost_info
             }
         else:
             original_model_info = resolve_model(grant_id, template_id, section_id, app_state, is_external=is_external)
@@ -593,7 +681,7 @@ class LLMService:
 
         response_hook = capture_response_sources if enable_grounding else None
 
-        raw_output, llm_error = await self.call_external_api(
+        raw_output, llm_error, response_json = await self.call_external_api(
             http_session,
             model_to_use,
             messages,
@@ -606,7 +694,9 @@ class LLMService:
             error_message = llm_error.get("error")
         else:
             final_content_json, parse_error = extract_json_block(raw_output, section_id)
-            # await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
+            # Log cost usage with response JSON that contains token counts
+            if response_json and model_to_use.get('type') == 'external':
+                await supabase_service.log_cost_usage(user_id, model_to_use, response_json, project_id=project_id, action="生成企劃書章節")
             if parse_error:
                 error_message = parse_error.get("error")
             else:

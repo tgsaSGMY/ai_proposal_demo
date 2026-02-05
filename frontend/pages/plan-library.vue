@@ -766,13 +766,14 @@ async function handleDelete(project: ProjectCard) {
     }
 
     const response = await fetch(`${API_BASE_URL}/projects/${project.id}`, {
-      method: "DELETE",
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ is_deleted: true }),
     });
-    if (!response.ok && response.status !== 204) {
+    if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || "刪除計畫失敗");
     }

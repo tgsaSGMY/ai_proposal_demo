@@ -282,6 +282,7 @@
       field-description="上傳文件後可自動擷取內容填入訊息"
       :field-label="fileImportFieldLabel"
       :field-value="fileImportInitialValue"
+      :project-id="props.projectId"
       @confirm="handleFileImportConfirm"
     />
 
@@ -1078,9 +1079,19 @@ async function requestGeneration() {
   recommendOptions.value = [];
 
   try {
+    // Get access token from Supabase session
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token || "";
+
+    const headers = { "Content-Type": "application/json" };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const resp = await fetch(`${API_BASE_URL}/recommend_project_names`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         current_answers: questionAnswers.value,
         project_title: props.projectTitle || "",
@@ -1088,6 +1099,7 @@ async function requestGeneration() {
         template_name: props.templateName || "",
         grant_id: props.grantId || "",
         template_id: props.templateId || "",
+        project_id: props.projectId || "",
       }),
     });
     const data = await resp.json().catch(() => null);

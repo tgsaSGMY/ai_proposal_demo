@@ -58,7 +58,7 @@ async def recommend_sections(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            llm_output, llm_error = await llm_service.call_external_api(
+            llm_output, llm_error, _ = await llm_service.call_external_api(
                 client, MODEL_INFO, messages, is_json_output=False
             )
     except Exception as exc:  # pragma: no cover - log unexpected runtime issues

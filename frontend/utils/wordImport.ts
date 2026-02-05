@@ -1,6 +1,7 @@
 // ===== 导入依赖库 =====
 // 导入 mammoth 库用于从 Word 文件中提取文本
 import mammoth from "mammoth";
+import { supabase } from "~/utils/supabaseClient";
 
 // ===== Word 文件文本提取 =====
 
@@ -80,7 +81,7 @@ export async function callAutoFillApi(
     }>;
     user_id: string; // 当前用户 ID
   },
-  apiBaseUrl: string // 后端 API 基础 URL
+  apiBaseUrl: string, // 后端 API 基础 URL
 ): Promise<Record<string, any>> {
   // ===== 构建请求 Payload =====
   // 添加 main_idea 对象（用于后端生成计划名称和摘要）
@@ -108,10 +109,23 @@ export async function callAutoFillApi(
     prompt_mode: "word_import", // 标记这是 Word 导入模式
   };
 
+  // ===== 获取认证令牌 =====
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token || "";
+
   // ===== 发送 API 请求 =====
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${apiBaseUrl}/autofill_from_document`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(updatedPayload),
   });
 
@@ -219,9 +233,9 @@ export function processAutoFillResults(
   updateDynamicValue: (
     sectionId: string,
     propertyKey: string,
-    value: string
+    value: string,
   ) => void,
-  ensureFieldExpanded: (sectionId: string, propertyKey: string) => void
+  ensureFieldExpanded: (sectionId: string, propertyKey: string) => void,
 ): void {
   // ===== 验证响应格式 =====
   if (!filledContent || typeof filledContent !== "object") {
@@ -266,7 +280,7 @@ export function processAutoFillResults(
         } else {
           // 否则获取对象中的第一个非空字符串值
           const firstStringEntry = Object.values(rawFieldContent).find(
-            (entry) => typeof entry === "string" && entry.trim() !== ""
+            (entry) => typeof entry === "string" && entry.trim() !== "",
           );
           if (typeof firstStringEntry === "string") {
             value = firstStringEntry;

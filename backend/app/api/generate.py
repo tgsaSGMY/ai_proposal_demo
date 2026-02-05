@@ -1,5 +1,5 @@
 # 使用ai生成内容功能的api
-
+from io import BytesIO
 import asyncio
 import copy
 import httpx
@@ -53,6 +53,37 @@ ALLOWED_FILE_SUFFIXES = {
     ".png",
 }
 MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard cap
+
+HIDDEN_REPLY_BLOCK_PATTERN = re.compile(
+    r"【回復結束】【隱藏回復欄位\+答案】(.*?)【隱藏回復結束】",
+    re.DOTALL,
+)
+RESPONSE_END_MARKER = "【回復結束】"
+
+def extract_hidden_field_responses(text: Optional[str]) -> Dict[str, str]:
+    if not text:
+        return {}
+    match = HIDDEN_REPLY_BLOCK_PATTERN.search(text)
+    if not match:
+        return {}
+    block_content = match.group(1)
+    extracted: Dict[str, str] = {}
+    for raw_line in block_content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("-"):
+            line = line[1:].strip()
+        if not line:
+            continue
+        if " -- " not in line:
+            continue
+        field_id, value = line.split(" -- ", 1)
+        field_key = field_id.strip()
+        field_value = value.strip()
+        if field_key:
+            extracted[field_key] = field_value
+    return extracted
 
 # ========== Helper Functions for System Prompts ==========
 
@@ -885,6 +916,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
         "id": "gpt-5.1-chat-latest",
         "provider": "openai",
         "type": "external",
+        "cost_info":{
+            "input": 1.25,
+            "output": 10
+        }
     }
     
     project_id = ""
@@ -959,52 +994,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                 )
         except Exception as exc:
             logger.error(f"DB Save Error: {exc}")
-
-    # --- 分析用户意图 (注入历史) ---
-    async def analyze_user_input(history: list, client: httpx.AsyncClient):
-        # 注意：这里的 history 此时已经包含了 [User Message, AI Message]
-        
-        q_desc, a_desc, _, _ = format_qa_descriptions(all_questions, current_answers)
-        # System Prompt: 侧重于从"对话交互"中提取，而不仅仅是用户输入
-        system_prompt = f"""
-        你是一個資料歸檔員，負責從最新對話中提取已確認的欄位資訊。
-
-        【欄位定義】
-        {q_desc}
-
-        【目前已填欄位】
-        {a_desc}
-
-        【核心規則】
-        1. 參考用戶輸入 + 助理回覆，以助理的確認為準
-        2. 若用戶輸入「無」且助理未追問，該欄位的答案就是「無」
-        3. 檢查前幾個對話中是否有遺漏未提取的欄位，一併提取。如果確認已經提取過的，那就不要重複提取
-        4. 不提取「助理剛詢問但用戶未回答」的欄位
-
-        【輸出格式】
-        僅輸出 JSON：
-        {{
-        "filled_fields": {{ "field_id": "提取的内容" }}
-        }}
-        """
-        
-        # 构建 Messages: 取最近的对话记录 (比如最近 4 条足矣: User -> AI -> User -> AI)
-        messages = get_chat_messages(system_prompt, history, limit=4)
-
-        resp, error = await llm_service.call_external_api(
-            client, model_info, messages, is_json_output=True
-        )
-        
-        if error:
-            logger.error(f"Analysis failed: {error}")
-            return {}
-        
-        try:
-            data = json.loads(resp)
-            return data.get("filled_fields", {})
-        except:
-            return {}
-        
+ 
     # --- 生成回答 (注入历史) ---
     async def stream_ai_reply(user_msg: str, history: list, needs_clarification: bool, client: httpx.AsyncClient, grant_name: str, paused_flag: dict):
       
@@ -1056,6 +1046,14 @@ async def websocket_chat_guidance(websocket: WebSocket):
     在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計劃書內容。
     完成後，推薦用戶點擊右下角的「輸出完整推演」按鈕來產出完整計劃書文本，不需要推薦幫忙其他東西了，因爲你負責的是完善欄位，而這時候你的任務完成了。
     
+    【隱藏回復欄位格式】
+    - 當你確認某個欄位已完成或你代為生成了內容或優化內容時，請在可見回覆結束後追加一段隱藏資訊，必須要和你回復用戶的資訊一摸一樣。
+    - 不需要畫分割綫，首行輸出 `【回復結束】【隱藏回復欄位+答案】`，末行輸出 `【隱藏回復結束】`。
+    - 隱藏段落中每行輸出 `欄位ID -- 答案內容`（用雙空格加連字號來分隔），可列出多個欄位。
+    - 欄位 ID 請使用系統提供的問題 ID（例如 三、解決辦法::商業模式運作流程），不要自行取名。
+    - 這些標記只供系統讀取，前端會自動隱藏，因此務必正確輸出。
+    - 這段文字僅供系統讀取，前端會自動隱藏，因此務必精準輸出。
+
     【排版】
     排版不要那麽鬆散，盡量維持緊凑。
     如果是重點内容/副標題，請使用「粗體」標記。
@@ -1155,6 +1153,17 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     grant_name,
                     paused_flag,
                 )
+                
+                # 記錄成本使用
+                if user_id:
+                    try:
+                        response_json = getattr(llm_service, '_last_response_json', {})
+                        print(response_json)
+                        if response_json:
+                            await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=project_id, action="生成對話")
+                    except Exception as e:
+                        logger.warning(f"Failed to log cost usage for initial greeting: {e}", exc_info=True)
+                
                 if first_reply:
                     conversation_history_records.append(build_history_entry("assistant", first_reply))
                     await save_state_to_db()
@@ -1224,6 +1233,15 @@ async def websocket_chat_guidance(websocket: WebSocket):
                         paused_flag,
                     )
 
+                    # 記錄成本使用
+                    if user_id and model_info.get('type') == 'external':
+                        try:
+                            response_json = getattr(llm_service, '_last_response_json', {})
+                            if response_json:
+                                await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=project_id, action="生成對話")
+                        except Exception as e:
+                            logger.warning(f"Failed to log cost usage: {e}", exc_info=True)
+
                     # If paused_flag was triggered during streaming, the stream has been cancelled
                     if paused_flag.get("value"):
                         # reset the flag and skip saving this user/assistant exchange
@@ -1237,9 +1255,9 @@ async def websocket_chat_guidance(websocket: WebSocket):
                         conversation_history_records.append(build_history_entry("assistant", ai_reply))
 
                     # Background extraction
-                    filled = await analyze_user_input(conversation_history_records, client)
-                    if filled:
-                        clean_filled = normalize_filled_fields(filled, all_questions)
+                    hidden_answers = extract_hidden_field_responses(ai_reply)
+                    if hidden_answers:
+                        clean_filled = normalize_filled_fields(hidden_answers, all_questions)
                         logger.info(f"Normalized fields: {clean_filled}")
                         current_answers.update(clean_filled)
                         for field_id in clean_filled.keys():
@@ -1398,7 +1416,7 @@ async def generate_synthetic_input(
     try:
         async with httpx.AsyncClient() as client:
             messages = [{"role": "user", "content": prompt}]
-            response, error = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
+            response, error, _ = await llm_service.call_external_api(client, model_info, messages, is_json_output=True)
 
             
             response_text = response
@@ -1423,6 +1441,7 @@ async def recommend_project_names(
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
+    user_id: str = Depends(get_current_user_id),
 ):
     # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
@@ -1437,6 +1456,7 @@ async def recommend_project_names(
     template_name = payload.get("template_name", "") or ""
     grant_id = payload.get("grant_id", "") or ""
     template_id = payload.get("template_id", "") or ""
+    project_id = payload.get("project_id", "") or ""
 
     name_config: Optional[Dict[str, Any]] = None
     if grant_id and template_id:
@@ -1550,7 +1570,7 @@ async def recommend_project_names(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            response, error = await llm_service.call_external_api(
+            response, error, response_json = await llm_service.call_external_api(
                 client, model_info, messages, is_json_output=True
             )
 
@@ -1571,6 +1591,11 @@ async def recommend_project_names(
                         cleaned.append(s)
                     if len(cleaned) >= 5:
                         break
+                
+                # Log cost usage
+                if response_json and model_info.get('type') == 'external':
+                    await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=project_id, action="推薦企劃書名稱")
+                
                 return {"names": cleaned}
             except Exception as ex:
                 logger.error(f"Failed to parse recommendation response: {ex}")
@@ -1634,7 +1659,7 @@ async def autofill_from_document(
 
     try:
         async with httpx.AsyncClient(timeout=180.0) as client:
-            raw_output, llm_error = await llm_service.call_external_api(
+            raw_output, llm_error, response_json = await llm_service.call_external_api(
                 client, 
                 model_to_use,  
                 messages,  
@@ -1657,7 +1682,8 @@ async def autofill_from_document(
                 logger.warning(f"Missing section in LLM output: {section_id}")
                 formatted_result[section_id] = {"content": {}}
 
-        await supabase_service.log_cost_usage(user_id, model_to_use, messages, raw_output)
+        # if response_json and model_to_use.get('type') == 'external':
+        #     await supabase_service.log_cost_usage(user_id, model_to_use, response_json)
 
         return formatted_result
 
@@ -1734,7 +1760,7 @@ async def generate_field_content(
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response, error = await llm_service.call_external_api(
+            response, error, _ = await llm_service.call_external_api(
                 client,
                 model_info,
                 [
@@ -1778,6 +1804,9 @@ async def field_file_analysis(
     field_description: str = Form(""),
     subfield_label: str = Form(""),
     current_value: str = Form(""),
+    project_id: str = Form(""),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+    user_id: str = Depends(get_current_user_id),
 ):
     # 上傳 PDF / TXT / PPT / PPTX / JPG / JPEG / PNG 等檔案，使用 OpenAI Responses API 針對指定欄位進行 AI 輔助分析，生成豐富的欄位內容
     if not OPENAI_API_KEY:
@@ -1861,11 +1890,21 @@ async def field_file_analysis(
                         "file_id": file_info["file_id"]
                     })
 
+            model_info = {
+                "id": "gpt-4.1-mini",
+                "provider": "openai",
+                "type": "external",
+                "cost_info":{
+                    "input": 0.40,
+                    "output": 1.60
+                }
+            }
+
             responses_resp = await client.post(
                 OPENAI_RESPONSES_ENDPOINT,
                 headers={**headers, "Content-Type": "application/json"},
                 json={
-                    "model": "gpt-4.1-mini",
+                    "model": model_info["id"],
                     "input": [
                         {
                             "role": "user",
@@ -1879,8 +1918,13 @@ async def field_file_analysis(
             )
             responses_resp.raise_for_status()
 
-            output_text = _extract_output_text(responses_resp.json())
+            response_json = responses_resp.json()
+            output_text = _extract_output_text(response_json)
             parsed = json.loads(output_text)
+            
+            # Log cost usage for file analysis
+            if response_json and model_info.get('type') == 'external':
+                await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=project_id, action="欄位OCR分析")
 
     except httpx.HTTPStatusError as e:
         detail = e.response.text if e.response else str(e)

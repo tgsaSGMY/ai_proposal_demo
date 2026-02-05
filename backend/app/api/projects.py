@@ -37,6 +37,7 @@ class ProjectUpdateRequest(BaseModel):
     grant_id: Optional[str] = Field(default=None, max_length=255)
     template_id: Optional[str] = Field(default=None, max_length=255)
     plan_type_id: Optional[str] = Field(default=None, max_length=255)
+    is_deleted: Optional[bool] = None  # 用於軟刪除
 
 
 def _resolve_version_index(
@@ -237,6 +238,20 @@ async def update_project(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 更新指定專案的內容，須驗證使用者為專案擁有者
+    record = await supabase_service.update_project_record(project_id, user_id, payload.dict(exclude_none=True))
+    if not record:
+        raise HTTPException(status_code=404, detail="Project not found or permission denied")
+    return record
+
+
+@router.patch("/{project_id}", response_model=Dict[str, Any], summary="更新專案（支援軟刪除）")
+async def patch_project(
+    project_id: str,
+    payload: ProjectUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    # 部分更新指定專案的內容，須驗證使用者為專案擁有者
     record = await supabase_service.update_project_record(project_id, user_id, payload.dict(exclude_none=True))
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")

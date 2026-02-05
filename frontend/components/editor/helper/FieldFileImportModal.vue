@@ -237,12 +237,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
+import { createClient } from "@supabase/supabase-js";
 
 const props = defineProps({
   fieldTitle: { type: String, default: "" },
   fieldDescription: { type: String, default: "" },
   fieldLabel: { type: String, default: "" },
   fieldValue: { type: String, default: "" },
+  projectId: { type: String, default: "" },
 });
 
 const emit = defineEmits<{ (e: "confirm", value: string): void }>();
@@ -276,7 +278,7 @@ watch(
     } else {
       resetState();
     }
-  }
+  },
 );
 
 watch(
@@ -285,7 +287,7 @@ watch(
     if (isOpenModel.value && !analysisResult.value) {
       editableValue.value = val || "";
     }
-  }
+  },
 );
 
 const formattedFileSize = computed(() => {
@@ -299,7 +301,7 @@ const formattedFileSize = computed(() => {
 
 const canConfirm = computed(() => {
   return Boolean(
-    analysisResult.value && editableValue.value.trim() && !isAnalyzing.value
+    analysisResult.value && editableValue.value.trim() && !isAnalyzing.value,
   );
 });
 
@@ -364,7 +366,7 @@ function addFiles(files: File[]) {
     const ext = file.name.split(".").pop()?.toLowerCase() || "";
     if (!ACCEPTED_EXTENSIONS.includes(ext)) {
       notifyError(
-        `檔案 ${file.name} 不支援的格式（僅支援 PDF / TXT / JPG / JPEG / PNG）。`
+        `檔案 ${file.name} 不支援的格式（僅支援 PDF / TXT / JPG / JPEG / PNG）。`,
       );
       return false;
     }
@@ -409,10 +411,31 @@ async function analyzeFile() {
   formData.append("field_description", props.fieldDescription || "");
   formData.append("subfield_label", props.fieldLabel || "");
   formData.append("current_value", props.fieldValue || "");
+  if (props.projectId) {
+    formData.append("project_id", props.projectId);
+  }
 
   try {
+    // Get Supabase session for auth
+    const config = useRuntimeConfig();
+    const supabase = createClient(
+      config.public.supabaseUrl,
+      config.public.supabaseAnonKey,
+    );
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/field_file_analysis`, {
       method: "POST",
+      headers,
       body: formData,
     });
 
@@ -428,7 +451,7 @@ async function analyzeFile() {
     };
     editableValue.value = analysisResult.value.enhancedValue;
     notifySuccess(
-      `檔案分析完成（已分析 ${selectedFiles.value.length} 個檔案）。`
+      `檔案分析完成（已分析 ${selectedFiles.value.length} 個檔案）。`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "分析失敗";

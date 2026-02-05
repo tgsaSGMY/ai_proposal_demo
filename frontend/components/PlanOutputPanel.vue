@@ -154,6 +154,7 @@ import { exportPlanToWord } from "@/utils/exportToWord";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { supabase } from "~/utils/supabaseClient";
 
 const props = defineProps({
   planContent: { type: Object, required: true },
@@ -282,9 +283,20 @@ async function handleFileSelected(event) {
 
 // 调用后端自动填充API，根据文档内容智能填充章节字段
 async function callAutoFillApi(payload) {
+  // Get access token from Supabase session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token || "";
+
+  const headers = { "Content-Type": "application/json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE_URL}/autofill_from_document`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(payload),
   });
 

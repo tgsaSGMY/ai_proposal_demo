@@ -151,7 +151,7 @@
               class="text-xs text-gray-400"
               v-if="
                 section.fields.some(
-                  (field) => field.value && field.value.trim() !== ''
+                  (field) => field.value && field.value.trim() !== '',
                 )
               "
             >
@@ -182,7 +182,7 @@
                 :class="{
                   'rotate-90': isFieldExpanded(
                     section.sectionId,
-                    field.propertyKey
+                    field.propertyKey,
                   ),
                 }"
                 xmlns="http://www.w3.org/2000/svg"
@@ -221,7 +221,7 @@
                       updateDynamicValue(
                         section.sectionId,
                         field.propertyKey,
-                        $event.target.value
+                        $event.target.value,
                       )
                     "
                     rows="4"
@@ -313,6 +313,7 @@ import {
   buildSectionSchema,
   processAutoFillResults,
 } from "~/utils/wordImport";
+import { supabase } from "~/utils/supabaseClient";
 
 const referenceLinks = ref([]);
 
@@ -375,7 +376,7 @@ watch(
       templateGrantId: selectedGrantId.value,
     });
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 // 重置所有动态值和展开状态，恢复初始状态
@@ -391,7 +392,7 @@ watch(
     if (selectedGrantId.value !== newVal) {
       selectedGrantId.value = newVal;
     }
-  }
+  },
 );
 
 watch(
@@ -400,7 +401,7 @@ watch(
     if (selectedTemplateId.value !== newVal) {
       selectedTemplateId.value = newVal;
     }
-  }
+  },
 );
 
 // 計算屬性（模板和章節）
@@ -416,7 +417,7 @@ const dynamicSections = computed(() =>
   buildDynamicSections(internalDynamicValues.value, {
     templateId: selectedTemplateId.value,
     templateGrantId: selectedGrantId.value,
-  })
+  }),
 );
 
 // 计算属性：从所有章节中收集可用的字段选项列表
@@ -429,7 +430,7 @@ const referenceFieldOptions = computed(() => {
         section_id: section.sectionId,
         property_key: field.propertyKey,
         label: `${section.sectionName} · ${field.title}`,
-      }))
+      })),
   );
 });
 
@@ -437,11 +438,11 @@ const analysisTargets = computed(() =>
   referenceFieldOptions.value.map(({ section_id, property_key }) => ({
     section_id,
     property_key,
-  }))
+  })),
 );
 
 const excelReplyTargetMap = computed(() =>
-  buildExcelReplyTargetMap(dynamicSections.value)
+  buildExcelReplyTargetMap(dynamicSections.value),
 );
 
 // 计算属性：检查是否准备好生成计划，需要选择模板和输入摘要
@@ -467,13 +468,13 @@ watch(
         templateId: selectedTemplateId.value,
       });
     }
-  }
+  },
 );
 
 // 补助变更处理：若新补助不包含当前模板，则清空模板选择
 const onGrantChange = () => {
   const isIncluded = availableTemplates.value.some(
-    (t) => t.id === selectedTemplateId.value
+    (t) => t.id === selectedTemplateId.value,
   );
 
   if (!isIncluded) {
@@ -602,7 +603,7 @@ async function handleWordFileChange(event) {
       filledContent,
       dynamicSections.value,
       updateDynamicValue,
-      ensureFieldExpanded
+      ensureFieldExpanded,
     );
 
     notifySuccess("Word 檔案匯入完成！");
@@ -768,7 +769,7 @@ async function handleAnalyzeLink(index) {
 
     const targetFields = selectedFieldLabels
       ? referenceFieldOptions.value.filter((field) =>
-          selectedFieldLabels.includes(field.label)
+          selectedFieldLabels.includes(field.label),
         )
       : referenceFieldOptions.value;
 
@@ -779,9 +780,20 @@ async function handleAnalyzeLink(index) {
         }))
       : analysisTargets.value;
 
+    // Get access token from Supabase session
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token || "";
+
+    const headers = { "Content-Type": "application/json" };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         url: link.url,
         context_targets: contextTargets,

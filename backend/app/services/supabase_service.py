@@ -13,7 +13,6 @@ import asyncio
 from collections import defaultdict
 import logging
 import time
-from app.utils.token_calculator import calculate_openai_tokens
 from datetime import datetime, timezone, timedelta
 from fastembed import TextEmbedding
 
@@ -760,12 +759,13 @@ class SupabaseService:
         return response.data[0] if response.data else None
 
     async def get_project_by_id(self, project_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """取得單一專案。若提供 user_id，則只返回該使用者擁有的專案。"""
+        """取得單一專案。若提供 user_id，則只返回該使用者擁有的專案。排除已刪除的專案。"""
         try:
             query = (
                 self.client.from_("projects")
                 .select("*")
                 .eq("id", project_id)
+                .eq("is_deleted", False)
             )
             if user_id:
                 query = query.eq("user_id", user_id)
@@ -777,11 +777,12 @@ class SupabaseService:
             return None
 
     async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """取得指定使用者的所有專案，依更新時間排序。補充 grant_name 和 template_name。"""
+        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant_name 和 template_name。"""
         response = (
             self.client.from_("projects")
             .select("*")
             .eq("user_id", user_id)
+            .eq("is_deleted", False)
             .order("updated_at", desc=True)
             .execute()
         )
@@ -839,8 +840,14 @@ class SupabaseService:
         return response.data[0] if response.data else None
 
     async def delete_project_record(self, project_id: str, user_id: str) -> bool:
-        """刪除指定專案。"""
-        response = self.client.from_("projects").delete().eq("id", project_id).eq("user_id", user_id).execute()
+        """軟刪除指定專案（設置 is_deleted = true）。"""
+        response = (
+            self.client.from_("projects")
+            .update({"is_deleted": True})
+            .eq("id", project_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
         return len(response.data) > 0
 
     async def get_all_models(self) -> List[Dict[str, Any]]:
@@ -885,7 +892,7 @@ class SupabaseService:
         
         return True, "Quota available." 
 
-    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int,output_token: int):
+    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None):
         """记录一次模型使用"""
         model_type = model_info.get('type', 'internal') 
         cost = 0.0
@@ -900,8 +907,13 @@ class SupabaseService:
             "model_type": model_type,
             "input_token": input_token,
             "output_token":  output_token,
-            "cost": cost
+            "cost": cost,
         }
+        
+        if project_id:
+            new_log["project_id"] = project_id
+        if action:
+            new_log["action"] = action
         
         self.client.from_("usage_logs").insert(new_log).execute()
         print(f"Logged usage for user {user_id}: ${cost} for {model_type} model.")
@@ -1171,15 +1183,43 @@ class SupabaseService:
             )
             return False
         
-    async def log_cost_usage(self, user_id: str, model_to_use: Dict, messages: List[Dict], raw_output: str):
-        token_counts = calculate_openai_tokens(
-            messages=messages, 
-            model_name=model_to_use['id'], 
-            raw_output_text=raw_output
-        )
-        input_token = token_counts["input_tokens"]
-        output_token = token_counts["output_tokens"]
-        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token))
+    async def log_cost_usage(self, user_id: str, model_to_use: Dict, response_json: Dict, project_id: Optional[str] = None, action: Optional[str] = None):
+        """記錄模型使用成本。從 API 響應中直接提取 token 計數。
+        
+        支持 OpenAI 和 Gemini 的响应格式：
+        - OpenAI (非流式): response_json['usage']['input_tokens'] 和 ['output_tokens']
+        - OpenAI (流式): response_json['usage']['prompt_tokens'] 和 ['completion_tokens']
+        - Gemini: response_json['usageMetadata']['promptTokenCount'] 和 ['candidatesTokenCount']
+        """
+        input_token = 0
+        output_token = 0
+        
+        provider = model_to_use.get('provider', 'unknown')
+        
+        try:
+            if provider == 'openai':
+                # OpenAI 格式（同時支援流式和非流式）
+                usage = response_json.get('usage', {})
+                print(usage)
+                # 優先使用 input_tokens/output_tokens（非流式），如果沒有則使用 prompt_tokens/completion_tokens（流式）
+                input_token = usage.get('input_tokens') or usage.get('prompt_tokens', 0)
+                output_token = usage.get('output_tokens') or usage.get('completion_tokens', 0)
+            elif provider == 'gemini':
+                # Gemini 格式
+                usage = response_json.get('usageMetadata', {})
+                print(usage)
+                input_token = usage.get('promptTokenCount', 0)
+                output_token = usage.get('candidatesTokenCount', 0)
+            else:
+                # Ollama 或其他提供者可能有不同的格式
+                usage = response_json.get('usage', {})
+                input_token = usage.get('input_tokens', usage.get('prompt_tokens', 0))
+                output_token = usage.get('output_tokens', usage.get('completion_tokens', 0))
+        except Exception as e:
+            logger.error(f"Failed to extract token counts from response: {e}", exc_info=True)
+            return
+        
+        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token, project_id=project_id, action=action))
 
     async def get_exemplars_by_ids(self, ids: List[int]) -> List[Dict[str, Any]]:
         """

@@ -2,7 +2,7 @@
 Images API routes
 Handles image retrieval and deletion with proper authorization checks
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from app.api.dependencies import get_supabase_service, get_current_user_id, get_llm_service
 from app.services.supabase_service import SupabaseService
@@ -162,7 +162,8 @@ class EnrichPromptResponse(BaseModel):
 
 @router.post("/enrich-prompt", response_model=EnrichPromptResponse, summary="按照計劃書內容豐富描述")
 async def enrich_prompt(
-    request: EnrichPromptRequest,
+    request_data: EnrichPromptRequest,
+    request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
@@ -174,7 +175,7 @@ async def enrich_prompt(
     """
     try:
         # 1) 驗證使用者是否為該 project 的擁有者
-        project = await supabase_service.get_project_by_id(request.project_id, user_id)
+        project = await supabase_service.get_project_by_id(request_data.project_id, user_id)
         if not project:
             raise HTTPException(status_code=403, detail="Project not found or access denied")
 
@@ -194,7 +195,7 @@ async def enrich_prompt(
 {stored_answer}
 
 原始圖片描述：
-{request.prompt}
+{request_data.prompt}
 
 請生成一個更詳細、更符合計劃書內容的圖片描述。描述未來會被用作圖片生成並放入企劃書。描述應該：
 1. 融合計劃書中的關鍵概念和細節
@@ -208,10 +209,15 @@ async def enrich_prompt(
         # 創建一個簡單的 httpx 客戶端
         async with httpx.AsyncClient() as http_client:
             # 使用 GPT-4 進行詳細化（或其他配置的模型）
-            model_info = {
+            model_registry = request.app.state.model_registry
+            model_info = model_registry.get("gpt-5-mini") or {
                 "id": "gpt-5-mini",
                 "provider": "openai",
-                "type": "external"
+                "type": "external",
+                "cost_info":{
+                    "input": 0.25,
+                    "output": 2.0
+                }
             }
             
             messages = [
@@ -225,7 +231,7 @@ async def enrich_prompt(
                 }
             ]
             
-            enriched_prompt, llm_error = await llm_service.call_external_api(
+            enriched_prompt, llm_error, response_json = await llm_service.call_external_api(
                 http_client,
                 model_info,
                 messages,
@@ -239,6 +245,10 @@ async def enrich_prompt(
                     detail=f"Failed to enrich prompt: {llm_error.get('error', 'Unknown error')}"
                 )
             
+            # Log cost usage for prompt enrichment
+            if response_json and model_info.get('type') == 'external':
+                await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=request_data.project_id, action="豐富圖片描述")
+            
             if not enriched_prompt:
                 raise HTTPException(
                     status_code=500,
@@ -250,7 +260,7 @@ async def enrich_prompt(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to enrich prompt for project {request.project_id}: {e}", exc_info=True)
+        logger.error(f"Failed to enrich prompt for project {request_data.project_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to enrich prompt")
 
 
@@ -341,7 +351,7 @@ async def generate_image(
 
         # 5) 調用圖片生成 API，如果有參考圖片則傳過去
         print("reference image data:", reference_image_data)
-        image_bytes, api_error = await llm_service._generate_image_from_api(
+        image_bytes, api_error, response_json = await llm_service._generate_image_from_api(
             prompt=optimized_prompt,
             image=reference_image_data
         )
@@ -353,6 +363,18 @@ async def generate_image(
                 detail=f"Image generation failed: {api_error}"
             )
 
+        # Log cost usage for image generation
+        if response_json:
+            gemini_model_info = {
+                "id": "gemini-3-pro-image-preview",
+                "provider": "gemini",
+                "type": "external",
+                "cost_info":{
+                    "input": 2,
+                    "output": 12
+                }
+            }
+            await supabase_service.log_cost_usage(user_id, gemini_model_info, response_json, project_id=request.project_id, action="生成圖片")
         if not image_bytes:
             raise HTTPException(
                 status_code=500,
