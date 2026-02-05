@@ -1446,7 +1446,7 @@ async def recommend_project_names(
     # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
     model_registry = request.app.state.model_registry or {}
-    model_info = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.1-mini")
+    model_info = model_registry.get("gemini-3-flash-preview") or model_registry.get("gpt-4.1-mini")
     if not model_info:
         raise HTTPException(status_code=500, detail="Model not configured for recommendation.")
 
