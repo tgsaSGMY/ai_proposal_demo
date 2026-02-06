@@ -381,15 +381,43 @@ async def generate_plan(
             for s in sections
             for _ in range(num_candidates)
         ]
-        results = await asyncio.gather(*tasks)
+        # 使用 return_exceptions=True 來捕獲個別失敗，避免一個失敗導致整體失敗
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # 組織輸出：每個 section_id -> [候選內容...]
     plan_content = {}
+    section_success_stats = {}
+    
     for res in results:
-        section_id = res.section_id
-        if section_id not in plan_content:
-            plan_content[section_id] = []
-        plan_content[section_id].append(res.dict())
+        # 檢查是否是異常
+        if isinstance(res, Exception):
+            logger.error(f"Task raised exception: {res}", exc_info=False)
+            continue
+        
+        if isinstance(res, SectionGenerateResponse):
+            section_id = res.section_id
+            
+            # 初始化該 section 的統計
+            if section_id not in section_success_stats:
+                section_success_stats[section_id] = {"success": 0, "failed": 0}
+                plan_content[section_id] = []
+            
+            # 記錄成功或失敗
+            if res.error:
+                section_success_stats[section_id]["failed"] += 1
+                logger.warning(f"Candidate for section {section_id} failed: {res.error}")
+            else:
+                section_success_stats[section_id]["success"] += 1
+                plan_content[section_id].append(res.dict())
+    
+    # 檢測哪些 section 完全失敗（所有候選都生成失敗）
+    failed_sections = [
+        sid for sid, stats in section_success_stats.items()
+        if stats["success"] == 0
+    ]
+    
+    if failed_sections:
+        logger.error(f"⚠️  {len(failed_sections)} sections failed completely: {failed_sections}")
 
     if request_data.project_id:
         finished_at = datetime.now(timezone.utc)
@@ -402,6 +430,8 @@ async def generate_plan(
                 **generation_context,
                 "duration_ms": duration_ms,
                 "section_count": len(sections),
+                "successful_sections": len(sections) - len(failed_sections),
+                "failed_sections": failed_sections,
                 "finished_at": finished_at.isoformat(),
             },
         )
@@ -544,14 +574,43 @@ async def revise_plan_version(
                     )
                 )
 
-        results = await asyncio.gather(*tasks)
+        # 使用 return_exceptions=True 來捕獲個別失敗
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    # 組織輸出：每個 section_id -> [候選內容...]
     plan_content = {}
+    section_success_stats = {}
+    
     for res in results:
-        section_id = res.section_id
-        if section_id not in plan_content:
-            plan_content[section_id] = []
-        plan_content[section_id].append(res.dict())
+        # 檢查是否是異常
+        if isinstance(res, Exception):
+            logger.error(f"Task raised exception: {res}", exc_info=False)
+            continue
+        
+        if isinstance(res, SectionGenerateResponse):
+            section_id = res.section_id
+            
+            # 初始化該 section 的統計
+            if section_id not in section_success_stats:
+                section_success_stats[section_id] = {"success": 0, "failed": 0}
+                plan_content[section_id] = []
+            
+            # 記錄成功或失敗
+            if res.error:
+                section_success_stats[section_id]["failed"] += 1
+                logger.warning(f"Revision candidate for section {section_id} failed: {res.error}")
+            else:
+                section_success_stats[section_id]["success"] += 1
+                plan_content[section_id].append(res.dict())
+    
+    # 檢測哪些 section 完全失敗
+    failed_sections = [
+        sid for sid, stats in section_success_stats.items()
+        if stats["success"] == 0
+    ]
+    
+    if failed_sections:
+        logger.error(f"⚠️  {len(failed_sections)} sections failed completely during revision: {failed_sections}")
 
     if request_data.project_id:
         finished_at = datetime.now(timezone.utc)
@@ -564,6 +623,8 @@ async def revise_plan_version(
                 **revision_context,
                 "duration_ms": duration_ms,
                 "section_count": len(sections),
+                "successful_sections": len(sections) - len(failed_sections),
+                "failed_sections": failed_sections,
                 "finished_at": finished_at.isoformat(),
             },
         )

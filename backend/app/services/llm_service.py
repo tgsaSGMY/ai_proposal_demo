@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 GenerationFunc = Callable[..., Awaitable[Tuple[Optional[str], Optional[Dict]]]]
 
 class LLMService:
+    PLACEHOLDER_VALUES = {"OOO", "未提供", "無", "暫無", "无"}
+
     def __init__(self):
         self.openai_api_key = OPENAI_API_KEY
         self.ollama_base_url = OLLAMA_BASE_URL
@@ -31,6 +33,235 @@ class LLMService:
         self.initial_retry_delay = 1  # 秒
         self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
         self._last_response_json = {}  # 用於儲存最後一次API呼叫的完整響應
+        self.GENERATION_TIMEOUT = 120  # 單個章節生成超時 120 秒
+        self.TOTAL_GENERATION_TIMEOUT = 600  # 整個計畫生成超時 10 分鐘
+
+    # ========== 重試與容錯機制 ==========
+    
+    async def _retry_with_exponential_backoff(
+        self,
+        operation: Callable,
+        max_retries: int = 3,
+        error_types: tuple = (ValueError, json.JSONDecodeError),
+        base_delay: float = 1.0,
+        operation_name: str = "Operation"
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """統一的重試邏輯，支援指數退避
+        
+        Args:
+            operation: 要執行的異步操作
+            max_retries: 最多重試次數
+            error_types: 需要重試的錯誤類型
+            base_delay: 基礎延遲時間（秒）
+            operation_name: 操作名稱（用於日誌）
+            
+        Returns:
+            (result, error_message) - 成功返回結果，失敗返回錯誤信息
+        """
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                result = await operation()
+                return result, None
+            except error_types as e:
+                last_error = str(e)
+                if attempt < max_retries - 1:
+                    wait_time = base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"[{operation_name}] Attempt {attempt + 1}/{max_retries} failed: {e}. "
+                        f"Retrying after {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(
+                        f"[{operation_name}] Final attempt ({max_retries}/{max_retries}) failed: {e}"
+                    )
+            except Exception as e:
+                # 非預期的錯誤，不重試
+                logger.error(f"[{operation_name}] Unexpected error: {e}")
+                return None, str(e)
+        
+        return None, last_error
+
+    async def _attempt_json_repair(
+        self,
+        raw_text: str,
+        session: httpx.AsyncClient,
+        model_info: Dict,
+        section_id: str,
+        max_attempts: int = 2
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """嘗試修復格式不正確的 JSON
+        
+        首先試著直接解析，失敗則讓 LLM 修復 JSON
+        
+        Args:
+            raw_text: 原始文本
+            session: HTTP 會話
+            model_info: 使用的模型信息
+            section_id: 章節 ID
+            max_attempts: 最多修復嘗試次數
+            
+        Returns:
+            (parsed_json, error_message)
+        """
+        # 第一次：嘗試直接解析
+        try:
+            parsed = json.loads(raw_text)
+            return parsed, None
+        except json.JSONDecodeError:
+            pass
+        
+        # 第二次：尋找首個完整的大括號區塊
+        try:
+            json_string = self._extract_first_json_object(raw_text)
+            if not json_string:
+                json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                json_string = json_match.group(0) if json_match else None
+            if json_string:
+                parsed = json.loads(json_string)
+                return parsed, None
+        except json.JSONDecodeError:
+            pass
+        
+        # 第三次：讓 LLM 修復 JSON（如果允許）
+        if max_attempts > 1 and model_info.get("provider") in {"openai", "gemini"}:
+            repair_prompt = f"""以下 JSON 格式不正確，請修復並只返回有效的 JSON（不要有任何其他文字）：
+
+{raw_text[:2000]}
+
+要求：
+1. 只返回有效的 JSON 物件
+2. 確保所有括號、引號、逗號都是正確的
+3. 保留原始的數據和結構
+4. 不要添加任何解釋文字"""
+            
+            messages = [
+                {"role": "system", "content": "你是 JSON 修復專家。严格只返回有效的 JSON，不要有任何其他文字。"},
+                {"role": "user", "content": repair_prompt}
+            ]
+            
+            try:
+                logger.info(f"Attempting to repair JSON for section {section_id} using LLM...")
+                repaired_text, error, _ = await self.call_external_api(
+                    session, model_info, messages, is_json_output=True
+                )
+                
+                if error:
+                    logger.warning(f"JSON repair failed: {error.get('error')}")
+                    return None, f"JSON repair attempt failed: {error.get('error')}"
+                
+                if repaired_text:
+                    try:
+                        parsed = json.loads(repaired_text)
+                        logger.info(f"✅ Successfully repaired JSON for section {section_id}")
+                        return parsed, None
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Repaired JSON is still invalid: {e}")
+                        return None, f"LLM-repaired JSON is still invalid: {str(e)}"
+            except Exception as e:
+                logger.warning(f"JSON repair attempt raised exception: {e}")
+                return None, f"JSON repair exception: {str(e)}"
+        
+        # 修復失敗
+        return None, f"Unable to parse or repair JSON. First 500 chars: {raw_text[:500]}"
+
+    @staticmethod
+    def _extract_first_json_object(raw_text: str) -> Optional[str]:
+        """利用括號深度追蹤擷取第一個完整的 JSON 物件。"""
+        depth = 0
+        start_idx = None
+        in_string = False
+        escape = False
+
+        for idx, ch in enumerate(raw_text):
+            if in_string:
+                if escape:
+                    escape = False
+                    continue
+                if ch == "\\":
+                    escape = True
+                    continue
+                if ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+                continue
+
+            if ch == '{':
+                if depth == 0:
+                    start_idx = idx
+                depth += 1
+            elif ch == '}':
+                if depth == 0:
+                    continue
+                depth -= 1
+                if depth == 0 and start_idx is not None:
+                    return raw_text[start_idx:idx + 1]
+
+        return None
+
+    def _validate_generated_content(self, content_json: Dict, section_id: str) -> Tuple[bool, Optional[str]]:
+        """驗證生成的內容是否有實質內容，不只是空枚舉
+        
+        Args:
+            content_json: 生成的JSON對象
+            section_id: 章節ID
+            
+        Returns:
+            (is_valid, error_message)
+        """
+        if not content_json:
+            return False, "Generated content is empty (None)"
+        
+        if not isinstance(content_json, dict):
+            return False, f"Generated content is not a dict: {type(content_json)}"
+        
+        if len(content_json) == 0:
+            return False, "Generated content dict is empty"
+        
+        # 檢查是否所有值都是空的
+        non_empty_fields = 0
+        for key, value in content_json.items():
+            if self._has_substantial_content(value):
+                non_empty_fields += 1
+        
+        if non_empty_fields == 0:
+            return False, f"Generated content has no substantial data. All fields are empty or just placeholders."
+        
+        # 至少30%的字段應該有內容
+        content_ratio = non_empty_fields / len(content_json)
+        if content_ratio < 0.3:
+            return False, f"Generated content is too sparse. Only {non_empty_fields}/{len(content_json)} fields have substance."
+        
+        return True, None
+
+    @classmethod
+    def _has_substantial_content(cls, value: Any) -> bool:
+        """遞迴檢查任意型別是否有實質內容，避免僅計數非空結構。"""
+        if value is None:
+            return False
+
+        if isinstance(value, str):
+            stripped = value.strip()
+            return bool(stripped and stripped not in cls.PLACEHOLDER_VALUES)
+
+        if isinstance(value, dict):
+            return any(cls._has_substantial_content(v) for v in value.values())
+
+        if isinstance(value, list):
+            return any(cls._has_substantial_content(item) for item in value)
+
+        if isinstance(value, (int, float)):
+            return True
+
+        if isinstance(value, bool):
+            return value
+
+        return True
 
     @staticmethod
     def _extract_openai_response_text(payload: Dict[str, Any]) -> str:
@@ -133,7 +364,20 @@ class LLMService:
             prompt = ex.get('prompt', '')
             answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
             formatted_examples.append(f"{answer}")
-        return "以下是一些高质量范例输出。結構可能改變，不需要參考其結構，但重點是參考其内容:\n\n" + "\n\n---\n\n".join(formatted_examples) + "\n\n"
+        
+        # ⚠️ 添加防数据泄露和防止直接复制的提示
+        few_shot_warning = """【重要：範例使用指南】
+以下是一些高質量的輸出範例。請注意：
+1. ⚠️ 範例中的具體資料（公司名稱、人名、數據、聯絡資訊等）只是示例，絕對不要直接複製到你的輸出中
+2. ✅ 你應該學習範例的「格式、邏輯組織方式」，但使用「新的、相關的內容」
+3. 🔒 保護隱私：不要在生成的內容中包含任何範例中的具體個人或公司資訊
+4. 🎯 根據當前的用戶輸入和背景，生成完全不同的、新鮮的內容
+5. 如果不確定某些資訊，請使用佔位符（如 OOO）而不是複製範例中的內容
+6. 結構可能會和範例不同，那就根據需求調整，學習的是範例邏輯和組織方式，而不是死搬硬套。
+
+【結構參考範例】
+"""
+        return few_shot_warning + "\n\n---\n\n".join(formatted_examples) + "\n\n【現在根據上述格式，為當前用戶生成新的、原創的內容】\n\n"
 
     def _build_api_request(
         self, 
@@ -322,6 +566,12 @@ class LLMService:
     ) -> Tuple[Optional[str], Optional[Dict], Optional[Dict]]:
         """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。
         
+        支持以下錯誤類型的自動重試：
+        - 429 Rate Limit: 使用 Retry-After 或指數退避
+        - 5xx 服務器錯誤: 使用指數退避
+        - 超時錯誤: 使用指數退避
+        - 連接錯誤: 使用指數退避
+        
         Returns:
             Tuple of (text_output, error_dict, response_json)
             - text_output: 提取的文本輸出
@@ -342,7 +592,18 @@ class LLMService:
                     
                     # 根據 provider 解析響應
                     provider = model_info.get("provider")
-                    response_json = response.json()
+                    try:
+                        response_json = response.json()
+                    except json.JSONDecodeError as decode_error:
+                        raw_body = (response.text or "")[:2000]
+                        logger.error(
+                            "Provider response is not valid JSON for model %s: %s | Body snippet: %s",
+                            model_info.get("id"),
+                            decode_error,
+                            raw_body,
+                            exc_info=True,
+                        )
+                        return None, {"error": "Provider returned invalid JSON payload."}, None
 
                     if response_hook:
                         try:
@@ -364,13 +625,18 @@ class LLMService:
                         return response_json["choices"][0]["message"]["content"], None, response_json
                     
                 except httpx.HTTPStatusError as e:
-                    # 处理 429 速率限制错误
-                    if e.response.status_code == 429:
+                    status_code = e.response.status_code
+                    
+                    # === 429 Speed Rate Limit ===
+                    if status_code == 429:
                         if attempt < self.max_retries - 1:
                             # 从响应头获取 Retry-After，如果没有则使用指数退避
                             retry_after = e.response.headers.get("Retry-After")
                             if retry_after:
-                                wait_time = int(retry_after)
+                                try:
+                                    wait_time = int(retry_after)
+                                except ValueError:
+                                    wait_time = self.initial_retry_delay * (2 ** attempt)
                             else:
                                 wait_time = self.initial_retry_delay * (2 ** attempt)  # 指数退避: 1, 2, 4 秒
                             
@@ -385,20 +651,71 @@ class LLMService:
                             logger.error(error_msg)
                             return None, {"error": error_msg}, None
                     
-                    # 其他 HTTP 错误
-                    error_msg = f"API call failed for model {model_info.get('id')}: {e}"
-                    logger.error(error_msg, exc_info=True)
-                    return None, {"error": error_msg}, None
+                    # === 5xx Server Errors (可重試) ===
+                    elif status_code >= 500 and status_code < 600:
+                        if attempt < self.max_retries - 1:
+                            wait_time = self.initial_retry_delay * (2 ** attempt)
+                            logger.warning(
+                                f"[Attempt {attempt + 1}/{self.max_retries}] Server error ({status_code}) for model {model_info.get('id')}. "
+                                f"Retrying after {wait_time}s..."
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            error_msg = f"API server error ({status_code}) for model {model_info.get('id')} after {self.max_retries} attempts"
+                            logger.error(error_msg)
+                            return None, {"error": error_msg}, None
+                    
+                    # === 4xx Client Errors (不可重試，除了 429) ===
+                    else:
+                        error_msg = f"API client error ({status_code}) for model {model_info.get('id')}: {e}"
+                        logger.error(error_msg, exc_info=True)
+                        return None, {"error": error_msg}, None
+                    
+                except asyncio.TimeoutError as e:
+                    # 超時錯誤可重試
+                    if attempt < self.max_retries - 1:
+                        wait_time = self.initial_retry_delay * (2 ** attempt)
+                        logger.warning(
+                            f"[Attempt {attempt + 1}/{self.max_retries}] Request timeout for model {model_info.get('id')}. "
+                            f"Retrying after {wait_time}s..."
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        error_msg = f"API request timeout for model {model_info.get('id')} after {self.max_retries} attempts"
+                        logger.error(error_msg)
+                        return None, {"error": error_msg}, None
+                
+                except (httpx.ConnectError, httpx.NetworkError) as e:
+                    # 連接錯誤可重試
+                    if attempt < self.max_retries - 1:
+                        wait_time = self.initial_retry_delay * (2 ** attempt)
+                        logger.warning(
+                            f"[Attempt {attempt + 1}/{self.max_retries}] Network error for model {model_info.get('id')}: {e}. "
+                            f"Retrying after {wait_time}s..."
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+                    else:
+                        error_msg = f"Network error for model {model_info.get('id')} after {self.max_retries} attempts: {e}"
+                        logger.error(error_msg)
+                        return None, {"error": error_msg}, None
                     
                 except ValueError as e:
+                    # 配置錯誤，不重試
                     error_msg = f"Configuration error for model {model_info.get('id')}: {e}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}, None
                     
                 except Exception as e:
-                    error_msg = f"An unexpected error occurred during API call: {repr(e)}"
+                    # 非預期的錯誤
+                    error_msg = f"Unexpected error during API call for model {model_info.get('id')}: {repr(e)}"
                     logger.error(error_msg, exc_info=True)
                     return None, {"error": error_msg}, None
+        
+        # 應該不會到達這裡（已在迴圈中返回）
+        return None, {"error": f"API call exhausted all {self.max_retries} attempts"}, None
 
     @staticmethod
     def _extract_external_sources(provider: Optional[str], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -644,7 +961,9 @@ class LLMService:
                 captured_external_sources.extend(references)
 
         # 3. --- 根据模型类型选择生成流程 ---
-        final_content_json = None; error_message = None
+        final_content_json = None
+        error_message = None
+        response_json = None
 
         enable_grounding = section_grounding_enabled and model_to_use.get("provider") in {"openai", "gemini"}
 
@@ -667,13 +986,32 @@ class LLMService:
         )
         user_content = "\n\n".join(user_content_parts)
     
-
         # 檢查是否有自定義指令，並將它們附加到 user_content
         if section_details.custom_prompt_list:
             custom_prompts_str = "\n".join(f"- {p}" for p in section_details.custom_prompt_list)
             user_content += f"\n\n请额外遵循以下客製化指令：\n{custom_prompts_str}\n如果允許使用web search工具，請務必使用最新的網路資訊來補充回答內容。"
 
-        system_prompt_for_all = section_details.system_prompt + "\n內容生成指南：\n圖片佔位符：若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。\n數據/名稱佔位符：當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。\n用戶的輸入若是無或是相關資料量不夠，可以自己發散思維來寫作內容，客觀内容可以用OOO代替。"
+        system_prompt_for_all = section_details.system_prompt + """
+
+========== 內容生成指南 ==========
+【圖片佔位符】若需要表示應插入圖片的位置，請使用 【圖：<圖片的簡單描述>】 的格式。例如：【圖：本公司研發之開片機實品操作展示照片】。
+
+【數據/名稱佔位符】當遇到不確定的公司名稱、人名、或具體數據時，請統一使用 OOO 作為替代文字。
+
+【內容質量要求】用戶的輸入若是無或是相關資料量不夠，可以自己發散思維來寫作內容，客觀内容可以用OOO代替。
+
+【⚠️ 嚴格禁止】
+❌ 不要從上面的範例中直接複製任何資料（人名、公司名、聯絡資訊、具體數據等）
+❌ 不要生成空白或只有佔位符的內容
+❌ 不要只複製範例的結構而不填充實際內容
+✅ 必須生成有實質內容的、相關的、原創的文本
+✅ 每個字段都應該包含有意義的信息（至少 30% 的字段需要有實質內容）
+
+【內容驗證】生成完成後，檢查：
+1. 是否所有重要字段都有內容（不是空白或只有 OOO）
+2. 是否內容來自於用戶輸入和你的知識，而非複製範例
+3. 是否內容邏輯清晰、相關性強
+4. 如果無法確定資訊，使用 OOO 而非留空"""
         messages = [
             {"role": "system", "content": system_prompt_for_all},
             {"role": "user", "content": user_content} 
@@ -681,30 +1019,81 @@ class LLMService:
 
         response_hook = capture_response_sources if enable_grounding else None
 
-        raw_output, llm_error, response_json = await self.call_external_api(
-            http_session,
-            model_to_use,
-            messages,
-            enable_grounding=enable_grounding,
-            is_json_output=True,
-            response_hook=response_hook,
+        # ========== 使用重試機制包裝 API 調用和 JSON 處理 ==========
+        async def generate_and_parse_with_retry():
+            """調用 API 並解析 JSON，支持重試。包括內容驗證，避免生成空白企劃書"""
+            raw_output, llm_error, resp_json = await self.call_external_api(
+                http_session,
+                model_to_use,
+                messages,
+                enable_grounding=enable_grounding,
+                is_json_output=True,
+                response_hook=response_hook,
+            )
+            
+            if llm_error:
+                raise ValueError(f"LLM API call failed: {llm_error.get('error', 'Unknown error')}")
+            
+            # 嘗試直接解析 JSON
+            parsed_json, parse_error = extract_json_block(raw_output, section_id)
+            
+            if parse_error:
+                # 首先嘗試使用 LLM 修復 JSON
+                logger.warning(f"Initial JSON parsing failed for {section_id}, attempting repair...")
+                parsed_json, repair_error = await self._attempt_json_repair(
+                    raw_output, http_session, model_to_use, section_id
+                )
+                
+                if repair_error:
+                    raise ValueError(f"JSON parsing and repair failed: {repair_error}")
+            
+            # ========== 驗證生成的內容是否有實質內容 ==========
+            is_valid, validation_error = self._validate_generated_content(parsed_json, section_id)
+            if not is_valid:
+                logger.warning(f"Content validation failed for {section_id}: {validation_error}. Retrying...")
+                raise ValueError(f"Generated content validation failed: {validation_error}")
+            
+            logger.info(f"✅ Content validation passed for section {section_id}")
+            return parsed_json, resp_json
+        
+        # 執行生成並自動重試
+        result, retry_error = await self._retry_with_exponential_backoff(
+            operation=generate_and_parse_with_retry,
+            max_retries=3,
+            error_types=(ValueError, json.JSONDecodeError, httpx.HTTPError),
+            base_delay=1.0,
+            operation_name=f"Section({section_id})"
         )
         
-        if llm_error:
-            error_message = llm_error.get("error")
-        else:
-            final_content_json, parse_error = extract_json_block(raw_output, section_id)
-            # Log cost usage with response JSON that contains token counts
-            if response_json and model_to_use.get('type') == 'external':
-                await supabase_service.log_cost_usage(user_id, model_to_use, response_json, project_id=project_id, action="生成企劃書章節")
-            if parse_error:
-                error_message = parse_error.get("error")
-            else:
-                full_prompt = f"User Input: {user_input}\nSystem Prompt: {section_details.system_prompt}"
+        if retry_error:
+            return SectionGenerateResponse(
+                section_id=section_id,
+                error=f"Generation failed after retries: {retry_error}"
+            )
+        
+        if result:
+            final_content_json, response_json = result
+        
+        # Log cost usage with response JSON that contains token counts
+        if response_json and model_to_use.get('type') == 'external':
+            try:
+                await supabase_service.log_cost_usage(
+                    user_id, model_to_use, response_json, 
+                    project_id=project_id, 
+                    action="生成企劃書章節"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log cost usage: {e}")
                   
         # 4. --- 返回结果 ---
-        if error_message: return SectionGenerateResponse(section_id=section_id, error=error_message)
-        if not final_content_json: return SectionGenerateResponse(section_id=section_id, error="Generation resulted in empty content.")
+        if error_message:
+            return SectionGenerateResponse(section_id=section_id, error=error_message)
+        
+        if not final_content_json:
+            return SectionGenerateResponse(
+                section_id=section_id, 
+                error="Generation resulted in empty content."
+            )
         
         formatted_content = format_section_output(final_content_json, section_details.json_schema)
 
@@ -724,7 +1113,12 @@ class LLMService:
                 )
             except Exception:
                 logger.warning("Failed to log section_generated event", exc_info=True)
-        return SectionGenerateResponse(section_id=section_id, content=formatted_content,raw_json_content=final_content_json)
+        
+        return SectionGenerateResponse(
+            section_id=section_id, 
+            content=formatted_content,
+            raw_json_content=final_content_json
+        )
 
 
     # 先暫時不使用，未來有使用内部模型才使用
