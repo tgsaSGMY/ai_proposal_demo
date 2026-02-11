@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  fastapi-backend:
+    image: jianheng0831/ai_proposal_platform:latest
+    container_name: fastapi_server
+    restart: always
+    env_file:
+      - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nuxt-frontend:
+    image: jianheng0831/ai_proposal_frontend:latest
+    container_name: nuxt_client
+    restart: always
+    environment:
+      - NUXT_PUBLIC_API_BASE_URL=/api
+    depends_on:
+      - fastapi-backend
+
+  nginx-proxy:
+    image: jianheng0831/ai_proposal_nginx:latest
+    container_name: nginx_proxy
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi-backend
+      - nuxt-frontend
