@@ -2,13 +2,12 @@ version: "3.8"
 
 services:
   fastapi-backend:
-    build: .
+    image: jianheng0831/ai_proposal_platform:latest
     container_name: fastapi_server
     restart: always
     ports:
-      - "8080:8000" # 左邊是伺服器對外 Port，右邊是容器內 Port
+      - "8080:8000"
     env_file:
       - .env
-    # 讓容器可以連線到 VPS 本機的 Supabase/Postgres ▼▼▼
     extra_hosts:
       - "host.docker.internal:host-gateway"

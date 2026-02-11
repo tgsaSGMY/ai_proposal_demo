@@ -4,10 +4,6 @@ FROM python:3.10-slim
 # 2. 設定容器內的工作目錄
 WORKDIR /app
 
-# 3. 安裝系統依賴 (有些 Python 庫如 psycopg2, fastembed 可能需要編譯工具)
-# 如果 pip install 報錯，可能需要取消註解下面這行：
-# RUN apt-get update && apt-get install -y build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
-
 # 4. 複製 requirements.txt 並安裝 Python 依賴
 # 這樣做的好處是：如果程式碼變了但 requirements 沒變，Docker 會使用緩存，構建速度超快
 COPY requirements.txt .
