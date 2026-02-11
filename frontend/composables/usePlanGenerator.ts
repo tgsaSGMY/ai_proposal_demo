@@ -172,7 +172,6 @@ export function usePlanGenerator() {
       // 确保当前选中模板的 JSON Schema 已加载
       // 这样可以在 UI 中显示动态表单字段
       await ensureDynamicSchemaLoaded({
-        apiBaseUrl: config.public.apiBaseUrl,
         templateId: selectedTemplateId.value,
         templateGrantId: selectedGrantId.value,
       });
@@ -288,7 +287,6 @@ export function usePlanGenerator() {
     // 异步加载新模板的 JSON Schema
     // 不用等待，在后台加载（不阻塞 UI）
     ensureDynamicSchemaLoaded({
-      apiBaseUrl: config.public.apiBaseUrl,
       templateId: selection.templateId,
       templateGrantId: selection.grantId,
     }).catch((error) => {

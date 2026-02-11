@@ -440,17 +440,15 @@ interface FetchRemoteSchemaOptions {
   schemaId: string;
   templateId?: string | null;
   templateGrantId?: string | null;
-  apiBaseUrl?: string;
 }
 
 async function fetchRemoteSchema({
   schemaId,
   templateId,
   templateGrantId,
-  apiBaseUrl = "http://localhost:8000",
 }: FetchRemoteSchemaOptions): Promise<DynamicSchemaSection[]> {
-  // Logic to handle relative or empty apiBaseUrl
-  let baseUrl = apiBaseUrl;
+  const config = useRuntimeConfig();
+  let baseUrl = config.public.apiBaseUrl || "";
 
   // Handle empty string -> current origin
   if (!baseUrl) {
@@ -501,12 +499,10 @@ async function fetchRemoteSchema({
 
 export async function ensureDynamicSchemaLoaded(options?: {
   schemaId?: string;
-  apiBaseUrl?: string;
   templateId?: string | null;
   templateGrantId?: string | null;
 }): Promise<DynamicSchemaSection[]> {
   const targetSchemaId = options?.schemaId || DEFAULT_SCHEMA_ID;
-  const apiBaseUrl = options?.apiBaseUrl ?? "";
   const templateId = options?.templateId ?? null;
   const templateGrantId = options?.templateGrantId ?? null;
   activeTemplateId = templateId;
@@ -517,7 +513,6 @@ export async function ensureDynamicSchemaLoaded(options?: {
       schemaId: targetSchemaId,
       templateId,
       templateGrantId,
-      apiBaseUrl,
     });
     const resolvedSections =
       remoteSections.length > 0 ? remoteSections : cloneFallbackSections();

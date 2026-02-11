@@ -559,9 +559,7 @@ async function fetchProjects() {
   loadError.value = "";
   try {
     // Ensure dynamic schema is loaded before processing projects
-    await ensureDynamicSchemaLoaded({
-      apiBaseUrl: config.public.apiBaseUrl,
-    });
+    await ensureDynamicSchemaLoaded();
 
     const {
       data: { session },
