@@ -14,8 +14,8 @@ services:
     image: jianheng0831/ai_proposal_frontend:latest
     container_name: nuxt_client
     restart: always
-    environment:
-      - NUXT_PUBLIC_API_BASE_URL=
+    env_file:
+      - ./frontend/.env
     depends_on:
       - fastapi-backend
 
