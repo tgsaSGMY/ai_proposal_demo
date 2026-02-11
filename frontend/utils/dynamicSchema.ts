@@ -506,7 +506,7 @@ export async function ensureDynamicSchemaLoaded(options?: {
   templateGrantId?: string | null;
 }): Promise<DynamicSchemaSection[]> {
   const targetSchemaId = options?.schemaId || DEFAULT_SCHEMA_ID;
-  const apiBaseUrl = options?.apiBaseUrl || "http://localhost:8000";
+  const apiBaseUrl = options?.apiBaseUrl ?? "http://localhost:8000";
   const templateId = options?.templateId ?? null;
   const templateGrantId = options?.templateGrantId ?? null;
   activeTemplateId = templateId;
