@@ -450,27 +450,27 @@ async function fetchRemoteSchema({
   const config = useRuntimeConfig();
   let baseUrl = config.public.apiBaseUrl || "";
 
-  // Handle empty string -> current origin
-  if (!baseUrl) {
-    if (typeof window !== "undefined") {
-      baseUrl = window.location.origin;
-    } else {
-      baseUrl = "http://localhost:8000";
-    }
-  }
-  // Handle relative path (starting with /)
-  else if (baseUrl.startsWith("/")) {
-    if (typeof window !== "undefined") {
-      baseUrl = window.location.origin + baseUrl;
-    } else {
-      baseUrl = "http://localhost:8000" + baseUrl;
-    }
-  }
+  // // Handle empty string -> current origin
+  // if (!baseUrl) {
+  //   if (typeof window !== "undefined") {
+  //     baseUrl = window.location.origin;
+  //   } else {
+  //     baseUrl = "http://localhost:8000";
+  //   }
+  // }
+  // // Handle relative path (starting with /)
+  // else if (baseUrl.startsWith("/")) {
+  //   if (typeof window !== "undefined") {
+  //     baseUrl = window.location.origin + baseUrl;
+  //   } else {
+  //     baseUrl = "http://localhost:8000" + baseUrl;
+  //   }
+  // }
 
-  // Ensure no trailing slash to avoid double slash issues
-  if (baseUrl.endsWith("/")) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
+  // // Ensure no trailing slash to avoid double slash issues
+  // if (baseUrl.endsWith("/")) {
+  //   baseUrl = baseUrl.slice(0, -1);
+  // }
 
   const url = new URL(`${baseUrl}/api/dynamic-sections`);
 
