@@ -15,7 +15,7 @@ services:
     container_name: nuxt_client
     restart: always
     environment:
-      - NUXT_PUBLIC_API_BASE_URL=/api
+      - NUXT_PUBLIC_API_BASE_URL=
     depends_on:
       - fastapi-backend
 
