@@ -11,7 +11,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   nuxt-frontend:
-    image: jianheng0831/ai_proposal_frontend:latest
+    build: ./frontend
     container_name: nuxt_client
     restart: always
     env_file:
