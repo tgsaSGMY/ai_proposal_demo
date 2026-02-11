@@ -448,7 +448,9 @@ async function fetchRemoteSchema({
   templateGrantId,
 }: FetchRemoteSchemaOptions): Promise<DynamicSchemaSection[]> {
   const config = useRuntimeConfig();
+  console.log("API Base URL:", config.public.apiBaseUrl);
   let baseUrl = config.public.apiBaseUrl || "";
+  console.log("Resolved API Base URL:", baseUrl);
 
   // // Handle empty string -> current origin
   // if (!baseUrl) {
