@@ -452,45 +452,32 @@ async function fetchRemoteSchema({
   let baseUrl = config.public.apiBaseUrl || "";
   console.log("Resolved API Base URL:", baseUrl);
 
-  // // Handle empty string -> current origin
-  // if (!baseUrl) {
-  //   if (typeof window !== "undefined") {
-  //     baseUrl = window.location.origin;
-  //   } else {
-  //     baseUrl = "http://localhost:8000";
-  //   }
-  // }
-  // // Handle relative path (starting with /)
-  // else if (baseUrl.startsWith("/")) {
-  //   if (typeof window !== "undefined") {
-  //     baseUrl = window.location.origin + baseUrl;
-  //   } else {
-  //     baseUrl = "http://localhost:8000" + baseUrl;
-  //   }
-  // }
-
-  // // Ensure no trailing slash to avoid double slash issues
-  // if (baseUrl.endsWith("/")) {
-  //   baseUrl = baseUrl.slice(0, -1);
-  // }
-
-  // const url = new URL(`${baseUrl}/api/dynamic-sections`);
-
-  // Fix for Invalid URL error when baseUrl is empty (relative path)
+  // 1. 如果 baseUrl 是絕對路徑，直接使用
+  // 2. 如果 baseUrl 為空或相對路徑，則自動結合 origin
+  const apiEndpoint = "/api/dynamic-sections";
   let url: URL;
-  const path = `${baseUrl}/api/dynamic-sections`;
 
   try {
-    // Try constructing as absolute URL first
+    // 嘗試構建絕對 URL (當 baseUrl 為完整 http://... 時)
+    // 注意：如果 baseUrl 為空，new URL("/api/...") 會拋錯，catch 會處理
+    const path = baseUrl ? `${baseUrl}${apiEndpoint}` : apiEndpoint;
     url = new URL(path);
   } catch (e) {
-    // If it fails (e.g. relative path), use current origin (browser) or localhost (server) as base
-    const base =
+    // 處理相對路徑的情況 (baseUrl 為空或 "/")
+    // 在瀏覽器：使用 window.location.origin
+    // 在服務端：默認為 localhost:8000
+    const origin =
       typeof window !== "undefined"
         ? window.location.origin
         : "http://localhost:8000";
-    url = new URL(path, base);
+
+    // 確保路徑格式正確
+    const cleanBaseUrl = baseUrl || "";
+    const cleanPath = `${cleanBaseUrl}${apiEndpoint}`.replace("//", "/");
+
+    url = new URL(cleanPath, origin);
   }
+  console.log("Final API URL:", url.toString());
 
   if (templateId) {
     url.searchParams.set("template_id", templateId);
