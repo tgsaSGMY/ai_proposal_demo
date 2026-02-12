@@ -450,35 +450,33 @@ async function fetchRemoteSchema({
   const config = useRuntimeConfig();
   const apiBaseUrl = config.public.apiBaseUrl || "";
 
-  // Clean up double slashes if any (e.g. "http://host/" + "/api")
+  // Clean up double slashes from base URL
   const cleanBase = apiBaseUrl.endsWith("/")
     ? apiBaseUrl.slice(0, -1)
     : apiBaseUrl;
   const endpoint = "/api/dynamic-sections";
 
-  // Construct the URL string
-  // If apiBaseUrl is empty, this results in "/api/dynamic-sections" (relative path), which fetch handles correctly
-  const urlString = `${cleanBase}${endpoint}`;
+  // Construct the base URL string directly
+  let url = `${cleanBase}${endpoint}`;
 
-  // Use URL object ONLY for query parameters to avoid manual string concatenation issues
-  // We use a dummy base if the path is relative, then extract the search params
-  const dummyBase = "http://dummy.com";
-  const urlObj = new URL(urlString, dummyBase);
-
+  // Manually build query string to avoid using new URL() which can fail with relative paths
+  const params = new URLSearchParams();
   if (templateId) {
-    urlObj.searchParams.set("template_id", templateId);
+    params.set("template_id", templateId);
     if (templateGrantId) {
-      urlObj.searchParams.set("template_grant_id", templateGrantId);
+      params.set("template_grant_id", templateGrantId);
     }
   } else {
-    urlObj.searchParams.set("schema_id", schemaId);
+    params.set("schema_id", schemaId);
   }
 
-  // Combine the original path with the generated query string
-  // If urlString was relative, we keep it relative. if it was absolute, we keep it absolute.
-  const finalUrl = `${urlString}?${urlObj.searchParams.toString()}`;
+  // Append query string if params exist
+  const queryString = params.toString();
+  if (queryString) {
+    url += `?${queryString}`;
+  }
 
-  const response = await fetch(finalUrl);
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch remote schema: ${response.status}`);
