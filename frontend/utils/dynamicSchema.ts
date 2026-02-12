@@ -459,21 +459,21 @@ async function fetchRemoteSchema({
   // Construct the base URL string directly
   let url = `${cleanBase}${endpoint}`;
 
-  // Manually build query string to avoid using new URL() which can fail with relative paths
-  const params = new URLSearchParams();
+  // Manually build query string without relying on URL utilities
+  const queryParts: string[] = [];
   if (templateId) {
-    params.set("template_id", templateId);
+    queryParts.push(`template_id=${encodeURIComponent(templateId)}`);
     if (templateGrantId) {
-      params.set("template_grant_id", templateGrantId);
+      queryParts.push(
+        `template_grant_id=${encodeURIComponent(templateGrantId)}`,
+      );
     }
   } else {
-    params.set("schema_id", schemaId);
+    queryParts.push(`schema_id=${encodeURIComponent(schemaId)}`);
   }
 
-  // Append query string if params exist
-  const queryString = params.toString();
-  if (queryString) {
-    url += `?${queryString}`;
+  if (queryParts.length > 0) {
+    url += `?${queryParts.join("&")}`;
   }
 
   const response = await fetch(url);
