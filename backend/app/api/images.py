@@ -65,6 +65,8 @@ async def get_project_images(
                 "storage_path": img.get("storage_path"),
                 "public_url": normalized_public_url,
             }
+            # 預設就使用 public_url，避免簽名 URL 失敗時回傳內網位址
+            image_data["signed_url"] = normalized_public_url
 
             # 嘗試產生 signed URL（如果 bucket 是 private）
             if img.get("storage_path"):
@@ -85,17 +87,13 @@ async def get_project_images(
                         signed_url = signed_response
 
                     if signed_url:
-                        image_data["signed_url"] = signed_url
-                    else:
-                        # Fallback to public_url if available
-                        image_data["signed_url"] = normalized_public_url
+                        image_data["signed_url"] = _normalize_public_url(signed_url)
 
                 except Exception as e:
                     logger.warning(
                         f"Failed to create signed URL for {img.get('storage_path')}: {e}"
                     )
-                    # 如果簽名失敗，使用 public_url 作為 fallback
-                    image_data["signed_url"] = normalized_public_url
+                    # 如果簽名失敗，仍使用 public_url 作為 fallback（已在預設設定）
 
             result.append(image_data)
 
