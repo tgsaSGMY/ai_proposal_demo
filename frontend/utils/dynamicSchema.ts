@@ -474,7 +474,23 @@ async function fetchRemoteSchema({
   //   baseUrl = baseUrl.slice(0, -1);
   // }
 
-  const url = new URL(`${baseUrl}/api/dynamic-sections`);
+  // const url = new URL(`${baseUrl}/api/dynamic-sections`);
+
+  // Fix for Invalid URL error when baseUrl is empty (relative path)
+  let url: URL;
+  const path = `${baseUrl}/api/dynamic-sections`;
+
+  try {
+    // Try constructing as absolute URL first
+    url = new URL(path);
+  } catch (e) {
+    // If it fails (e.g. relative path), use current origin (browser) or localhost (server) as base
+    const base =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:8000";
+    url = new URL(path, base);
+  }
 
   if (templateId) {
     url.searchParams.set("template_id", templateId);
