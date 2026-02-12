@@ -14,12 +14,24 @@ from app.models import (
 )
 from app.services.supabase_service import SupabaseService
 
+SUPABASE_INTERNAL_BASE = "http://host.docker.internal:8000"
+SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
 	prefix="/api/template-manager",
 	tags=["Template Manager"],
 )
+
+
+def _normalize_logo_url(url: Optional[str]) -> Optional[str]:
+    """將內部 Supabase URL 轉換成外部 HTTPS 代理網址。"""
+    if not url:
+        return url
+    if url.startswith(SUPABASE_INTERNAL_BASE):
+        return f"{SUPABASE_PUBLIC_PROXY_BASE}{url[len(SUPABASE_INTERNAL_BASE):]}"
+    return url
 
 
 async def _refresh_grant_cache(request: Request, supabase_service: SupabaseService) -> None:
@@ -425,7 +437,8 @@ async def create_template_with_upload(
                 )
                 
                 # 獲取公開 URL
-                logo_storage_path = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                raw_logo_url = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                logo_storage_path = _normalize_logo_url(raw_logo_url)
                 
             except Exception as e:
                 logger.error("Failed to upload logo file: %s", e, exc_info=True)
@@ -485,7 +498,7 @@ async def update_template_with_upload(
         if not existing:
             raise HTTPException(status_code=404, detail="Template not found")
 
-        logo_storage_path = existing.get("logo_storage_path")
+        logo_storage_path = _normalize_logo_url(existing.get("logo_storage_path"))
         
         # 2. 如果有上傳新文件，上傳並覆蓋
         if logo_file:
@@ -507,7 +520,8 @@ async def update_template_with_upload(
                 )
                 
                 # 獲取公開 URL
-                logo_storage_path = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                raw_logo_url = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                logo_storage_path = _normalize_logo_url(raw_logo_url)
 
             except Exception as e:
                 logger.error("Failed to upload logo file: %s", e, exc_info=True)

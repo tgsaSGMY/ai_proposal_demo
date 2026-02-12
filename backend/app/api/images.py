@@ -8,7 +8,7 @@ from app.api.dependencies import get_supabase_service, get_current_user_id, get_
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
 from app.utils.routing import resolve_model
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 import json
 import httpx
@@ -17,6 +17,18 @@ from app.config import DEFAULT_MODEL_ID
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/images", tags=["images"])
+
+SUPABASE_INTERNAL_BASE = "http://host.docker.internal:8000"
+SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
+
+
+def _normalize_public_url(url: Optional[str]) -> Optional[str]:
+    """將內部 Supabase URL 轉換成外部 HTTPS 代理網址。"""
+    if not url:
+        return url
+    if url.startswith(SUPABASE_INTERNAL_BASE):
+        return f"{SUPABASE_PUBLIC_PROXY_BASE}{url[len(SUPABASE_INTERNAL_BASE):]}"
+    return url
 
 
 @router.get("", summary="取得某個專案的所有圖片")
@@ -45,12 +57,13 @@ async def get_project_images(
         # 3) 為每個圖片產生 signed URL（使用 service key，會繞過 RLS）
         result = []
         for img in images:
+            normalized_public_url = _normalize_public_url(img.get("public_url"))
             image_data = {
                 "id": img.get("id"),
                 "project_id": img.get("project_id"),
                 "placeholder_text": img.get("placeholder_text"),
                 "storage_path": img.get("storage_path"),
-                "public_url": img.get("public_url"),
+                "public_url": normalized_public_url,
             }
 
             # 嘗試產生 signed URL（如果 bucket 是 private）
@@ -75,14 +88,14 @@ async def get_project_images(
                         image_data["signed_url"] = signed_url
                     else:
                         # Fallback to public_url if available
-                        image_data["signed_url"] = img.get("public_url")
+                        image_data["signed_url"] = normalized_public_url
 
                 except Exception as e:
                     logger.warning(
                         f"Failed to create signed URL for {img.get('storage_path')}: {e}"
                     )
                     # 如果簽名失敗，使用 public_url 作為 fallback
-                    image_data["signed_url"] = img.get("public_url")
+                    image_data["signed_url"] = normalized_public_url
 
             result.append(image_data)
 
@@ -386,6 +399,8 @@ async def generate_image(
             request.project_id, image_bytes, "image/png"
         )
 
+        public_url = _normalize_public_url(public_url)
+
         if not public_url:
             logger.error(f"Failed to upload image for project {request.project_id}")
             raise HTTPException(
@@ -439,7 +454,7 @@ async def generate_image(
             project_id=request.project_id,
             placeholder_text=request.prompt,
             public_url=public_url,
-            signed_url=signed_url or public_url
+            signed_url=_normalize_public_url(signed_url) or public_url
         )
 
     except HTTPException:
