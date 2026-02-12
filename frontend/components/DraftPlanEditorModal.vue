@@ -79,7 +79,6 @@ import {
   buildDynamicSections,
   mergeIntoEmptyValues,
   getCompositeKeyFromLabel,
-  getDynamicFieldLabels,
   getDynamicFieldDefinitions,
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
@@ -583,9 +582,9 @@ async function handleGenerateUserInput() {
       template_name: currentTemplate.value.name,
       section_name: currentSections.value[0]?.name || "general",
       user_id: userId,
-      dynamic_fields_schema: getDynamicFieldLabels(schemaOptions).map(
-        (label) => ({
-          label,
+      dynamic_fields_schema: getDynamicFieldDefinitions(schemaOptions).map(
+        (definition) => ({
+          label: definition.compositeKey,
         }),
       ),
     };
@@ -613,6 +612,19 @@ async function handleGenerateUserInput() {
       const attemptLabelMap = (fieldMap) => {
         let updated = false;
         Object.entries(fieldMap).forEach(([label, fieldValue]) => {
+          // 如果 label 已经是 composite key 的格式（包含 ::），直接使用
+          if (label.includes("::") && label in nextValues) {
+            const normalized =
+              typeof fieldValue === "string"
+                ? fieldValue
+                : fieldValue != null
+                  ? JSON.stringify(fieldValue)
+                  : "";
+            nextValues[label] = normalized;
+            updated = true;
+            return;
+          }
+          // 否则尝试通过 getCompositeKeyFromLabel 进行转换
           const compositeKey = getCompositeKeyFromLabel(label, schemaOptions);
           if (compositeKey && compositeKey in nextValues) {
             const normalized =

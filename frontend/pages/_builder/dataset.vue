@@ -121,7 +121,7 @@ async function handleInputModalSubmit(value) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ name: value }),
-        }
+        },
       );
       if (!response.ok)
         throw new Error("重命名失败: " + (await response.text()));
@@ -179,7 +179,7 @@ import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
 import InputPromptModal from "~/components/InputPromptModal.vue";
 // 导入加载状态和动态模式生成工具
 import { useLoading } from "~/composables/useLoading";
-import { getAllCompositeKeys } from "~/utils/dynamicSchema";
+import { getDynamicFieldDefinitions } from "~/utils/dynamicSchema";
 
 // ===== 模态框状态数据 =====
 // 用于重命名或创建企划的输入框模态框状态
@@ -278,7 +278,7 @@ onMounted(async () => {
       { event: "*", schema: "public", table: "draft_plans" },
       (payload) => {
         fetchDrafts();
-      }
+      },
     )
     .subscribe();
 
@@ -343,7 +343,9 @@ async function handleBatchStart(payload) {
     };
     const payload1 = {
       ...payload,
-      dynamic_fields_schema: getAllCompositeKeys(schemaOptions),
+      dynamic_fields_schema: getDynamicFieldDefinitions(schemaOptions).map(
+        (definition) => ({ label: definition.compositeKey }),
+      ),
     };
     const response = await fetch(
       `${API_BASE_URL}/draft_plans/batch_synthetic`,
@@ -354,7 +356,7 @@ async function handleBatchStart(payload) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload1),
-      }
+      },
     );
     if (response.status !== 202)
       throw new Error("启动批量任务失败: " + (await response.text()));
@@ -408,7 +410,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!draftResponse.ok) {

@@ -1,5 +1,7 @@
 import logging
+import time
 from typing import Any, Dict, List, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, Form, UploadFile, File
 
@@ -32,6 +34,35 @@ def _normalize_logo_url(url: Optional[str]) -> Optional[str]:
     if url.startswith(SUPABASE_INTERNAL_BASE):
         return f"{SUPABASE_PUBLIC_PROXY_BASE}{url[len(SUPABASE_INTERNAL_BASE):]}"
     return url
+
+
+def _extract_public_url(response: Any) -> Optional[str]:
+    """兼容不同 SDK 版本的 get_public_url 回傳格式。"""
+    if not response:
+        return None
+    if isinstance(response, str):
+        return response
+    if isinstance(response, dict):
+        for key in ("publicUrl", "publicURL", "publicurl"):
+            if response.get(key):
+                return response[key]
+        data = response.get("data")
+        if isinstance(data, dict):
+            for key in ("publicUrl", "publicURL", "publicurl"):
+                if data.get(key):
+                    return data[key]
+    return None
+
+
+def _with_cache_busting_token(url: Optional[str]) -> Optional[str]:
+    """為公開網址加上時間戳，避免前端快取舊圖。"""
+    if not url:
+        return url
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "v"]
+    query.append(("v", str(int(time.time()))))
+    new_query = urlencode(query)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
 
 
 async def _refresh_grant_cache(request: Request, supabase_service: SupabaseService) -> None:
@@ -435,10 +466,14 @@ async def create_template_with_upload(
                         "upsert": "true" 
                     }
                 )
-                
-                # 獲取公開 URL
-                raw_logo_url = supabase_service.client.storage.from_("logos").get_public_url(object_path)
-                logo_storage_path = _normalize_logo_url(raw_logo_url)
+
+                # 獲取公開 URL 並加入快取破壞參數
+                public_url_resp = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                public_url = _extract_public_url(public_url_resp)
+                if not public_url:
+                    raise HTTPException(status_code=500, detail="Failed to obtain logo public URL")
+                normalized_url = _normalize_logo_url(public_url)
+                logo_storage_path = _with_cache_busting_token(normalized_url)
                 
             except Exception as e:
                 logger.error("Failed to upload logo file: %s", e, exc_info=True)
@@ -518,10 +553,14 @@ async def update_template_with_upload(
                         "upsert": "true" 
                     }
                 )
-                
-                # 獲取公開 URL
-                raw_logo_url = supabase_service.client.storage.from_("logos").get_public_url(object_path)
-                logo_storage_path = _normalize_logo_url(raw_logo_url)
+
+                # 獲取公開 URL 並加入快取破壞參數
+                public_url_resp = supabase_service.client.storage.from_("logos").get_public_url(object_path)
+                public_url = _extract_public_url(public_url_resp)
+                if not public_url:
+                    raise HTTPException(status_code=500, detail="Failed to obtain logo public URL")
+                normalized_url = _normalize_logo_url(public_url)
+                logo_storage_path = _with_cache_busting_token(normalized_url)
 
             except Exception as e:
                 logger.error("Failed to upload logo file: %s", e, exc_info=True)
