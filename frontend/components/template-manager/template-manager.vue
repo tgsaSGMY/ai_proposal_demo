@@ -128,7 +128,7 @@
                 ></div>
                 <div
                   v-if="openMenuId === `${template.grant_id}-${template.id}`"
-                  class="fixed bg-white rounded-lg shadow-lg border border-slate-200 z-50 w-48"
+                  class="absolute bg-white rounded-lg shadow-lg border border-slate-200 z-50 w-48"
                   :style="
                     getMenuPosition(`${template.grant_id}-${template.id}`)
                   "
@@ -178,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, nextTick } from "vue";
+import { computed, ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import type { PropType } from "vue";
 import type { WordExportConfigEntry } from "~/types/wordExport";
 import type { NameRecommendConfig } from "~/types/nameRecommend";
@@ -231,6 +231,19 @@ const filteredTemplates = computed(() => {
   return props.templates.filter((tpl) => tpl.grant_id === templateFilter.value);
 });
 
+// 滾動時關閉菜單
+onMounted(() => {
+  const handleScroll = () => {
+    if (openMenuId.value) {
+      openMenuId.value = null;
+    }
+  };
+  window.addEventListener("scroll", handleScroll);
+  onBeforeUnmount(() => {
+    window.removeEventListener("scroll", handleScroll);
+  });
+});
+
 const toggleMenu = (templateId: string) => {
   openMenuId.value = openMenuId.value === templateId ? null : templateId;
 };
@@ -250,6 +263,9 @@ const getMenuPosition = (templateId: string) => {
   }
 
   const rect = trigger.getBoundingClientRect();
+  const scrollY = window.scrollY || window.pageYOffset;
+  const scrollX = window.scrollX || window.pageXOffset;
+
   const menuHeight = 150; // 菜單的大約高度
   const menuWidth = 192; // w-48 = 12rem = 192px
   const viewportHeight = window.innerHeight;
@@ -259,12 +275,12 @@ const getMenuPosition = (templateId: string) => {
   const spaceBelow = viewportHeight - rect.bottom;
   const showAbove = spaceBelow < menuHeight && rect.top > menuHeight;
 
-  // 計算頂部位置
+  // 計算相對於文檔（考慮滾動）的頂部位置
   const top = showAbove
-    ? `${rect.top - menuHeight - 8}px`
-    : `${rect.bottom + 8}px`;
+    ? `${rect.top + scrollY - menuHeight - 8}px`
+    : `${rect.top + scrollY + rect.height + 8}px`;
 
-  // 判斷菜單是否會超出右邊界，如果會則調整為從右邊對齊
+  // 計算左側位置
   const rightPos = viewportWidth - rect.right;
   const leftPos = rect.left - menuWidth + rect.width;
 
@@ -273,7 +289,7 @@ const getMenuPosition = (templateId: string) => {
   if (rightPos >= 0 && rightPos + menuWidth <= viewportWidth) {
     style.right = `${rightPos}px`;
   } else if (leftPos >= 0) {
-    style.left = `${leftPos}px`;
+    style.left = `${leftPos + scrollX}px`;
   } else {
     style.right = "16px"; // 如果都不行就距離右邊 16px
   }
