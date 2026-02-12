@@ -25,6 +25,12 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # 掛載證書 (左邊是主機路徑 : 右邊是容器路徑)
+      - /srv/nginx/certs:/etc/nginx/certs:ro
+      # 掛載設定檔
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - fastapi-backend
       - nuxt-frontend
