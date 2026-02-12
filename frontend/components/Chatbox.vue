@@ -922,6 +922,9 @@ function openAttachmentModal() {
 function handleFileImportConfirm(value) {
   draftMessage.value = value;
   isFileImportOpen.value = false;
+  nextTick(() => {
+    autoResizeTextarea();
+  });
 }
 
 function resolveTextarea(target) {
