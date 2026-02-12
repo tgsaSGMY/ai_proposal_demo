@@ -3,6 +3,10 @@ export default defineNuxtConfig({
   compatibilityDate: "2025-07-15",
   devtools: { enabled: true },
   modules: ["@nuxtjs/tailwindcss", "@nuxt/icon", "nuxt-color-picker"],
+  icon: {
+    // Serve Nuxt icon endpoint outside /api to avoid proxying to backend
+    localApiEndpoint: "/_nuxt_icon",
+  },
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "",
