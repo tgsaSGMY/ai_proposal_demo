@@ -448,47 +448,37 @@ async function fetchRemoteSchema({
   templateGrantId,
 }: FetchRemoteSchemaOptions): Promise<DynamicSchemaSection[]> {
   const config = useRuntimeConfig();
-  console.log("API Base URL:", config.public.apiBaseUrl);
-  let baseUrl = config.public.apiBaseUrl || "";
-  console.log("Resolved API Base URL:", baseUrl);
+  const apiBaseUrl = config.public.apiBaseUrl || "";
 
-  // 1. 如果 baseUrl 是絕對路徑，直接使用
-  // 2. 如果 baseUrl 為空或相對路徑，則自動結合 origin
-  const apiEndpoint = "/api/dynamic-sections";
-  let url: URL;
+  // Clean up double slashes if any (e.g. "http://host/" + "/api")
+  const cleanBase = apiBaseUrl.endsWith("/")
+    ? apiBaseUrl.slice(0, -1)
+    : apiBaseUrl;
+  const endpoint = "/api/dynamic-sections";
 
-  try {
-    // 嘗試構建絕對 URL (當 baseUrl 為完整 http://... 時)
-    // 注意：如果 baseUrl 為空，new URL("/api/...") 會拋錯，catch 會處理
-    const path = baseUrl ? `${baseUrl}${apiEndpoint}` : apiEndpoint;
-    url = new URL(path);
-  } catch (e) {
-    // 處理相對路徑的情況 (baseUrl 為空或 "/")
-    // 在瀏覽器：使用 window.location.origin
-    // 在服務端：默認為 localhost:8000
-    const origin =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : "http://localhost:8000";
+  // Construct the URL string
+  // If apiBaseUrl is empty, this results in "/api/dynamic-sections" (relative path), which fetch handles correctly
+  const urlString = `${cleanBase}${endpoint}`;
 
-    // 確保路徑格式正確
-    const cleanBaseUrl = baseUrl || "";
-    const cleanPath = `${cleanBaseUrl}${apiEndpoint}`.replace("//", "/");
-
-    url = new URL(cleanPath, origin);
-  }
-  console.log("Final API URL:", url.toString());
+  // Use URL object ONLY for query parameters to avoid manual string concatenation issues
+  // We use a dummy base if the path is relative, then extract the search params
+  const dummyBase = "http://dummy.com";
+  const urlObj = new URL(urlString, dummyBase);
 
   if (templateId) {
-    url.searchParams.set("template_id", templateId);
+    urlObj.searchParams.set("template_id", templateId);
     if (templateGrantId) {
-      url.searchParams.set("template_grant_id", templateGrantId);
+      urlObj.searchParams.set("template_grant_id", templateGrantId);
     }
   } else {
-    url.searchParams.set("schema_id", schemaId);
+    urlObj.searchParams.set("schema_id", schemaId);
   }
 
-  const response = await fetch(url.toString());
+  // Combine the original path with the generated query string
+  // If urlString was relative, we keep it relative. if it was absolute, we keep it absolute.
+  const finalUrl = `${urlString}?${urlObj.searchParams.toString()}`;
+
+  const response = await fetch(finalUrl);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch remote schema: ${response.status}`);
