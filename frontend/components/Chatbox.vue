@@ -548,20 +548,44 @@ async function streamAIGuidanceMessage(question) {
   if (!props.grantId || !props.templateId) {
     return;
   }
+  if (typeof window === "undefined") {
+    return;
+  }
 
-  const config = useRuntimeConfig();
-  const wsProtocol = config.public.apiBaseUrl.startsWith("https")
-    ? "wss"
-    : "ws";
+  const rawApiBase = config.public.apiBaseUrl || "";
+  let wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  let wsHost = window.location.host;
+  let wsPathPrefix = "";
+
+  if (rawApiBase.startsWith("http://") || rawApiBase.startsWith("https://")) {
+    try {
+      const parsedBase = new URL(rawApiBase);
+      wsProtocol = parsedBase.protocol === "https:" ? "wss" : "ws";
+      wsHost = parsedBase.host;
+      wsPathPrefix = parsedBase.pathname.replace(/\/+$/, "");
+    } catch (err) {
+      console.warn(
+        "Failed to parse apiBaseUrl, using window location instead",
+        err,
+      );
+    }
+  } else if (rawApiBase) {
+    wsPathPrefix = (
+      rawApiBase.startsWith("/") ? rawApiBase : `/${rawApiBase}`
+    ).replace(/\/+$/, "");
+  }
 
   // Get access token for WebSocket authentication
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const token = session?.access_token || "";
-  const wsUrl = `${wsProtocol}://${
-    config.public.apiBaseUrl.split("://")[1]
-  }/api/ws/chat_guidance${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+  const wsPath = `${wsPathPrefix}/api/ws/chat_guidance`
+    .replace(/\/{2,}/g, "/")
+    .replace(/^\/?/, "/");
+  const wsUrl = `${wsProtocol}://${wsHost}${wsPath}${
+    token ? `?token=${encodeURIComponent(token)}` : ""
+  }`;
 
   // 如果是初始化阶段，只建立连接，不创建 AI 消息
   if (question.id === "init") {
