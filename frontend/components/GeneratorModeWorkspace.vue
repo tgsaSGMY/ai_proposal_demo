@@ -25,7 +25,7 @@
           :grant-id="selectedGrantId"
           :template-id="selectedTemplateId"
           :saved-plan-versions="savedPlanVersions"
-          :project-created-at="projectRecord?.created_at || null"
+          :project-created-at="projectRecord?.created_at || undefined"
           @update:content="handleGeneratorContentUpdate"
           @autoFillComplete="handleGeneratorAutoFill"
           @generateUserInput="handleGeneratorUserInput"

@@ -512,6 +512,7 @@ const { show: showLoading, hide: hideLoading } = useLoading();
 
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const TEMPLATE_MANAGER_API = `${API_BASE_URL}/template-manager`;
 
 // ===== 数据模型（前端端） =====
 // 存储补助、选中的补助和模板、以及章节列表
@@ -1100,9 +1101,46 @@ onMounted(async () => {
 async function fetchGrantTemplates() {
   try {
     showLoading("載入補助模板...");
-    const response = await fetch(`${API_BASE_URL}/config`);
-    if (!response.ok) throw new Error(await response.text());
-    grants.value = await response.json();
+    const token = await getAuthToken();
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const [grantsResp, templatesResp] = await Promise.all([
+      fetch(`${TEMPLATE_MANAGER_API}/grants`, { headers }),
+      fetch(`${TEMPLATE_MANAGER_API}/templates`, { headers }),
+    ]);
+
+    if (!grantsResp.ok) {
+      throw new Error(await grantsResp.text());
+    }
+    if (!templatesResp.ok) {
+      throw new Error(await templatesResp.text());
+    }
+
+    const grantList = await grantsResp.json();
+    const templateList = await templatesResp.json();
+
+    const grantMap = new Map();
+    grantList.forEach((grant) => {
+      grantMap.set(grant.id, {
+        ...grant,
+        templates: [],
+      });
+    });
+
+    templateList.forEach((template) => {
+      if (!grantMap.has(template.grant_id)) {
+        grantMap.set(template.grant_id, {
+          id: template.grant_id,
+          name: template.grant_id,
+          templates: [],
+        });
+      }
+      grantMap.get(template.grant_id).templates.push(template);
+    });
+
+    grants.value = Array.from(grantMap.values());
     if (!selectedGrantId.value && grants.value.length) {
       selectedGrantId.value = grants.value[0].id;
     }
