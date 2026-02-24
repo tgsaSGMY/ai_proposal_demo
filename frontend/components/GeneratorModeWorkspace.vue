@@ -311,7 +311,7 @@ function handleGeneratorContentUpdate({
   scheduleGeneratorAutosave();
 }
 
-// 处理计划生成请求，调用后端API生成方案
+// 处理企劃生成请求，调用后端API生成方案
 async function handleGeneratorPlanRequest(outerPayload?: {
   summaries?: string[];
 }) {

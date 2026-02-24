@@ -56,7 +56,7 @@ export interface ExcelApplyOptions {
 export interface ExcelApplyResult {
   appliedCount: number; // 成功应用的行数
   skippedCount: number; // 跳过的行数（无法映射）
-  summaryText: string; // 从 Excel 摘要部分提取的计划名称和摘要
+  summaryText: string; // 从 Excel 摘要部分提取的企劃名称和摘要
 }
 
 // ===== 公共导出函数 =====
@@ -135,7 +135,7 @@ export function extractExcelRows(buffer: ArrayBuffer): ExcelImportRow[] {
  *   - 可以提高 Excel 导入的匹配成功率
  */
 export function buildExcelReplyTargetMap(
-  sections: DynamicSectionViewModel[]
+  sections: DynamicSectionViewModel[],
 ): Map<string, ExcelReplyTarget> {
   const map = new Map<string, ExcelReplyTarget>();
   // 遍历每个章节
@@ -170,7 +170,7 @@ export function buildExcelReplyTargetMap(
  *   3. 使用映射表查找目标字段
  *   4. 调用回调函数填充数据
  *   5. 统计应用结果
- *   6. 提取计划名称和摘要
+ *   6. 提取企劃名称和摘要
  *
  * 工作流程：
  *   1. 检查行数据有效性
@@ -179,7 +179,7 @@ export function buildExcelReplyTargetMap(
  *   4. 遍历每一行：
  *      - 提取章节、项目、回答
  *      - 规范化文本
- *      - 特殊处理摘要部分（计划名称、摘要）
+ *      - 特殊处理摘要部分（企劃名称、摘要）
  *      - 查找映射关系
  *      - 调用 onFill 回调填充数据
  *   5. 生成摘要文本
@@ -212,19 +212,19 @@ export function applyExcelRows({
   // ===== 摘要部分配置 =====
   // 定义摘要部分（一、摘要）的规范化名称
   const summarySectionKey = normalizeExcelText("一、摘要");
-  // 计划名称字段的可能列名变体
+  // 企劃名称字段的可能列名变体
   const summaryNameKey = normalizeExcelText("1.計畫暫定名稱");
   const summaryNameAltKey = normalizeExcelText("1.計劃暫定名稱");
   // 摘要内容字段的可能列名变体
   const summaryContentKey = normalizeExcelText("3.計畫摘要");
   const summaryContentAltKey = normalizeExcelText("3.計劃摘要");
 
-  // 合并所有可能的计划名称匹配项
+  // 合并所有可能的企劃名称匹配项
   const summaryNameCandidates = Array.from(
     new Set([
       ...buildExcelItemVariants(summaryNameKey),
       ...buildExcelItemVariants(summaryNameAltKey),
-    ])
+    ]),
   ).filter(Boolean);
 
   // 合并所有可能的摘要内容匹配项
@@ -232,12 +232,12 @@ export function applyExcelRows({
     new Set([
       ...buildExcelItemVariants(summaryContentKey),
       ...buildExcelItemVariants(summaryContentAltKey),
-    ])
+    ]),
   ).filter(Boolean);
 
   // 初始化统计变量
-  let planName = ""; // 提取的计划名称
-  let planSummary = ""; // 提取的计划摘要
+  let planName = ""; // 提取的企劃名称
+  let planSummary = ""; // 提取的企劃摘要
   let appliedCount = 0; // 成功应用的行数
   let skippedCount = 0; // 跳过的行数
 
@@ -288,12 +288,12 @@ export function applyExcelRows({
     // ===== 特殊处理：摘要部分 =====
     // 如果这行是摘要部分的数据
     if (normalizedSection.startsWith(summarySectionKey)) {
-      // 检查是否是计划名称
+      // 检查是否是企劃名称
       if (matchesAnyPrefix(normalizedItem, summaryNameCandidates)) {
         planName = answer;
         return;
       }
-      // 检查是否是计划摘要
+      // 检查是否是企劃摘要
       if (matchesAnyPrefix(normalizedItem, summaryContentCandidates)) {
         planSummary = answer;
       }
@@ -305,7 +305,7 @@ export function applyExcelRows({
     const target = findExcelReplyTarget(
       normalizedSection,
       normalizedItem,
-      targetMap
+      targetMap,
     );
 
     // 如果找不到映射关系，则跳过
@@ -401,14 +401,14 @@ function buildExcelLookupKey(sectionLabel: string, itemLabel: string): string {
 function stripLeadingOrdering(value: string): string {
   return value.replace(
     /^(?:[0-9]+|[一二三四五六七八九十百千]+)(?:[\.．、:：]*)?/,
-    ""
+    "",
   );
 }
 
 function stripTrailingPunctuation(value: string): string {
   return value.replace(
     /[?？!！。，．,\.、；;（）()\[\]{}【】<>《》"“”'‘’]+$/g,
-    ""
+    "",
   );
 }
 
@@ -429,7 +429,7 @@ function registerExcelLookup(
   map: Map<string, ExcelReplyTarget>,
   sectionLabel: string,
   itemLabel: string,
-  target: ExcelReplyTarget
+  target: ExcelReplyTarget,
 ): void {
   if (!itemLabel) {
     return;
@@ -443,7 +443,7 @@ function registerExcelLookup(
 function findExcelReplyTarget(
   sectionLabel: string,
   itemLabel: string,
-  map: Map<string, ExcelReplyTarget>
+  map: Map<string, ExcelReplyTarget>,
 ): ExcelReplyTarget | null {
   const variants = buildExcelItemVariants(itemLabel);
   for (const variant of variants) {
@@ -458,13 +458,13 @@ function findExcelReplyTarget(
 
 function matchesAnyPrefix(value: string, candidates: string[]): boolean {
   return candidates.some(
-    (candidate) => candidate && value.startsWith(candidate)
+    (candidate) => candidate && value.startsWith(candidate),
   );
 }
 
 function forwardFillMergedColumns(
   rows: ExcelImportRow[],
-  candidateKeys: string[]
+  candidateKeys: string[],
 ): void {
   let lastValue = "";
   rows.forEach((row) => {
@@ -492,7 +492,7 @@ function forwardFillMergedColumns(
     }
 
     const targetKey = candidateKeys.find((key) =>
-      Object.prototype.hasOwnProperty.call(row, key)
+      Object.prototype.hasOwnProperty.call(row, key),
     );
     if (targetKey) {
       row[targetKey] = lastValue;

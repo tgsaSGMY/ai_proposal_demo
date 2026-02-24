@@ -816,7 +816,7 @@ function copyPrompt(text: string) {
     });
 }
 
-// 根据计划内容丰富提示词
+// 根据企劃内容丰富提示词
 async function enrichPrompt() {
   if (!prompt.value.trim() || !props.projectId) return;
 

@@ -100,7 +100,7 @@ useHead({
 });
 
 // ===== 输入框模态框处理函数 =====
-// 处理用户在输入框模态框中的提交操作（重命名或创建企划）
+// 处理用户在输入框模态框中的提交操作（重命名或创建企劃）
 async function handleInputModalSubmit(value) {
   isInputModalVisible.value = false;
   if (!value || !value.trim()) return;
@@ -125,7 +125,7 @@ async function handleInputModalSubmit(value) {
       );
       if (!response.ok)
         throw new Error("重命名失败: " + (await response.text()));
-      success(`企划已重命名为 "${value}"`);
+      success(`企劃已重命名为 "${value}"`);
       fetchDrafts();
     } catch (e) {
       errorNotification(e.message);
@@ -182,7 +182,7 @@ import { useLoading } from "~/composables/useLoading";
 import { getDynamicFieldDefinitions } from "~/utils/dynamicSchema";
 
 // ===== 模态框状态数据 =====
-// 用于重命名或创建企划的输入框模态框状态
+// 用于重命名或创建企劃的输入框模态框状态
 const isInputModalVisible = ref(false);
 const inputModalTitle = ref("");
 const inputModalMessage = ref("");
@@ -205,19 +205,19 @@ const isBatchModalVisible = ref(false);
 // 实时数据库频道引用，用于监听数据变化
 let realtimeChannel = null;
 
-// ===== 企划编辑操作 =====
-// 处理重命名企划的模态框打开
+// ===== 企劃编辑操作 =====
+// 处理重命名企劃的模态框打开
 async function handleRenameDraft(draft) {
-  inputModalTitle.value = "重命名企划";
-  inputModalMessage.value = "请输入新的企划名称:";
+  inputModalTitle.value = "重命名企劃";
+  inputModalMessage.value = "请输入新的企劃名称:";
   inputModalDefaultValue.value = draft.name;
   inputModalMode = "rename";
   inputModalDraft = draft;
   isInputModalVisible.value = true;
 }
 
-// ===== 删除企划 =====
-// 显示确认对话框并删除选中的企划
+// ===== 删除企劃 =====
+// 显示确认对话框并删除选中的企劃
 async function handleDeleteDraft(draft) {
   const isConfirmed = await confirm({
     title: "確認刪除企劃",
@@ -243,7 +243,7 @@ async function handleDeleteDraft(draft) {
       },
     });
     if (!response.ok) throw new Error("删除失败: " + (await response.text()));
-    success(`企划 "${draft.name}" 已被删除。`);
+    success(`企劃 "${draft.name}" 已被删除。`);
     fetchDrafts();
   } catch (e) {
     errorNotification(e.message);
@@ -251,7 +251,7 @@ async function handleDeleteDraft(draft) {
 }
 
 // ===== 获取草稿列表 =====
-// 从数据库中获取所有企划草稿，按创建时间倒序排列
+// 从数据库中获取所有企劃草稿，按创建时间倒序排列
 async function fetchDrafts() {
   const { data, error } = await supabase
     .from("draft_plans")
@@ -308,7 +308,7 @@ onMounted(async () => {
 });
 
 // ===== 打开编辑器 =====
-// 打开选中的企划编辑器，初始化 user_input 和 plan_content 对象
+// 打开选中的企劃编辑器，初始化 user_input 和 plan_content 对象
 function openEditor(draft) {
   // Make sure user_input and plan_content are valid objects
   if (!draft.user_input) draft.user_input = {};
@@ -316,12 +316,12 @@ function openEditor(draft) {
   selectedDraft.value = draft;
 }
 
-// ===== 创建企划 =====
-// 显示输入框模态框，用于创建新的企划（手动标注或生成企划）
+// ===== 创建企劃 =====
+// 显示输入框模态框，用于创建新的企劃（手动标注或生成企劃）
 async function handleCreateDraft(mode) {
-  inputModalTitle.value = "新建企划";
-  inputModalMessage.value = `请输入新的企划名称 (${
-    mode === "golden" ? "手动标注" : "生成企划"
+  inputModalTitle.value = "新建企劃";
+  inputModalMessage.value = `请输入新的企劃名称 (${
+    mode === "golden" ? "手动标注" : "生成企劃"
   })：`;
   inputModalDefaultValue.value = "";
   inputModalMode = "create";
@@ -330,7 +330,7 @@ async function handleCreateDraft(mode) {
 }
 
 // ===== 批量 AI 生成 =====
-// 启动批量 AI 生成任务，将新企划添加到草稿列表
+// 启动批量 AI 生成任务，将新企劃添加到草稿列表
 async function handleBatchStart(payload) {
   try {
     const {
@@ -367,7 +367,7 @@ async function handleBatchStart(payload) {
 }
 
 // ===== 保存到最终数据集 =====
-// 将企划保存到最终数据集，然后删除对应的草稿
+// 将企劃保存到最终数据集，然后删除对应的草稿
 async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   const {
     id: draftId,
@@ -467,7 +467,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
     if (response.status !== 202)
       throw new Error("保存至数据集失败: " + (await response.text()));
 
-    success(`企划 "${draftToSave.name}" 已成功保存至最终数据集！`);
+    success(`企劃 "${draftToSave.name}" 已成功保存至最终数据集！`);
     await fetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
       method: "DELETE",
       headers: {

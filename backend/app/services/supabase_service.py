@@ -544,12 +544,12 @@ class SupabaseService:
 
 
     async def get_all_draft_plans(self) -> List[Dict[str, Any]]:
-        """获取所有企划草稿"""
+        """获取所有企劃草稿"""
         response = self.client.from_("draft_plans").select("*").order("created_at", desc=True).execute()
         return response.data if response.data else []
 
     async def create_draft_plan(self, name: str, mode: str, grant_id: Optional[str] = None, template_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """创建一个新的企划草稿"""
+        """创建一个新的企劃草稿"""
         
         # 检查同名草稿
         existing_response = self.client.from_("draft_plans").select("id").eq("name", name).execute()
@@ -575,7 +575,7 @@ class SupabaseService:
         return response.data if response.data else None
     
     async def update_draft_plan(self, draft_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """更新一个企划草稿"""
+        """更新一个企劃草稿"""
         if "updated_at" not in data:
             # 设置为东八区时间
             tz = timezone(timedelta(hours=8))
@@ -585,7 +585,7 @@ class SupabaseService:
         return response.data[0] if response.data else None
 
     async def delete_draft_plan(self, draft_id: str) -> bool:
-        """删除一个企划草稿"""
+        """删除一个企劃草稿"""
         response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
         return len(response.data) > 0
 

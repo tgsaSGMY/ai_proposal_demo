@@ -187,7 +187,7 @@ function handleExport() {
   emit("export", props.version);
 }
 
-// 触发版本更新事件，用新版本数据更新计划
+// 触发版本更新事件，用新版本数据更新企劃
 function handleVersionUpdate() {
   if (!props.version || !props.version.data) {
     return;

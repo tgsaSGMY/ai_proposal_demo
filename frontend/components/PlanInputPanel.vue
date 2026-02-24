@@ -445,7 +445,7 @@ const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value),
 );
 
-// 计算属性：检查是否准备好生成计划，需要选择模板和输入摘要
+// 计算属性：检查是否准备好生成企劃，需要选择模板和输入摘要
 const isReadyToGenerate = computed(() => {
   return (
     selectedTemplateId.value &&
@@ -522,7 +522,7 @@ function computeFieldStatus(value) {
   return "可選填";
 }
 
-// 发送生成计划事件，附带参考链接摘要
+// 发送生成企劃事件，附带参考链接摘要
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
 

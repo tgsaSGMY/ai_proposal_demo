@@ -10,10 +10,10 @@
       class="bg-white rounded-lg shadow-xl w-full max-w-xs sm:max-w-md p-3 sm:p-6"
     >
       <h2 class="text-lg sm:text-xl font-bold text-gray-800 mb-2 sm:mb-4">
-        批量生成 AI 企划
+        批量生成 AI 企劃
       </h2>
       <p class="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
-        选择主题和模板，然后设定要生成的企划数量。系统将在后台为您生成多个独特的项目想法。
+        选择主题和模板，然后设定要生成的企劃数量。系统将在后台为您生成多个独特的项目想法。
       </p>
 
       <div class="space-y-3 sm:space-y-4">
@@ -123,7 +123,7 @@ watch(
       selectedTemplateId.value = "";
       count.value = 5;
     }
-  }
+  },
 );
 
 // 關閉模態框

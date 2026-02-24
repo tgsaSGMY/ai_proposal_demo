@@ -110,12 +110,12 @@ async def run_synthetic_idea_generation_task(
 
 # --- API 端点 ---
 
-@router.get("", response_model=List[Dict[str, Any]], summary="获取所有企划草稿")
+@router.get("", response_model=List[Dict[str, Any]], summary="获取所有企劃草稿")
 async def get_all_drafts(supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     # 獲取所有企劃草稿記錄，僅限內部人員訪問
     return await supabase_service.get_all_draft_plans()
 
-@router.get("/{draft_id}", response_model=Dict[str, Any], summary="获取单个企划草稿")
+@router.get("/{draft_id}", response_model=Dict[str, Any], summary="获取单个企劃草稿")
 async def get_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     # 根據 ID 獲取單個企劃草稿詳情
     draft = await supabase_service.get_draft_plan_by_id(draft_id)
@@ -123,7 +123,7 @@ async def get_draft(draft_id: str, supabase_service: SupabaseService = Depends(g
         raise HTTPException(status_code=404, detail="Draft not found.")
     return draft
 
-@router.post("", response_model=Dict[str, Any], status_code=201, summary="创建单个企划草稿")
+@router.post("", response_model=Dict[str, Any], status_code=201, summary="创建单个企劃草稿")
 async def create_single_draft(req: CreateDraftRequest, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     # 建立新的企劃草稿，包含名稱、模式、主題和模板信息
     draft = await supabase_service.create_draft_plan(
@@ -133,7 +133,7 @@ async def create_single_draft(req: CreateDraftRequest, supabase_service: Supabas
         raise HTTPException(status_code=500, detail="Failed to create draft.")
     return draft
 
-@router.post("/batch_synthetic", status_code=202, summary="异步批量生成 AI 企划想法")
+@router.post("/batch_synthetic", status_code=202, summary="异步批量生成 AI 企劃想法")
 async def create_batch_synthetic_drafts(
     req: BatchSyntheticRequest,
     request: Request, 
@@ -164,7 +164,7 @@ async def create_batch_synthetic_drafts(
             )
     return {"message": f"Started generating ideas for {len(created_draft_ids)} drafts.", "draft_ids": created_draft_ids}
 
-@router.put("/{draft_id}", response_model=Dict[str, Any], summary="更新一个企划草稿")
+@router.put("/{draft_id}", response_model=Dict[str, Any], summary="更新一个企劃草稿")
 async def update_draft(draft_id: str, req: DraftPlanUpdateRequest, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     # 更新指定企劃草稿的內容，包括名稱、計劃內容、用戶輸入等
     updated_draft = await supabase_service.update_draft_plan(draft_id, req.dict(exclude_unset=True))
@@ -172,7 +172,7 @@ async def update_draft(draft_id: str, req: DraftPlanUpdateRequest, supabase_serv
         raise HTTPException(status_code=404, detail="Draft not found.")
     return updated_draft
 
-@router.delete("/{draft_id}", status_code=204, summary="删除一个企划草稿")
+@router.delete("/{draft_id}", status_code=204, summary="删除一个企劃草稿")
 async def delete_draft(draft_id: str, supabase_service: SupabaseService = Depends(get_supabase_service), _=Depends(verify_internal_user)):
     # 刪除指定的企劃草稿記錄
     success = await supabase_service.delete_draft_plan(draft_id)

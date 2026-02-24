@@ -288,8 +288,8 @@ const { userId: currentUserId, refreshUser } = useCurrentUser();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// ===== 计划生成器状态 =====
-// 获取计划相关的所有配置和数据
+// ===== 企劃生成器状态 =====
+// 获取企劃相关的所有配置和数据
 const {
   allConfigs,
   selectedGrantId,
@@ -380,8 +380,8 @@ function formatVersionTimestamp(value?: string | null) {
   return new Date().toLocaleString("zh-TW");
 }
 
-// ===== 计算属性：已保存的计划版本 =====
-// 将保存的计划数据转换为版本列表格式，支持单个版本和多个版本
+// ===== 计算属性：已保存的企劃版本 =====
+// 将保存的企劃数据转换为版本列表格式，支持单个版本和多个版本
 const savedPlanVersions = computed(() => {
   if (!projectRecord.value?.saved_plan) {
     return [];
@@ -410,7 +410,7 @@ const savedPlanVersions = computed(() => {
 });
 
 // ===== 计算属性：是否为生成模式 =====
-// 检查项目是否为计划生成模式
+// 检查项目是否为企劃生成模式
 const isGeneratorMode = computed(
   () => projectRecord.value?.mode === "generator",
 );
@@ -681,8 +681,8 @@ function toggleModel() {
     useModelType.value === "internal" ? "external" : "internal";
 }
 
-// ===== 导出计划为 Word =====
-// 调用导出函数将计划内容导出为 Word 文档
+// ===== 导出企劃为 Word =====
+// 调用导出函数将企劃内容导出为 Word 文档
 async function handleExportWord(payload?: { version?: any }) {
   let contentToExport = finalPlanContent.value;
 
@@ -1001,7 +1001,7 @@ async function handleVersionRevision(payload: {
   finalPlanContent.value = {};
   candidatePlan.value = {};
 
-  // 构建完整的版本更新提示词，包括计划名称、摘要和 stored answer
+  // 构建完整的版本更新提示词，包括企劃名称、摘要和 stored answer
   const projectTitle = projectRecord.value?.title || "無";
   const projectSummary = projectRecord.value?.description || "無";
   // 格式化 stored answer，类似 Chatbox 中的处理方式

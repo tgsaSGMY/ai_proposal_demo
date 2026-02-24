@@ -402,7 +402,7 @@ async function saveRejectedAnswersToDb(rejected) {
   }
 }
 
-// 处理自动填充，更新计划内容
+// 处理自动填充，更新企劃内容
 function handleAutoFillInModal(filledContent) {
   if (!planContent.value) planContent.value = {};
   Object.assign(planContent.value, filledContent);
@@ -471,7 +471,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-// 处理计划生成，调用后端API生成多个候选方案
+// 处理企劃生成，调用后端API生成多个候选方案
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
   showLoading("正在生成計劃書...", true);

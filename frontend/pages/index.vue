@@ -436,7 +436,7 @@ const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const SUPABASE_BUCKET_URL = config.public.supabaseUrl;
 
-// 从数据库加载计划类型
+// 从数据库加载企劃类型
 async function loadPlanTypes() {
   try {
     const response = await fetch(`${API_BASE_URL}/plan_templates`, {
