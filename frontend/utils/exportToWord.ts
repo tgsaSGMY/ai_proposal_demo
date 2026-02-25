@@ -154,6 +154,23 @@ type ExportableSection = { id: string; name: string; json_schema?: any };
 
 type HeadingCounterState = Record<number, number>;
 
+const DEFAULT_EAST_ASIA_FONT = "Microsoft JhengHei";
+
+function resolveRunFont(font?: string) {
+  const normalizedFont =
+    (font || "Times New Roman").trim() || "Times New Roman";
+  const eastAsiaFont = /^[\x00-\x7F\s]+$/.test(normalizedFont)
+    ? DEFAULT_EAST_ASIA_FONT
+    : normalizedFont;
+
+  return {
+    ascii: normalizedFont,
+    hAnsi: normalizedFont,
+    cs: normalizedFont,
+    eastAsia: eastAsiaFont,
+  };
+}
+
 const DEFAULT_DOCUMENT_STYLE: Required<WordDocumentStyle> = {
   headingFont: "Times New Roman",
   headingSizePt: 18,
@@ -686,7 +703,7 @@ function renderTextWithHighlightedImages(
           new TextRun({
             text: text,
             size: size,
-            font: font,
+            font: resolveRunFont(font),
             bold: bold,
           }),
         ],
@@ -708,7 +725,7 @@ function renderTextWithHighlightedImages(
         new TextRun({
           text: text.substring(lastIndex, match.index),
           size: size,
-          font: font,
+          font: resolveRunFont(font),
           bold: bold,
         }),
       );
@@ -720,7 +737,7 @@ function renderTextWithHighlightedImages(
         new TextRun({
           text: match.text,
           size: size,
-          font: font,
+          font: resolveRunFont(font),
           bold: bold,
           highlight: "yellow",
         }),
@@ -730,7 +747,7 @@ function renderTextWithHighlightedImages(
         new TextRun({
           text: match.text ?? "",
           size: size,
-          font: font,
+          font: resolveRunFont(font),
           bold: true,
         }),
       );
@@ -745,7 +762,7 @@ function renderTextWithHighlightedImages(
       new TextRun({
         text: text.substring(lastIndex),
         size: size,
-        font: font,
+        font: resolveRunFont(font),
         bold: bold,
       }),
     );
@@ -775,8 +792,12 @@ function renderTextWithLineBreaksToParagraphs(
 ): void {
   if (!text) return;
 
-  // 规范化：将多个连续换行符替换为双换行符
-  const normalized = text.replace(/\n{2,}/g, "\n\n");
+  // 规范化：统一各种换行符，再将多个连续换行符压缩为双换行
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[\u2028\u2029]/g, "\n")
+    .replace(/\n{2,}/g, "\n\n");
   const segments = normalized.split("\n\n");
 
   segments.forEach((segment) => {
@@ -830,7 +851,7 @@ function buildParagraphFromNode(
             text: node.label || "章節標題",
             bold: resolvedStyle.headingBold,
             size: headingSize,
-            font: resolvedStyle.headingFont,
+            font: resolveRunFont(resolvedStyle.headingFont),
           }),
         ],
         spacing: { before: 200, after: 120 },
@@ -848,7 +869,7 @@ function buildParagraphFromNode(
             text: `${prefix}${node.label || "次標題"}`,
             bold: resolvedStyle.subHeadingBold,
             size: subHeadingSize,
-            font: resolvedStyle.subHeadingFont,
+            font: resolveRunFont(resolvedStyle.subHeadingFont),
           }),
         ],
         spacing: { before: 120, after: 80 },
@@ -918,7 +939,7 @@ function buildParagraphFromNode(
                     text: "欄位",
                     bold: true,
                     size: bodySize,
-                    font: resolvedStyle.bodyFont,
+                    font: resolveRunFont(resolvedStyle.bodyFont),
                   }),
                 ],
               }),
@@ -934,7 +955,7 @@ function buildParagraphFromNode(
                         text: String(r + 1),
                         bold: true,
                         size: bodySize,
-                        font: resolvedStyle.bodyFont,
+                        font: resolveRunFont(resolvedStyle.bodyFont),
                       }),
                     ],
                   }),
@@ -955,7 +976,7 @@ function buildParagraphFromNode(
                           text: col.label || col.key,
                           bold: true,
                           size: bodySize,
-                          font: resolvedStyle.bodyFont,
+                          font: resolveRunFont(resolvedStyle.bodyFont),
                         }),
                       ],
                     }),
@@ -974,7 +995,7 @@ function buildParagraphFromNode(
                                   : (row ?? ""),
                               ),
                               size: bodySize,
-                              font: resolvedStyle.bodyFont,
+                              font: resolveRunFont(resolvedStyle.bodyFont),
                             }),
                           ],
                         }),
@@ -996,7 +1017,7 @@ function buildParagraphFromNode(
                       text: col.label || col.key,
                       bold: true,
                       size: bodySize,
-                      font: resolvedStyle.bodyFont,
+                      font: resolveRunFont(resolvedStyle.bodyFont),
                     }),
                   ],
                 }),
@@ -1017,7 +1038,7 @@ function buildParagraphFromNode(
                               new TextRun({
                                 text: "無",
                                 size: bodySize,
-                                font: resolvedStyle.bodyFont,
+                                font: resolveRunFont(resolvedStyle.bodyFont),
                               }),
                             ],
                           }),
@@ -1059,7 +1080,9 @@ function buildParagraphFromNode(
                                     new TextRun({
                                       text: cellValue,
                                       size: bodySize,
-                                      font: resolvedStyle.bodyFont,
+                                      font: resolveRunFont(
+                                        resolvedStyle.bodyFont,
+                                      ),
                                     }),
                                   ],
                                 }),
@@ -1100,7 +1123,7 @@ function buildParagraphFromNode(
               italics: true,
               color: "999999",
               size: bodySize,
-              font: resolvedStyle.bodyFont,
+              font: resolveRunFont(resolvedStyle.bodyFont),
             }),
           ],
           spacing: { after: 80 },
@@ -1147,7 +1170,7 @@ function buildParagraphFromNode(
                           new TextRun({
                             text: displayValue,
                             size: bodySize,
-                            font: resolvedStyle.bodyFont,
+                            font: resolveRunFont(resolvedStyle.bodyFont),
                           }),
                         ],
                       }),
@@ -1262,7 +1285,7 @@ function buildParagraphFromNode(
                   new TextRun({
                     text: prefixText + displayValue,
                     size: bodySize,
-                    font: resolvedStyle.bodyFont,
+                    font: resolveRunFont(resolvedStyle.bodyFont),
                     bold: childBold,
                   }),
                 ],
@@ -1294,7 +1317,7 @@ function buildParagraphFromNode(
                       text: `${prefix}${adjustedChildNode.label || "次標題"}`,
                       bold: resolvedStyle.subHeadingBold,
                       size: subHeadingSize,
-                      font: resolvedStyle.subHeadingFont,
+                      font: resolveRunFont(resolvedStyle.subHeadingFont),
                     }),
                   ],
                   spacing: { before: 120, after: 80 },
@@ -1353,7 +1376,7 @@ function buildParagraphFromNode(
               new TextRun({
                 text: displayText,
                 size: bodySize,
-                font: resolvedStyle.bodyFont,
+                font: resolveRunFont(resolvedStyle.bodyFont),
               }),
             ],
             spacing: { after: 40 },
@@ -1381,7 +1404,7 @@ function buildParagraphFromNode(
           new TextRun({
             text: node.label || "【圖：請插入圖片】",
             size: bodySize,
-            font: resolvedStyle.bodyFont,
+            font: resolveRunFont(resolvedStyle.bodyFont),
             highlight: "yellow",
           }),
         ],
@@ -1433,6 +1456,7 @@ async function exportPlanUsingWordConfig(
               text: projectTitle,
               bold: true,
               size: 36,
+              font: resolveRunFont(config.documentStyle?.headingFont),
             }),
           ],
           alignment: AlignmentType.CENTER,
@@ -1457,6 +1481,7 @@ async function exportPlanUsingWordConfig(
               text: "尚未設定任何節點。",
               color: "999999",
               size: 22,
+              font: resolveRunFont(config.documentStyle?.bodyFont),
             }),
           ],
         }),
