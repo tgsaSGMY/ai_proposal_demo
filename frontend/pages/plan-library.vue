@@ -233,56 +233,30 @@
         <!-- 側欄統計與快捷資訊：例如本月生成次數、真人專家邀請等 -->
         <div class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div
-            class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm flex items-start gap-3"
+            class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3 cursor-pointer"
+            @click="openSupportPanel"
           >
             <span
               class="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500"
             >
               <Icon
-                name="tabler:circle"
+                name="tabler:headset"
                 width="24"
                 height="24"
                 style="color: #e40909"
               />
             </span>
 
-            <div class="flex-1">
-              <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-400"
-              >
-                本月 AI 生成次數
+            <div class="flex-1 flex items-center justify-between">
+              <p class="text-base font-semibold text-gray-700">
+                客戶服務與專家諮詢
               </p>
-              <div class="mt-1 flex items-end gap-2">
-                <span class="text-xl font-semibold text-gray-900"
-                  >暫不計算</span
-                >
-              </div>
-            </div>
-          </div>
-          <div
-            class="rounded-3xl border border-gray-100 bg-red-500 text-white p-4 shadow-sm flex items-start gap-3"
-          >
-            <span
-              class="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white"
-            >
               <Icon
-                name="mdi:people-add"
-                width="24"
-                height="24"
-                style="color: #fff"
+                name="tabler:arrow-narrow-right"
+                width="64"
+                height="64"
+                class="text-gray-400"
               />
-            </span>
-            <div class="flex-1">
-              <p
-                class="text-xs font-semibold uppercase tracking-wide text-white"
-              >
-                需要專業協助？
-              </p>
-              <div class="mt-1 flex items-end gap-2">
-                <span class="text-xl font-semibold text-white"
-                  >真人專家邀請</span
-                >
-              </div>
             </div>
           </div>
         </div>
@@ -301,6 +275,141 @@
         @generate="handleImageGenerate"
         @close="closeImageGeneratorModal"
       />
+
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        leave-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="isSupportPanelOpen"
+          class="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-40"
+          @click="closeSupportPanel"
+        ></div>
+      </Transition>
+
+      <Transition
+        enter-active-class="transition-transform duration-300"
+        leave-active-class="transition-transform duration-300"
+        enter-from-class="translate-x-full"
+        leave-to-class="translate-x-full"
+      >
+        <aside
+          v-if="isSupportPanelOpen"
+          class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col"
+        >
+          <div
+            class="flex items-center justify-between px-6 py-4 border-b border-gray-100"
+          >
+            <div class="flex items-center gap-3">
+              <span
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-500"
+              >
+                <Icon name="tabler:headset" width="26" height="26" />
+              </span>
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900">
+                  客戶服務與專家咨詢
+                </h2>
+                <p class="text-sm text-gray-500">我們隨時準備為您提供服務</p>
+              </div>
+            </div>
+            <button
+              class="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              @click="closeSupportPanel"
+              aria-label="關閉支援面板"
+            >
+              <Icon name="tabler:x" width="22" height="22" />
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+            <section class="space-y-3">
+              <h3 class="text-lg font-semibold text-gray-900">價格服務方案</h3>
+              <p class="text-sm text-gray-500">
+                （佔位符）我們將爲您提供OOO方案。
+              </p>
+              <ul class="space-y-2 text-sm text-gray-600">
+                <li class="flex items-start gap-2">
+                  <Icon name="tabler:check" class="text-emerald-500 mt-0.5" />
+                  <span>（佔位符）AI 企劃產製與審稿服務</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <Icon name="tabler:check" class="text-emerald-500 mt-0.5" />
+                  <span>（佔位符）專家陪跑顧問</span>
+                </li>
+              </ul>
+              <button
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-rose-600"
+              >
+                取得專案報價
+                <Icon name="tabler:arrow-up-right" width="18" height="18" />
+              </button>
+            </section>
+
+            <section class="space-y-3">
+              <h3 class="text-lg font-semibold text-gray-900">客戶 QA</h3>
+              <div class="space-y-2 text-sm text-gray-600">
+                <details
+                  class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3"
+                >
+                  <summary class="font-semibold text-gray-800 cursor-pointer">
+                    （佔位符）如何加速產製一份符合補助條件的計畫案？
+                  </summary>
+                  <p class="mt-2 text-gray-600">
+                    （佔位符）先行建立模板與案例資料庫，透過 AI
+                    生成模式產生初稿，再由專家調整策略與預算，即可在短時間内內完成高品質輸出。
+                  </p>
+                </details>
+                <details
+                  class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3"
+                >
+                  <summary class="font-semibold text-gray-800 cursor-pointer">
+                    （佔位符）OOO
+                  </summary>
+                  <p class="mt-2 text-gray-600">（佔位符）OOO</p>
+                </details>
+              </div>
+            </section>
+
+            <section class="space-y-3">
+              <h3 class="text-lg font-semibold text-gray-900">
+                LINE QR Code 掃描客服
+              </h3>
+              <p class="text-sm text-gray-500">
+                掃描下方 QR Code 或點擊連結，即可加入智庫 LINE@
+                並獲得真人客服協助。
+              </p>
+              <div
+                class="flex items-center gap-4 rounded-3xl border border-dashed border-gray-200 p-4"
+              >
+                <div
+                  class="flex h-28 w-28 items-center justify-center rounded-2xl bg-white border border-gray-100 overflow-hidden"
+                >
+                  <img
+                    src="/qr_code.jpg"
+                    alt="LINE 客服 QR Code"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+                <div class="flex-1 space-y-2">
+                  <p class="text-sm text-gray-600">LINE@ 智庫客服</p>
+                  <a
+                    href="https://lin.ee/h0tC2Hw"
+                    target="_blank"
+                    rel="noopener"
+                    class="inline-flex items-center gap-2 text-emerald-600 font-semibold"
+                  >
+                    立即開啟 LINE 聊天
+                    <Icon name="tabler:external-link" width="18" height="18" />
+                  </a>
+                </div>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </Transition>
     </div>
   </ClientOnly>
 </template>
@@ -416,6 +525,7 @@ const isEditModalOpen = ref(false);
 const editingProject = ref<ProjectCard | null>(null);
 const isImageGeneratorOpen = ref(false);
 const selectedProjectForImage = ref<ProjectCard | null>(null);
+const isSupportPanelOpen = ref(false);
 
 // internal check
 const { checkIsInternal } = useInternalCheck();
@@ -653,6 +763,14 @@ function closeEditModal() {
 function closeImageGeneratorModal() {
   isImageGeneratorOpen.value = false;
   selectedProjectForImage.value = null;
+}
+
+function openSupportPanel() {
+  isSupportPanelOpen.value = true;
+}
+
+function closeSupportPanel() {
+  isSupportPanelOpen.value = false;
 }
 
 /**
