@@ -290,7 +290,7 @@ useHead({
 
 // ===== 导入依赖库 =====
 // 导入 Vue 核心库
-import { ref, onMounted, reactive, watch, computed } from "vue";
+import { ref, onMounted, reactive, watch, computed, nextTick } from "vue";
 // 导入子组件和工具函数
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
@@ -345,7 +345,7 @@ const availableTemplates = computed(() => {
 const availableSections = computed(() => {
   if (!filters.templateId) return [];
   const template = availableTemplates.value.find(
-    (t) => t.id === filters.templateId
+    (t) => t.id === filters.templateId,
   );
   return template ? template.sections : [];
 });
@@ -379,7 +379,7 @@ watch(
     datasets.value = newVal;
     currentPage.value = 1;
   },
-  { deep: true }
+  { deep: true },
 );
 
 // ===== 计算属性：分页后的数据集 =====
@@ -422,7 +422,8 @@ const nameMaps = computed(() => {
 
 // ===== 刷新数据库 =====
 // 调用后端 API 刷新数据集，获取最新的数据
-async function handleRefreshDatasets() {
+async function handleRefreshDatasets(options = {}) {
+  const { syncLocalData = true, showSuccessToast = true } = options;
   isRefreshing.value = true;
   try {
     const {
@@ -438,9 +439,13 @@ async function handleRefreshDatasets() {
     if (!response.ok) throw new Error("Network response was not ok.");
 
     const result = await response.json();
-    allDatasets.value = result.datasets;
-    datasets.value = allDatasets.value;
-    success("數據庫刷新成功！");
+    if (syncLocalData) {
+      allDatasets.value = result.datasets;
+      datasets.value = allDatasets.value;
+    }
+    if (showSuccessToast) {
+      success("數據庫刷新成功！");
+    }
   } catch (e) {
     errorNotification(`刷新失敗: ${e.message}`);
   } finally {
@@ -492,13 +497,13 @@ watch(
   () => {
     filters.templateId = "";
     filters.sectionId = "";
-  }
+  },
 );
 watch(
   () => filters.templateId,
   () => {
     filters.sectionId = "";
-  }
+  },
 );
 
 // ===== 初始化数据集 =====
@@ -586,9 +591,24 @@ async function handleSave(updatedData) {
       const errData = await response.json();
       throw new Error(errData.detail || "保存失敗");
     }
-    success("保存成功！");
+
+    const targetIndex = allDatasets.value.findIndex(
+      (item) => item.id === updatedData.id,
+    );
+    if (targetIndex !== -1) {
+      allDatasets.value[targetIndex] = {
+        ...allDatasets.value[targetIndex],
+        ...entry,
+      };
+    }
+
     closeEditModal();
-    handleRefreshDatasets();
+    await nextTick();
+    success("保存成功！");
+    await handleRefreshDatasets({
+      syncLocalData: false,
+      showSuccessToast: false,
+    });
   } catch (e) {
     errorNotification(`保存失敗: ${e.message}`);
   } finally {
@@ -632,8 +652,14 @@ async function handleDelete(id) {
       const errData = await response.json();
       throw new Error(errData.detail || "刪除失敗");
     }
+
+    allDatasets.value = allDatasets.value.filter((d) => d.id !== id);
+
     success("刪除成功！");
-    handleRefreshDatasets();
+    await handleRefreshDatasets({
+      syncLocalData: false,
+      showSuccessToast: false,
+    });
   } catch (e) {
     errorNotification(`刪除失敗: ${e.message}`);
   }
