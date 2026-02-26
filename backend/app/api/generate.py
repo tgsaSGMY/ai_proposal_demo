@@ -1725,7 +1725,7 @@ async def autofill_from_document(
                 model_to_use,  
                 messages,  
                 is_json_output=True,
-                reasoning_effort="medium",
+                reasoning_effort="low",
             )
 
         if llm_error:
