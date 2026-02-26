@@ -385,6 +385,7 @@ class LLMService:
         messages: List[Dict],
         is_json_output: bool,
         enable_grounding: bool = False,
+        reasoning_effort: Optional[str] = None,
     ) -> Tuple[str, Dict, Dict]:
         """根據 model_info 建立 API 請求的 URL, headers, 和 payload"""
         provider = model_info.get("provider")
@@ -421,6 +422,13 @@ class LLMService:
                 "model": model_id,
                 "input": input_messages, # 這裡傳入簡化後的列表
             }
+
+            if (
+                reasoning_effort in {"low", "medium", "high"}
+                and isinstance(model_id, str)
+                and model_id.startswith("gpt-5")
+            ):
+                payload["reasoning"] = {"effort": reasoning_effort}
 
             # Web Search
             if enable_grounding:
@@ -563,6 +571,7 @@ class LLMService:
         is_json_output: bool = False,
         enable_grounding: bool = False,
         response_hook: Optional[Callable[[Dict[str, Any]], None]] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> Tuple[Optional[str], Optional[Dict], Optional[Dict]]:
         """呼叫外部 LLM API (如 OpenAI, Ollama, Gemini)，並處理重試邏輯和錯誤。
         
@@ -586,6 +595,7 @@ class LLMService:
                         messages,
                         is_json_output,
                         enable_grounding=enable_grounding,
+                        reasoning_effort=reasoning_effort,
                     )
                     response = await session.post(api_url, json=payload, headers=headers, timeout=300)
                     response.raise_for_status()

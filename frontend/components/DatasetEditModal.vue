@@ -119,6 +119,23 @@
               </span>
             </span>
           </div>
+
+          <div
+            v-if="isAiReference"
+            class="mt-4 pt-4 border-t border-gray-100 flex items-center"
+          >
+            <label
+              class="inline-flex items-center gap-2 cursor-pointer select-none"
+            >
+              <input
+                type="checkbox"
+                :checked="isGoldenSample"
+                @change="toggleGoldenSample"
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span class="text-sm text-gray-700">設為黃金樣本</span>
+            </label>
+          </div>
         </div>
 
         <!-- Bottom: Split View -->
@@ -262,7 +279,7 @@ watch(
         : {};
     }
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 // 計算渲染後的 HTML
@@ -295,7 +312,7 @@ const renderedHtml = computed(() => {
         [section.id]: {
           content: editableData.final_answer_obj || "",
         },
-      }
+      },
     );
   } catch (error) {
     console.error("HTML Render Error:", error);
@@ -317,7 +334,7 @@ function handleSave() {
 // 判斷目前是否屬於「作為 AI 參考」的類別
 const isAiReference = computed(() => {
   return ["golden_samples", "synthetic_data"].includes(
-    editableData.source_type
+    editableData.source_type,
   );
 });
 
@@ -338,6 +355,11 @@ function toggleSourceType() {
     // 當前是不參考 (external_direct) -> 切換為 AI 參考 (synthetic_data)
     editableData.source_type = "synthetic_data";
   }
+}
+
+function toggleGoldenSample(event) {
+  const checked = event?.target?.checked;
+  editableData.source_type = checked ? "golden_samples" : "synthetic_data";
 }
 </script>
 

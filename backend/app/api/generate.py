@@ -1709,7 +1709,7 @@ async def autofill_from_document(
     """
 
     model_registry = request.app.state.model_registry
-    model_to_use = model_registry.get("gemini-3-flash-preview") or model_registry.get("gpt-5-mini")
+    model_to_use =  model_registry.get("gpt-5-mini") or model_registry.get("gemini-3-flash-preview")
     if not model_to_use:
         raise HTTPException(status_code=500, detail="A powerful model like GPT-4/5 is required for this feature.")
 
@@ -1724,15 +1724,26 @@ async def autofill_from_document(
                 client, 
                 model_to_use,  
                 messages,  
-                is_json_output=True 
+                is_json_output=True,
+                reasoning_effort="medium",
             )
 
         if llm_error:
             raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
 
         
-        # 解析返回的 JSON 字符串
-        filled_data = json.loads(raw_output)
+        # 容錯解析返回的 JSON 字串
+        filled_data, parse_error = extract_json_block(
+            raw_output,
+            "autofill_from_document",
+        )
+        if parse_error:
+            logger.error(f"AutoFill JSON parse error: {parse_error}")
+            raise HTTPException(status_code=500, detail="LLM did not return a valid JSON object.")
+
+        if not isinstance(filled_data, dict):
+            raise HTTPException(status_code=500, detail="LLM returned unexpected JSON format.")
+
         # 確保所有章節都有內容，缺少的設為空
         formatted_result = {}
         for section in request_data.sections:

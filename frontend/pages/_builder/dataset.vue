@@ -435,7 +435,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
           source_type:
             mode === "synthetic" || mode == "internal"
               ? "synthetic_data"
-              : "synthetic_data", //暫時放一樣
+              : "golden_samples",
           grant_id: grant_id,
           template_id: template_id,
           section_id: section.id,
