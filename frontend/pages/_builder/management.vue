@@ -154,8 +154,9 @@
                   <span class="text-xs text-gray-500 mt-1">
                     {{ nameMaps.grants.get(item.grant_id) || item.grant_id }} >
                     {{
-                      nameMaps.templates.get(item.template_id) ||
-                      item.template_id
+                      nameMaps.templates.get(
+                        buildTemplateMapKey(item.grant_id, item.template_id),
+                      ) || item.template_id
                     }}
                   </span>
                 </div>
@@ -390,6 +391,10 @@ const paginatedDatasets = computed(() => {
   return datasets.value.slice(start, end);
 });
 
+function buildTemplateMapKey(grantId, templateId) {
+  return `${grantId || ""}::${templateId || ""}`;
+}
+
 // ===== 计算属性：名称映射 =====
 // 构建一个映射表，将 ID 转换为人类可读的名称（补助、模板、章节等）
 const nameMaps = computed(() => {
@@ -407,7 +412,10 @@ const nameMaps = computed(() => {
     maps.grants.set(grant.id, grant.name);
     if (grant.templates) {
       grant.templates.forEach((template) => {
-        maps.templates.set(template.id, template.name);
+        maps.templates.set(
+          buildTemplateMapKey(grant.id, template.id),
+          template.name,
+        );
         if (template.sections) {
           template.sections.forEach((section) => {
             maps.sections.set(section.id, section.name);

@@ -341,9 +341,17 @@ async function handleBatchStart(payload) {
       templateId: payload.template_id,
       templateGrantId: payload.grant_id,
     };
+    const dynamicFieldDefinitions = getDynamicFieldDefinitions(schemaOptions);
+    if (!dynamicFieldDefinitions.length) {
+      errorNotification(
+        "批量生成失败：此模板尚未配置動態欄位，請先到 Section 管理設定欄位後再試。",
+      );
+      return;
+    }
+
     const payload1 = {
       ...payload,
-      dynamic_fields_schema: getDynamicFieldDefinitions(schemaOptions).map(
+      dynamic_fields_schema: dynamicFieldDefinitions.map(
         (definition) => ({ label: definition.compositeKey }),
       ),
     };
@@ -358,11 +366,10 @@ async function handleBatchStart(payload) {
         body: JSON.stringify(payload1),
       },
     );
-    if (response.status !== 202)
-      throw new Error("启动批量任务失败: " + (await response.text()));
+    if (response.status !== 202) return;
     success(`已启动 ${payload1.count} 个 AI 生成任务，请关注列表状态更新。`);
   } catch (e) {
-    errorNotification(e.message);
+    console.error("Batch generation failed:", e);
   }
 }
 

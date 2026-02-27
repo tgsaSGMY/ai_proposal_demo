@@ -17,17 +17,17 @@ router = APIRouter(
 )
 
 @router.get("/config", response_model=List[GrantConfig])
-async def get_all_configs(request: Request):
+async def get_all_configs(
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
     """
-    從應用程式狀態中獲取已加載的所有 Grant、Template 和 Section 配置，直接返回內存中的數據。
+    直接從 Supabase 讀取 Grant、Template、Section 的最新配置，避免使用 app state 快取。
     """
     try:
-        if not hasattr(request.app.state, 'all_grants_config'):
-             raise HTTPException(status_code=503, detail="Configurations are not yet loaded or failed to load.")
-        return request.app.state.all_grants_config 
+        return await supabase_service.get_all_grants_config()
     except Exception as e:
-        logger.error(f"Failed to retrieve configurations from app state: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while fetching configurations.")
+        logger.error(f"Failed to retrieve configurations from Supabase: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching configurations.")
 
 @router.get("/datasets-lifecycle", response_model=List[Dict[str, Any]])
 async def get_datasets_from_lifecycle(request: Request):
