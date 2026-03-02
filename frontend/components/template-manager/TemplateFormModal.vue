@@ -27,7 +27,8 @@
           <span class="text-sm font-medium text-slate-700">隸屬主題</span>
           <select
             v-model="templateForm.grant_id"
-            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-rose-400"
+            :disabled="templateFormMode === 'edit'"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-rose-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
           >
             <option value="" disabled>請先選擇</option>
             <option

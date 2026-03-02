@@ -149,7 +149,13 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                 <div class="flex flex-col">
                   <span class="font-semibold text-gray-900">{{
-                    nameMaps.sections.get(item.section_id) || item.section_id
+                    nameMaps.sections.get(
+                      buildSectionMapKey(
+                        item.grant_id,
+                        item.template_id,
+                        item.section_id,
+                      ),
+                    ) || item.section_id
                   }}</span>
                   <span class="text-xs text-gray-500 mt-1">
                     {{ nameMaps.grants.get(item.grant_id) || item.grant_id }} >
@@ -395,6 +401,10 @@ function buildTemplateMapKey(grantId, templateId) {
   return `${grantId || ""}::${templateId || ""}`;
 }
 
+function buildSectionMapKey(grantId, templateId, sectionId) {
+  return `${grantId || ""}::${templateId || ""}::${sectionId || ""}`;
+}
+
 // ===== 计算属性：名称映射 =====
 // 构建一个映射表，将 ID 转换为人类可读的名称（补助、模板、章节等）
 const nameMaps = computed(() => {
@@ -418,7 +428,10 @@ const nameMaps = computed(() => {
         );
         if (template.sections) {
           template.sections.forEach((section) => {
-            maps.sections.set(section.id, section.name);
+            maps.sections.set(
+              buildSectionMapKey(grant.id, template.id, section.id),
+              section.name,
+            );
           });
         }
       });
