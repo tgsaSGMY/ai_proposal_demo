@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -63,6 +64,20 @@ def _with_cache_busting_token(url: Optional[str]) -> Optional[str]:
     query.append(("v", str(int(time.time()))))
     new_query = urlencode(query)
     return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+
+
+def _sanitize_storage_key_part(value: str) -> str:
+    """Normalize dynamic path segments for Supabase object keys."""
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", (value or "").strip().lower()).strip("-")
+    return cleaned or "default"
+
+
+def _build_logo_object_path(grant_id: str, template_id: str, file_extension: str) -> str:
+    """Use grant/template namespaced path to prevent cross-template collisions."""
+    safe_grant = _sanitize_storage_key_part(grant_id)
+    safe_template = _sanitize_storage_key_part(template_id)
+    safe_ext = _sanitize_storage_key_part(file_extension) or "png"
+    return f"{safe_grant}/{safe_template}_logo.{safe_ext}"
 
 
 async def _refresh_grant_cache(request: Request, supabase_service: SupabaseService) -> None:
@@ -454,7 +469,7 @@ async def create_template_with_upload(
                 file_content = await logo_file.read()
                 # 獲取副檔名，如果沒有則預設 png
                 file_extension = logo_file.filename.split(".")[-1].lower() if logo_file.filename and "." in logo_file.filename else "png"
-                object_path = f"{id}_logo.{file_extension}"
+                object_path = _build_logo_object_path(grant_id, id, file_extension)
                 
                 # 上傳到 Supabase Storage
                 # 使用 upsert='true' 以防萬一有殘留文件
@@ -540,8 +555,7 @@ async def update_template_with_upload(
             try:
                 file_content = await logo_file.read()
                 file_extension = logo_file.filename.split(".")[-1].lower() if logo_file.filename and "." in logo_file.filename else "png"
-                # 使用 template_id 保持文件名一致性
-                object_path = f"{template_id}_logo.{file_extension}"
+                object_path = _build_logo_object_path(grant_id, template_id, file_extension)
                 
                 # 上傳到 Supabase Storage
                 # 關鍵修復：更新時必須加入 "upsert": "true" 才能覆蓋舊圖
