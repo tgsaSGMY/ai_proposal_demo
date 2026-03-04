@@ -9,6 +9,9 @@ services:
       - ./backend/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks: # <--- 新增这行
+      - default # <--- 新增这行
+      - supabase_net
 
   nuxt-frontend:
     build: ./frontend
