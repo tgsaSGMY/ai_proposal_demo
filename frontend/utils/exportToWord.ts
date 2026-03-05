@@ -18,10 +18,18 @@ import type {
   WordDocumentNode,
   WordDocumentStyle,
   WordExportTemplateConfig,
-  WordListStyle,
   WordCustomTableCell,
   WordCustomTableCellContent,
 } from "~/types/wordExport";
+import {
+  createHeadingCounterState,
+  formatHeadingPrefix,
+  getImplicitLevelFromStyle,
+  getListBulletLabel,
+  resetHeadingCounters,
+  shouldUseParagraphSubHeadingStyle,
+  type HeadingCounterState,
+} from "~/composables/template-manager/useWordNumbering";
 
 // --- 輔助函數：將 schema 的 key 轉換為更易讀的標題 ---
 function keyToTitle(key: string): string {
@@ -152,8 +160,6 @@ function renderSectionContent(
 
 type ExportableSection = { id: string; name: string; json_schema?: any };
 
-type HeadingCounterState = Record<number, number>;
-
 const DEFAULT_EAST_ASIA_FONT = "Microsoft JhengHei";
 
 function resolveRunFont(font?: string) {
@@ -183,150 +189,11 @@ const DEFAULT_DOCUMENT_STYLE: Required<WordDocumentStyle> = {
   bodyBold: false,
 };
 
-const PARAGRAPH_SUB_HEADING_MAX_LEVEL = 3;
-
-function resolveParagraphEffectiveLevel(node: WordDocumentNode): number {
-  if (node.paragraphNumberStyle) {
-    return getImplicitLevelFromStyle(node.paragraphNumberStyle);
-  }
-  return node.level ?? 3;
-}
-
-function shouldUseParagraphSubHeadingStyle(node: WordDocumentNode): boolean {
-  return (
-    node.type === "paragraph" &&
-    node.paragraphNumbering === true &&
-    resolveParagraphEffectiveLevel(node) <= PARAGRAPH_SUB_HEADING_MAX_LEVEL
-  );
-}
-
 function resolveDocumentStyle(style?: WordDocumentStyle) {
   return {
     ...DEFAULT_DOCUMENT_STYLE,
     ...(style || {}),
   } as Required<WordDocumentStyle>;
-}
-
-function createHeadingCounterState(): HeadingCounterState {
-  return {};
-}
-
-function resetHeadingCounters(state: HeadingCounterState) {
-  Object.keys(state).forEach((key) => delete state[Number(key)]);
-}
-
-function formatChineseNumeral(value: number): string {
-  if (value <= 0) return "";
-  const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
-  if (value <= 10) {
-    return value === 10 ? "十" : digits[value] || "";
-  }
-  if (value < 20) {
-    return `十${digits[value - 10]}`;
-  }
-  if (value < 100) {
-    const tens = Math.floor(value / 10);
-    const units = value % 10;
-    let result = `${digits[tens]}十`;
-    if (units !== 0) {
-      result += digits[units];
-    }
-    return result;
-  }
-  return String(value);
-}
-
-/**
- * 根據列表樣式決定有效層級
- * 這樣可以確保相同樣式的列表共享同一個計數器
- */
-function getImplicitLevelFromStyle(style: WordListStyle | undefined): number {
-  switch (style) {
-    case "chineseNumber": // 一、二、三、
-    case "chineseComma":
-      return 2; // 強制視為第二層
-    case "arabicNumber": // 1. 2. 3.
-    case "numberedDot":
-      return 3; // 強制視為第三層
-    case "parenNumbered": // (1) (2) (3)
-      return 4; // 強制視為第四層
-    default:
-      return 3; // 預設值
-  }
-}
-
-function formatHeadingPrefix(
-  level: number | undefined,
-  state: HeadingCounterState,
-  style?: WordListStyle,
-): string {
-  // 1. 決定「有效層級 (Effective Level)」
-  // 如果有傳入樣式，優先使用樣式對應的層級來計數 (例如選了「一、二、」就強制用 Level 2 計數器)
-  // 如果沒有樣式，才退回使用節點原本的 level
-  const rawLevel = level || 2;
-  const effectiveLevel = style ? getImplicitLevelFromStyle(style) : rawLevel;
-
-  // 2. 針對「有效層級」進行計數 (關鍵修正：這裡不再使用 rawLevel)
-  state[effectiveLevel] = (state[effectiveLevel] ?? 0) + 1;
-
-  // 3. 重置所有比「有效層級」更深的計數器
-  // 例如：現在數到「五、」(Level 2)，底下的 (1) (Level 4) 必須歸零
-  Object.keys(state).forEach((key) => {
-    const keyNum = Number(key);
-    if (keyNum > effectiveLevel) {
-      delete state[keyNum];
-    }
-  });
-
-  const count = state[effectiveLevel];
-
-  // 4. 根據樣式或層級回傳格式化字串
-  if (style) {
-    switch (style) {
-      case "chineseNumber":
-      case "chineseComma":
-        return `${formatChineseNumeral(count)}、`;
-      case "arabicNumber":
-      case "numberedDot":
-        return `${count}. `;
-      case "parenNumbered":
-        return `（${count}）`;
-      case "bullet":
-        return "";
-      default:
-        break;
-    }
-  }
-
-  // Fallback: 如果沒有指定樣式，依據層級給預設格式
-  switch (effectiveLevel) {
-    case 2:
-      return `${formatChineseNumeral(count)}、`;
-    case 3:
-      return `${count}. `;
-    case 4:
-      return `（${count}）`;
-    default:
-      return `${count}. `;
-  }
-}
-
-function getListBulletLabel(
-  style: WordListStyle | undefined,
-  index: number,
-): string {
-  switch (style) {
-    case "chineseNumber":
-    case "chineseComma":
-      return `${formatChineseNumeral(index + 1)}、`;
-    case "arabicNumber":
-    case "numberedDot":
-      return `${index + 1}.`;
-    case "parenNumbered":
-      return `（${index + 1}）`;
-    default:
-      return "•";
-  }
 }
 
 function getAlignmentType(
@@ -386,18 +253,34 @@ function resolveScopedPath(
   basePath?: string,
   relativePath?: string,
 ): string | undefined {
-  if (!relativePath || !relativePath.trim()) {
-    return basePath;
+  const normalize = (value?: string) =>
+    value
+      ?.split(".")
+      .map((segment) => segment.trim())
+      .filter(Boolean)
+      .join(".") || "";
+
+  const normalizedBase = normalize(basePath);
+  const normalizedPath = normalize(relativePath);
+
+  if (!normalizedPath) return normalizedBase || undefined;
+  if (!normalizedBase) return normalizedPath;
+
+  const basePrefix = `${normalizedBase}.`;
+  if (
+    normalizedPath === normalizedBase ||
+    normalizedPath.startsWith(basePrefix)
+  ) {
+    return normalizedPath;
   }
-  if (!basePath || !basePath.trim()) {
-    return relativePath;
+
+  const marker = `.${basePrefix}`;
+  const markerIndex = normalizedPath.indexOf(marker);
+  if (markerIndex >= 0) {
+    return normalizedPath.slice(markerIndex + 1);
   }
-  const trimmedRelative = relativePath.trim();
-  const basePrefix = `${basePath}.`;
-  if (trimmedRelative.startsWith(basePrefix)) {
-    return trimmedRelative;
-  }
-  return `${basePath}.${trimmedRelative}`;
+
+  return `${normalizedBase}.${normalizedPath}`;
 }
 
 function ensureExportCellContents(
@@ -1241,6 +1124,10 @@ function buildParagraphFromNode(
         if (node.sectionId) {
           itemDataMap[node.sectionId] = item as Record<string, any>;
         }
+        const mergedSectionDataMap: Record<string, Record<string, any>> = {
+          ...sectionDataMap,
+          ...itemDataMap,
+        };
 
         // 主項編號
         const bullet = isNumbered
@@ -1274,7 +1161,7 @@ function buildParagraphFromNode(
           // 如果是 paragraph 類型的子節點
           if (adjustedChildNode.type === "paragraph") {
             const childSectionData = adjustedChildNode.sectionId
-              ? itemDataMap[adjustedChildNode.sectionId]
+              ? mergedSectionDataMap[adjustedChildNode.sectionId]
               : null;
             let value: any = null;
 
@@ -1356,7 +1243,7 @@ function buildParagraphFromNode(
                 for (const subChild of adjustedChildNode.children) {
                   const subElements = buildParagraphFromNode(
                     subChild,
-                    itemDataMap,
+                    mergedSectionDataMap,
                     {
                       documentStyle: resolvedStyle,
                       headingCounters,
@@ -1368,7 +1255,7 @@ function buildParagraphFromNode(
             } else {
               childElements = buildParagraphFromNode(
                 adjustedChildNode,
-                itemDataMap,
+                mergedSectionDataMap,
                 { documentStyle: resolvedStyle, headingCounters },
               );
             }
@@ -1457,12 +1344,13 @@ function buildParagraphFromNode(
 /**
  * 使用 word export config 生成文档
  */
-async function exportPlanUsingWordConfig(
+export async function exportPlanUsingWordConfig(
   config: WordExportTemplateConfig,
   sections: ExportableSection[],
   planContent: Record<string, any>,
   projectTitle?: string,
-): Promise<void> {
+  options?: { autoDownload?: boolean },
+): Promise<Blob> {
   try {
     // 使用实际的 plan content 作为数据源
     const sectionDataMap: Record<string, Record<string, any>> = {};
@@ -1536,16 +1424,22 @@ async function exportPlanUsingWordConfig(
       ],
     });
 
-    // 生成 blob 并下载
+    // 生成 blob
     const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${projectTitle || "文檔"}.docx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const shouldAutoDownload = options?.autoDownload !== false;
+
+    if (shouldAutoDownload) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${projectTitle || "文檔"}.docx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    return blob;
   } catch (error) {
     console.error("Error exporting with word config:", error);
     throw error;
@@ -1577,6 +1471,7 @@ export async function exportPlanToWord(
           sections,
           planContent,
           projectTitle,
+          { autoDownload: true },
         );
       }
     } catch (error) {
