@@ -354,6 +354,212 @@
         </div>
       </div>
 
+      <div
+        v-if="node.type === 'customTable'"
+        class="space-y-4 rounded-xl bg-slate-50 p-3"
+      >
+        <div class="grid gap-3 md:grid-cols-2">
+          <label class="space-y-1 text-sm text-slate-600">
+            列數 (1-20)
+            <input
+              :value="node.customTable?.rows ?? 1"
+              type="number"
+              min="1"
+              max="20"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              @change="
+                (event) =>
+                  handleCustomTableDimensionChange(
+                    'rows',
+                    Number(
+                      (event.target as HTMLInputElement | null)?.value || 1,
+                    ),
+                  )
+              "
+            />
+          </label>
+          <label class="space-y-1 text-sm text-slate-600">
+            欄數 (1-20)
+            <input
+              :value="node.customTable?.cols ?? 1"
+              type="number"
+              min="1"
+              max="20"
+              class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              @change="
+                (event) =>
+                  handleCustomTableDimensionChange(
+                    'cols',
+                    Number(
+                      (event.target as HTMLInputElement | null)?.value || 1,
+                    ),
+                  )
+              "
+            />
+          </label>
+        </div>
+
+        <div
+          class="space-y-3 max-h-[28rem] overflow-y-auto overflow-x-auto pr-1"
+        >
+          <div
+            v-for="rowIndex in node.customTable?.rows || 0"
+            :key="`custom-row-${node.id}-${rowIndex}`"
+            class="space-y-2"
+          >
+            <p class="text-xs font-semibold text-slate-500">
+              第 {{ rowIndex }} 列
+            </p>
+            <div
+              class="grid gap-3"
+              :style="{
+                gridTemplateColumns:
+                  'repeat(' +
+                  (node.customTable?.cols || 1) +
+                  ', minmax(220px, 1fr))',
+              }"
+            >
+              <div
+                v-for="cell in getCustomTableRowCells(node, rowIndex - 1)"
+                :key="cell.id"
+                class="min-w-[220px] rounded-xl border border-slate-200 p-3 space-y-2 bg-white"
+              >
+                <p class="text-xs font-semibold text-slate-500">
+                  儲存格 {{ rowIndex }}-{{ cell.col + 1 }}
+                </p>
+                <div class="space-y-2">
+                  <div
+                    v-for="(content, contentIndex) in cell.contents"
+                    :key="content.id"
+                    class="rounded-lg border border-slate-200 p-2 space-y-2"
+                  >
+                    <div
+                      class="flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <div
+                        class="flex items-center gap-2 text-xs text-slate-500"
+                      >
+                        <span>片段 {{ contentIndex + 1 }}</span>
+                        <select
+                          v-model="content.type"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                          @change="
+                            handleCustomTableCellContentTypeChange(
+                              cell,
+                              content,
+                            )
+                          "
+                        >
+                          <option value="text">自訂文字</option>
+                          <option value="field">資料欄位</option>
+                        </select>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                          :disabled="contentIndex === 0"
+                          @click="
+                            moveCustomTableCellContent(cell, contentIndex, 'up')
+                          "
+                          title="上移片段"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600 disabled:opacity-40"
+                          :disabled="
+                            contentIndex === (cell.contents?.length || 0) - 1
+                          "
+                          @click="
+                            moveCustomTableCellContent(
+                              cell,
+                              contentIndex,
+                              'down',
+                            )
+                          "
+                          title="下移片段"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 disabled:opacity-40"
+                          :disabled="(cell.contents?.length || 0) === 1"
+                          @click="
+                            removeCustomTableCellContent(cell, content.id)
+                          "
+                          title="刪除此片段"
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </div>
+                    <div v-if="content.type === 'text'" class="space-y-1">
+                      <span class="text-xs text-slate-500">顯示文字</span>
+                      <input
+                        v-model="content.text"
+                        type="text"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        placeholder="輸入內容"
+                        @input="syncLegacyCustomTableCellFields(cell)"
+                      />
+                    </div>
+                    <div v-else class="space-y-1">
+                      <span class="text-xs text-slate-500">資料欄位</span>
+                      <select
+                        v-model="content.dataPath"
+                        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        @change="syncLegacyCustomTableCellFields(cell)"
+                      >
+                        <option value="">選擇欄位</option>
+                        <option
+                          v-for="option in getNodeColumnCandidates(node)"
+                          :key="option.key"
+                          :value="option.key"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select>
+                      <p
+                        v-if="
+                          !getNodeColumnCandidates(node).length &&
+                          node.sectionId
+                        "
+                        class="text-xs text-slate-400"
+                      >
+                        無可用欄位，請調整資料來源。
+                      </p>
+                      <p v-if="!node.sectionId" class="text-xs text-rose-500">
+                        需先選擇資料章節才能綁定欄位。
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      class="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                      @click="addCustomTableCellContent(cell, 'text')"
+                    >
+                      + 新增文字片段
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                      :disabled="!node.sectionId"
+                      @click="addCustomTableCellContent(cell, 'field')"
+                    >
+                      + 新增資料片段
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 清單配置 -->
       <div
         v-if="node.type === 'list' || node.type === 'subHeading'"
@@ -464,6 +670,10 @@ import type {
   WordDocumentNodeType,
   WordTableColumn,
   WordListStyle,
+  WordCustomTableConfig,
+  WordCustomTableCell,
+  WordCustomTableCellContent,
+  WordCustomTableCellContentType,
 } from "~/types/wordExport";
 
 interface SectionRecord {
@@ -571,6 +781,11 @@ function handleTypeChange(event: Event) {
     if (node.type !== "list") {
       delete node.list;
     }
+    if (node.type !== "customTable") {
+      delete node.customTable;
+    } else {
+      ensureCustomTableConfig(node);
+    }
     if (!shouldShowSectionSelectors(node)) {
       node.sectionId = "";
       node.dataPath = "";
@@ -590,6 +805,7 @@ function handleSectionChange(event: Event) {
   updateNode((node) => {
     node.sectionId = target.value;
     node.dataPath = "";
+    handleNodeDataPathChange(node);
   });
 }
 
@@ -597,6 +813,7 @@ function handleDataPathChange(event: Event) {
   const target = event.target as HTMLSelectElement;
   updateNode((node) => {
     node.dataPath = target.value;
+    handleNodeDataPathChange(node);
   });
 }
 
@@ -915,7 +1132,9 @@ function generateNodeId(): string {
 }
 
 function shouldShowNodeLabel(node: WordDocumentNode) {
-  return !["paragraph", "table", "list", "customText"].includes(node.type);
+  return !["paragraph", "table", "customTable", "list", "customText"].includes(
+    node.type,
+  );
 }
 
 function shouldShowSectionSelectors(node: WordDocumentNode) {
@@ -1027,6 +1246,7 @@ function handleDataPathLevelChange(levelIndex: number, event: Event) {
     }
 
     node.dataPath = segments.join(".");
+    handleNodeDataPathChange(node);
   });
 }
 
@@ -1082,6 +1302,308 @@ function ensureTableFixedLayout(node: WordDocumentNode) {
     };
   }
   return node.table.fixedLayout;
+}
+
+function handleNodeDataPathChange(node: WordDocumentNode) {
+  if (node.type === "table" && node.table?.columns?.length) {
+    const allow = new Set(getNodeColumnCandidates(node).map((opt) => opt.key));
+    node.table.columns = node.table.columns.filter((col) => allow.has(col.key));
+  }
+
+  if (node.type === "customTable" && node.customTable?.cells?.length) {
+    const allow = new Set(getNodeColumnCandidates(node).map((opt) => opt.key));
+    node.customTable.cells.forEach((cell) => {
+      let changed = false;
+      cell.contents?.forEach((content) => {
+        if (content.type !== "field" || !content.dataPath) return;
+        if (!allow.has(content.dataPath)) {
+          const scopedPath = resolveNodeScopedPath(node, content.dataPath);
+          const stillAllowed = scopedPath ? allow.has(scopedPath) : false;
+          if (!stillAllowed) {
+            content.dataPath = "";
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        syncLegacyCustomTableCellFields(cell);
+      }
+    });
+  }
+}
+
+function resolveNodeScopedPath(
+  node: WordDocumentNode,
+  relativePath?: string,
+): string | undefined {
+  if (!relativePath || !relativePath.trim()) {
+    return node.dataPath;
+  }
+  if (!node.dataPath || !node.dataPath.trim()) {
+    return relativePath;
+  }
+  const trimmedRelative = relativePath.trim();
+  const basePrefix = `${node.dataPath}.`;
+  if (trimmedRelative.startsWith(basePrefix)) {
+    return trimmedRelative;
+  }
+  return `${node.dataPath}.${trimmedRelative}`;
+}
+
+function normalizeCustomTableCells(config: WordCustomTableConfig) {
+  const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 20);
+  const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 20);
+  const expectedCellCount = rows * cols;
+  const existingCells = Array.isArray(config.cells) ? config.cells : [];
+  let needsRebuild =
+    !Array.isArray(config.cells) || existingCells.length !== expectedCellCount;
+
+  const seenKeys = new Set<string>();
+  if (!needsRebuild) {
+    for (const cell of existingCells) {
+      const rowValid =
+        typeof cell.row === "number" && cell.row >= 0 && cell.row < rows;
+      const colValid =
+        typeof cell.col === "number" && cell.col >= 0 && cell.col < cols;
+      if (!rowValid || !colValid) {
+        needsRebuild = true;
+        break;
+      }
+      const key = `${cell.row}-${cell.col}`;
+      if (seenKeys.has(key)) {
+        needsRebuild = true;
+        break;
+      }
+      seenKeys.add(key);
+    }
+  }
+
+  const finalizeCell = (cell: WordCustomTableCell) => {
+    if (!cell.id) {
+      cell.id = generateNodeId();
+    }
+    ensureCustomTableCellContents(cell);
+    return cell;
+  };
+
+  if (!needsRebuild) {
+    existingCells.forEach(finalizeCell);
+    config.rows = rows;
+    config.cols = cols;
+    return;
+  }
+
+  const existing = new Map<string, WordCustomTableCell>();
+  for (const cell of existingCells) {
+    if (
+      typeof cell.row !== "number" ||
+      typeof cell.col !== "number" ||
+      cell.row < 0 ||
+      cell.col < 0
+    ) {
+      continue;
+    }
+    const key = `${cell.row}-${cell.col}`;
+    if (!existing.has(key)) {
+      existing.set(key, cell);
+    }
+  }
+
+  const cells: WordCustomTableCell[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const key = `${row}-${col}`;
+      const cell = existing.get(key) ?? {
+        id: generateNodeId(),
+        row,
+        col,
+        type: "text",
+        text: "",
+        dataPath: "",
+      };
+      cell.row = row;
+      cell.col = col;
+      cells.push(finalizeCell(cell));
+    }
+  }
+
+  config.rows = rows;
+  config.cols = cols;
+  config.cells = cells;
+}
+
+function ensureCustomTableConfig(node: WordDocumentNode) {
+  if (!node.customTable) {
+    node.customTable = {
+      rows: 2,
+      cols: 2,
+      cells: [],
+    };
+  }
+  normalizeCustomTableCells(node.customTable);
+  return node.customTable;
+}
+
+function getCustomTableRowCells(node: WordDocumentNode, rowIndex: number) {
+  if (!node.customTable?.cells) {
+    return [];
+  }
+  return node.customTable.cells
+    .filter((cell) => cell.row === rowIndex)
+    .sort((a, b) => a.col - b.col);
+}
+
+function syncLegacyCustomTableCellFields(cell: WordCustomTableCell) {
+  const primary = cell.contents?.[0];
+  if (!primary) {
+    cell.type = "text";
+    cell.text = "";
+    cell.dataPath = "";
+    return;
+  }
+
+  cell.type = primary.type;
+  if (primary.type === "text") {
+    cell.text = primary.text ?? "";
+    cell.dataPath = "";
+  } else {
+    cell.dataPath = primary.dataPath ?? "";
+    cell.text = "";
+  }
+}
+
+function ensureCustomTableCellContents(cell: WordCustomTableCell) {
+  const buildContent = (
+    base?: Partial<WordCustomTableCellContent> & {
+      type?: WordCustomTableCellContentType;
+    },
+  ): WordCustomTableCellContent => {
+    const resolvedType = base?.type ?? "text";
+    return {
+      id: base?.id || generateNodeId(),
+      type: resolvedType,
+      text: resolvedType === "text" ? (base?.text ?? "") : undefined,
+      dataPath: resolvedType === "field" ? (base?.dataPath ?? "") : undefined,
+    };
+  };
+
+  if (!Array.isArray(cell.contents) || cell.contents.length === 0) {
+    const fallbackType = cell.type ?? "text";
+    cell.contents = [
+      buildContent({
+        type: fallbackType,
+        text: cell.text,
+        dataPath: cell.dataPath,
+      }),
+    ];
+  } else {
+    cell.contents = cell.contents.map((content) =>
+      buildContent({
+        id: content.id,
+        type: content.type,
+        text: content.text,
+        dataPath: content.dataPath,
+      }),
+    );
+  }
+
+  syncLegacyCustomTableCellFields(cell);
+  return cell.contents;
+}
+
+function handleCustomTableDimensionChange(
+  dimension: "rows" | "cols",
+  rawValue: number,
+) {
+  const sanitized = Number.isFinite(rawValue) ? Math.floor(rawValue) : 1;
+  updateNode((node) => {
+    const customTable = ensureCustomTableConfig(node);
+    const clamped = Math.min(Math.max(sanitized, 1), 20);
+    customTable[dimension] = clamped;
+    normalizeCustomTableCells(customTable);
+  });
+}
+
+function addCustomTableCellContent(
+  cell: WordCustomTableCell,
+  type: WordCustomTableCellContentType,
+) {
+  if (!cell.contents) {
+    cell.contents = [];
+  }
+  cell.contents.push({
+    id: generateNodeId(),
+    type,
+    text: type === "text" ? "" : undefined,
+    dataPath: type === "field" ? "" : undefined,
+  });
+  ensureCustomTableCellContents(cell);
+}
+
+function removeCustomTableCellContent(
+  cell: WordCustomTableCell,
+  contentId: string,
+) {
+  if (!cell.contents || cell.contents.length === 0) {
+    cell.contents = [
+      {
+        id: generateNodeId(),
+        type: "text",
+        text: "",
+      },
+    ];
+  }
+  if (cell.contents.length === 1) {
+    const first = cell.contents[0];
+    if (first) {
+      first.type = "text";
+      first.text = "";
+      first.dataPath = "";
+    }
+    syncLegacyCustomTableCellFields(cell);
+    return;
+  }
+  cell.contents = cell.contents.filter((content) => content.id !== contentId);
+  if (!cell.contents.length) {
+    cell.contents = [
+      {
+        id: generateNodeId(),
+        type: "text",
+        text: "",
+      },
+    ];
+  }
+  ensureCustomTableCellContents(cell);
+}
+
+function moveCustomTableCellContent(
+  cell: WordCustomTableCell,
+  contentIndex: number,
+  direction: "up" | "down",
+) {
+  if (!cell.contents || cell.contents.length < 2) return;
+  const newIndex = direction === "up" ? contentIndex - 1 : contentIndex + 1;
+  if (newIndex < 0 || newIndex >= cell.contents.length) return;
+  const current = cell.contents[contentIndex];
+  const target = cell.contents[newIndex];
+  if (!current || !target) return;
+  cell.contents[contentIndex] = target;
+  cell.contents[newIndex] = current;
+  ensureCustomTableCellContents(cell);
+}
+
+function handleCustomTableCellContentTypeChange(
+  cell: WordCustomTableCell,
+  content: WordCustomTableCellContent,
+) {
+  if (content.type === "text") {
+    content.text = content.text ?? "";
+    content.dataPath = "";
+  } else {
+    content.dataPath = content.dataPath ?? "";
+    content.text = "";
+  }
+  ensureCustomTableCellContents(cell);
 }
 
 function getListStyleForLevel(level: number): WordListStyle {

@@ -663,12 +663,12 @@
                           />
                         </label>
                         <label class="space-y-1 text-sm text-slate-600">
-                          欄數 (1-6)
+                          欄數 (1-20)
                           <input
                             :value="node.customTable?.cols ?? 1"
                             type="number"
                             min="1"
-                            max="6"
+                            max="20"
                             class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                             @change="
                               (event) =>
@@ -685,7 +685,9 @@
                         </label>
                       </div>
 
-                      <div class="space-y-3">
+                      <div
+                        class="space-y-3 max-h-[28rem] overflow-y-auto overflow-x-auto pr-1"
+                      >
                         <div
                           v-for="rowIndex in node.customTable?.rows || 0"
                           :key="`custom-row-${node.id}-${rowIndex}`"
@@ -700,7 +702,7 @@
                               gridTemplateColumns:
                                 'repeat(' +
                                 (node.customTable?.cols || 1) +
-                                ', minmax(0, 1fr))',
+                                ', minmax(220px, 1fr))',
                             }"
                           >
                             <div
@@ -709,7 +711,7 @@
                                 rowIndex - 1,
                               )"
                               :key="cell.id"
-                              class="rounded-xl border border-slate-200 p-3 space-y-2 bg-white"
+                              class="min-w-[220px] rounded-xl border border-slate-200 p-3 space-y-2 bg-white"
                             >
                               <p class="text-xs font-semibold text-slate-500">
                                 儲存格 {{ rowIndex }}-{{ cell.col + 1 }}
@@ -2332,7 +2334,7 @@ function getCustomTableCellDisplayValue(
 
 function normalizeCustomTableCells(config: WordCustomTableConfig) {
   const rows = Math.min(Math.max(Math.floor(config.rows || 1), 1), 20);
-  const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 6);
+  const cols = Math.min(Math.max(Math.floor(config.cols || 1), 1), 20);
   const expectedCellCount = rows * cols;
   const existingCells = Array.isArray(config.cells) ? config.cells : [];
   let needsRebuild =
@@ -2481,7 +2483,7 @@ function handleCustomTableDimensionChange(
     const clamped =
       dimension === "rows"
         ? Math.min(Math.max(sanitized, 1), 20)
-        : Math.min(Math.max(sanitized, 1), 6);
+        : Math.min(Math.max(sanitized, 1), 20);
     customTable[dimension] = clamped;
     normalizeCustomTableCells(customTable);
   });
@@ -3985,6 +3987,33 @@ function getAlignmentType(
   }
 }
 
+function insertTableSeparators(
+  elements: Array<Paragraph | Table>,
+): Array<Paragraph | Table> {
+  if (!elements.length) return elements;
+
+  const separated: Array<Paragraph | Table> = [];
+
+  for (const element of elements) {
+    const previous = separated[separated.length - 1];
+    const isPreviousTable = previous instanceof Table;
+    const isCurrentTable = element instanceof Table;
+
+    if (isPreviousTable && isCurrentTable) {
+      separated.push(
+        new Paragraph({
+          children: [new TextRun({ text: "", size: 2 })],
+          spacing: { before: 80, after: 80 },
+        }),
+      );
+    }
+
+    separated.push(element);
+  }
+
+  return separated;
+}
+
 /**
  * Generate docx document from current form state
  */
@@ -4022,6 +4051,8 @@ async function generateDocxDocument(): Promise<Blob> {
     );
   }
 
+  const normalizedDocumentElements = insertTableSeparators(documentElements);
+
   const doc = new Document({
     sections: [
       {
@@ -4035,7 +4066,7 @@ async function generateDocxDocument(): Promise<Blob> {
             },
           },
         },
-        children: documentElements,
+        children: normalizedDocumentElements,
       },
     ],
   });

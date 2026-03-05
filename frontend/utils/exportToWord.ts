@@ -820,6 +820,33 @@ function renderTextWithLineBreaksToParagraphs(
   });
 }
 
+function insertTableSeparators(
+  elements: Array<Paragraph | Table>,
+): Array<Paragraph | Table> {
+  if (!elements.length) return elements;
+
+  const separated: Array<Paragraph | Table> = [];
+
+  for (const element of elements) {
+    const previous = separated[separated.length - 1];
+    const isPreviousTable = previous instanceof Table;
+    const isCurrentTable = element instanceof Table;
+
+    if (isPreviousTable && isCurrentTable) {
+      separated.push(
+        new Paragraph({
+          children: [new TextRun({ text: "", size: 2 })],
+          spacing: { before: 80, after: 80 },
+        }),
+      );
+    }
+
+    separated.push(element);
+  }
+
+  return separated;
+}
+
 /**
  * 创建文档段落/表格的辅助函数（参考 WordEditorForm 的 buildParagraphsFromNode）
  */
@@ -1488,6 +1515,8 @@ async function exportPlanUsingWordConfig(
       );
     }
 
+    const normalizedDocumentElements = insertTableSeparators(documentElements);
+
     // 创建文档
     const doc = new Document({
       sections: [
@@ -1502,7 +1531,7 @@ async function exportPlanUsingWordConfig(
               },
             },
           },
-          children: documentElements,
+          children: normalizedDocumentElements,
         },
       ],
     });
