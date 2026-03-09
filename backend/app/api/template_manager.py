@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.services.supabase_service import SupabaseService
 
-SUPABASE_INTERNAL_BASE = "http://host.docker.internal:8000"
+SUPABASE_INTERNAL_BASE = "http://supabase-kong:8000"
 SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
 
 logger = logging.getLogger(__name__)

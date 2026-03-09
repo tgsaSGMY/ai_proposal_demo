@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/images", tags=["images"])
 
-SUPABASE_INTERNAL_BASE = "http://host.docker.internal:8000"
+SUPABASE_INTERNAL_BASE = "http://supabase-kong:8000"
 SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
 
 
