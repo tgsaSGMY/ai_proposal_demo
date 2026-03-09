@@ -3,7 +3,13 @@
 from fastapi import Request, Depends, HTTPException, Header, status
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
-from typing import Optional
+from typing import Optional, Dict, Any
+import time
+
+from app.core.app_jwt import decode_app_access_token
+
+AUTH_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
+AUTH_CONTEXT_CACHE_TTL_SECONDS = 20
 
 def get_supabase_service(request: Request) -> SupabaseService:
     # 從應用狀態中獲取 Supabase Service 實例
@@ -26,17 +32,89 @@ async def get_current_user_id(
             detail="Missing or invalid Authorization header"
         )
     
-    token = authorization.split(" ")[1]
-    
-    user_response = supabase_service.client.auth.get_user(token)
-    
-    if not user_response.user:
+    user_ctx = await _resolve_user_context_from_auth(
+        authorization=authorization,
+        supabase_service=supabase_service,
+    )
+    return user_ctx["id"]
+
+
+async def get_current_user_context(
+    authorization: Optional[str] = Header(None),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """
+    Resolve and return canonical user context from Bearer token.
+    """
+    return await _resolve_user_context_from_auth(
+        authorization=authorization,
+        supabase_service=supabase_service,
+    )
+
+
+async def _resolve_user_context_from_auth(
+    *,
+    authorization: Optional[str],
+    supabase_service: SupabaseService,
+) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Invalid or expired token"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header"
         )
-        
-    return user_response.user.id
+
+    token = authorization.split(" ")[1]
+    now = time.time()
+    cached = AUTH_CONTEXT_CACHE.get(token)
+    if cached and cached.get("expires_at", 0) > now:
+        return cached["user_ctx"]
+
+    auth_user = None
+    try:
+        user_response = supabase_service.client.auth.get_user(token)
+        auth_user = user_response.user
+    except Exception:
+        auth_user = None
+
+    if auth_user:
+        canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
+            auth_user_id=auth_user.id,
+            email=auth_user.email,
+        )
+        user_ctx = {
+            "id": canonical_user["id"],
+            "email": canonical_user.get("email"),
+            "role": canonical_user.get("role", "normal"),
+            "auth_user_id": auth_user.id,
+            "provider": "supabase",
+        }
+    else:
+        payload = decode_app_access_token(token)
+        canonical_user_id = payload.get("sub")
+        if not canonical_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid app token subject",
+            )
+        user_row = await supabase_service.get_user_by_id(canonical_user_id)
+        if not user_row:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found for app token",
+            )
+        user_ctx = {
+            "id": user_row["id"],
+            "email": user_row.get("email") or payload.get("email"),
+            "role": user_row.get("role", payload.get("role", "normal")),
+            "auth_user_id": None,
+            "provider": payload.get("provider", "external"),
+        }
+
+    AUTH_CONTEXT_CACHE[token] = {
+        "user_ctx": user_ctx,
+        "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
+    }
+    return user_ctx
 
 async def verify_internal_user(
     authorization: Optional[str] = Header(None),
@@ -45,58 +123,16 @@ async def verify_internal_user(
     """
     Dependency:
     1. 解析 Authorization Token 驗證是否登入
-    2. 查詢 Whitelist 表檢查是否為 'internal'
+    2. 解析 canonical user 並檢查 users.role 是否為 'internal'
     3. 如果通過，回傳 user 物件；不通過則拋出 403 錯誤
     """
     
-    # --- 1. 基礎驗證 (Authentication) ---
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header"
-        )
-    
-    token = authorization.split(" ")[1]
-    
-    # 呼叫 Supabase Auth 驗證 Token 有效性
-    try:
-        user_response = supabase_service.client.auth.get_user(token)
-        user = user_response.user
-        
-        if not user or not user.email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Invalid or expired token"
-            )
-    except Exception as e:
-        # Token 解析失敗
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail=f"Authentication failed: {str(e)}"
-        )
+    user_ctx = await get_current_user_context(
+        authorization=authorization,
+        supabase_service=supabase_service,
+    )
 
-    # --- 2. 權限驗證 (Authorization) ---
-    # 使用 Service Key 去查詢 whitelist 表 (無視 RLS)
-    try:
-        result = (
-            supabase_service.client.from_("whitelist")
-            .select("role")
-            .eq("email", user.email)
-            .maybe_single()  # 使用 maybe_single 避免查無資料時報錯
-            .execute()
-        )
-        whitelist_data = result.data
-
-    except Exception as e:
-        print(f"Database error checking whitelist: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error verifying permissions"
-        )
-
-    # --- 3. 判斷結果 ---
-    is_internal = whitelist_data and whitelist_data.get("role") == "internal"
-
+    is_internal = user_ctx.get("role") == "internal"
     if not is_internal:
         # 403 Forbidden: 伺服器理解請求但拒絕執行 (權限不足)
         raise HTTPException(
@@ -104,5 +140,5 @@ async def verify_internal_user(
             detail="Permission Denied: This action is restricted to internal staff."
         )
 
-    # 驗證通過，回傳使用者資訊 (API 可能會用到)
-    return user
+    # 驗證通過，回傳 canonical user context
+    return user_ctx

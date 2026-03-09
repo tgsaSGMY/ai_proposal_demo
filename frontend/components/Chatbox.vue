@@ -419,6 +419,7 @@ const editAnswerDraft = ref("");
 const isGenerationComplete = ref(false);
 const isFetchingNextQuestion = ref(false);
 const projectRealtimeChannel = ref(null);
+const projectStatePollTimer = ref(null);
 const isVersionModalVisible = ref(false);
 const selectedVersion = ref(null);
 const timelineLoading = ref(false);
@@ -1445,21 +1446,36 @@ function applyProjectState(record = {}) {
   });
 }
 
-// 從 Supabase 數據庫加載項目的聊天歷史和問題答案
+// 從後端 API 加載項目狀態（避免直接查 Supabase 受 RLS/ID 策略影響）
 async function loadProjectState(projectId) {
   if (!projectId || typeof window === "undefined") {
     return;
   }
   try {
-    const { data, error } = await supabase
-      .from("projects")
-      .select("conversation_history, stored_answer")
-      .eq("id", projectId)
-      .maybeSingle();
-    if (error) {
-      console.error("Failed to load project chat state", error.message);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      console.error("Failed to load project chat state: missing session token");
       return;
     }
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error("Failed to load project chat state", detail);
+      return;
+    }
+
+    const data = await response.json();
     if (data) {
       applyProjectState(data);
     }
@@ -1490,10 +1506,20 @@ async function setupRealtimeSubscription(projectId) {
       },
     )
     .subscribe();
+
+  // Fallback polling: keep state in sync when realtime delivery is blocked.
+  projectStatePollTimer.value = window.setInterval(() => {
+    void loadProjectState(projectId);
+  }, 3000);
 }
 
 // 清除 Supabase 實時訂閱，清理資源
 async function teardownRealtimeSubscription() {
+  if (projectStatePollTimer.value) {
+    clearInterval(projectStatePollTimer.value);
+    projectStatePollTimer.value = null;
+  }
+
   if (!projectRealtimeChannel.value) {
     return;
   }

@@ -558,8 +558,6 @@ onMounted(async () => {
 async function handleSessionUpdate(session) {
   // 从会话中提取用户 ID（如果会话不存在则为 null）
   const sessionUserId = session?.user?.id ?? null;
-  // 更新状态中的用户 ID
-  currentUserId.value = sessionUserId;
   // 根据是否有用户 ID 来设置认证状态
   isAuthenticated.value = !!sessionUserId;
   // 更新用户邮箱（如果会话不存在则为空字符串）
@@ -573,8 +571,14 @@ async function handleSessionUpdate(session) {
     return;
   }
 
+  // Keep global user id in canonical users.id instead of auth.users.id.
+  const canonicalUserId = await refreshUser();
+  currentUserId.value = canonicalUserId;
+
   // 对于已认证的用户：获取成本/使用量信息
-  fetchUserUsage(sessionUserId);
+  if (canonicalUserId) {
+    fetchUserUsage(canonicalUserId);
+  }
 
   // 检查用户是否具有内部权限（管理员权限）
   const { checkIsInternal } = useInternalCheck();

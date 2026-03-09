@@ -120,7 +120,7 @@
         v-if="isLoadingCommands"
         class="text-xs font-semibold uppercase tracking-wide text-gray-400"
       >
-        正在同步 Supabase 指令...
+        正在同步指令...
       </p>
 
       <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -269,6 +269,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import CommandEditModal from "~/components/CommandEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
+import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useNotifications } from "~/composables/useNotifications";
 import { supabase } from "~/utils/supabaseClient";
 // 引入：modal、確認與通知工具、以及 Supabase 用於指令的 CRUD 操作
@@ -350,6 +351,7 @@ const editingCommand = ref<{
   description: string;
   isCompany: boolean;
 } | null>(null); // 正在編輯的指令
+const pendingEnableCommandId = ref<string | null>(null); // 由啟用流程觸發編輯時，儲存後需自動啟用的指令 id
 const { confirm } = useConfirm();
 const {
   success,
@@ -358,8 +360,44 @@ const {
   warning: notifyWarning,
 } = useNotifications();
 const userId = ref<string | null>(null); // 當前使用者 id
+const { refreshUser } = useCurrentUser();
 const isLoadingCommands = ref(false); // 載入狀態
 let hasSeededDefaults = false; // 是否已經 seed 過預設指令
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+async function getAccessToken(): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("請先登入");
+  }
+  return session.access_token;
+}
+
+async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || "Command API request failed");
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
 
 const tabCounts = computed(() => ({
   all: commands.value.length,
@@ -419,13 +457,17 @@ function toggleMenu(id: string) {
  * 打開指令編輯 modal，將選中的指令載入到編輯表單中
  * @param command - 要編輯的指令物件
  */
-function openEdit(command: CommandItem) {
+function openEdit(
+  command: CommandItem,
+  options?: { enableAfterSave?: boolean },
+) {
   editingCommand.value = {
     id: command.id,
     title: command.title,
     description: command.description,
     isCompany: command.isCompany,
   };
+  pendingEnableCommandId.value = options?.enableAfterSave ? command.id : null;
   isEditModalOpen.value = true;
   menuOpenId.value = null;
 }
@@ -436,6 +478,7 @@ function openEdit(command: CommandItem) {
 function closeEditModal() {
   isEditModalOpen.value = false;
   editingCommand.value = null;
+  pendingEnableCommandId.value = null;
 }
 
 /**
@@ -469,26 +512,24 @@ async function handleSave(payload: {
   }
 
   try {
-    const timestamp = new Date().toISOString();
     if (payload.id) {
-      const { error } = await supabase
-        .from("commands")
-        .update({
+      const shouldEnableAfterSave = pendingEnableCommandId.value === payload.id;
+      await apiRequest(`/commands/${payload.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
           ...normalized,
-          last_updated: timestamp,
-        })
-        .eq("id", payload.id)
-        .eq("user_id", userId.value);
-      if (error) throw error;
-      success("指令內容已更新");
-    } else {
-      const { error } = await supabase.from("commands").insert({
-        ...normalized,
-        user_id: userId.value,
-        is_open: true,
-        last_updated: timestamp,
+          ...(shouldEnableAfterSave ? { is_open: true } : {}),
+        }),
       });
-      if (error) throw error;
+      success(shouldEnableAfterSave ? "指令已更新並啟用" : "指令內容已更新");
+    } else {
+      await apiRequest("/commands", {
+        method: "POST",
+        body: JSON.stringify({
+          ...normalized,
+          is_open: true,
+        }),
+      });
       success("已新增指令");
     }
     await loadCommands();
@@ -520,12 +561,9 @@ async function handleDelete(command: CommandItem) {
     notifyWarning("請先登入後再進行操作");
     return;
   }
-  const { error } = await supabase
-    .from("commands")
-    .delete()
-    .eq("id", command.id)
-    .eq("user_id", userId.value);
-  if (error) {
+  try {
+    await apiRequest(`/commands/${command.id}`, { method: "DELETE" });
+  } catch (error: any) {
     console.error("Failed to delete command", error);
     notifyError("刪除指令失敗，請稍後再試");
     return;
@@ -541,6 +579,7 @@ async function handleDelete(command: CommandItem) {
  * - 打開編輯 modal
  */
 function handleCreateCommand() {
+  pendingEnableCommandId.value = null;
   editingCommand.value = {
     title: "",
     description: "",
@@ -557,12 +596,7 @@ function handleCreateCommand() {
  */
 async function bootstrapCommands() {
   try {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-    if (error) throw error;
-    userId.value = user?.id || null;
+    userId.value = await refreshUser();
     await loadCommands();
   } catch (error: any) {
     console.error("Failed to initialize commands", error);
@@ -585,12 +619,9 @@ async function loadCommands() {
   }
   isLoadingCommands.value = true;
   try {
-    const { data, error } = await supabase
-      .from("commands")
-      .select("*")
-      .eq("user_id", userId.value)
-      .order("last_updated", { ascending: false });
-    if (error) throw error;
+    const data = await apiRequest<SupabaseCommandRow[]>("/commands", {
+      method: "GET",
+    });
     if (!data || data.length === 0) {
       if (!hasSeededDefaults) {
         await seedDefaultCommands();
@@ -620,18 +651,16 @@ async function seedDefaultCommands() {
   if (!userId.value) {
     return;
   }
-  const timestamp = new Date().toISOString();
-  const payload = DEFAULT_COMMANDS.map((item) => ({
-    title: item.title,
-    description: "",
-    user_id: userId.value,
-    is_open: false,
-    is_company: item.isCompany,
-    last_updated: timestamp,
-  }));
-  const { error } = await supabase.from("commands").insert(payload);
-  if (error) {
-    throw error;
+  for (const item of DEFAULT_COMMANDS) {
+    await apiRequest("/commands", {
+      method: "POST",
+      body: JSON.stringify({
+        title: item.title,
+        description: "",
+        is_open: false,
+        is_company: item.isCompany,
+      }),
+    });
   }
 }
 
@@ -697,18 +726,18 @@ async function handleToggle(commandId: string) {
     if (!title || !desc) {
       notifyWarning("無法啟用空白的指令內容，請先編輯並填寫標題與描述");
       // Open edit modal so user can fill required fields
-      openEdit(target);
+      openEdit(target, { enableAfterSave: true });
       return;
     }
   }
 
   const timestamp = new Date().toISOString();
-  const { error } = await supabase
-    .from("commands")
-    .update({ is_open: nextState, last_updated: timestamp })
-    .eq("id", commandId)
-    .eq("user_id", userId.value);
-  if (error) {
+  try {
+    await apiRequest(`/commands/${commandId}`, {
+      method: "PUT",
+      body: JSON.stringify({ is_open: nextState }),
+    });
+  } catch (error) {
     console.error("Failed to toggle command", error);
     notifyError("切換指令狀態失敗，請稍後再試");
     return;

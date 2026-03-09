@@ -13,7 +13,6 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-
     // 如果已經有有效的 session 和用戶，導向到首頁
     if (session && session.user) {
       return navigateTo("/");

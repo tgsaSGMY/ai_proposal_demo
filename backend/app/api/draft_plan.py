@@ -41,7 +41,7 @@ class BatchSyntheticRequest(BaseModel):
     count: int = Field(..., gt=0, le=20) # 限制一次最多生成 20 个
     grant_id: str
     template_id: str
-    user_id: str = Field(..., description="發起請求的用戶 ID，用於配額和日誌記錄。")
+    user_id: Optional[str] = Field(None, description="兼容舊客戶端，實際以當前登入者為準。")
     dynamic_fields_schema: Optional[List[DynamicFieldSchema]] = Field(
         default=None,
         description="指定批量任務使用的動態欄位標籤清單。",
@@ -140,7 +140,7 @@ async def create_batch_synthetic_drafts(
     background_tasks: BackgroundTasks,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
-    _=Depends(verify_internal_user),
+    user_ctx: Dict[str, Any] = Depends(verify_internal_user),
 ):
     # 非同步批量建立企劃草稿並觸發後台 AI 生成想法任務
     created_draft_ids = []
@@ -159,7 +159,7 @@ async def create_batch_synthetic_drafts(
                 request_for_llm=request,
                 supabase_service=supabase_service,
                 llm_service=llm_service,
-                user_id=req.user_id,
+                user_id=user_ctx.get("id", ""),
                 dynamic_fields_schema=req.dynamic_fields_schema
             )
     return {"message": f"Started generating ideas for {len(created_draft_ids)} drafts.", "draft_ids": created_draft_ids}

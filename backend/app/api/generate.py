@@ -967,7 +967,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
         try:
             user_response = supabase_service.client.auth.get_user(token)
             if user_response.user:
-                user_id = user_response.user.id
+                canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
+                    auth_user_id=user_response.user.id,
+                    email=user_response.user.email,
+                )
+                user_id = canonical_user["id"]
         except Exception as e:
             logger.warning(f"Failed to extract user from WebSocket token: {e}")
     

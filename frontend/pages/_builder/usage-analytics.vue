@@ -66,10 +66,10 @@
               <option value="">全部</option>
               <option
                 v-for="user in filterOptions.users"
-                :key="user.id.id"
-                :value="user.id.id"
+                :key="user.id"
+                :value="user.id"
               >
-                {{ user.id.email }}
+                {{ user.email || user.id }}
               </option>
             </select>
           </div>
@@ -377,7 +377,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "Usage Analytics Dashboard",
+  title: "成本分析儀表板 - TGSA 補助引擎",
   meta: [
     {
       name: "description",

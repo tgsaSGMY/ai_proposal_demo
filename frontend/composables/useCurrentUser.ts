@@ -9,7 +9,7 @@ import { supabase } from "~/utils/supabaseClient";
 interface UseCurrentUserResult {
   userId: Ref<string | null>; // 当前用户的 ID（响应式）
   isFetchingUser: Ref<boolean>; // 是否正在获取用户信息的标志
-  refreshUser: () => Promise<string | null>; // 刷新用户信息的方法
+  refreshUser: (force?: boolean) => Promise<string | null>; // 刷新用户信息的方法
 }
 
 // ===== 当前用户管理组合式函数 =====
@@ -30,6 +30,12 @@ export function useCurrentUser(): UseCurrentUserResult {
 
   // 用户信息加载标志，防止同时发起多个加载请求
   const isFetchingUser = useState<boolean>("currentUserIdLoading", () => false);
+  const lastResolvedAt = useState<number>("currentUserResolvedAt", () => 0);
+  const lastResolvedToken = useState<string | null>(
+    "currentUserResolvedToken",
+    () => null,
+  );
+  const ME_CACHE_TTL_MS = 30 * 1000;
 
   // ===== 刷新用户信息的方法 =====
   /**
@@ -47,7 +53,7 @@ export function useCurrentUser(): UseCurrentUserResult {
    *   - 失败：返回 null
    *   - 重复调用：返回已缓存的用户 ID
    */
-  const refreshUser = async (): Promise<string | null> => {
+  const refreshUser = async (force = false): Promise<string | null> => {
     // 检查是否在浏览器环境中运行
     // 如果在服务器端，则返回 null（避免服务器端错误）
     if (typeof window === "undefined") {
@@ -74,14 +80,48 @@ export function useCurrentUser(): UseCurrentUserResult {
         throw error;
       }
 
-      // ===== 更新用户 ID =====
-      // 从会话中提取用户 ID，如果没有会话则为 null
-      userId.value = session?.user?.id ?? null;
+      if (!session?.access_token) {
+        userId.value = null;
+        lastResolvedAt.value = 0;
+        lastResolvedToken.value = null;
+        return userId.value;
+      }
+
+      const now = Date.now();
+      if (
+        !force &&
+        lastResolvedToken.value === session.access_token &&
+        now - lastResolvedAt.value < ME_CACHE_TTL_MS
+      ) {
+        return userId.value;
+      }
+
+      // Use backend canonical identity (public.users.id) instead of auth.users.id.
+      const config = useRuntimeConfig();
+      const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to resolve canonical user id", response.status);
+        userId.value = null;
+        return userId.value;
+      }
+
+      const me = await response.json();
+      userId.value = me?.id ?? null;
+      lastResolvedToken.value = session.access_token;
+      lastResolvedAt.value = now;
     } catch (error) {
       // 捕获任何错误（网络错误、会话过期等）
       console.error("Failed to load current user session", error);
       // 出错时将用户 ID 设为 null
       userId.value = null;
+      lastResolvedAt.value = 0;
+      lastResolvedToken.value = null;
     } finally {
       // 无论成功还是失败，都关闭加载标志
       isFetchingUser.value = false;

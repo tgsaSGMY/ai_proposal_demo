@@ -77,7 +77,7 @@ definePageMeta({
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化
 useHead({
-  title: "數據生產工作室 - AI 計畫書平台",
+  title: "數據生產工作室 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -90,7 +90,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "數據生產工作室 - AI 計畫書平台",
+      content: "數據生產工作室 - TGSA 補助引擎",
     },
     {
       property: "og:description",
@@ -351,9 +351,9 @@ async function handleBatchStart(payload) {
 
     const payload1 = {
       ...payload,
-      dynamic_fields_schema: dynamicFieldDefinitions.map(
-        (definition) => ({ label: definition.compositeKey }),
-      ),
+      dynamic_fields_schema: dynamicFieldDefinitions.map((definition) => ({
+        label: definition.compositeKey,
+      })),
     };
     const response = await fetch(
       `${API_BASE_URL}/draft_plans/batch_synthetic`,

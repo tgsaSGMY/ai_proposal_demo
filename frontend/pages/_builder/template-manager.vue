@@ -113,7 +113,7 @@ definePageMeta({
 });
 
 useHead({
-  title: "主題與模板管理- AI補助引擎",
+  title: "主題與模板管理- TGSA 補助引擎",
   meta: [
     {
       name: "description",

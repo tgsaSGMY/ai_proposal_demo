@@ -1,6 +1,6 @@
 <template>
   <ClientOnly>
-    <div class="flex items-center justify-center p-4 sm:p-6 min-h-screen">
+    <div class="flex items-center justify-center p-4 sm:p-6">
       <div class="w-full max-w-md">
         <!-- 卡片容器 -->
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -9,16 +9,16 @@
             class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 sm:px-8 py-8 sm:py-10"
           >
             <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">
-              重設密碼
+              歡迎回來
             </h1>
             <p class="text-indigo-100 text-sm sm:text-base">
-              輸入您的電子郵件，我們將發送重設密碼的鏈接
+              登入您的帳戶以訪問 AI 計畫書生成平台
             </p>
           </div>
 
           <!-- 表單區塊 -->
           <form
-            @submit.prevent="handleForgotPassword"
+            @submit.prevent="handleLogin"
             class="px-6 sm:px-8 py-8 sm:py-10 space-y-6"
           >
             <!-- 電子郵件輸入 -->
@@ -38,6 +38,33 @@
                 required
                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition duration-200 text-gray-900 placeholder-gray-400"
               />
+            </div>
+
+            <!-- 密碼輸入 -->
+            <div>
+              <label
+                for="password"
+                class="block text-sm font-semibold text-gray-700 mb-2"
+              >
+                密碼
+              </label>
+              <input
+                type="password"
+                id="password"
+                v-model="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+                required
+                class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition duration-200 text-gray-900 placeholder-gray-400"
+              />
+              <div class="mt-2 text-right">
+                <NuxtLink
+                  to="/_builder/forgot-password"
+                  class="text-sm text-indigo-600 hover:text-indigo-700 hover:underline transition"
+                >
+                  忘記密碼？
+                </NuxtLink>
+              </div>
             </div>
 
             <!-- 錯誤訊息 -->
@@ -71,37 +98,6 @@
               </div>
             </Transition>
 
-            <!-- 成功訊息 -->
-            <Transition
-              name="fade"
-              enter-active-class="transition duration-200"
-              leave-active-class="transition duration-200"
-              enter-from-class="opacity-0 transform -translate-y-1"
-              enter-to-class="opacity-100"
-              leave-from-class="opacity-100"
-              leave-to-class="opacity-0 transform -translate-y-1"
-            >
-              <div
-                v-if="successMessage"
-                class="p-4 bg-green-50 border-l-4 border-green-500 rounded text-green-700 text-sm"
-              >
-                <div class="flex items-start gap-2">
-                  <svg
-                    class="w-5 h-5 flex-shrink-0 mt-0.5"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fill-rule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                  <span>{{ successMessage }}</span>
-                </div>
-              </div>
-            </Transition>
-
             <!-- 送出按鈕 -->
             <button
               type="submit"
@@ -119,7 +115,7 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v2a2 2 0 01-2 2H7a2 2 0 01-2-2v-2m14-4V7a2 2 0 00-2-2H7a2 2 0 00-2 2v2m14-4h-2.5A2.5 2.5 0 0016 5.5"
                 />
               </svg>
               <svg
@@ -143,21 +139,20 @@
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              {{ isLoading ? "發送中..." : "發送重設鏈接" }}
+              {{ isLoading ? "登入中..." : "登入" }}
             </button>
           </form>
 
-          <!-- 頁腳區塊 -->
           <div
             class="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-100"
           >
             <p class="text-gray-600 text-sm">
-              記起密碼了？
+              尚未有內部帳號？
               <NuxtLink
-                to="/login"
+                to="/_builder/signup"
                 class="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline transition"
               >
-                返回登入
+                前往註冊
               </NuxtLink>
             </p>
           </div>
@@ -169,54 +164,74 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
-// 引入 Supabase：用於發送重設郵件以及處理與驗證相關的操作
+// 引入 Supabase：處理登入驗證與錯誤回傳解析
 
 definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
-// 表單欄位與 UI 狀態
-const email = ref(""); // 使用者輸入的電子郵件
-const errorMessage = ref(""); // 錯誤訊息顯示
-const successMessage = ref(""); // 成功訊息顯示
+// router 用於登入成功後導向
+const router = useRouter();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+
+// 表單欄位與 UI 狀態說明
+const email = ref(""); // 使用者輸入電子郵件
+const password = ref(""); // 使用者輸入密碼
+const errorMessage = ref(""); // 顯示錯誤訊息
 const isLoading = ref(false); // 請求中狀態
 
 /**
- * handleForgotPassword - 處理發送重設密碼郵件
+ * handleLogin - 處理使用者登入流程
  * 步驟：
- *  1) 驗證是否輸入郵件
- *  2) 呼叫 supabase.auth.resetPasswordForEmail 發送重設鏈接
- *  3) 根據錯誤類型顯示友善提示
+ *  1) 檢查欄位是否填寫
+ *  2) 呼叫 supabase.auth.signInWithPassword
+ *  3) 根據回傳錯誤提供更友善的提示（如驗證未完成、帳號不存在等）
  */
-const handleForgotPassword = async () => {
-  if (!email.value) {
-    errorMessage.value = "請輸入電子郵件";
+const handleLogin = async () => {
+  if (!email.value || !password.value) {
+    errorMessage.value = "請輸入電子郵件和密碼";
     return;
   }
 
   isLoading.value = true;
   errorMessage.value = "";
-  successMessage.value = "";
 
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.value, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
     });
 
     if (error) {
-      console.error("Password reset error:", error);
-      if (error.message.includes("User not found")) {
+      // 根據錯誤類型提供更具體的提示
+      if (error.message.includes("Invalid login credentials")) {
+        errorMessage.value = "電子郵件或密碼不正確，請檢查後重試";
+      } else if (error.message.includes("Email not confirmed")) {
+        errorMessage.value = "帳戶尚未驗證，請檢查您的電子郵件並點擊驗證鏈接";
+      } else if (error.message.includes("User not found")) {
         errorMessage.value = "此電子郵件帳戶不存在";
       } else {
-        errorMessage.value = `發送失敗：${error.message}`;
+        errorMessage.value = `登入失敗：${error.message}`;
       }
+      console.error("Login error details:", error);
     } else {
-      successMessage.value = "重設密碼鏈接已發送到您的電子郵件，請檢查收件箱";
-      email.value = "";
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) {
+        await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+      }
+      await router.push("/");
     }
   } catch (err) {
     errorMessage.value = "發生錯誤，請稍後重試";
-    console.error("Forgot password error:", err);
+    console.error("Login error:", err);
   } finally {
     isLoading.value = false;
   }

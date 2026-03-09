@@ -274,6 +274,8 @@ definePageMeta({
 
 // 若使用者已登入，中介層會導回其他頁面，這裡保留 router 以便需要時導航使用
 const router = useRouter();
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 const email = ref("");
 const password = ref("");
@@ -287,7 +289,7 @@ const hasUppercase = computed(() => /[A-Z]/.test(password.value));
 const hasLowercase = computed(() => /[a-z]/.test(password.value));
 const hasNumber = computed(() => /[0-9]/.test(password.value));
 const hasSpecialChar = computed(() =>
-  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value)
+  /[!@#$%^&*()_\-+=\[\]{};':"\\|,.<>\/?]/.test(password.value),
 );
 
 /* isPasswordValid：綜合檢查密碼是否符合所有安全性條件（長度＋格式） */
@@ -328,7 +330,7 @@ const handleSignUp = async () => {
     // 步驟 1: 使用 RPC 檢查 Email 是否在白名單中（回傳 boolean）
     const { data: isWhitelisted, error: whitelistError } = await supabase.rpc(
       "is_whitelisted",
-      { email: email.value }
+      { email: email.value },
     );
     // 如果呼叫失敗或回傳 false（未被授權）
     if (whitelistError || !isWhitelisted) {
@@ -346,6 +348,13 @@ const handleSignUp = async () => {
     if (signUpError) {
       errorMessage.value = signUpError.message || "註冊失敗，請稍後重試";
     } else {
+      if (data?.session?.access_token) {
+        await fetch(`${API_BASE_URL}/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        });
+      }
       successMessage.value = "註冊成功！您現在可以去郵箱點擊確認鏈接。";
       // 清空表單
       email.value = "";

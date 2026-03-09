@@ -325,7 +325,7 @@
               </div>
             </div>
             <NuxtLink
-              to="/forgot-password"
+              to="/_builder/forgot-password"
               class="inline-block bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:shadow-lg hover:from-indigo-700 hover:to-purple-700 transition"
             >
               返回重申請重設密碼
@@ -339,7 +339,7 @@
             <p class="text-gray-600 text-sm">
               密碼設定成功？
               <NuxtLink
-                to="/login"
+                to="/_builder/login"
                 class="text-indigo-600 font-semibold hover:text-indigo-700 hover:underline transition"
               >
                 返回登入
@@ -470,7 +470,7 @@ const handleResetPassword = async () => {
       password.value = "";
       confirmPassword.value = "";
       setTimeout(() => {
-        router.push("/");
+        router.push("/_builder/login");
       }, 1000);
     }
   } catch (err) {

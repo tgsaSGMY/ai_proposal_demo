@@ -11,9 +11,9 @@ export const useInternalCheck = () => {
    *
    * 工作原理：
    *   1. 先检查用户是否已登录（有效会话）
-   *   2. 调用 Supabase RPC (Remote Procedure Call) 函数 "is_internal"
-   *   3. 该 RPC 函数会自动读取当前用户的 JWT Token 中的邮箱信息
-   *   4. 在数据库中查询该邮箱是否在内部白名单中
+   *   2. 调用后端 /api/auth/me
+   *   3. 后端会解析 Bearer token，并同步 users/user_identities
+   *   4. 读取 users.role 判断是否为 internal
    *   5. 返回检查结果
    *
    * 好处：
@@ -40,23 +40,22 @@ export const useInternalCheck = () => {
         return false;
       }
 
-      // ===== 第 2 步：调用 Supabase RPC 函数检查权限 =====
-      // RPC (Remote Procedure Call) 是 Supabase 提供的服务器端函数调用机制
-      // is_internal 函数会：
-      //   - 自动读取当前 JWT Token 中的用户邮箱
-      //   - 在数据库中查询该邮箱是否存在于内部白名单表中
-      //   - 返回查询结果
-      const { data, error } = await supabase.rpc("is_internal");
+      const config = useRuntimeConfig();
+      const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-      // ===== 第 3 步：处理 RPC 调用结果 =====
-      // 如果 RPC 调用出错，打印错误日志并返回 false
-      if (error) {
-        console.error("RPC check internal error:", error.message);
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to fetch /api/auth/me:", response.status);
         return false;
       }
 
-      // RPC 直接返回 true 或 false，将其转换为布尔值后返回
-      return !!data;
+      const me = await response.json();
+      return me?.role === "internal";
     } catch (e) {
       // 捕获任何意外的错误（网络错误、解析错误等）
       console.error("Unexpected error in checkIsInternal:", e);

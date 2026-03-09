@@ -69,5 +69,56 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true, // 持久化会话信息
       detectSessionInUrl: true, // 检测 URL 中的会话信息（OAuth 回调）
     },
-  }
+  },
 );
+
+const EXTERNAL_APP_TOKEN_KEY = "app_access_token";
+
+export function getExternalAppToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(EXTERNAL_APP_TOKEN_KEY);
+}
+
+export function setExternalAppToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(EXTERNAL_APP_TOKEN_KEY, token);
+}
+
+export function clearExternalAppToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(EXTERNAL_APP_TOKEN_KEY);
+}
+
+// Keep existing code unchanged by falling back to external token when Supabase has no session.
+const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
+(supabase.auth as any).getSession = async () => {
+  const result = await originalGetSession();
+  const existingToken = result?.data?.session?.access_token;
+  if (existingToken) {
+    return result;
+  }
+
+  const externalToken = getExternalAppToken();
+  if (!externalToken) {
+    return result;
+  }
+
+  return {
+    data: {
+      session: {
+        access_token: externalToken,
+        user: {
+          id: "external",
+          email: null,
+        },
+      },
+    },
+    error: null,
+  };
+};
+
+const originalSignOut = supabase.auth.signOut.bind(supabase.auth);
+(supabase.auth as any).signOut = async () => {
+  clearExternalAppToken();
+  return originalSignOut();
+};

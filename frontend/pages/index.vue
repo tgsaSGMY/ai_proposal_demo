@@ -7,7 +7,7 @@
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
-          <span class="text-gray-600">AI補助引擎</span>
+          <span class="text-gray-600">TGSA 補助引擎</span>
         </p>
         <!-- Stage 1: 選擇計畫類型 -->
         <section
@@ -319,7 +319,7 @@ import { useFileExtractor } from "~/composables/useFileExtractor";
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化和社交媒体分享
 useHead({
-  title: "AI補助引擎 - TGSA 補助引擎",
+  title: "TGSA 補助引擎 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -332,7 +332,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "AI補助引擎 - TGSA 補助引擎",
+      content: "TGSA 補助引擎 - TGSA 補助引擎",
     },
     {
       property: "og:description",

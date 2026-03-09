@@ -64,25 +64,39 @@ async def _fetch_all(
     filters: Optional[Dict[str, Any]] = None,
     group_by: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """从 Supabase 表中获取数据"""
+    """从 Supabase 表中获取数据（自动分页，避免默认 1000 笔上限）。"""
     try:
-        query = client.from_(table_name).select("*")
-        
-        if filters:
-            for key, value in filters.items():
-                if isinstance(value, (list, tuple)):
-                    query = query.in_(key, value)
-                elif isinstance(value, dict):
-                    # 处理范围查询
-                    if "gte" in value:
-                        query = query.gte(key, value["gte"])
-                    if "lt" in value:
-                        query = query.lt(key, value["lt"])
-                else:
-                    query = query.eq(key, value)
-        
-        response = await asyncio.to_thread(query.execute)
-        return [_normalize_row(row) for row in (response.data or [])]
+        page_size = 1000
+        offset = 0
+        all_rows: List[Dict[str, Any]] = []
+
+        while True:
+            query = client.from_(table_name).select("*").range(offset, offset + page_size - 1)
+
+            if filters:
+                for key, value in filters.items():
+                    if isinstance(value, (list, tuple)):
+                        query = query.in_(key, value)
+                    elif isinstance(value, dict):
+                        if "gte" in value:
+                            query = query.gte(key, value["gte"])
+                        if "lt" in value:
+                            query = query.lt(key, value["lt"])
+                    else:
+                        query = query.eq(key, value)
+
+            response = await asyncio.to_thread(query.execute)
+            batch = response.data or []
+            if not batch:
+                break
+
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+
+            offset += page_size
+
+        return [_normalize_row(row) for row in all_rows]
     except Exception as e:
         logger.error(f"Failed to fetch from {table_name}: {e}", exc_info=True)
         return []
@@ -94,12 +108,10 @@ async def _get_user_emails(user_ids: List[str], supabase_service: SupabaseServic
     
     user_emails = {}
     try:
-        # 使用 rpc 呼叫剛才建立的 SQL 函數
         response = await asyncio.to_thread(
-            supabase_service.client.rpc("get_user_emails", {"user_ids": user_ids}).execute
+            supabase_service.client.from_("users").select("id,email").in_("id", user_ids).execute
         )
-        
-        # response.data 會長這樣: [{'id': '...', 'email': '...'}, ...]
+
         for user in (response.data or []):
             uid = user.get("id")
             email = user.get("email")
@@ -107,7 +119,7 @@ async def _get_user_emails(user_ids: List[str], supabase_service: SupabaseServic
                 user_emails[uid] = email
                 
     except Exception as e:
-        logger.warning(f"Failed to fetch emails via RPC: {e}", exc_info=True)
+        logger.warning(f"Failed to fetch emails from users table: {e}", exc_info=True)
     
     # Fallback (保持你原本的邏輯)
     for uid in user_ids:
@@ -372,7 +384,7 @@ async def get_usage_analytics(
             "byAction": action_rows,
             "byModel": model_rows,
             "availableFilters": {
-                "users": [{"id": uid, "lastUsed": None} for uid in option_users],
+                "users": option_users,
                 "projects": [{"id": pid, "lastUsed": None} for pid in option_projects],
                 "models": [{"id": mid, "lastUsed": None} for mid in option_models],
                 "actions": [{"id": act, "lastUsed": None} for act in option_actions],

@@ -273,7 +273,7 @@ definePageMeta({
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化
 useHead({
-  title: "數據庫管理 - AI 計畫書平台",
+  title: "數據庫管理 - TGSA 補助引擎",
   meta: [
     {
       name: "description",
@@ -286,7 +286,7 @@ useHead({
     },
     {
       property: "og:title",
-      content: "數據庫管理 - AI 計畫書平台",
+      content: "數據庫管理 - TGSA 補助引擎",
     },
     {
       property: "og:description",

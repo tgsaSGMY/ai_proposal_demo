@@ -477,7 +477,7 @@ definePageMeta({
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化
 useHead({
-  title: "動態欄位配置中心 - AI 計畫書平台",
+  title: "動態欄位配置中心 - TGSA 補助引擎",
   meta: [
     {
       name: "description",

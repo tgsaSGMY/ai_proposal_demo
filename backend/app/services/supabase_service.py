@@ -179,9 +179,10 @@ class SupabaseService:
     ) -> None:
         """Append an execution timeline entry for AI transparency."""
         try:
+            canonical_user_id = await self.ensure_canonical_user_id(user_id)
             insert_data = {
                 "project_id": project_id,
-                "user_id": user_id,
+                "user_id": canonical_user_id,
                 "event_type": event_type,
                 "section_id": section_id,
                 "version_id": version_id,
@@ -204,15 +205,16 @@ class SupabaseService:
                 adapter_path = EXCLUDED.adapter_path,
                 updated_at = NOW(); 
         """)
-        session.execute(stmt, {
-            "id": model_id,
-            "display_name": display_name,
-            "base_model_id": base_model_id,
-            "adapter_path": adapter_path,
-            "tags": tags if tags else [],
-            "description": f"Fine-tuned model based on {base_model_id}"
-        })
-        session.commit()
+        with self.get_db_session() as session:
+            session.execute(stmt, {
+                "id": model_id,
+                "display_name": display_name,
+                "base_model_id": base_model_id,
+                "adapter_path": adapter_path,
+                "tags": tags if tags else [],
+                "description": f"Fine-tuned model based on {base_model_id}"
+            })
+            session.commit()
         print("Model registration successful.")
     
     
@@ -864,6 +866,287 @@ class SupabaseService:
         response = self.client.from_("users").select("*").eq("id", user_id).single().execute()
         return response.data if response.data else None
 
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        if not email:
+            return None
+        try:
+            response = (
+                self.client.from_("users")
+                .select("*")
+                .eq("email", email)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception:
+            logger.warning("Failed to query user by email", exc_info=True)
+            return None
+
+    async def _is_internal_email(self, email: Optional[str]) -> bool:
+        if not email:
+            return False
+        try:
+            result = (
+                self.client.from_("whitelist")
+                .select("role")
+                .eq("email", email)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            row = rows[0] if rows else None
+            return bool(row and row.get("role") == "internal")
+        except Exception:
+            logger.warning("Failed to check internal email in whitelist", exc_info=True)
+            return False
+
+    @staticmethod
+    def _placeholder_email(user_id: str) -> str:
+        return f"{user_id}@placeholder.local"
+
+    async def resolve_or_create_user_by_supabase_identity(
+        self,
+        *,
+        auth_user_id: str,
+        email: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Resolve canonical user from Supabase auth identity.
+
+        Guarantees:
+        - A public.users record exists.
+        - A public.user_identities mapping exists for provider='supabase'.
+        - Role is synchronized from whitelist (internal) into users.role.
+
+                Notes:
+                - No implicit merge by email. If identity mapping does not exist, create a new
+                    canonical user row and bind it to the current provider_subject.
+        """
+        try:
+            identity_resp = (
+                self.client.from_("user_identities")
+                .select("user_id,email")
+                .eq("provider", "supabase")
+                .eq("provider_subject", auth_user_id)
+                .limit(1)
+                .execute()
+            )
+            identity_rows = identity_resp.data or []
+            identity = identity_rows[0] if identity_rows else None
+        except Exception:
+            logger.warning("Failed to query user identity mapping", exc_info=True)
+            identity = None
+
+        user_row: Optional[Dict[str, Any]] = None
+        if identity and identity.get("user_id"):
+            user_row = await self.get_user_by_id(identity["user_id"])
+
+        if not user_row:
+            preferred_email = email or self._placeholder_email(auth_user_id)
+            insert_payload = {
+                "email": preferred_email,
+                "role": "normal",
+                "auth_source": "supabase",
+                "status": "active",
+                "last_login_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+            try:
+                inserted = self.client.from_("users").insert(insert_payload).execute()
+            except Exception:
+                # Most commonly a unique conflict on users.email when the same email
+                # already belongs to another identity/provider.
+                fallback_email = self._placeholder_email(auth_user_id)
+                logger.warning(
+                    "Primary email insert failed for auth user %s; falling back to placeholder email",
+                    auth_user_id,
+                    exc_info=True,
+                )
+                inserted = self.client.from_("users").insert(
+                    {
+                        **insert_payload,
+                        "email": fallback_email,
+                    }
+                ).execute()
+
+            if not inserted.data:
+                raise ValueError("Failed to create canonical user record")
+            user_row = inserted.data[0]
+
+        # Keep identity mapping updated only when needed to avoid write-on-every-request latency.
+        mapped_email = email or user_row.get("email")
+        if (not identity) or identity.get("email") != mapped_email or identity.get("user_id") != user_row.get("id"):
+            self.client.from_("user_identities").upsert(
+                {
+                    "user_id": user_row["id"],
+                    "provider": "supabase",
+                    "provider_subject": auth_user_id,
+                    "email": mapped_email,
+                },
+                on_conflict="provider,provider_subject",
+            ).execute()
+
+        is_internal = await self._is_internal_email(email)
+        target_role = "internal" if is_internal else (user_row.get("role") or "normal")
+
+        update_payload: Dict[str, Any] = {}
+        now_dt = datetime.now(timezone.utc)
+
+        if user_row.get("auth_source") != "supabase":
+            update_payload["auth_source"] = "supabase"
+
+        try:
+            last_login_raw = user_row.get("last_login_at")
+            last_login_dt = None
+            if isinstance(last_login_raw, str) and last_login_raw:
+                last_login_dt = datetime.fromisoformat(last_login_raw.replace("Z", "+00:00"))
+            if not last_login_dt or (now_dt - last_login_dt) >= timedelta(minutes=10):
+                update_payload["last_login_at"] = now_dt.isoformat()
+        except Exception:
+            update_payload["last_login_at"] = now_dt.isoformat()
+
+        if user_row.get("role") != target_role:
+            update_payload["role"] = target_role
+
+        if update_payload:
+            updated = (
+                self.client.from_("users")
+                .update(update_payload)
+                .eq("id", user_row["id"])
+                .execute()
+            )
+            if updated.data:
+                return updated.data[0]
+        return await self.get_user_by_id(user_row["id"]) or user_row
+
+    async def ensure_canonical_user_id(self, user_id: Optional[str]) -> Optional[str]:
+        """
+        Normalize incoming user_id to public.users.id.
+
+        - If already a users.id, return it.
+        - If it is a supabase auth uid, map through user_identities.
+        - If unresolved, return None to keep FK-safe writes.
+        """
+        if not user_id:
+            return None
+
+        existing = await self.get_user_by_id(user_id)
+        if existing:
+            return user_id
+
+        try:
+            response = (
+                self.client.from_("user_identities")
+                .select("user_id")
+                .eq("provider", "supabase")
+                .eq("provider_subject", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            mapped_user_id = rows[0].get("user_id") if rows else None
+            if mapped_user_id:
+                return mapped_user_id
+        except Exception:
+            logger.warning("Failed to map user_id to canonical users.id", exc_info=True)
+
+        logger.warning("Unresolvable user_id '%s'; storing NULL for FK-safe log write", user_id)
+        return None
+
+    async def resolve_or_create_user_by_external_identity(
+        self,
+        *,
+        provider: str,
+        provider_subject: str,
+        email: Optional[str],
+        role: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Resolve canonical user from external OAuth identity.
+
+        Guarantees:
+        - A public.users record exists.
+        - A public.user_identities mapping exists for this provider/subject.
+        - Existing role is preserved unless a valid role is explicitly provided.
+        """
+        try:
+            identity_resp = (
+                self.client.from_("user_identities")
+                .select("user_id,email")
+                .eq("provider", provider)
+                .eq("provider_subject", provider_subject)
+                .limit(1)
+                .execute()
+            )
+            identity_rows = identity_resp.data or []
+            identity = identity_rows[0] if identity_rows else None
+        except Exception:
+            logger.warning("Failed to query external user identity mapping", exc_info=True)
+            identity = None
+
+        user_row: Optional[Dict[str, Any]] = None
+        if identity and identity.get("user_id"):
+            user_row = await self.get_user_by_id(identity["user_id"])
+
+        if not user_row and email:
+            user_row = await self.get_user_by_email(email)
+
+        normalized_role = role if role in {"normal", "internal", "vip"} else None
+
+        if not user_row:
+            placeholder = f"{provider}-{provider_subject}@placeholder.local"
+            preferred_email = email or placeholder
+            insert_payload = {
+                "email": preferred_email,
+                "role": normalized_role or "normal",
+                "auth_source": provider,
+                "status": "active",
+                "last_login_at": datetime.now(timezone.utc).isoformat(),
+            }
+            try:
+                inserted = self.client.from_("users").insert(insert_payload).execute()
+            except Exception:
+                inserted = self.client.from_("users").insert(
+                    {
+                        **insert_payload,
+                        "email": placeholder,
+                    }
+                ).execute()
+
+            if not inserted.data:
+                raise ValueError("Failed to create canonical user record for external identity")
+            user_row = inserted.data[0]
+
+        mapped_email = email or user_row.get("email")
+        if (not identity) or identity.get("email") != mapped_email or identity.get("user_id") != user_row.get("id"):
+            self.client.from_("user_identities").upsert(
+                {
+                    "user_id": user_row["id"],
+                    "provider": provider,
+                    "provider_subject": provider_subject,
+                    "email": mapped_email,
+                },
+                on_conflict="provider,provider_subject",
+            ).execute()
+
+        update_payload: Dict[str, Any] = {
+            "auth_source": provider,
+            "last_login_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if normalized_role and user_row.get("role") != "internal" and user_row.get("role") != normalized_role:
+            update_payload["role"] = normalized_role
+
+        updated = (
+            self.client.from_("users")
+            .update(update_payload)
+            .eq("id", user_row["id"])
+            .execute()
+        )
+        if updated.data:
+            return updated.data[0]
+        return await self.get_user_by_id(user_row["id"]) or user_row
+
     async def get_user_usage(self, user_id: str) -> Dict[str, int]:
         """获取用户的 internal 和 external 总用量"""
         query = self.client.from_("usage_logs").select("model_type, cost").eq("user_id", user_id)
@@ -894,6 +1177,8 @@ class SupabaseService:
 
     async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None):
         """记录一次模型使用"""
+        canonical_user_id = await self.ensure_canonical_user_id(user_id)
+
         model_type = model_info.get('type', 'internal') 
         cost = 0.0
         # 简单估算成本，只用external modal 的 output token
@@ -902,7 +1187,7 @@ class SupabaseService:
             cost = (output_token / 1_000_000) * cost_per_million
 
         new_log = {
-            "user_id": user_id,
+            "user_id": canonical_user_id,
             "model_id": model_info['id'],
             "model_type": model_type,
             "input_token": input_token,
@@ -916,7 +1201,7 @@ class SupabaseService:
             new_log["action"] = action
         
         self.client.from_("usage_logs").insert(new_log).execute()
-        print(f"Logged usage for user {user_id}: ${cost} for {model_type} model.")
+        print(f"Logged usage for user {canonical_user_id or 'NULL'}: ${cost} for {model_type} model.")
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
@@ -1256,6 +1541,60 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Error fetching commands for user {user_id}: {e}", exc_info=True)
             return []
+
+    async def list_user_commands(self, user_id: str) -> List[Dict[str, Any]]:
+        """取得指定使用者的所有 commands，依 last_updated 由新到舊排序。"""
+        if not user_id:
+            return []
+        response = (
+            self.client.from_("commands")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("last_updated", desc=True)
+            .execute()
+        )
+        return response.data or []
+
+    async def create_user_command(self, user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """為指定使用者建立 command。"""
+        if not user_id:
+            return None
+        payload = {k: v for k, v in data.items() if v is not None}
+        payload["user_id"] = user_id
+        response = self.client.from_("commands").insert(payload).execute()
+        return response.data[0] if response.data else None
+
+    async def update_user_command(
+        self,
+        command_id: str,
+        user_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """更新指定使用者擁有的 command。"""
+        if not command_id or not user_id:
+            return None
+        payload = {k: v for k, v in data.items() if v is not None}
+        response = (
+            self.client.from_("commands")
+            .update(payload)
+            .eq("id", command_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
+    async def delete_user_command(self, command_id: str, user_id: str) -> bool:
+        """刪除指定使用者擁有的 command。"""
+        if not command_id or not user_id:
+            return False
+        response = (
+            self.client.from_("commands")
+            .delete()
+            .eq("id", command_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return len(response.data or []) > 0
 
     # ========== Image Generation & Storage Methods ==========
     

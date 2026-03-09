@@ -7,7 +7,14 @@ import { supabase } from "~/utils/supabaseClient";
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   // 1. 公開頁面：如果是登入或註冊頁面，直接允許
-  if (to.path === "/login" || to.path === "/signup") {
+  const publicPaths = new Set([
+    "/login",
+    "/_builder/login",
+    "/_builder/signup",
+    "/_builder/forgot-password",
+    "/_builder/reset-password",
+  ]);
+  if (publicPaths.has(to.path)) {
     return;
   }
 
@@ -24,15 +31,22 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       return navigateTo("/login");
     }
 
-    // 3. 內部人員檢查：如果訪問的是 /_builder 路徑
+    // 3. 內部人員檢查：只有訪問 /_builder 才需要打 /auth/me。
     if (to.path.startsWith("/_builder")) {
-      // 查詢 whitelist 資料表
-      const { data, error } = await supabase.rpc("is_internal");
+      const config = useRuntimeConfig();
+      const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+      const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
-      const isInternal = data;
+      if (!meResponse.ok) {
+        return navigateTo("/login");
+      }
 
-      // 如果發生錯誤、找不到資料、或是角色不是 internal
-      if (error || !isInternal) {
+      const me = await meResponse.json();
+      if (me?.role !== "internal") {
         // 自動返回 home page
         return navigateTo("/");
       }
