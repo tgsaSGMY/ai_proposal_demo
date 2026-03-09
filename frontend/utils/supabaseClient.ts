@@ -118,7 +118,31 @@ const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
 };
 
 const originalSignOut = supabase.auth.signOut.bind(supabase.auth);
+
+function isMissingSessionError(error: unknown): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message ?? "")
+      : "";
+
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+
+  return (
+    message.toLowerCase().includes("auth session missing") ||
+    code.toLowerCase().includes("session_missing")
+  );
+}
+
 (supabase.auth as any).signOut = async () => {
   clearExternalAppToken();
-  return originalSignOut();
+
+  const result = await originalSignOut();
+  if (result.error && isMissingSessionError(result.error)) {
+    return { error: null };
+  }
+
+  return result;
 };
