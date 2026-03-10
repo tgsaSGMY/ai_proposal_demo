@@ -92,10 +92,17 @@ def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
 
     subject = profile_data.get("sub") or profile_data.get("id")
     email = profile_data.get("email")
+def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
+    # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
+    profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
+
+    subject = profile_data.get("sub") or profile_data.get("id")
+    email = profile_data.get("email")
 
     if not subject:
         raise HTTPException(status_code=400, detail="Unable to resolve external user subject")
 
+    role_raw = profile_data.get("role") or "normal"
     role_raw = profile_data.get("role") or "normal"
     role = role_raw if role_raw in {"normal", "internal", "vip"} else "normal"
 
@@ -167,6 +174,14 @@ async def external_oauth_callback(
     )
 
     access_token = token_payload.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Token exchange succeeded but access_token is missing")
+
+    if not EXTERNAL_OAUTH_USERINFO_URL:
+        raise HTTPException(status_code=500, detail="EXTERNAL_OAUTH_USERINFO_URL is missing in config.")
+
+    user_info = _json_get_with_bearer(EXTERNAL_OAUTH_USERINFO_URL, access_token)
+    profile = _derive_profile(user_info)
     if not access_token:
         raise HTTPException(status_code=400, detail="Token exchange succeeded but access_token is missing")
 
