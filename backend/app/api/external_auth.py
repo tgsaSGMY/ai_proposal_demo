@@ -53,7 +53,9 @@ def _require_provider_config() -> None:
 
 
 def _build_redirect_uri(request: FastAPIRequest) -> str:
-    return str(request.url_for("external_oauth_callback"))
+    # 取得網址後，強制將 scheme 轉換為 https (避免 Nginx 反向代理導致變回 http)
+    url = request.url_for("external_oauth_callback")
+    return str(url.replace(scheme="https"))
 
 
 def _frontend_callback_url() -> str:
@@ -85,13 +87,6 @@ def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
         raw = resp.read().decode("utf-8")
         return json.loads(raw)
 
-
-def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
-    # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
-    profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
-
-    subject = profile_data.get("sub") or profile_data.get("id")
-    email = profile_data.get("email")
 def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
     # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
     profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
