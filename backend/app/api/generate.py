@@ -1223,7 +1223,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                 if user_id:
                     try:
                         response_json = getattr(llm_service, '_last_response_json', {})
-                        print(response_json)
+                      
                         if response_json:
                             await supabase_service.log_cost_usage(user_id, model_info, response_json, project_id=project_id, action="生成對話")
                     except Exception as e:
