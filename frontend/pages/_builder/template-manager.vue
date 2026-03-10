@@ -132,6 +132,9 @@ interface TemplateRecord {
   id: string;
   grant_id: string;
   name: string;
+  requires_paid_plan?: boolean | null;
+  submission_deadline?: string | null;
+  subsidy_amount?: string | null;
   subtitle?: string | null;
   description?: string | null;
   logo_storage_path?: string | null;
@@ -151,6 +154,9 @@ interface TemplateFormState {
   id: string;
   grant_id: string;
   name: string;
+  requires_paid_plan: boolean;
+  submission_deadline: string;
+  subsidy_amount: string;
   subtitle: string;
   description: string;
   logo_storage_path: string;
@@ -210,6 +216,9 @@ const templateForm = ref<TemplateFormState>({
   id: "",
   grant_id: "",
   name: "",
+  requires_paid_plan: true,
+  submission_deadline: "",
+  subsidy_amount: "",
   subtitle: "",
   description: "",
   logo_storage_path: "",
@@ -418,6 +427,9 @@ function resetTemplateForm() {
     id: "",
     grant_id: "",
     name: "",
+    requires_paid_plan: true,
+    submission_deadline: "",
+    subsidy_amount: "",
     subtitle: "",
     description: "",
     logo_storage_path: "",
@@ -433,6 +445,9 @@ function startTemplateEdit(template: TemplateRecord) {
     id: template.id,
     grant_id: template.grant_id,
     name: template.name,
+    requires_paid_plan: template.requires_paid_plan !== false,
+    submission_deadline: template.submission_deadline || "",
+    subsidy_amount: template.subsidy_amount || "",
     subtitle: template.subtitle || "",
     description: template.description || "",
     logo_storage_path: template.logo_storage_path || "",
@@ -465,6 +480,18 @@ async function handleTemplateSubmit() {
     formData.append("id", templateForm.value.id.trim());
     formData.append("grant_id", templateForm.value.grant_id);
     formData.append("name", templateForm.value.name.trim());
+    formData.append(
+      "requires_paid_plan",
+      templateForm.value.requires_paid_plan ? "true" : "false",
+    );
+    formData.append(
+      "submission_deadline",
+      templateForm.value.submission_deadline?.trim() || "",
+    );
+    formData.append(
+      "subsidy_amount",
+      templateForm.value.subsidy_amount?.trim() || "",
+    );
     formData.append("subtitle", templateForm.value.subtitle?.trim() || "");
     formData.append(
       "description",

@@ -37,6 +37,10 @@ definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+useHead({
+  title: "登入 - TGSA 補助引擎",
+});
+
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 

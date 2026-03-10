@@ -57,8 +57,33 @@
               <p class="mt-1 text-xs text-[#8f98be]">
                 {{ plan.description }}
               </p>
+              <div
+                v-if="plan.subsidyAmount || plan.submissionDeadline"
+                class="mt-4 space-y-1 rounded-lg bg-rose-50/60 px-3 py-2"
+              >
+                <p v-if="plan.subsidyAmount" class="text-xs text-rose-700">
+                  補助額：{{ plan.subsidyAmount }}
+                </p>
+                <p v-if="plan.submissionDeadline" class="text-xs text-rose-700">
+                  送件截止：{{ plan.submissionDeadline }}
+                </p>
+              </div>
             </button>
           </div>
+
+          <section
+            class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm"
+            aria-label="免責聲明"
+          >
+            <p class="text-sm font-black tracking-wide text-amber-900">
+              免責聲明
+            </p>
+            <p
+              class="mt-2 text-sm font-semibold leading-relaxed text-amber-800"
+            >
+              引擎產生計劃內容僅供參考。請根據公司實際研發進行計劃調整。
+            </p>
+          </section>
 
           <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
@@ -102,33 +127,6 @@
               重新選擇類型
             </button>
           </header>
-
-          <!-- <div class="mt-6 grid gap-4 md:grid-cols-2">
-            <button
-              v-for="mode in modeOptions"
-              :key="mode.id"
-              class="flex h-full flex-col rounded-3xl border p-5 text-left transition"
-              :class="
-                selectedMode === mode.id
-                  ? 'border-rose-400 bg-rose-50 shadow-md'
-                  : 'border-slate-100 bg-slate-50 shadow-sm hover:border-rose-200 hover:bg-white'
-              "
-              @click="selectedMode = mode.id"
-            >
-              <p
-                class="text-xs font-semibold uppercase tracking-widest text-slate-400"
-              >
-                {{ mode.badge }}
-              </p>
-              <h3 class="mt-2 text-xl font-semibold text-slate-900">
-                {{ mode.title }}
-              </h3>
-              <p class="mt-2 text-sm text-slate-500">
-                {{ mode.description }}
-              </p>
-            </button>
-          </div> -->
-
           <div class="mt-6 space-y-4">
             <label class="block space-y-2">
               <span class="text-sm font-semibold text-slate-700"
@@ -361,11 +359,13 @@ definePageMeta({
 interface PlanTypeOption {
   id: string;
   title: string;
-  subtitle: string;
-  description: string;
+  subtitle?: string;
+  description?: string;
   grantId: string;
   templateHint?: string;
   templateId?: string;
+  submissionDeadline?: string;
+  subsidyAmount?: string;
   iconBg: string;
   image: string;
 }
@@ -395,11 +395,13 @@ interface PlanTemplate {
   id: string;
   grant_id: string;
   name: string;
-  subtitle: string;
-  description: string;
+  subtitle?: string | null;
+  description?: string | null;
   logo_storage_path?: string;
   iconBg?: string;
   isOpen: boolean;
+  submission_deadline?: string | null;
+  subsidy_amount?: string | null;
 }
 
 const planTypes = ref<PlanTypeOption[]>([]);
@@ -469,10 +471,12 @@ async function loadPlanTypes() {
       return {
         id: template.id,
         title: template.name,
-        subtitle: template.subtitle,
-        description: template.description,
+        subtitle: template.subtitle || "",
+        description: template.description || "",
         grantId: template.grant_id,
         templateId: template.id,
+        submissionDeadline: template.submission_deadline || "",
+        subsidyAmount: template.subsidy_amount || "",
         iconBg: template.iconBg || "#F8FAFC",
         image: logoUrl,
       };

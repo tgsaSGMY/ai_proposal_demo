@@ -327,21 +327,9 @@
           <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6">
             <section class="space-y-3">
               <h3 class="text-lg font-semibold text-gray-900">價格服務方案</h3>
-              <p class="text-sm text-gray-500">
-                （佔位符）我們將爲您提供OOO方案。
-              </p>
-              <ul class="space-y-2 text-sm text-gray-600">
-                <li class="flex items-start gap-2">
-                  <Icon name="tabler:check" class="text-emerald-500 mt-0.5" />
-                  <span>（佔位符）AI 企劃產製與審稿服務</span>
-                </li>
-                <li class="flex items-start gap-2">
-                  <Icon name="tabler:check" class="text-emerald-500 mt-0.5" />
-                  <span>（佔位符）專家陪跑顧問</span>
-                </li>
-              </ul>
               <button
-                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-rose-600"
+                class="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-gray-300 px-4 py-2 text-sm font-semibold text-white shadow"
+                disabled
               >
                 取得專案報價
                 <Icon name="tabler:arrow-up-right" width="18" height="18" />
@@ -352,23 +340,17 @@
               <h3 class="text-lg font-semibold text-gray-900">客戶 QA</h3>
               <div class="space-y-2 text-sm text-gray-600">
                 <details
+                  v-for="item in customerQaList"
+                  :key="item.question"
                   class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3"
                 >
                   <summary class="font-semibold text-gray-800 cursor-pointer">
-                    （佔位符）如何加速產製一份符合補助條件的計畫案？
+                    {{ item.question }}
                   </summary>
-                  <p class="mt-2 text-gray-600">
-                    （佔位符）先行建立模板與案例資料庫，透過 AI
-                    生成模式產生初稿，再由專家調整策略與預算，即可在短時間内內完成高品質輸出。
-                  </p>
-                </details>
-                <details
-                  class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3"
-                >
-                  <summary class="font-semibold text-gray-800 cursor-pointer">
-                    （佔位符）OOO
-                  </summary>
-                  <p class="mt-2 text-gray-600">（佔位符）OOO</p>
+                  <div
+                    class="mt-2 text-gray-600 leading-relaxed"
+                    v-html="formatQaAnswer(item.answer)"
+                  ></div>
                 </details>
               </div>
             </section>
@@ -430,6 +412,7 @@ import {
   ensureDynamicSchemaLoaded,
 } from "~/utils/dynamicSchema";
 import { supabase } from "~/utils/supabaseClient";
+import { customerQaList } from "~/utils/customerQa";
 // 透過動態 schema 來計算每個計畫卡片的進度，並使用 Supabase API 取得與管理專案資料
 
 // 介面定義：用來描述 UI 卡片與後端的專案紀錄結構
@@ -771,6 +754,24 @@ function openSupportPanel() {
 
 function closeSupportPanel() {
   isSupportPanelOpen.value = false;
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatQaAnswer(answer: string): string {
+  return escapeHtml(answer)
+    .replace(
+      /\*\*(.+?)\*\*/g,
+      '<strong class="font-black text-gray-700">$1</strong>',
+    )
+    .replace(/\n/g, "<br />");
 }
 
 /**

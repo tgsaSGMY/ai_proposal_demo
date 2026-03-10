@@ -70,6 +70,34 @@
             placeholder="簡短描述"
           />
         </label>
+        <label class="block space-y-1">
+          <span class="text-sm font-medium text-slate-700">付費方案限制</span>
+          <select
+            v-model="templateForm.requires_paid_plan"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-rose-400"
+          >
+            <option :value="true">需要付費方案</option>
+            <option :value="false">不需要</option>
+          </select>
+        </label>
+        <label class="block space-y-1">
+          <span class="text-sm font-medium text-slate-700">送件截止日期</span>
+          <input
+            v-model="templateForm.submission_deadline"
+            type="text"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-rose-400"
+            placeholder="例如：2026/12/31"
+          />
+        </label>
+        <label class="block space-y-1 md:col-span-2">
+          <span class="text-sm font-medium text-slate-700">補助額</span>
+          <input
+            v-model="templateForm.subsidy_amount"
+            type="text"
+            class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:border-rose-400"
+            placeholder="例如：最高新台幣 200 萬元"
+          />
+        </label>
         <label class="block space-y-1 md:col-span-2">
           <span class="text-sm font-medium text-slate-700">描述</span>
           <textarea
@@ -202,6 +230,9 @@ interface TemplateFormState {
   id: string;
   grant_id: string;
   name: string;
+  requires_paid_plan: boolean;
+  submission_deadline: string;
+  subsidy_amount: string;
   subtitle: string;
   description: string;
   logo_storage_path: string;

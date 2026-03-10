@@ -170,6 +170,10 @@ definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+useHead({
+  title: "内部賬號登入 - TGSA 補助引擎",
+});
+
 // router 用於登入成功後導向
 const router = useRouter();
 const config = useRuntimeConfig();

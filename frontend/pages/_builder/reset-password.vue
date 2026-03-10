@@ -356,6 +356,10 @@
 import { supabase } from "~/utils/supabaseClient";
 // 引入 Supabase：處理驗證與使用者操作（例如更新密碼與會話檢查）
 
+useHead({
+  title: "重設密碼 - TGSA 補助引擎",
+});
+
 // router 用於頁面導向；route 用於取得當前路由資訊（例如重設 token 在 URL hash）
 const router = useRouter();
 const route = useRoute();

@@ -272,6 +272,10 @@ definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+useHead({
+  title: "註冊 - TGSA 補助引擎",
+});
+
 // 若使用者已登入，中介層會導回其他頁面，這裡保留 router 以便需要時導航使用
 const router = useRouter();
 const config = useRuntimeConfig();

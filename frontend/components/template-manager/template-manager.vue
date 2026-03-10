@@ -36,6 +36,9 @@
           <tr>
             <th class="py-2">模板</th>
             <th class="py-2">主題</th>
+            <th class="py-2">付費方案</th>
+            <th class="py-2">送件截止日期</th>
+            <th class="py-2">補助額</th>
             <th class="py-2">圖示色</th>
             <th class="py-2">Logo</th>
             <th class="py-2">狀態</th>
@@ -59,6 +62,24 @@
                 {{ grantNameMap.get(template.grant_id) || template.grant_id }}
               </p>
               <p class="text-xs text-slate-500">{{ template.grant_id }}</p>
+            </td>
+            <td class="py-3">
+              <span
+                :class="[
+                  'px-3 py-1 text-xs font-semibold rounded-full',
+                  template.requires_paid_plan !== false
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-emerald-50 text-emerald-700',
+                ]"
+              >
+                {{ template.requires_paid_plan !== false ? "需要" : "不需要" }}
+              </span>
+            </td>
+            <td class="py-3 text-slate-700 text-sm">
+              {{ template.submission_deadline || "—" }}
+            </td>
+            <td class="py-3 text-slate-700 text-sm">
+              {{ template.subsidy_amount || "—" }}
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
@@ -167,7 +188,7 @@
             </td>
           </tr>
           <tr v-if="!filteredTemplates.length">
-            <td colspan="6" class="py-6 text-center text-slate-400">
+            <td colspan="9" class="py-6 text-center text-slate-400">
               沒有符合條件的模板
             </td>
           </tr>
@@ -187,6 +208,9 @@ interface TemplateRecord {
   id: string;
   grant_id: string;
   name: string;
+  requires_paid_plan?: boolean | null;
+  submission_deadline?: string | null;
+  subsidy_amount?: string | null;
   subtitle?: string | null;
   description?: string | null;
   logo_storage_path?: string | null;

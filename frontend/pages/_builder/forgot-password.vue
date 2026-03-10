@@ -175,6 +175,10 @@ definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
+useHead({
+  title: "忘記密碼 - TGSA 補助引擎",
+});
+
 // 表單欄位與 UI 狀態
 const email = ref(""); // 使用者輸入的電子郵件
 const errorMessage = ref(""); // 錯誤訊息顯示
