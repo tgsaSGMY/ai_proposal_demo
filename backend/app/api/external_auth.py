@@ -5,22 +5,17 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, Request as FastAPIRequest, status
 from fastapi.responses import RedirectResponse
 
 from app.api.dependencies import get_supabase_service
 from app.config import (
-    EXTERNAL_OAUTH_AUDIENCE,
     EXTERNAL_OAUTH_AUTHORIZE_URL,
     EXTERNAL_OAUTH_CLIENT_ID,
     EXTERNAL_OAUTH_CLIENT_SECRET,
     EXTERNAL_OAUTH_ENABLED,
     EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL,
-    EXTERNAL_OAUTH_ISSUER,
-    EXTERNAL_OAUTH_PEM_PUBLIC_KEY,
     EXTERNAL_OAUTH_PROVIDER,
-    EXTERNAL_OAUTH_REDIRECT_URI,
     EXTERNAL_OAUTH_SCOPE,
     EXTERNAL_OAUTH_TOKEN_URL,
     EXTERNAL_OAUTH_USERINFO_URL,
@@ -58,13 +53,7 @@ def _require_provider_config() -> None:
         )
 
 
-def _normalize_pem(pem: str) -> str:
-    return pem.replace("\\n", "\n").strip()
-
-
 def _build_redirect_uri(request: FastAPIRequest) -> str:
-    if EXTERNAL_OAUTH_REDIRECT_URI:
-        return EXTERNAL_OAUTH_REDIRECT_URI
     return str(request.url_for("external_oauth_callback"))
 
 
@@ -98,45 +87,17 @@ def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
         return json.loads(raw)
 
 
-def _verify_id_token(token: str) -> Dict[str, Any]:
-    if not EXTERNAL_OAUTH_PEM_PUBLIC_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="EXTERNAL_OAUTH_PEM_PUBLIC_KEY is required for id_token verification",
-        )
+def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
+    # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
+    profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
 
-    pem = _normalize_pem(EXTERNAL_OAUTH_PEM_PUBLIC_KEY)
-    header = jwt.get_unverified_header(token)
-    alg = header.get("alg")
-    if not alg:
-        raise HTTPException(status_code=401, detail="id_token missing signing algorithm")
-
-    kwargs: Dict[str, Any] = {
-        "algorithms": [alg],
-        "options": {"verify_signature": True, "verify_exp": True, "verify_aud": bool(EXTERNAL_OAUTH_AUDIENCE)},
-    }
-    if EXTERNAL_OAUTH_ISSUER:
-        kwargs["issuer"] = EXTERNAL_OAUTH_ISSUER
-    if EXTERNAL_OAUTH_AUDIENCE:
-        kwargs["audience"] = EXTERNAL_OAUTH_AUDIENCE
-
-    try:
-        return jwt.decode(token, pem, **kwargs)
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid id_token") from exc
-
-
-def _derive_profile(token_payload: Dict[str, Any], user_info: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    profile = user_info or {}
-    profile_sub = profile.get("sub") or profile.get("id")
-    token_sub = token_payload.get("sub")
-    subject = profile_sub or token_sub
-    email = profile.get("email") or token_payload.get("email")
+    subject = profile_data.get("sub") or profile_data.get("id")
+    email = profile_data.get("email")
 
     if not subject:
         raise HTTPException(status_code=400, detail="Unable to resolve external user subject")
 
-    role_raw = profile.get("role") or token_payload.get("role") or "normal"
+    role_raw = profile_data.get("role") or "normal"
     role = role_raw if role_raw in {"normal", "internal", "vip"} else "normal"
 
     return {
@@ -207,21 +168,15 @@ async def external_oauth_callback(
         },
     )
 
-    id_token = token_payload.get("id_token")
     access_token = token_payload.get("access_token")
-    if not id_token:
-        raise HTTPException(status_code=400, detail="Token exchange succeeded but id_token is missing")
-    if not access_token and not EXTERNAL_OAUTH_USERINFO_URL:
-        # access_token can be optional when profile fields are fully provided by id_token.
-        pass
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Token exchange succeeded but access_token is missing")
 
-    verified_token_claims: Dict[str, Any] = _verify_id_token(id_token)
+    if not EXTERNAL_OAUTH_USERINFO_URL:
+        raise HTTPException(status_code=500, detail="EXTERNAL_OAUTH_USERINFO_URL is missing in config.")
 
-    user_info = None
-    if EXTERNAL_OAUTH_USERINFO_URL and access_token:
-        user_info = _json_get_with_bearer(EXTERNAL_OAUTH_USERINFO_URL, access_token)
-
-    profile = _derive_profile(verified_token_claims, user_info)
+    user_info = _json_get_with_bearer(EXTERNAL_OAUTH_USERINFO_URL, access_token)
+    profile = _derive_profile(user_info)
 
     canonical_user = await supabase_service.resolve_or_create_user_by_external_identity(
         provider=EXTERNAL_OAUTH_PROVIDER,
