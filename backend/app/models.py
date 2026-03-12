@@ -247,6 +247,7 @@ class PlanTemplateCreateRequest(BaseModel):
     """建立新的計畫模板。"""
     id: str = Field(..., min_length=1, max_length=64)
     grant_id: str = Field(..., min_length=1, max_length=64)
+    order: Optional[int] = Field(default=None, ge=0)
     name: str = Field(..., min_length=1, max_length=255)
     subtitle: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None
@@ -261,6 +262,7 @@ class PlanTemplateUpdateRequest(BaseModel):
     """更新既有計畫模板，允許局部更新。"""
     id: Optional[str] = Field(None, min_length=1, max_length=64)
     grant_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    order: Optional[int] = Field(default=None, ge=0)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     subtitle: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None

@@ -30,11 +30,13 @@
         :templates="templates"
         :grant-options="grantOptions"
         :grant-name-map="grantNameMap"
+        :loading="templateSaving"
         @new="openTemplateModal('create')"
         @edit="(template) => startTemplateEdit(template)"
         @sections="(template) => openSectionEditor(template)"
         @word-editor="(template) => openWordEditor(template)"
         @name-config="(template) => openNameRecommendModal(template)"
+        @reorder="handleTemplateReorder"
       />
 
       <GrantFormModal
@@ -131,6 +133,7 @@ interface GrantRecord {
 interface TemplateRecord {
   id: string;
   grant_id: string;
+  order?: number | null;
   name: string;
   requires_paid_plan?: boolean | null;
   submission_deadline?: string | null;
@@ -180,6 +183,12 @@ interface SectionMutationPayload {
   order: number;
   json_schema: Record<string, any> | null;
   originalId?: string | null;
+}
+
+interface TemplateReorderPayload {
+  id: string;
+  grant_id: string;
+  order: number;
 }
 
 const grants = ref<GrantRecord[]>([]);
@@ -526,6 +535,68 @@ async function handleTemplateSubmit() {
     closeTemplateModal();
   } catch (error: any) {
     notifyError(error?.message || "操作失敗");
+  } finally {
+    templateSaving.value = false;
+  }
+}
+
+async function handleTemplateReorder(
+  changedTemplates: TemplateReorderPayload[],
+) {
+  if (!changedTemplates?.length) {
+    return;
+  }
+
+  const currentOrderMap = new Map<string, number>();
+  templates.value.forEach((template) => {
+    const key = `${template.grant_id}::${template.id}`;
+    currentOrderMap.set(key, Number(template.order ?? 0));
+  });
+
+  const templatesToUpdate = changedTemplates.filter((template) => {
+    const key = `${template.grant_id}::${template.id}`;
+    return currentOrderMap.get(key) !== Number(template.order ?? 0);
+  });
+
+  if (!templatesToUpdate.length) {
+    return;
+  }
+
+  templateSaving.value = true;
+  try {
+    await Promise.all(
+      templatesToUpdate.map((template) =>
+        fetchJsonWithAuth(
+          `${TEMPLATE_MANAGER_API}/templates/${template.grant_id}/${template.id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ order: template.order }),
+          },
+        ),
+      ),
+    );
+
+    const updatedOrderMap = new Map(
+      templatesToUpdate.map((template) => [
+        `${template.grant_id}::${template.id}`,
+        template.order,
+      ]),
+    );
+    templates.value = templates.value.map((template) => {
+      const key = `${template.grant_id}::${template.id}`;
+      const nextOrder = updatedOrderMap.get(key);
+      if (nextOrder === undefined) {
+        return template;
+      }
+      return {
+        ...template,
+        order: nextOrder,
+      };
+    });
+
+    success("模板順序已更新");
+  } catch (error: any) {
+    notifyError(error?.message || "模板排序更新失敗");
   } finally {
     templateSaving.value = false;
   }

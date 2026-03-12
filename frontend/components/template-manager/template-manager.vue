@@ -11,6 +11,7 @@
         <select
           v-model="templateFilter"
           class="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          :disabled="props.loading"
         >
           <option value="">全部主題</option>
           <option
@@ -24,13 +25,32 @@
         <button
           type="button"
           class="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-rose-600"
+          :disabled="props.loading"
+          :class="props.loading ? 'cursor-not-allowed opacity-70' : ''"
           @click="emit('new')"
         >
           新增模板
         </button>
       </div>
     </div>
-    <div class="overflow-x-auto">
+    <p class="text-xs text-slate-400">
+      {{
+        props.loading
+          ? "模板更新中，請稍候..."
+          : "切換為「全部主題」時可拖曳調整模板順序。"
+      }}
+    </p>
+    <div class="relative overflow-x-auto">
+      <div
+        v-if="props.loading"
+        class="absolute inset-0 z-20 flex items-center justify-center bg-white/60 backdrop-blur-[1px]"
+      >
+        <p
+          class="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 shadow"
+        >
+          更新模板順序中...
+        </p>
+      </div>
       <table class="min-w-full text-sm">
         <thead class="text-slate-500 text-left border-b">
           <tr>
@@ -38,7 +58,7 @@
             <th class="py-2">主題</th>
             <th class="py-2">付費方案</th>
             <th class="py-2">送件截止日期</th>
-            <th class="py-2">補助額</th>
+            <th class="py-2 min-w-[220px]">補助額</th>
             <th class="py-2">圖示色</th>
             <th class="py-2">Logo</th>
             <th class="py-2">狀態</th>
@@ -47,9 +67,18 @@
         </thead>
         <tbody>
           <tr
-            v-for="template in filteredTemplates"
+            v-for="(template, index) in filteredTemplates"
             :key="`${template.grant_id}-${template.id}`"
             class="border-b last:border-b-0"
+            :class="[
+              canDragReorder ? 'cursor-move' : '',
+              dragOverTemplateIndex === index ? 'bg-indigo-50' : '',
+            ]"
+            :draggable="canDragReorder"
+            @dragstart="startDragTemplate(index, $event)"
+            @dragover="dragOverTemplate(index, $event)"
+            @drop="dropTemplate(index, $event)"
+            @dragend="dragEndTemplate"
           >
             <td class="py-3">
               <p class="font-semibold text-slate-900">{{ template.name }}</p>
@@ -78,8 +107,10 @@
             <td class="py-3 text-slate-700 text-sm">
               {{ template.submission_deadline || "—" }}
             </td>
-            <td class="py-3 text-slate-700 text-sm">
-              {{ template.subsidy_amount || "—" }}
+            <td class="py-3 min-w-[220px] text-slate-700 text-sm">
+              <p class="max-w-[320px] whitespace-normal break-words">
+                {{ template.subsidy_amount || "—" }}
+              </p>
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
@@ -123,6 +154,8 @@
                 <button
                   type="button"
                   class="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                  :disabled="props.loading"
+                  :class="props.loading ? 'cursor-not-allowed opacity-60' : ''"
                   @click="toggleMenu(`${template.grant_id}-${template.id}`)"
                 >
                   <svg
@@ -207,6 +240,7 @@ import type { NameRecommendConfig } from "~/types/nameRecommend";
 interface TemplateRecord {
   id: string;
   grant_id: string;
+  order?: number | null;
   name: string;
   requires_paid_plan?: boolean | null;
   submission_deadline?: string | null;
@@ -239,6 +273,10 @@ const props = defineProps({
     type: Object as PropType<Map<string, string>>,
     default: () => new Map<string, string>(),
   },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const templateFilter = defineModel<string>("templateFilter", {
@@ -247,13 +285,101 @@ const templateFilter = defineModel<string>("templateFilter", {
 
 const openMenuId = ref<string | null>(null);
 const menuTriggers = ref<HTMLElement | null>(null);
+const draggedTemplateIndex = ref<number | null>(null);
+const dragOverTemplateIndex = ref<number | null>(null);
+
+const isAllThemesSelected = computed(() => !templateFilter.value);
+const canDragReorder = computed(
+  () => isAllThemesSelected.value && !props.loading,
+);
+
+function getTemplateOrderValue(template: TemplateRecord) {
+  const numeric = Number(template.order);
+  return Number.isFinite(numeric) && numeric > 0
+    ? numeric
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function sortTemplates(list: TemplateRecord[]) {
+  return [...list].sort((a, b) => {
+    const orderDiff = getTemplateOrderValue(a) - getTemplateOrderValue(b);
+    if (orderDiff !== 0) {
+      return orderDiff;
+    }
+    const grantDiff = (a.grant_id || "").localeCompare(b.grant_id || "");
+    if (grantDiff !== 0) {
+      return grantDiff;
+    }
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
 
 const filteredTemplates = computed(() => {
   if (!templateFilter.value) {
-    return props.templates;
+    return sortTemplates(props.templates);
   }
-  return props.templates.filter((tpl) => tpl.grant_id === templateFilter.value);
+  return sortTemplates(
+    props.templates.filter((tpl) => tpl.grant_id === templateFilter.value),
+  );
 });
+
+function startDragTemplate(index: number, event: DragEvent) {
+  if (!canDragReorder.value) {
+    return;
+  }
+  draggedTemplateIndex.value = index;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+  }
+}
+
+function dragOverTemplate(index: number, event: DragEvent) {
+  if (!canDragReorder.value || draggedTemplateIndex.value === null) {
+    return;
+  }
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+  dragOverTemplateIndex.value = index;
+}
+
+function dropTemplate(index: number, event: DragEvent) {
+  if (!canDragReorder.value) {
+    return;
+  }
+  event.preventDefault();
+  dragOverTemplateIndex.value = null;
+
+  if (draggedTemplateIndex.value === null) {
+    return;
+  }
+
+  const sourceIndex = draggedTemplateIndex.value;
+  draggedTemplateIndex.value = null;
+  if (sourceIndex === index) {
+    return;
+  }
+
+  const reordered = [...filteredTemplates.value];
+  const [movedTemplate] = reordered.splice(sourceIndex, 1);
+  if (!movedTemplate) {
+    return;
+  }
+  reordered.splice(index, 0, movedTemplate);
+
+  const payload = reordered.map((template, idx) => ({
+    id: template.id,
+    grant_id: template.grant_id,
+    order: idx + 1,
+  }));
+  emit("reorder", payload);
+}
+
+function dragEndTemplate() {
+  draggedTemplateIndex.value = null;
+  dragOverTemplateIndex.value = null;
+}
 
 // 滾動時關閉菜單
 onMounted(() => {
@@ -269,6 +395,9 @@ onMounted(() => {
 });
 
 const toggleMenu = (templateId: string) => {
+  if (props.loading) {
+    return;
+  }
   openMenuId.value = openMenuId.value === templateId ? null : templateId;
 };
 
@@ -331,6 +460,10 @@ const emit = defineEmits<{
   (e: "sections", template: TemplateRecord): void;
   (e: "word-editor", template: TemplateRecord): void;
   (e: "name-config", template: TemplateRecord): void;
+  (
+    e: "reorder",
+    templates: Array<{ id: string; grant_id: string; order: number }>,
+  ): void;
   (e: "new"): void;
 }>();
 

@@ -297,6 +297,8 @@ class SupabaseService:
             self.client
             .from_("plan_templates")
             .select("*")
+            .order("order", desc=False)
+            .order("grant_id", desc=False)
             .order("name", desc=False)
         )
         if grant_id:

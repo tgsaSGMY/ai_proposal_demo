@@ -37,16 +37,33 @@
               "
               @click="handlePlanClick(plan)"
             >
-              <span
-                class="inline-flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden"
-                :style="{ backgroundColor: plan.iconBg }"
-              >
-                <img
-                  :src="plan.image"
-                  alt=""
-                  class="max-h-full max-w-full object-contain p-2"
-                />
-              </span>
+              <div class="flex items-start justify-between gap-3">
+                <span
+                  class="inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
+                  :style="{ backgroundColor: plan.iconBg }"
+                >
+                  <img
+                    :src="plan.image"
+                    alt=""
+                    class="max-h-full max-w-full object-contain p-2"
+                  />
+                </span>
+
+                <div
+                  v-if="plan.subsidyAmount || plan.submissionDeadline"
+                  class="ml-auto w-full max-w-[220px] min-w-[150px] space-y-1 rounded-lg bg-gray-100 px-3 py-2"
+                >
+                  <p v-if="plan.subsidyAmount" class="text-xs text-gray-700">
+                    補助額：{{ plan.subsidyAmount }}
+                  </p>
+                  <p
+                    v-if="plan.submissionDeadline"
+                    class="text-xs text-gray-700"
+                  >
+                    送件截止：{{ plan.submissionDeadline }}
+                  </p>
+                </div>
+              </div>
 
               <h3 class="mt-1 text-xl font-semibold text-[#111b3f]">
                 {{ plan.title }}
@@ -57,17 +74,6 @@
               <p class="mt-1 text-xs text-[#8f98be]">
                 {{ plan.description }}
               </p>
-              <div
-                v-if="plan.subsidyAmount || plan.submissionDeadline"
-                class="mt-4 space-y-1 rounded-lg bg-rose-50/60 px-3 py-2"
-              >
-                <p v-if="plan.subsidyAmount" class="text-xs text-rose-700">
-                  補助額：{{ plan.subsidyAmount }}
-                </p>
-                <p v-if="plan.submissionDeadline" class="text-xs text-rose-700">
-                  送件截止：{{ plan.submissionDeadline }}
-                </p>
-              </div>
             </button>
           </div>
 

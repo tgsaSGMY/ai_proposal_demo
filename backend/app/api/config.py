@@ -68,7 +68,14 @@ async def get_plan_templates(
     從 Supabase 取得所有計畫模板列表，包含 logo、描述等資訊。
     """
     try:
-        response = supabase_service.client.from_("plan_templates").select("*").order("id", desc=False).execute()
+        response = (
+            supabase_service.client
+            .from_("plan_templates")
+            .select("*")
+            .order("order", desc=False)
+            .order("id", desc=False)
+            .execute()
+        )
         
         if response.data:
             return response.data
