@@ -327,8 +327,8 @@
           <div v-else class="space-y-3">
             <NuxtLink
               to="/login"
-              class="flex items-center gap-3 rounded-2xl px-5 py-3 transition border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-              active-class="border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200"
+              class="flex items-center gap-3 rounded-2xl px-5 py-3 transition border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+              active-class="border border-rose-300 bg-rose-100 text-rose-700 shadow-md"
               @click.native="handleNavClick"
             >
               <svg
