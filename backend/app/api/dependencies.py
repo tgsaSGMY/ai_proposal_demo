@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 import time
 
 from app.core.app_jwt import decode_app_access_token
+from app.config import EXTERNAL_OAUTH_PROVIDER
 
 AUTH_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
 AUTH_CONTEXT_CACHE_TTL_SECONDS = 20
@@ -107,7 +108,7 @@ async def _resolve_user_context_from_auth(
             "email": user_row.get("email") or payload.get("email"),
             "role": user_row.get("role", payload.get("role", "normal")),
             "auth_user_id": None,
-            "provider": payload.get("provider", "external"),
+            "provider": payload.get("provider", EXTERNAL_OAUTH_PROVIDER),
         }
 
     AUTH_CONTEXT_CACHE[token] = {
