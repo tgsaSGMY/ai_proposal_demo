@@ -1,6 +1,7 @@
 import hmac
 import json
 import secrets
+import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -25,6 +26,36 @@ from app.services.supabase_service import SupabaseService
 router = APIRouter(prefix="/api/external-auth", tags=["ExternalAuth"])
 
 STATE_COOKIE_NAME = "external_oauth_state"
+STATE_TTL_SECONDS = 600
+_STATE_STORE: Dict[str, float] = {}
+
+
+def _store_oauth_state(state: str) -> None:
+    """將 state 暫存於後端記憶體，供 callback 一次性驗證。"""
+    now = time.time()
+    _STATE_STORE[state] = now + STATE_TTL_SECONDS
+
+    # 順手清理過期 state，避免長時間執行下字典無限成長。
+    expired = [key for key, expires_at in _STATE_STORE.items() if expires_at <= now]
+    for key in expired:
+        _STATE_STORE.pop(key, None)
+
+
+def _consume_oauth_state(state: Optional[str]) -> bool:
+    """驗證並消耗 state（只允許使用一次）。"""
+    if not state:
+        return False
+
+    expires_at = _STATE_STORE.get(state)
+    if not expires_at:
+        return False
+
+    if expires_at <= time.time():
+        _STATE_STORE.pop(state, None)
+        return False
+
+    _STATE_STORE.pop(state, None)
+    return True
 
 
 def _require_enabled() -> None:
@@ -114,6 +145,7 @@ async def external_oauth_redirect(request: FastAPIRequest):
     _require_provider_config()
 
     state = secrets.token_urlsafe(32)
+    _store_oauth_state(state)
     redirect_uri = _build_redirect_uri(request)
 
     query = {
@@ -154,7 +186,13 @@ async def external_oauth_callback(
         raise HTTPException(status_code=400, detail="Missing authorization code")
 
     expected_state = request.cookies.get(STATE_COOKIE_NAME)
-    if not expected_state or not state or not hmac.compare_digest(expected_state, state):
+    is_state_valid = _consume_oauth_state(state)
+
+    # 保留 cookie 比對作為相容方案：若 cookie 存在且不一致，仍視為無效。
+    if expected_state and state and not hmac.compare_digest(expected_state, state):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    if not is_state_valid:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     token_payload = _json_post_form(
