@@ -308,7 +308,26 @@ class SupabaseService:
 
     async def create_plan_template_record(self, template_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """新增計畫模板。"""
-        response = self.client.from_("plan_templates").insert(template_data).execute()
+        payload = {k: v for k, v in template_data.items() if v is not None}
+
+        # plan_templates.order 為 NOT NULL；若前端未傳，補上目前最大值 + 1
+        if payload.get("order") is None:
+            max_order_resp = (
+                self.client
+                .from_("plan_templates")
+                .select("order")
+                .order("order", desc=True)
+                .limit(1)
+                .execute()
+            )
+            max_order = 0
+            if max_order_resp.data:
+                current = max_order_resp.data[0].get("order")
+                if isinstance(current, (int, float)):
+                    max_order = int(current)
+            payload["order"] = max_order + 1
+
+        response = self.client.from_("plan_templates").insert(payload).execute()
         return response.data[0] if response.data else None
 
     async def update_plan_template_record(
