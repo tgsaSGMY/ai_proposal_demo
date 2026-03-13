@@ -328,19 +328,21 @@
             <NuxtLink
               to="/login"
               class="flex items-center gap-3 rounded-2xl px-5 py-3 transition border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-              active-class="border border-rose-500 bg-rose-500 text-rose-500 shadow-lg shadow-rose-200"
+              active-class="border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200"
               @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 class="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.8"
+                stroke="currentColor"
               >
                 <path
-                  fill-rule="evenodd"
-                  d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1h12a1 1 0 110 2H4v12a1 1 0 11-2 0V4a1 1 0 011-1z"
-                  clip-rule="evenodd"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15.75 9V5.25m0 0h-3.75m3.75 0L10.5 10.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
               <span class="font-medium">登入</span>
@@ -556,10 +558,9 @@ onMounted(async () => {
 // 统一处理所有与 Supabase 会话相关的状态逻辑
 // 参数: session - Supabase 会话对象（可能为 null）
 async function handleSessionUpdate(session) {
-  // 从会话中提取用户 ID（如果会话不存在则为 null）
-  const sessionUserId = session?.user?.id ?? null;
-  // 根据是否有用户 ID 来设置认证状态
-  isAuthenticated.value = !!sessionUserId;
+  // 和 middleware 保持一致：有 session 且有 user 才算已登入。
+  const hasValidSession = !!session?.access_token && !!session?.user;
+  isAuthenticated.value = hasValidSession;
   // 更新用户邮箱（如果会话不存在则为空字符串）
   userEmail.value = session?.user?.email ?? "";
 
