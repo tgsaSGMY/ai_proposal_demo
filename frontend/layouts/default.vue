@@ -547,8 +547,14 @@ onMounted(async () => {
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
-    // 当 Supabase 认证状态变化时，更新本地状态
-    handleSessionUpdate(session);
+    // 对 external token 登录，onAuthStateChange 可能回传 null session。
+    // 统一回读 getSession()，确保 sidebar 与 middleware 使用同一套会话来源。
+    void (async () => {
+      const {
+        data: { session: resolvedSession },
+      } = await supabase.auth.getSession();
+      await handleSessionUpdate(resolvedSession ?? session);
+    })();
   });
   // 保存订阅对象以便在组件卸载时取消订阅
   authSubscription = subscription;
