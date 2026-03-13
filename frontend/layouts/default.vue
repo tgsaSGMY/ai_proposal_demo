@@ -567,7 +567,7 @@ async function handleSessionUpdate(session) {
   // 和 middleware 保持一致：有 session 且有 user 才算已登入。
   const hasValidSession = !!session?.access_token && !!session?.user;
   isAuthenticated.value = hasValidSession;
-  // 更新用户邮箱（如果会话不存在则为空字符串）
+  // 先放入 session email；稍後會用 /auth/me（users table）覆寫成 canonical email。
   userEmail.value = session?.user?.email ?? "";
 
   // 如果用户未认证，清除所有相关权限和数据
@@ -578,18 +578,40 @@ async function handleSessionUpdate(session) {
     return;
   }
 
-  // Keep global user id in canonical users.id instead of auth.users.id.
-  const canonicalUserId = await refreshUser();
-  currentUserId.value = canonicalUserId;
+  let canonicalUserId = null;
+  try {
+    // 统一从后端 /auth/me 获取 canonical user（来源为 users table）。
+    const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (meResponse.ok) {
+      const me = await meResponse.json();
+      canonicalUserId = me?.id ?? null;
+      currentUserId.value = canonicalUserId;
+      userEmail.value = me?.email ?? userEmail.value;
+      isInternal.value = me?.role === "internal";
+    } else {
+      // /auth/me 暫時失敗時，回退到既有流程。
+      canonicalUserId = await refreshUser();
+      currentUserId.value = canonicalUserId;
+      const { checkIsInternal } = useInternalCheck();
+      isInternal.value = await checkIsInternal();
+    }
+  } catch (error) {
+    console.error("Failed to load canonical user profile", error);
+    canonicalUserId = await refreshUser();
+    currentUserId.value = canonicalUserId;
+    const { checkIsInternal } = useInternalCheck();
+    isInternal.value = await checkIsInternal();
+  }
 
   // 对于已认证的用户：获取成本/使用量信息
   if (canonicalUserId) {
     fetchUserUsage(canonicalUserId);
   }
-
-  // 检查用户是否具有内部权限（管理员权限）
-  const { checkIsInternal } = useInternalCheck();
-  isInternal.value = await checkIsInternal();
 
   // 强制检查一次路由状态，确保 isInternalView 标志准确
   // 如果路由是 /_builder 开头且用户有权限，则显示内部视图
