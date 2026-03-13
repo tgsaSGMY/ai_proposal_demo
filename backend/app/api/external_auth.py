@@ -1,11 +1,12 @@
 import hmac
 import json
+import logging
 import secrets
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request as FastAPIRequest, logger, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request as FastAPIRequest, status
 from fastapi.responses import RedirectResponse
 
 from app.api.dependencies import get_supabase_service
@@ -23,6 +24,7 @@ from app.core.app_jwt import create_app_access_token
 from app.services.supabase_service import SupabaseService
 
 router = APIRouter(prefix="/api/external-auth", tags=["ExternalAuth"])
+logger = logging.getLogger(__name__)
 
 STATE_COOKIE_NAME = "external_oauth_state"
 
@@ -89,7 +91,7 @@ def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
 
 def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
     # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
-    logger.info("User info received from OAuth provider:", user_info)
+    logger.info("User info received from OAuth provider: %s", user_info)
     profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
 
     subject = profile_data.get("sub") or profile_data.get("id")
