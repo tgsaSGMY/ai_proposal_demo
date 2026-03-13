@@ -1102,7 +1102,8 @@ class SupabaseService:
             insert_payload = {
                 "email": preferred_email,
                 "role": normalized_role or "normal",
-                "auth_source": provider,
+                # users.auth_source is a channel summary; keep provider-specific value in user_identities.
+                "auth_source": "external",
                 "status": "active",
                 "last_login_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -1133,9 +1134,10 @@ class SupabaseService:
             ).execute()
 
         update_payload: Dict[str, Any] = {
-            "auth_source": provider,
             "last_login_at": datetime.now(timezone.utc).isoformat(),
         }
+        if user_row.get("auth_source") != "external":
+            update_payload["auth_source"] = "external"
         if normalized_role and user_row.get("role") != "internal" and user_row.get("role") != normalized_role:
             update_payload["role"] = normalized_role
 
