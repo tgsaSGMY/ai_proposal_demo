@@ -32,6 +32,7 @@ from app.models import (
     ChatGuidanceResponse,
     GenerateFieldContentRequest,
 )
+from app.core.app_jwt import decode_app_access_token
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from .dependencies import get_llm_service, get_supabase_service, get_current_user_id
@@ -962,6 +963,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
         auth_header = websocket.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
+
+    # Fall back to app access token cookie for external login users.
+    if not token:
+        token = websocket.cookies.get("app_access_token", "")
     
     if token and supabase_service:
         try:
@@ -973,7 +978,15 @@ async def websocket_chat_guidance(websocket: WebSocket):
                 )
                 user_id = canonical_user["id"]
         except Exception as e:
-            logger.warning(f"Failed to extract user from WebSocket token: {e}")
+            try:
+                payload = decode_app_access_token(token)
+                canonical_user_id = payload.get("sub")
+                if canonical_user_id:
+                    user_row = await supabase_service.get_user_by_id(canonical_user_id)
+                    if user_row and user_row.get("id"):
+                        user_id = user_row["id"]
+            except Exception as decode_error:
+                logger.warning(f"Failed to extract user from WebSocket token: {e}; app token decode error: {decode_error}")
     
     llm_service = websocket.app.state.llm_service
     model_registry = getattr(websocket.app.state, "model_registry", {}) or {}

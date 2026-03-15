@@ -12,27 +12,26 @@
 </template>
 
 <script setup lang="ts">
-import { setExternalAppToken } from "~/utils/supabaseClient";
-
 definePageMeta({
   middleware: "redirect-if-authenticated",
 });
 
-const route = useRoute();
 const router = useRouter();
 const message = ref("正在完成登入，請稍候...");
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
 onMounted(async () => {
-  const token = route.query.token;
-  const tokenValue = Array.isArray(token) ? token[0] : token;
-
-  if (!tokenValue) {
-    message.value = "外部登入失敗：缺少 token。";
-    return;
-  }
-
   try {
-    setExternalAppToken(tokenValue);
+    const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+      credentials: "include",
+    });
+
+    if (!meResponse.ok) {
+      message.value = "外部登入失敗：登入狀態未建立。";
+      return;
+    }
+
     message.value = "登入成功，正在跳轉...";
     await router.replace("/");
   } catch (error) {

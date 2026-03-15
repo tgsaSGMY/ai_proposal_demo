@@ -388,7 +388,7 @@ useHead({
 });
 
 import { ref, reactive, computed, onMounted } from "vue";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
 import TrendOverviewModal from "~/components/usage-analytics/TrendOverviewModal.vue";
@@ -579,11 +579,6 @@ async function fetchAnalytics(showToast = false) {
   loading.value = true;
   errorMessage.value = "";
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
     const params = new URLSearchParams();
     params.append("start_date", filters.startDate);
     params.append("end_date", filters.endDate);
@@ -592,13 +587,8 @@ async function fetchAnalytics(showToast = false) {
     if (filters.modelId) params.append("model_id", filters.modelId);
     if (filters.action) params.append("action", filters.action);
 
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/usage-log/analytics?${params.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      },
     );
 
     if (!response.ok) {

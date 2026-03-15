@@ -1,8 +1,7 @@
 // ===== 导入依赖库 =====
 // 导入 Vue 类型定义
 import type { Ref } from "vue";
-// 导入 Supabase 认证客户端
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
 
 // ===== 返回值类型定义 =====
 // 定义 useCurrentUser 函数的返回值接口
@@ -70,27 +69,20 @@ export function useCurrentUser(): UseCurrentUserResult {
     try {
       // ===== 获取 Supabase 会话信息 =====
       // 从 Supabase 认证系统获取当前用户的会话
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      const session = await getAppSession();
 
-      // 如果获取会话出错，抛出错误
-      if (error) {
-        throw error;
-      }
-
-      if (!session?.access_token) {
+      if (!session.isAuthenticated) {
         userId.value = null;
         lastResolvedAt.value = 0;
         lastResolvedToken.value = null;
         return userId.value;
       }
 
+      const cacheKey = session.accessToken || "external-cookie";
       const now = Date.now();
       if (
         !force &&
-        lastResolvedToken.value === session.access_token &&
+        lastResolvedToken.value === cacheKey &&
         now - lastResolvedAt.value < ME_CACHE_TTL_MS
       ) {
         return userId.value;
@@ -99,11 +91,7 @@ export function useCurrentUser(): UseCurrentUserResult {
       // Use backend canonical identity (public.users.id) instead of auth.users.id.
       const config = useRuntimeConfig();
       const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
 
       if (!response.ok) {
         console.error("Failed to resolve canonical user id", response.status);
@@ -113,7 +101,7 @@ export function useCurrentUser(): UseCurrentUserResult {
 
       const me = await response.json();
       userId.value = me?.id ?? null;
-      lastResolvedToken.value = session.access_token;
+      lastResolvedToken.value = cacheKey;
       lastResolvedAt.value = now;
     } catch (error) {
       // 捕获任何错误（网络错误、会话过期等）

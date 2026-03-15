@@ -271,7 +271,7 @@ import CommandEditModal from "~/components/CommandEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useNotifications } from "~/composables/useNotifications";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 引入：modal、確認與通知工具、以及 Supabase 用於指令的 CRUD 操作
 
 definePageMeta({
@@ -366,22 +366,10 @@ let hasSeededDefaults = false; // 是否已經 seed 過預設指令
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-async function getAccessToken(): Promise<string> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error("請先登入");
-  }
-  return session.access_token;
-}
-
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const accessToken = await getAccessToken();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       ...(options?.headers || {}),
     },

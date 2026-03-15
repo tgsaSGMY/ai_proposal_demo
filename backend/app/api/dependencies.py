@@ -11,6 +11,7 @@ from app.config import EXTERNAL_OAUTH_PROVIDER
 
 AUTH_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
 AUTH_CONTEXT_CACHE_TTL_SECONDS = 20
+APP_TOKEN_COOKIE_NAME = "app_access_token"
 
 def get_supabase_service(request: Request) -> SupabaseService:
     # 從應用狀態中獲取 Supabase Service 實例
@@ -21,19 +22,15 @@ def get_llm_service(request: Request) -> LLMService:
     return request.app.state.llm_service
 
 async def get_current_user_id(
+    request: Request,
     authorization: Optional[str] = Header(None),
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ) -> str:
     """
     從 Authorization Header 解析 Token 並驗證使用者，回傳 user_id
     """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header"
-        )
-    
     user_ctx = await _resolve_user_context_from_auth(
+        request=request,
         authorization=authorization,
         supabase_service=supabase_service,
     )
@@ -41,6 +38,7 @@ async def get_current_user_id(
 
 
 async def get_current_user_context(
+    request: Request,
     authorization: Optional[str] = Header(None),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
@@ -48,6 +46,7 @@ async def get_current_user_context(
     Resolve and return canonical user context from Bearer token.
     """
     return await _resolve_user_context_from_auth(
+        request=request,
         authorization=authorization,
         supabase_service=supabase_service,
     )
@@ -55,69 +54,91 @@ async def get_current_user_context(
 
 async def _resolve_user_context_from_auth(
     *,
+    request: Request,
     authorization: Optional[str],
     supabase_service: SupabaseService,
 ) -> Dict[str, Any]:
-    if not authorization or not authorization.startswith("Bearer "):
+    header_token: Optional[str] = None
+    if authorization and authorization.startswith("Bearer "):
+        candidate = authorization.split(" ")[1].strip()
+        if candidate and candidate.lower() not in {"null", "undefined"}:
+            header_token = candidate
+
+    cookie_token = request.cookies.get(APP_TOKEN_COOKIE_NAME)
+
+    candidate_tokens = [token for token in [header_token, cookie_token] if token]
+
+    if not candidate_tokens:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header"
+            detail="Missing authentication token in Authorization header or app_access_token cookie"
         )
 
-    token = authorization.split(" ")[1]
-    now = time.time()
-    cached = AUTH_CONTEXT_CACHE.get(token)
-    if cached and cached.get("expires_at", 0) > now:
-        return cached["user_ctx"]
+    last_error: Optional[Exception] = None
+    for token in candidate_tokens:
+        now = time.time()
+        cached = AUTH_CONTEXT_CACHE.get(token)
+        if cached and cached.get("expires_at", 0) > now:
+            return cached["user_ctx"]
 
-    auth_user = None
-    try:
-        user_response = supabase_service.client.auth.get_user(token)
-        auth_user = user_response.user
-    except Exception:
-        auth_user = None
+        try:
+            auth_user = None
+            try:
+                user_response = supabase_service.client.auth.get_user(token)
+                auth_user = user_response.user
+            except Exception:
+                auth_user = None
 
-    if auth_user:
-        canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
-            auth_user_id=auth_user.id,
-            email=auth_user.email,
-        )
-        user_ctx = {
-            "id": canonical_user["id"],
-            "email": canonical_user.get("email"),
-            "role": canonical_user.get("role", "normal"),
-            "auth_user_id": auth_user.id,
-            "provider": "supabase",
-        }
-    else:
-        payload = decode_app_access_token(token)
-        canonical_user_id = payload.get("sub")
-        if not canonical_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid app token subject",
-            )
-        user_row = await supabase_service.get_user_by_id(canonical_user_id)
-        if not user_row:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found for app token",
-            )
-        user_ctx = {
-            "id": user_row["id"],
-            "email": user_row.get("email") or payload.get("email"),
-            "role": user_row.get("role", payload.get("role", "normal")),
-            "auth_user_id": None,
-            "provider": payload.get("provider", EXTERNAL_OAUTH_PROVIDER),
-        }
+            if auth_user:
+                canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
+                    auth_user_id=auth_user.id,
+                    email=auth_user.email,
+                )
+                user_ctx = {
+                    "id": canonical_user["id"],
+                    "email": canonical_user.get("email"),
+                    "role": canonical_user.get("role", "normal"),
+                    "auth_user_id": auth_user.id,
+                    "provider": "supabase",
+                }
+            else:
+                payload = decode_app_access_token(token)
+                canonical_user_id = payload.get("sub")
+                if not canonical_user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid app token subject",
+                    )
+                user_row = await supabase_service.get_user_by_id(canonical_user_id)
+                if not user_row:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="User not found for app token",
+                    )
+                user_ctx = {
+                    "id": user_row["id"],
+                    "email": user_row.get("email") or payload.get("email"),
+                    "role": user_row.get("role", payload.get("role", "normal")),
+                    "auth_user_id": None,
+                    "provider": payload.get("provider", EXTERNAL_OAUTH_PROVIDER),
+                }
 
-    AUTH_CONTEXT_CACHE[token] = {
-        "user_ctx": user_ctx,
-        "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
-    }
-    return user_ctx
+            AUTH_CONTEXT_CACHE[token] = {
+                "user_ctx": user_ctx,
+                "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
+            }
+            return user_ctx
+        except Exception as exc:
+            last_error = exc
+            continue
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired authentication token",
+    ) from last_error
 
 async def verify_internal_user(
+    request: Request,
     authorization: Optional[str] = Header(None),
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
@@ -129,6 +150,7 @@ async def verify_internal_user(
     """
     
     user_ctx = await get_current_user_context(
+        request=request,
         authorization=authorization,
         supabase_service=supabase_service,
     )

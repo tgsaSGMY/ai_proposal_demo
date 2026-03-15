@@ -301,6 +301,7 @@ definePageMeta({
 import { ref, onMounted, computed, watch } from "vue";
 // 导入子组件和服务
 import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import { useNotifications } from "~/composables/useNotifications";
 
 // ===== SEO 配置 =====
@@ -389,26 +390,19 @@ const currentSections = computed(() => {
 // 从后端获取初始数据：配置、模型和路由规则
 async function fetchData() {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
     const [configsRes, modelsRes, rulesRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/config`, {
+      authenticatedFetch(`${API_BASE_URL}/config`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       }),
-      fetch(`${API_BASE_URL}/models`, {
+      authenticatedFetch(`${API_BASE_URL}/models`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       }),
-      fetch(`${API_BASE_URL}/routing-rules`, {
+      authenticatedFetch(`${API_BASE_URL}/routing-rules`, {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       }),
@@ -455,17 +449,15 @@ onMounted(fetchData);
 async function refreshConfigurations() {
   isRefreshing.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/config/refresh`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/config/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -542,14 +534,9 @@ function closeModal() {
 // 调用 API 保存新的路由规则配置
 async function handleSaveRule(rulePayload) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/routing-rules`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/routing-rules`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(rulePayload),
@@ -561,11 +548,7 @@ async function handleSaveRule(rulePayload) {
     }
 
     // 更新 UI
-    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
+    const rulesRes = await authenticatedFetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
     success("規則已成功儲存！");
     closeModal();
@@ -579,17 +562,15 @@ async function handleSaveRule(rulePayload) {
 // 调用 API 删除指定的路由规则
 async function handleDeleteRule(ruleId) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/routing-rules/${ruleId}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/routing-rules/${ruleId}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -597,11 +578,7 @@ async function handleDeleteRule(ruleId) {
     }
 
     // 更新 UI
-    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
+    const rulesRes = await authenticatedFetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
 
     closeModal();
@@ -649,23 +626,17 @@ function getGlobalModel(isExternal) {
 async function saveGlobalModels() {
   isSavingGlobal.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
     // 删除现有的全局规则
     const existingGlobalRules = routingRules.value.filter(
       (r) => !r.grant_id && !r.section_id,
     );
 
     for (const rule of existingGlobalRules) {
-      const deleteRes = await fetch(
+      const deleteRes = await authenticatedFetch(
         `${API_BASE_URL}/routing-rules/${rule.id}`,
         {
           method: "DELETE",
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
         },
@@ -695,14 +666,16 @@ async function saveGlobalModels() {
     }
 
     for (const rule of rulesToCreate) {
-      const saveRes = await fetch(`${API_BASE_URL}/routing-rules`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
+      const saveRes = await authenticatedFetch(
+        `${API_BASE_URL}/routing-rules`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(rule),
         },
-        body: JSON.stringify(rule),
-      });
+      );
 
       if (!saveRes.ok) {
         const errorData = await saveRes.json();
@@ -711,11 +684,7 @@ async function saveGlobalModels() {
     }
 
     // 重新加载路由规则
-    const rulesRes = await fetch(`${API_BASE_URL}/routing-rules`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
+    const rulesRes = await authenticatedFetch(`${API_BASE_URL}/routing-rules`);
     routingRules.value = await rulesRes.json();
 
     // 更新已保存的全局模型值

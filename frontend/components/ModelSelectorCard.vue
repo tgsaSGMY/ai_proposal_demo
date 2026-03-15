@@ -192,7 +192,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
 
 const props = defineProps({
@@ -218,12 +218,12 @@ const settingsPanelRef = ref(null);
 
 // 計算當前規則應用的模型ID
 const currentInternalModelId = computed(
-  () => props.currentInternalRule?.model_id
+  () => props.currentInternalRule?.model_id,
 );
 
 // 计算属性：获取当前应用的外部模型ID
 const currentExternalModelId = computed(
-  () => props.currentExternalRule?.model_id
+  () => props.currentExternalRule?.model_id,
 );
 
 // 所有模型在兩個標籤頁中都可用
@@ -303,17 +303,11 @@ async function handleSaveSettings(updatedSettings) {
 
   isSavingSettings.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/sections/${props.section.id}/prompts`,
       {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -321,7 +315,7 @@ async function handleSaveSettings(updatedSettings) {
           grant_id: props.grantId,
           template_id: props.templateId,
         }),
-      }
+      },
     );
     if (!response.ok) {
       throw new Error("保存 Prompt 設定失敗");

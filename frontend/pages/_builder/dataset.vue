@@ -108,16 +108,11 @@ async function handleInputModalSubmit(value) {
     // Rename draft
     if (value === inputModalDraft.name) return;
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("請先登入");
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${API_BASE_URL}/draft_plans/${inputModalDraft.id}`,
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ name: value }),
@@ -133,14 +128,9 @@ async function handleInputModalSubmit(value) {
   } else if (inputModalMode === "create" && inputModalDraft) {
     // Create draft
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("請先登入");
-      const response = await fetch(`${API_BASE_URL}/draft_plans`, {
+      const response = await authenticatedFetch(`${API_BASE_URL}/draft_plans`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name: value, mode: inputModalDraft }),
@@ -172,6 +162,7 @@ import { supabase } from "~/utils/supabaseClient";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 导入子组件
 import DraftPlanList from "~/components/DraftPlanList.vue";
 import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
@@ -232,16 +223,12 @@ async function handleDeleteDraft(draft) {
   }
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/draft_plans/${draft.id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/draft_plans/${draft.id}`,
+      {
+        method: "DELETE",
       },
-    });
+    );
     if (!response.ok) throw new Error("删除失败: " + (await response.text()));
     success(`企劃 "${draft.name}" 已被删除。`);
     fetchDrafts();
@@ -333,10 +320,6 @@ async function handleCreateDraft(mode) {
 // 启动批量 AI 生成任务，将新企劃添加到草稿列表
 async function handleBatchStart(payload) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
     const schemaOptions = {
       templateId: payload.template_id,
       templateGrantId: payload.grant_id,
@@ -355,12 +338,11 @@ async function handleBatchStart(payload) {
         label: definition.compositeKey,
       })),
     };
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/draft_plans/batch_synthetic`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload1),
@@ -406,15 +388,10 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   try {
     // 從數據庫獲取最新的 draft 數據，包括 rejected_answer
     showLoading();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const draftResponse = await fetch(
+    const draftResponse = await authenticatedFetch(
       `${API_BASE_URL}/draft_plans/${draftId}`,
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       },
@@ -463,10 +440,9 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
       return;
     }
 
-    const response = await fetch(`${API_BASE_URL}/datasets`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/datasets`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ entries }),
@@ -475,11 +451,8 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
       throw new Error("保存至数据集失败: " + (await response.text()));
 
     success(`企劃 "${draftToSave.name}" 已成功保存至最终数据集！`);
-    await fetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
+    await authenticatedFetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
     });
     selectedDraft.value = null;
     await fetchDrafts();

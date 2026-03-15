@@ -2,7 +2,7 @@
  * Redirect If Authenticated Middleware
  * 如果用户已登入，會重新導向到首頁
  */
-import { supabase } from "~/utils/supabaseClient";
+import { getAppSession } from "~/composables/useAppAuth";
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   // 只在客戶端運行
@@ -10,11 +10,9 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
   // 檢查 Supabase 中的認證狀態
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getAppSession();
     // 如果已經有有效的 session 和用戶，導向到首頁
-    if (session && session.user) {
+    if (session.isAuthenticated) {
       return navigateTo("/");
     }
   } catch (error) {

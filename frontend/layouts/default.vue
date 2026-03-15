@@ -397,7 +397,11 @@
 // ===== 导入依赖库 =====
 // 导入 Vue 核心库和相关函数
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
-// 导入 Supabase 认证服务
+import {
+  appLogout,
+  authenticatedFetch,
+  getAppSession,
+} from "~/composables/useAppAuth";
 import { supabase } from "~/utils/supabaseClient";
 // 导入自定义组合式函数
 import { useCurrentUser } from "~/composables/useCurrentUser";
@@ -490,7 +494,7 @@ async function fetchUserUsage(targetUserId) {
 
   try {
     // 调用 API 获取用户成本信息
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/user-usage?user_id=${targetUserId}`,
     );
     // 如果响应失败，抛出错误
@@ -508,21 +512,16 @@ async function fetchUserUsage(targetUserId) {
 // 处理用户登出：清除认证状态，清理本地存储，重定向到登录页面
 async function handleLogout() {
   try {
-    // 调用 Supabase 的 signOut 方法进行登出
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await appLogout();
 
     // 清除所有相关的用户状态信息
     isAuthenticated.value = false; // 标记为未认证
     isInternalView.value = false; // 切回外部视图
     currentUserId.value = null; // 清空用户 ID
     userTotalCost.value = null; // 清空用户成本
-    localStorage.clear(); // 清空所有本地存储
 
     // 重定向到登录页面
     await router.push("/login");
-    // 移动端上关闭侧边栏
-    handleNavClick();
   } catch (error) {
     // 登出失败时打印错误信息
     console.error("Logout error:", error);
@@ -537,23 +536,17 @@ onMounted(async () => {
   refreshUser();
 
   // 第 1 步：获取初始的认证会话
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const appSession = await getAppSession();
   // 使用会话信息更新本地状态
-  await handleSessionUpdate(session);
+  await handleSessionUpdate(appSession);
 
   // 第 2 步：监听认证状态变化（包括用户切换标签页时的会话刷新）
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
-    // 对 external token 登录，onAuthStateChange 可能回传 null session。
-    // 统一回读 getSession()，确保 sidebar 与 middleware 使用同一套会话来源。
+  } = supabase.auth.onAuthStateChange(() => {
     void (async () => {
-      const {
-        data: { session: resolvedSession },
-      } = await supabase.auth.getSession();
-      await handleSessionUpdate(resolvedSession ?? session);
+      const latest = await getAppSession();
+      await handleSessionUpdate(latest);
     })();
   });
   // 保存订阅对象以便在组件卸载时取消订阅
@@ -563,12 +556,11 @@ onMounted(async () => {
 // ===== 处理会话状态更新 =====
 // 统一处理所有与 Supabase 会话相关的状态逻辑
 // 参数: session - Supabase 会话对象（可能为 null）
-async function handleSessionUpdate(session) {
+async function handleSessionUpdate(appSession) {
   // 和 middleware 保持一致：有 session 且有 user 才算已登入。
-  const hasValidSession = !!session?.access_token && !!session?.user;
-  isAuthenticated.value = hasValidSession;
+  isAuthenticated.value = appSession?.isAuthenticated === true;
   // 先放入 session email；稍後會用 /auth/me（users table）覆寫成 canonical email。
-  userEmail.value = session?.user?.email ?? "";
+  userEmail.value = "";
 
   // 如果用户未认证，清除所有相关权限和数据
   if (!isAuthenticated.value) {
@@ -581,11 +573,7 @@ async function handleSessionUpdate(session) {
   let canonicalUserId = null;
   try {
     // 统一从后端 /auth/me 获取 canonical user（来源为 users table）。
-    const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    });
+    const meResponse = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
 
     if (meResponse.ok) {
       const me = await meResponse.json();

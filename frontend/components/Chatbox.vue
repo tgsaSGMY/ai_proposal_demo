@@ -324,6 +324,7 @@ import RecommendNameModal from "~/components/editor/helper/RecommendNameModal.vu
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
+import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
 import {
   buildDynamicSections,
   createEmptyDynamicValues,
@@ -576,11 +577,9 @@ async function streamAIGuidanceMessage(question) {
     ).replace(/\/+$/, "");
   }
 
-  // Get access token for WebSocket authentication
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token || "";
+  // Get access token for WebSocket authentication (if available).
+  const appSession = await getAppSession();
+  const token = appSession.accessToken || "";
   const wsPath = `${wsPathPrefix}/api/ws/chat_guidance`
     .replace(/\/{2,}/g, "/")
     .replace(/^\/?/, "/");
@@ -1111,29 +1110,22 @@ async function requestGeneration() {
   recommendOptions.value = [];
 
   try {
-    // Get access token from Supabase session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token || "";
-
-    const headers = { "Content-Type": "application/json" };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    const resp = await fetch(`${API_BASE_URL}/recommend_project_names`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        current_answers: questionAnswers.value,
-        project_title: props.projectTitle || "",
-        grant_name: props.grantName || "",
-        template_name: props.templateName || "",
-        grant_id: props.grantId || "",
-        template_id: props.templateId || "",
-        project_id: props.projectId || "",
-      }),
-    });
+    const resp = await authenticatedFetch(
+      `${API_BASE_URL}/recommend_project_names`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_answers: questionAnswers.value,
+          project_title: props.projectTitle || "",
+          grant_name: props.grantName || "",
+          template_name: props.templateName || "",
+          grant_id: props.grantId || "",
+          template_id: props.templateId || "",
+          project_id: props.projectId || "",
+        }),
+      },
+    );
     const data = await resp.json().catch(() => null);
     if (resp.ok && data?.names) {
       recommendOptions.value = data.names;
@@ -1247,14 +1239,6 @@ async function handleTimelineDownload(version) {
 
   timelineLoading.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入後再下載時間軸");
-    }
-
     const params = new URLSearchParams();
     if (version.id) {
       params.set("version_id", version.id);
@@ -1263,12 +1247,10 @@ async function handleTimelineDownload(version) {
     }
 
     const query = params.toString() ? `?${params.toString()}` : "";
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/projects/${props.projectId}/timeline/pdf${query}`,
       {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        method: "GET",
       },
     );
 
@@ -1452,22 +1434,15 @@ async function loadProjectState(projectId) {
     return;
   }
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      console.error("Failed to load project chat state: missing session token");
-      return;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/projects/${projectId}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       const detail = await response.text();

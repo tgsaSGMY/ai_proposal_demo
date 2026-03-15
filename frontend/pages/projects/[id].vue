@@ -201,10 +201,10 @@ import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 导入工具函数
 import { exportPlanToWord } from "~/utils/exportToWord";
 import { mergeIntoEmptyValues } from "~/utils/dynamicSchema";
-import { supabase } from "~/utils/supabaseClient";
 
 // ===== 路由和响应式数据 =====
 // 获取当前路由信息
@@ -565,22 +565,11 @@ async function loadVersionedSectionsFor(record: ProjectRecord | null) {
   }
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      versionedSections.value = [];
-      lastSectionVersionKey.value = "";
-      return;
-    }
-
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/projects/${record.id}/sections`,
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       },
@@ -616,20 +605,11 @@ async function fetchProject() {
   versionedSections.value = [];
   lastSectionVersionKey.value = "";
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/projects/${projectId.value}`,
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       },
@@ -787,20 +767,11 @@ async function handleUpdateProjectTitle(newTitle: string) {
 async function updateProject(payload: Record<string, any>) {
   if (!projectRecord.value) return null;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/projects/${projectRecord.value.id}`,
       {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
@@ -940,20 +911,9 @@ async function handleChatPlanGeneration(payload: {
     const sectionsToGenerate = effectiveSections.value.map((section) => ({
       section_id: section.id,
     }));
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      hideLoading();
-      notifyError("請先登入");
-      return;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -1029,35 +989,27 @@ async function handleVersionRevision(payload: {
     (storedAnswerText ? storedAnswerText : "");
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      hideLoading();
-      notifyError("請先登入");
-      return;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/revise_plan_version`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/revise_plan_version`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          grant: selectedGrantId.value,
+          template: selectedTemplateId.value,
+          current_version: payload.version.data,
+          stored_answer: projectRecord.value?.stored_answer || null,
+          project_title: projectRecord.value?.title || "",
+          project_summary: projectRecord.value?.description || "",
+          num_candidates: 2,
+          is_external: useModelType.value === "external",
+          selected_model: payload.selectedModel,
+          project_id: projectRecord.value?.id || null,
+        }),
       },
-      body: JSON.stringify({
-        grant: selectedGrantId.value,
-        template: selectedTemplateId.value,
-        current_version: payload.version.data,
-        stored_answer: projectRecord.value?.stored_answer || null,
-        project_title: projectRecord.value?.title || "",
-        project_summary: projectRecord.value?.description || "",
-        num_candidates: 2,
-        is_external: useModelType.value === "external",
-        selected_model: payload.selectedModel,
-        project_id: projectRecord.value?.id || null,
-      }),
-    });
+    );
 
     if (!response.ok) {
       const errorDetail = await response.text();

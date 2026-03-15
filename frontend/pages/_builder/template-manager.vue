@@ -101,7 +101,7 @@ import TemplateFormModal from "~/components/template-manager/TemplateFormModal.v
 import SectionEditorModal from "~/components/template-manager/SectionEditorModal.vue";
 import WordEditorForm from "~/components/template-manager/WordEditorForm.vue";
 import NameRecommendForm from "~/components/template-manager/NameRecommendForm.vue";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";
 import type {
@@ -253,20 +253,12 @@ const grantNameMap = computed(() => {
 });
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error("請先登入");
-  }
-
   const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${session.access_token}`);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  return fetch(url, {
+  return authenticatedFetch(url, {
     ...options,
     headers,
   });
@@ -299,21 +291,9 @@ async function fetchWithFormDataAuth(
   formData: FormData,
   options: RequestInit = {},
 ) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error("請先登入");
-  }
-
-  const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${session.access_token}`);
-  // 不設置 Content-Type，讓瀏覽器自動設置 multipart/form-data
-
-  const response = await fetch(url, {
+  const response = await authenticatedFetch(url, {
     ...options,
     method: options.method || "POST",
-    headers,
     body: formData,
   });
 

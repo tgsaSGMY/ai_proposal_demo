@@ -313,7 +313,7 @@ import {
   buildSectionSchema,
   processAutoFillResults,
 } from "~/utils/wordImport";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 const referenceLinks = ref([]);
 
@@ -780,26 +780,18 @@ async function handleAnalyzeLink(index) {
         }))
       : analysisTargets.value;
 
-    // Get access token from Supabase session
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token || "";
-
-    const headers = { "Content-Type": "application/json" };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/scrape_and_analyze`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        url: link.url,
-        context_targets: contextTargets,
-        max_items: selectedFieldLabels ? targetFields.length || 1 : 4,
-      }),
-    });
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/scrape_and_analyze`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: link.url,
+          context_targets: contextTargets,
+          max_items: selectedFieldLabels ? targetFields.length || 1 : 4,
+        }),
+      },
+    );
 
     if (!response.ok) {
       const errorData = await response.json();

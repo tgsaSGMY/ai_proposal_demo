@@ -1,12 +1,16 @@
 # 連接數據庫，CRUD數據
 
+import json
 import logging
 from typing import List, Optional, Dict, Any
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from app.models import SaveDatasetRequest, DatasetEntry, DatasetEntry
+from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_supabase_service, verify_internal_user
+from app.utils.extract_json import extract_json_block
+from .dependencies import get_supabase_service, verify_internal_user, get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +18,87 @@ router = APIRouter(
     prefix="/api/datasets",
     tags=["Datasets"]
 )
+
+
+@router.post("/sensitive-terms/suggest", summary="AI 建議敏感詞")
+async def suggest_sensitive_terms(
+    req: Dict[str, Any],
+    request: Request,
+    llm_service: LLMService = Depends(get_llm_service),
+    _=Depends(verify_internal_user),
+):
+    """根據 prompt 與 final_answer 建議可脫敏的詞，回傳去重後的詞列表。"""
+    prompt_text = str(req.get("prompt") or "").strip()
+    final_answer = req.get("final_answer") or {}
+    existing_terms = req.get("existing_terms") or []
+
+    if not isinstance(final_answer, dict):
+        raise HTTPException(status_code=400, detail="final_answer must be an object")
+
+    model_info = request.app.state.model_registry.get("gpt-5-mini")
+    if not model_info:
+        model_info = next(
+            (
+                m
+                for m in request.app.state.model_registry.values()
+                if m.get("provider") in {"openai", "gemini"}
+            ),
+            None,
+        )
+
+    if not model_info:
+        raise HTTPException(status_code=500, detail="No available model for sensitive-term suggestion")
+
+    final_answer_str = json.dumps(final_answer, ensure_ascii=False)
+    existing_terms_str = json.dumps(existing_terms, ensure_ascii=False)
+
+    instruction = (
+        "你是一個資料脫敏助手。請找出下列內容中可能屬於敏感資訊、"
+        "且適合被替換成 OOO 的短詞，重點包含人名、公司名、地址、電話、email、帳號、網址、統編、身分證字號、具體數字、公司策略。\n"
+        "請只輸出 JSON，格式必須是：{\"terms\": [\"詞1\", \"詞2\"]}。\n"
+        "規則：\n"
+        "1) 只回傳具體詞彙，不要回傳描述句。\n"
+        "2) 不要回傳單字元或純符號。\n"
+        "3) 不要重複。\n"
+        "4) 最多 20 個。\n"
+        f"已存在詞清單（避免重複）：{existing_terms_str}\n\n"
+        f"用戶輸入：{prompt_text}\n\n"
+        f"輸出 JSON：{final_answer_str}"
+    )
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        raw_output, llm_error, _ = await llm_service.call_external_api(
+            session=client,
+            model_info=model_info,
+            messages=[{"role": "user", "content": instruction}],
+            is_json_output=True,
+            enable_grounding=False,
+        )
+
+    if llm_error:
+        raise HTTPException(status_code=500, detail=llm_error.get("error", "suggestion failed"))
+
+    parsed_json, parse_error = extract_json_block(raw_output or "", "sensitive_terms")
+    if parse_error:
+        raise HTTPException(status_code=500, detail=parse_error.get("error", "invalid suggestion format"))
+
+    terms = parsed_json.get("terms") if isinstance(parsed_json, dict) else []
+    if not isinstance(terms, list):
+        terms = []
+
+    deduped: List[str] = []
+    seen = set()
+    for item in terms:
+        value = str(item or "").strip()
+        if len(value) < 2:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+
+    return {"terms": deduped[:20]}
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def save_dataset_entries(

@@ -3,7 +3,7 @@
  * 1. 未登入 -> 導向 /login
  * 2. 已登入但非內部人員嘗試訪問 /_builder -> 導向 /
  */
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   // 1. 公開頁面：如果是登入或註冊頁面，直接允許
@@ -22,12 +22,10 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
 
   try {
     // 2. 檢查登入狀態
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getAppSession();
 
     // 如果沒有 session 或沒有用戶，重新導向到登入頁面
-    if (!session || !session.user) {
+    if (!session.isAuthenticated) {
       return navigateTo("/login");
     }
 
@@ -35,11 +33,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     if (to.path.startsWith("/_builder")) {
       const config = useRuntimeConfig();
       const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-      const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const meResponse = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
 
       if (!meResponse.ok) {
         return navigateTo("/login");

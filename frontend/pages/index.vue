@@ -319,6 +319,7 @@ import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化和社交媒体分享
@@ -927,18 +928,9 @@ async function enterChatStage() {
       }
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/projects`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

@@ -610,8 +610,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from "vue";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import { useNotifications } from "~/composables/useNotifications";
-import { supabase } from "~/utils/supabaseClient";
 
 interface ImageRecord {
   id: string;
@@ -667,21 +667,12 @@ async function fetchImages() {
 
   isLoadingImages.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
     // 呼叫後端 API 而不是直接查詢 Supabase
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${API_BASE_URL}/images?project_id=${props.projectId}`,
       {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       },
@@ -723,30 +714,24 @@ async function handleGenerate() {
 
   isGenerating.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
     // 調用後端 API 生成圖片
-    const response = await fetch(`${API_BASE_URL}/images/generate`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        project_id: props.projectId,
-        prompt: prompt.value,
-        ...(referenceImage.value && {
-          reference_image_id: referenceImage.value.id,
-          reference_prompt: referenceImage.value.placeholder_text,
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/images/generate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          project_id: props.projectId,
+          prompt: prompt.value,
+          ...(referenceImage.value && {
+            reference_image_id: referenceImage.value.id,
+            reference_prompt: referenceImage.value.placeholder_text,
+          }),
         }),
-      }),
-    });
+      },
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -774,22 +759,16 @@ async function handleGenerate() {
 // 调用后端API删除指定的图片记录
 async function handleDeleteImage(imageId: string) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
     // 呼叫後端 API 刪除圖片
-    const response = await fetch(`${API_BASE_URL}/images/${imageId}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/images/${imageId}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       const detail = await response.text();
@@ -822,25 +801,19 @@ async function enrichPrompt() {
 
   isEnriching.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/images/enrich-prompt`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/images/enrich-prompt`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          project_id: props.projectId,
+          prompt: prompt.value,
+        }),
       },
-      body: JSON.stringify({
-        project_id: props.projectId,
-        prompt: prompt.value,
-      }),
-    });
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

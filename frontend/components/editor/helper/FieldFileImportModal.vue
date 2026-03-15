@@ -237,7 +237,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useNotifications } from "~/composables/useNotifications";
-import { createClient } from "@supabase/supabase-js";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 const props = defineProps({
   fieldTitle: { type: String, default: "" },
@@ -416,28 +416,13 @@ async function analyzeFile() {
   }
 
   try {
-    // Get Supabase session for auth
-    const config = useRuntimeConfig();
-    const supabase = createClient(
-      config.public.supabaseUrl,
-      config.public.supabaseAnonKey,
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/field_file_analysis`,
+      {
+        method: "POST",
+        body: formData,
+      },
     );
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const accessToken = session?.access_token;
-
-    const headers: Record<string, string> = {};
-    if (accessToken) {
-      headers["Authorization"] = `Bearer ${accessToken}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/field_file_analysis`, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
 
     const payload = await response.json().catch(() => null);
 

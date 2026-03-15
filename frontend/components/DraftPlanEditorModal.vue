@@ -82,7 +82,7 @@ import {
   getDynamicFieldDefinitions,
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import PlanInputPanel from "~/components/PlanInputPanel.vue";
 import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
 import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
@@ -279,19 +279,16 @@ const saveUpdatesToDb = async () => {
       plan_content: planContent.value,
     };
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
-    const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const res = await authenticatedFetch(
+      `${API_BASE_URL}/draft_plans/${props.draft.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+    );
 
     if (!res.ok) {
       console.error(`Failed to auto-save draft ${props.draft.id}`);
@@ -378,19 +375,16 @@ async function saveRejectedAnswersToDb(rejected) {
       rejected_answer: rejectedAnswerData,
     };
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
-    const res = await fetch(`${API_BASE_URL}/draft_plans/${props.draft.id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const res = await authenticatedFetch(
+      `${API_BASE_URL}/draft_plans/${props.draft.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+    );
 
     if (!res.ok) {
       console.error(
@@ -476,16 +470,6 @@ async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
   showLoading("正在生成計劃書...", true);
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      hideLoading();
-      errorNotification("請先登入");
-      return;
-    }
-
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries,
     );
@@ -493,10 +477,9 @@ async function handleGeneratePlanInModal(outerPayload) {
       section_id: s.id,
     }));
 
-    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

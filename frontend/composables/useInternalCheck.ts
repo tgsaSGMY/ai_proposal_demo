@@ -1,6 +1,5 @@
 // ===== 导入依赖库 =====
-// 导入 Supabase 认证和数据库客户端
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
 
 // ===== 内部权限检查组合式函数 =====
 // 用于检查当前用户是否具有内部（管理员）权限
@@ -30,12 +29,10 @@ export const useInternalCheck = () => {
       // ===== 第 1 步：检查用户是否已登录 =====
       // 虽然 RPC 会自动带上 Token，但先检查有没有登录
       // 这样可以省去一次不必要的网络请求
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await getAppSession();
 
       // 如果没有活跃的会话，说明用户未登录
-      if (!session) {
+      if (!session.isAuthenticated) {
         console.warn("User not logged in.");
         return false;
       }
@@ -43,11 +40,7 @@ export const useInternalCheck = () => {
       const config = useRuntimeConfig();
       const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const response = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
 
       if (!response.ok) {
         console.error("Failed to fetch /api/auth/me:", response.status);

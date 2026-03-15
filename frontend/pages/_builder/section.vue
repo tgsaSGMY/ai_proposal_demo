@@ -494,8 +494,7 @@ useHead({
 // ===== 导入依赖库 =====
 // 导入 Vue 核心库
 import { ref, onMounted, computed, watch } from "vue";
-// 导入 Supabase 数据库客户端
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 导入自定义组合式函数
 import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
@@ -603,14 +602,15 @@ function isEditingField(field) {
   );
 }
 
-// ===== API 辅助函数：获取认证令牌 =====
-// 从 Supabase 会话中获取访问令牌，用于 API 认证
-async function getAuthToken() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("請先登入");
-  return session.access_token;
+async function authedFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  return authenticatedFetch(url, {
+    ...options,
+    headers,
+  });
 }
 
 // ===== 获取章节列表 =====
@@ -622,16 +622,10 @@ async function fetchSections() {
   }
   try {
     showLoading("載入章節與欄位...");
-    const token = await getAuthToken();
-    const response = await fetch(
+    const response = await authedFetch(
       `${API_BASE_URL}/dynamic-sections?template_id=${encodeURIComponent(
         selectedTemplateId.value,
       )}&template_grant_id=${encodeURIComponent(selectedGrantId.value)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
     );
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
@@ -705,7 +699,6 @@ async function saveSection(localSection) {
       throw new Error("章節 key 與標題不可為空");
     }
 
-    const token = await getAuthToken();
     const isCreate = !localSection.id;
     const url = isCreate
       ? `${API_BASE_URL}/dynamic-sections/sections`
@@ -713,12 +706,8 @@ async function saveSection(localSection) {
 
     const method = isCreate ? "POST" : "PUT";
 
-    const response = await fetch(url, {
+    const response = await authedFetch(url, {
       method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         schema_id: localSection.schema_id,
         section_key: localSection.section_key,
@@ -767,14 +756,10 @@ async function confirmDeleteSection(section) {
   if (!isConfirmed) return;
 
   try {
-    const token = await getAuthToken();
-    const response = await fetch(
+    const response = await authedFetch(
       `${API_BASE_URL}/dynamic-sections/sections/${section.id}`,
       {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       },
     );
     if (!response.ok) throw new Error(await response.text());
@@ -827,19 +812,14 @@ async function saveField(localField) {
       throw new Error("欄位 key 與標題不可為空");
     }
 
-    const token = await getAuthToken();
     const isCreate = !localField.id;
     const url = isCreate
       ? `${API_BASE_URL}/dynamic-sections/fields`
       : `${API_BASE_URL}/dynamic-sections/fields/${localField.id}`;
     const method = isCreate ? "POST" : "PUT";
 
-    const response = await fetch(url, {
+    const response = await authedFetch(url, {
       method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         section_id: localField.section_id,
         field_key: localField.field_key,
@@ -888,14 +868,10 @@ async function confirmDeleteField(field) {
   if (!isConfirmed) return;
 
   try {
-    const token = await getAuthToken();
-    const response = await fetch(
+    const response = await authedFetch(
       `${API_BASE_URL}/dynamic-sections/fields/${field.id}`,
       {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       },
     );
     if (!response.ok) throw new Error(await response.text());
@@ -960,17 +936,12 @@ async function dropSection(targetIndex, event) {
 
   // Update API for all sections that changed order
   try {
-    const token = await getAuthToken();
     for (const section of sections.value) {
       section.order = sections.value.indexOf(section) + 1;
-      const response = await fetch(
+      const response = await authedFetch(
         `${API_BASE_URL}/dynamic-sections/sections/${section.id}`,
         {
           method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             schema_id: section.schema_id,
             section_key: section.section_key,
@@ -1043,17 +1014,12 @@ async function dropField(targetSectionId, targetFieldIndex, event) {
 
   // Recalculate order for all fields in this section
   try {
-    const token = await getAuthToken();
     for (let i = 0; i < section.fields.length; i++) {
       section.fields[i].order = i + 1;
-      const response = await fetch(
+      const response = await authedFetch(
         `${API_BASE_URL}/dynamic-sections/fields/${section.fields[i].id}`,
         {
           method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             section_id: section.fields[i].section_id,
             field_key: section.fields[i].field_key,
@@ -1101,14 +1067,9 @@ onMounted(async () => {
 async function fetchGrantTemplates() {
   try {
     showLoading("載入補助模板...");
-    const token = await getAuthToken();
-    const headers = {
-      Authorization: `Bearer ${token}`,
-    };
-
     const [grantsResp, templatesResp] = await Promise.all([
-      fetch(`${TEMPLATE_MANAGER_API}/grants`, { headers }),
-      fetch(`${TEMPLATE_MANAGER_API}/templates`, { headers }),
+      authedFetch(`${TEMPLATE_MANAGER_API}/grants`),
+      authedFetch(`${TEMPLATE_MANAGER_API}/templates`),
     ]);
 
     if (!grantsResp.ok) {

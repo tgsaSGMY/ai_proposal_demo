@@ -6,7 +6,8 @@
     @click.self="$emit('close')"
   >
     <div
-      class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200"
+      class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden border border-gray-200"
+      :class="isMaskMode ? 'max-h-[96vh]' : 'max-h-[90vh]'"
     >
       <!-- Header -->
       <header
@@ -50,7 +51,10 @@
       <!-- Main content -->
       <main class="flex-1 flex flex-col min-h-0 bg-gray-50/50">
         <!-- Top: Source Type Selection -->
-        <div class="p-4 sm:p-6 bg-white border-b border-gray-100 flex-shrink-0">
+        <div
+          v-if="!isMaskMode"
+          class="p-4 sm:p-6 bg-white border-b border-gray-100 flex-shrink-0"
+        >
           <label
             class="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3"
           >
@@ -139,7 +143,10 @@
         </div>
 
         <!-- Bottom: Split View -->
-        <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div
+          v-if="!isMaskMode"
+          class="flex-1 flex flex-col md:flex-row overflow-hidden"
+        >
           <!-- Left: User Input (Prompt) -->
           <div
             class="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 min-h-0"
@@ -161,11 +168,21 @@
 
           <!-- Right: User Output (Rendered HTML) -->
           <div class="flex-1 flex flex-col min-h-0">
-            <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
+            <div
+              class="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3"
+            >
               <span
                 class="text-xs font-bold text-emerald-600 uppercase tracking-wider"
-                >輸出結果 (Preview)</span
               >
+                輸出結果 (Preview)
+              </span>
+              <button
+                type="button"
+                @click="enterMaskMode"
+                class="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition"
+              >
+                進入脫敏界面
+              </button>
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-white relative">
               <!-- 渲染內容 -->
@@ -200,6 +217,140 @@
             </div>
           </div>
         </div>
+
+        <!-- Mask Mode: Three Columns (Terms / Before / After) -->
+        <div v-else class="flex-1 flex flex-col overflow-hidden">
+          <div
+            class="px-6 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between"
+          >
+            <div
+              class="text-xs font-bold text-amber-700 uppercase tracking-wider"
+            >
+              脫敏模式
+            </div>
+            <button
+              type="button"
+              @click="isMaskMode = false"
+              class="px-3 py-1.5 text-xs font-semibold rounded-md bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 transition"
+            >
+              返回檢視
+            </button>
+          </div>
+
+          <div class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+            <div
+              class="w-full lg:w-[320px] min-h-0 flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200 bg-white"
+            >
+              <div
+                class="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-600"
+              >
+                敏感詞列表
+              </div>
+
+              <div class="p-3 border-b border-gray-100 space-y-2">
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model.trim="newSensitiveTerm"
+                    type="text"
+                    placeholder="新增敏感詞"
+                    class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    @keyup.enter="addSensitiveTerm"
+                  />
+                  <button
+                    type="button"
+                    @click="addSensitiveTerm"
+                    class="px-3 py-2 text-sm rounded-md bg-white border border-gray-300 hover:bg-gray-50"
+                  >
+                    新增
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  @click="suggestSensitiveTermsByAi"
+                  :disabled="isSuggestingTerms"
+                  class="w-full px-3 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400"
+                >
+                  {{ isSuggestingTerms ? "建議中..." : "AI 建議敏感詞" }}
+                </button>
+              </div>
+
+              <div class="flex-1 overflow-y-auto p-2">
+                <div
+                  v-if="sensitiveTerms.length === 0"
+                  class="text-sm text-gray-400 px-2 py-3"
+                >
+                  尚無敏感詞，請手動新增或使用 AI 建議。
+                </div>
+                <label
+                  v-for="term in sensitiveTerms"
+                  :key="term"
+                  class="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-gray-50"
+                >
+                  <span class="inline-flex items-center gap-2 min-w-0 flex-1">
+                    <input
+                      type="checkbox"
+                      :checked="selectedTerms.includes(term)"
+                      @change="toggleTermSelection(term, $event)"
+                      class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span class="text-sm text-gray-700 truncate">{{
+                      term
+                    }}</span>
+                  </span>
+                  <button
+                    type="button"
+                    @click="removeSensitiveTerm(term)"
+                    class="text-xs text-red-500 hover:text-red-700 whitespace-nowrap shrink-0 min-w-[2.5rem] text-right"
+                  >
+                    刪除
+                  </button>
+                </label>
+              </div>
+
+              <div
+                class="px-3 py-2 border-t border-gray-100 text-xs text-gray-500"
+              >
+                已選擇 {{ selectedTerms.length }} 個詞
+              </div>
+            </div>
+
+            <div
+              class="flex-1 min-h-0 flex flex-col border-b lg:border-b-0 lg:border-r border-gray-200"
+            >
+              <div
+                class="px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-600"
+              >
+                脫敏前
+              </div>
+              <div class="flex-1 overflow-y-auto p-6 bg-white">
+                <div
+                  v-if="renderedHtml"
+                  class="prose prose-sm prose-slate max-w-none"
+                >
+                  <div v-html="highlightedBeforeHtml"></div>
+                </div>
+                <div v-else class="text-sm text-gray-400">無可預覽內容</div>
+              </div>
+            </div>
+
+            <div class="flex-1 min-h-0 flex flex-col">
+              <div
+                class="px-6 py-2 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-emerald-700"
+              >
+                脫敏後
+              </div>
+              <div class="flex-1 overflow-y-auto p-6 bg-white">
+                <div
+                  v-if="maskedRenderedHtml"
+                  class="prose prose-sm prose-slate max-w-none"
+                >
+                  <div v-html="maskedRenderedHtml"></div>
+                </div>
+                <div v-else class="text-sm text-gray-400">尚未產生脫敏結果</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
 
       <!-- Footer -->
@@ -213,6 +364,15 @@
           取消
         </button>
         <button
+          v-if="isMaskMode"
+          type="button"
+          @click="applyMaskToCurrentData"
+          class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium transition shadow-sm"
+        >
+          套用脫敏
+        </button>
+        <button
+          v-if="!isMaskMode"
           @click="handleSave"
           :disabled="isSaving"
           class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 text-sm font-medium transition shadow-sm flex items-center gap-2"
@@ -246,8 +406,14 @@
 </template>
 
 <script setup>
-import { watch, reactive, computed } from "vue";
+import { watch, reactive, computed, ref } from "vue";
+import { useSensitiveMasking } from "~/composables/useSensitiveMasking";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 import { renderPlanToHtml } from "~/utils/exportToWord"; // 確保這個路徑正確
+
+const config = useRuntimeConfig();
+const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const { success, error: errorNotification } = useNotifications();
 
 const props = defineProps({
   show: Boolean,
@@ -257,6 +423,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["close", "save"]);
+const AI_REFERENCE_TYPES = ["golden_samples", "synthetic_data"];
 
 const editableData = reactive({
   id: null,
@@ -264,6 +431,64 @@ const editableData = reactive({
   source_type: "synthetic_data",
   final_answer_obj: {}, // 這是唯讀的，用於渲染
 });
+
+const isMaskMode = ref(false);
+const isSuggestingTerms = ref(false);
+const newSensitiveTerm = ref("");
+const sensitiveTerms = ref([]);
+const selectedTerms = ref([]);
+
+const {
+  mergeTerms,
+  deepClone,
+  maskObjectDeep,
+  highlightSensitiveTermsInHtml,
+  addTermToLists,
+  removeTermFromLists,
+  toggleSelectionInList,
+} = useSensitiveMasking();
+
+function resetMaskEditorState() {
+  isMaskMode.value = false;
+  newSensitiveTerm.value = "";
+  sensitiveTerms.value = [];
+  selectedTerms.value = [];
+}
+
+function getSectionConfigForDataset() {
+  if (!props.dataset || !props.allConfigs) return null;
+  const { grant_id, template_id, section_id } = props.dataset;
+  if (!grant_id || !template_id || !section_id) return null;
+
+  const grant = props.allConfigs.find((g) => g.id === grant_id);
+  const template = grant?.templates.find((t) => t.id === template_id);
+  return template?.sections.find((s) => s.id === section_id) || null;
+}
+
+function renderAnswerObjToHtml(answerObj) {
+  const section = getSectionConfigForDataset();
+  if (!section) return "";
+
+  try {
+    return renderPlanToHtml(
+      [
+        {
+          id: section.id,
+          name: section.name || "預覽內容",
+          json_schema: section.json_schema,
+        },
+      ],
+      {
+        [section.id]: {
+          content: answerObj || "",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("HTML Render Error:", error);
+    return `<div class="text-red-500 text-sm">渲染錯誤: ${error.message}</div>`;
+  }
+}
 
 // 當 dataset 改變時更新本地數據
 watch(
@@ -277,6 +502,7 @@ watch(
       editableData.final_answer_obj = newVal.final_answer
         ? JSON.parse(JSON.stringify(newVal.final_answer))
         : {};
+      resetMaskEditorState();
     }
   },
   { immediate: true, deep: true },
@@ -284,41 +510,99 @@ watch(
 
 // 計算渲染後的 HTML
 const renderedHtml = computed(() => {
-  if (!props.dataset || !props.allConfigs) return "";
+  return renderAnswerObjToHtml(editableData.final_answer_obj);
+});
 
-  const { grant_id, template_id, section_id } = props.dataset;
-  if (!grant_id || !template_id || !section_id) return "";
+const maskedPreviewObj = computed(() => {
+  return maskObjectDeep(editableData.final_answer_obj, selectedTerms.value);
+});
 
-  // 1. 查找對應的 Schema Config
-  const grant = props.allConfigs.find((g) => g.id === grant_id);
-  const template = grant?.templates.find((t) => t.id === template_id);
-  const section = template?.sections.find((s) => s.id === section_id);
+const maskedRenderedHtml = computed(() => {
+  return renderAnswerObjToHtml(maskedPreviewObj.value);
+});
 
-  if (!section) return "";
+const highlightedBeforeHtml = computed(() => {
+  return highlightSensitiveTermsInHtml(renderedHtml.value, selectedTerms.value);
+});
 
+function enterMaskMode() {
+  isMaskMode.value = true;
+}
+
+function addSensitiveTerm() {
+  const next = addTermToLists(
+    newSensitiveTerm.value,
+    sensitiveTerms.value,
+    selectedTerms.value,
+  );
+  sensitiveTerms.value = next.sensitiveTerms;
+  selectedTerms.value = next.selectedTerms;
+  newSensitiveTerm.value = "";
+}
+
+function removeSensitiveTerm(termToRemove) {
+  const next = removeTermFromLists(
+    termToRemove,
+    sensitiveTerms.value,
+    selectedTerms.value,
+  );
+  sensitiveTerms.value = next.sensitiveTerms;
+  selectedTerms.value = next.selectedTerms;
+}
+
+function toggleTermSelection(term, event) {
+  const checked = event?.target?.checked;
+  selectedTerms.value = toggleSelectionInList(
+    term,
+    Boolean(checked),
+    selectedTerms.value,
+  );
+}
+
+async function suggestSensitiveTermsByAi() {
+  isSuggestingTerms.value = true;
   try {
-    // 2. 使用 exportToWord 中的 renderPlanToHtml 進行渲染
-    // 參數1: 章節定義陣列
-    // 參數2: 數據內容 (Key 是 section_id)
-    return renderPlanToHtml(
-      [
-        {
-          id: section.id,
-          name: section.name || "預覽內容",
-          json_schema: section.json_schema,
-        },
-      ],
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/datasets/sensitive-terms/suggest`,
       {
-        [section.id]: {
-          content: editableData.final_answer_obj || "",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          prompt: editableData.prompt,
+          final_answer: editableData.final_answer_obj,
+          existing_terms: sensitiveTerms.value,
+        }),
       },
     );
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail || "AI 建議失敗");
+    }
+
+    const data = await response.json();
+    const suggested = Array.isArray(data.terms) ? data.terms : [];
+    sensitiveTerms.value = mergeTerms(sensitiveTerms.value, suggested);
+    selectedTerms.value = mergeTerms(selectedTerms.value, suggested);
+    success(`已加入 ${suggested.length} 個 AI 建議詞`);
   } catch (error) {
-    console.error("HTML Render Error:", error);
-    return `<div class="text-red-500 text-sm">渲染錯誤: ${error.message}</div>`;
+    errorNotification(`AI 建議失敗: ${error.message}`);
+  } finally {
+    isSuggestingTerms.value = false;
   }
-});
+}
+
+function applyMaskToCurrentData() {
+  if (selectedTerms.value.length === 0) {
+    errorNotification("請至少勾選一個敏感詞");
+    return;
+  }
+  editableData.final_answer_obj = deepClone(maskedPreviewObj.value);
+  isMaskMode.value = false;
+  success("已套用脫敏結果");
+}
 
 function handleSave() {
   // 只回傳可能被修改的 source_type，以及必要的 id
@@ -333,9 +617,7 @@ function handleSave() {
 
 // 判斷目前是否屬於「作為 AI 參考」的類別
 const isAiReference = computed(() => {
-  return ["golden_samples", "synthetic_data"].includes(
-    editableData.source_type,
-  );
+  return AI_REFERENCE_TYPES.includes(editableData.source_type);
 });
 
 // 判斷是否為黃金樣本 (鎖定狀態)
@@ -388,5 +670,12 @@ function toggleGoldenSample(event) {
 .prose :deep(ol) {
   list-style-type: decimal;
   padding-left: 1.5em;
+}
+
+.prose :deep(mark.mask-highlight) {
+  background-color: #fde68a;
+  color: #7c2d12;
+  padding: 0 0.1em;
+  border-radius: 0.2em;
 }
 </style>

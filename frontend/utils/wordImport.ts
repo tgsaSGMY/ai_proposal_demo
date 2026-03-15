@@ -1,7 +1,7 @@
 // ===== 导入依赖库 =====
 // 导入 mammoth 库用于从 Word 文件中提取文本
 import mammoth from "mammoth";
-import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 // ===== Word 文件文本提取 =====
 
@@ -109,25 +109,17 @@ export async function callAutoFillApi(
     prompt_mode: "word_import", // 标记这是 Word 导入模式
   };
 
-  // ===== 获取认证令牌 =====
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token || "";
-
   // ===== 发送 API 请求 =====
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${apiBaseUrl}/autofill_from_document`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(updatedPayload),
-  });
+  const response = await authenticatedFetch(
+    `${apiBaseUrl}/autofill_from_document`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updatedPayload),
+    },
+  );
 
   // ===== 处理 API 响应 =====
   if (!response.ok) {

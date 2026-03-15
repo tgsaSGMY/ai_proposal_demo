@@ -302,6 +302,7 @@ import { ref, onMounted, reactive, watch, computed, nextTick } from "vue";
 import DatasetEditModal from "~/components/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 // ===== 数据分页和过滤状态 =====
 // 数据集列表、当前页码、每页条数等
@@ -447,16 +448,12 @@ async function handleRefreshDatasets(options = {}) {
   const { syncLocalData = true, showSuccessToast = true } = options;
   isRefreshing.value = true;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/refresh-datasets`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/refresh-datasets`,
+      {
+        method: "POST",
       },
-    });
+    );
     if (!response.ok) throw new Error("Network response was not ok.");
 
     const result = await response.json();
@@ -532,15 +529,9 @@ watch(
 async function initializeDatasets() {
   // 从 /datasets-lifecycle 接口获取预加载的数据集
   showLoading("加載數據庫...");
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("請先登入");
-  const response = await fetch(`${API_BASE_URL}/datasets-lifecycle`, {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}/datasets-lifecycle`,
+  );
   if (!response.ok) throw new Error("Failed to fetch preloaded datasets");
   const data = await response.json();
   allDatasets.value = data;
@@ -595,19 +586,16 @@ async function handleSave(updatedData) {
       final_answer: updatedData.final_answer,
     };
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-
-    const response = await fetch(`${API_BASE_URL}/datasets/${updatedData.id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/datasets/${updatedData.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(entry),
       },
-      body: JSON.stringify(entry),
-    });
+    );
     if (!response.ok) {
       const errData = await response.json();
       throw new Error(errData.detail || "保存失敗");
@@ -659,16 +647,12 @@ async function handleDelete(id) {
   }
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("請先登入");
-    const response = await fetch(`${API_BASE_URL}/datasets/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/datasets/${id}`,
+      {
+        method: "DELETE",
       },
-    });
+    );
     if (!response.ok) {
       const errData = await response.json();
       throw new Error(errData.detail || "刪除失敗");

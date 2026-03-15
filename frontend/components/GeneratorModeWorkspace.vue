@@ -59,6 +59,7 @@ import {
 import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
 import { useCurrentUser } from "~/composables/useCurrentUser";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 interface ProjectRecord {
   id: string;
@@ -322,16 +323,6 @@ async function handleGeneratorPlanRequest(outerPayload?: {
   isGeneratingPlan.value = true;
   showLoading("正在生成計畫書...", true);
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      hideLoading();
-      notifyError("請先登入");
-      return;
-    }
-
     const userInput = props.buildFinalUserInput(outerPayload?.summaries || []);
     const finalUserInput =
       "計劃名稱: " +
@@ -345,10 +336,9 @@ async function handleGeneratorPlanRequest(outerPayload?: {
     lastFinalUserInput.value = finalUserInput;
 
     finalPlanContent.value = {};
-    const response = await fetch(`${API_BASE_URL}/generate_plan`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/generate_plan`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

@@ -266,6 +266,7 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 引入 Supabase 客戶端，用於呼叫 RPC 與 auth（處理註冊、登入等行為）
 
 definePageMeta({
@@ -353,11 +354,7 @@ const handleSignUp = async () => {
       errorMessage.value = signUpError.message || "註冊失敗，請稍後重試";
     } else {
       if (data?.session?.access_token) {
-        await fetch(`${API_BASE_URL}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${data.session.access_token}`,
-          },
-        });
+        await authenticatedFetch(`${API_BASE_URL}/auth/me`);
       }
       successMessage.value = "註冊成功！您現在可以去郵箱點擊確認鏈接。";
       // 清空表單

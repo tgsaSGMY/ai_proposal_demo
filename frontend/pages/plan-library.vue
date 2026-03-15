@@ -411,8 +411,8 @@ import {
   getDynamicFieldLabels,
   ensureDynamicSchemaLoaded,
 } from "~/utils/dynamicSchema";
-import { supabase } from "~/utils/supabaseClient";
 import { customerQaList } from "~/utils/customerQa";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 透過動態 schema 來計算每個計畫卡片的進度，並使用 Supabase API 取得與管理專案資料
 
 // 介面定義：用來描述 UI 卡片與後端的專案紀錄結構
@@ -654,18 +654,9 @@ async function fetchProjects() {
     // Ensure dynamic schema is loaded before processing projects
     await ensureDynamicSchemaLoaded();
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/projects`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
     });
@@ -813,25 +804,19 @@ async function handleSave(payload: {
 }) {
   if (!payload.id) return;
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects/${payload.id}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/projects/${payload.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: payload.title,
+          description: payload.description,
+        }),
       },
-      body: JSON.stringify({
-        title: payload.title,
-        description: payload.description,
-      }),
-    });
+    );
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || "更新計畫失敗");
@@ -873,22 +858,16 @@ async function handleDelete(project: ProjectCard) {
   if (!confirmed) return;
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("請先登入");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects/${project.id}`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/projects/${project.id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ is_deleted: true }),
       },
-      body: JSON.stringify({ is_deleted: true }),
-    });
+    );
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(detail || "刪除計畫失敗");

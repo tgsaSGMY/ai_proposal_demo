@@ -164,6 +164,7 @@
 
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 // 引入 Supabase：處理登入驗證與錯誤回傳解析
 
 definePageMeta({
@@ -220,17 +221,7 @@ const handleLogin = async () => {
       }
       console.error("Login error details:", error);
     } else {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.access_token) {
-        await fetch(`${API_BASE_URL}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-      }
+      await authenticatedFetch(`${API_BASE_URL}/auth/me`);
       await router.push("/");
     }
   } catch (err) {
