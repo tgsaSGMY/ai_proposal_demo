@@ -30,11 +30,14 @@
               v-for="plan in planTypes"
               :key="plan.id"
               class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
-              :class="
-                isPlanSelected(plan)
-                  ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
-                  : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]'
-              "
+              :disabled="isPlanLocked(plan)"
+              :class="[
+                isPlanLocked(plan)
+                  ? 'cursor-not-allowed border-amber-200 bg-amber-50 opacity-80'
+                  : isPlanSelected(plan)
+                    ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
+                    : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]',
+              ]"
               @click="handlePlanClick(plan)"
             >
               <div class="flex items-start justify-between gap-3">
@@ -73,6 +76,12 @@
               </p>
               <p class="mt-1 text-xs text-[#8f98be]">
                 {{ plan.description }}
+              </p>
+              <p
+                v-if="isPlanLocked(plan)"
+                class="mt-2 text-xs font-semibold text-amber-700"
+              >
+                需升級會員才能使用
               </p>
             </button>
           </div>
@@ -373,9 +382,12 @@ interface PlanTypeOption {
   templateId?: string;
   submissionDeadline?: string;
   subsidyAmount?: string;
+  requiresPaidPlan?: boolean;
   iconBg: string;
   image: string;
 }
+
+type UserPlanRole = "internal" | "vip" | "normal";
 
 interface ModeOption {
   id: "interactive" | "generator";
@@ -407,11 +419,13 @@ interface PlanTemplate {
   logo_storage_path?: string;
   iconBg?: string;
   isOpen: boolean;
+  requires_paid_plan?: boolean | null;
   submission_deadline?: string | null;
   subsidy_amount?: string | null;
 }
 
 const planTypes = ref<PlanTypeOption[]>([]);
+const currentUserRole = ref<UserPlanRole>("normal");
 
 const modeOptions: ModeOption[] = [
   {
@@ -437,8 +451,31 @@ const {
   warning: notifyWarning,
 } = useNotifications();
 const { userId: currentUserId, refreshUser } = useCurrentUser();
+
+function normalizeUserRole(role: unknown): UserPlanRole {
+  if (role === "internal") return "internal";
+  if (role === "vip") return "vip";
+  return "normal";
+}
+
+async function loadCurrentUserRole() {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
+    if (!response.ok) {
+      currentUserRole.value = "normal";
+      return;
+    }
+    const me = await response.json();
+    currentUserRole.value = normalizeUserRole(me?.role);
+  } catch (error) {
+    console.error("Failed to load user role", error);
+    currentUserRole.value = "normal";
+  }
+}
+
 onMounted(async () => {
-  refreshUser();
+  await refreshUser();
+  await loadCurrentUserRole();
   await loadPlanTypes();
 });
 const config = useRuntimeConfig();
@@ -484,6 +521,7 @@ async function loadPlanTypes() {
         templateId: template.id,
         submissionDeadline: template.submission_deadline || "",
         subsidyAmount: template.subsidy_amount || "",
+        requiresPaidPlan: Boolean(template.requires_paid_plan),
         iconBg: template.iconBg || "#F8FAFC",
         image: logoUrl,
       };
@@ -515,6 +553,11 @@ const lastClickTime = ref<number>(0);
 const DOUBLE_CLICK_THRESHOLD = 600; // ms
 
 function handlePlanClick(plan: PlanTypeOption) {
+  if (isPlanLocked(plan)) {
+    notifyWarning("此計畫需升級會員才能使用");
+    return;
+  }
+
   const planKey = getPlanKey(plan);
   const now = Date.now();
   if (
@@ -560,7 +603,10 @@ async function getUserIdOrNotify() {
 
 const configsLoaded = computed(() => allConfigs.value.length > 0);
 const canConfirmPlanType = computed(
-  () => Boolean(selectedPlanType.value) && configsLoaded.value,
+  () =>
+    Boolean(selectedPlanType.value) &&
+    configsLoaded.value &&
+    canAccessPlan(selectedPlanType.value),
 );
 
 const resolvedTemplateName = computed(() => {
@@ -833,6 +879,15 @@ function getPlanKey(plan: PlanTypeOption | null): string {
   return buildSelectionKey(plan.grantId, templateId);
 }
 
+function isPlanLocked(plan: PlanTypeOption | null): boolean {
+  if (!plan?.requiresPaidPlan) return false;
+  return currentUserRole.value === "normal";
+}
+
+function canAccessPlan(plan: PlanTypeOption | null): boolean {
+  return !isPlanLocked(plan);
+}
+
 function isPlanSelected(plan: PlanTypeOption): boolean {
   const planKey = getPlanKey(plan);
   if (!planKey) return false;
@@ -869,6 +924,10 @@ function resolvePlanConfig(plan: PlanTypeOption | null) {
 function handlePlanTypeConfirm() {
   if (!selectedPlanType.value) {
     notifyWarning("請先選擇計畫類型");
+    return;
+  }
+  if (isPlanLocked(selectedPlanType.value)) {
+    notifyWarning("此計畫需升級會員才能使用");
     return;
   }
   const configSelection = resolvePlanConfig(selectedPlanType.value);
