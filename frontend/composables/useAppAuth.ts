@@ -44,16 +44,29 @@ export async function getAppSession(): Promise<AppSession> {
 
   const config = useRuntimeConfig();
   const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+  const response = await fetch(`${API_BASE_URL}/auth/status`, {
     method: "GET",
     credentials: "include",
   });
 
   if (response.ok) {
+    const statusPayload = (await response.json().catch(() => ({}))) as {
+      authenticated?: boolean;
+      provider?: "supabase" | "external" | null;
+    };
+
+    if (statusPayload.authenticated) {
+      return {
+        isAuthenticated: true,
+        accessToken: null,
+        provider: statusPayload.provider || "external",
+      };
+    }
+
     return {
-      isAuthenticated: true,
+      isAuthenticated: false,
       accessToken: null,
-      provider: "external",
+      provider: null,
     };
   }
 
