@@ -939,10 +939,7 @@ class SupabaseService:
         - A public.users record exists.
         - A public.user_identities mapping exists for provider='supabase'.
         - Role is synchronized from whitelist (internal) into users.role.
-
-                Notes:
-                - No implicit merge by email. If identity mapping does not exist, create a new
-                    canonical user row and bind it to the current provider_subject.
+        - Implicitly merges with existing user by email to prevent duplicates.
         """
         try:
             identity_resp = (
@@ -963,6 +960,10 @@ class SupabaseService:
         if identity and identity.get("user_id"):
             user_row = await self.get_user_by_id(identity["user_id"])
 
+        # ====== FIX: Merge by email if identity not found ======
+        if not user_row and email:
+            user_row = await self.get_user_by_email(email)
+
         if not user_row:
             preferred_email = email or self._placeholder_email(auth_user_id)
             insert_payload = {
@@ -973,23 +974,7 @@ class SupabaseService:
                 "last_login_at": datetime.now(timezone.utc).isoformat(),
             }
 
-            try:
-                inserted = self.client.from_("users").insert(insert_payload).execute()
-            except Exception:
-                # Most commonly a unique conflict on users.email when the same email
-                # already belongs to another identity/provider.
-                fallback_email = self._placeholder_email(auth_user_id)
-                logger.warning(
-                    "Primary email insert failed for auth user %s; falling back to placeholder email",
-                    auth_user_id,
-                    exc_info=True,
-                )
-                inserted = self.client.from_("users").insert(
-                    {
-                        **insert_payload,
-                        "email": fallback_email,
-                    }
-                ).execute()
+            inserted = self.client.from_("users").insert(insert_payload).execute()
 
             if not inserted.data:
                 raise ValueError("Failed to create canonical user record")
@@ -1126,15 +1111,8 @@ class SupabaseService:
                 "status": "active",
                 "last_login_at": datetime.now(timezone.utc).isoformat(),
             }
-            try:
-                inserted = self.client.from_("users").insert(insert_payload).execute()
-            except Exception:
-                inserted = self.client.from_("users").insert(
-                    {
-                        **insert_payload,
-                        "email": placeholder,
-                    }
-                ).execute()
+            
+            inserted = self.client.from_("users").insert(insert_payload).execute()
 
             if not inserted.data:
                 raise ValueError("Failed to create canonical user record for external identity")
