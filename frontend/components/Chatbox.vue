@@ -329,7 +329,6 @@ import {
   buildDynamicSections,
   createEmptyDynamicValues,
 } from "~/utils/dynamicSchema";
-import { renderPlanToHtml } from "~/utils/exportToWord";
 import { supabase } from "~/utils/supabaseClient";
 
 const config = useRuntimeConfig();

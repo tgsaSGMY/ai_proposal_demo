@@ -1479,69 +1479,7 @@ export async function exportPlanToWord(
       // 继续到 fallback 逻辑
     }
   }
-
-  // 第二優先級：使用動態導入的 grant template 函數（原有邏輯）
-  const grantTemplateKey = `${grantId}_${templateId}`;
-
-  try {
-    let exportFn: any;
-
-    // 根據 grantId 和 templateId 映射到對應的導出函數
-    switch (grantTemplateKey) {
-      case "central_phase1":
-        const { exportPlanToWordCentralPhase1 } =
-          await import("./wordStyle/central_phase1");
-        exportFn = exportPlanToWordCentralPhase1;
-        break;
-      case "central_phase2":
-        const { exportPlanToWordCentralPhase2 } =
-          await import("./wordStyle/central_phase2");
-        exportFn = exportPlanToWordCentralPhase2;
-        break;
-      case "local_standard":
-        const { exportPlanToWordLocalStandard } =
-          await import("./wordStyle/local_standard");
-        exportFn = exportPlanToWordLocalStandard;
-        break;
-      case "marketing_imdp":
-        const { exportPlanToWordMarketingImdp } =
-          await import("./wordStyle/marketing_imdp");
-        exportFn = exportPlanToWordMarketingImdp;
-        break;
-      case "marketing_siir":
-        const { exportPlanToWordMarketingSiir } =
-          await import("./wordStyle/marketing_siir");
-        exportFn = exportPlanToWordMarketingSiir;
-        break;
-      case "r&d_standard":
-        const { exportPlanToWordRdStandard } =
-          await import("./wordStyle/r&d_standard");
-        exportFn = exportPlanToWordRdStandard;
-        break;
-      case "r&d_transform_over_10":
-        const { exportPlanToWordRdTransformOver10 } =
-          await import("./wordStyle/r&d_transform_over_10");
-        exportFn = exportPlanToWordRdTransformOver10;
-        break;
-      case "r&d_transform_under_9":
-        const { exportPlanToWordRdTransformUnder9 } =
-          await import("./wordStyle/r&d_transform_under9");
-        exportFn = exportPlanToWordRdTransformUnder9;
-        break;
-      default:
-        // 默認使用 exportPlanToWordDefault
-        exportFn = exportPlanToWordDefault;
-    }
-
-    return await exportFn(sections, planContent, projectTitle);
-  } catch (error) {
-    console.error(
-      `Failed to export using template ${grantTemplateKey}:`,
-      error,
-    );
-    // 降級到默認導出
-    return exportPlanToWordDefault(sections, planContent, projectTitle);
-  }
+  return exportPlanToWordDefault(sections, planContent, projectTitle);
 }
 
 // 默認導出函數（保留原有邏輯）

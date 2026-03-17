@@ -63,23 +63,6 @@
           <div
             class="flex items-center gap-2 self-start sm:self-auto flex-wrap"
           >
-            <!-- <button
-              v-if="mode === 'synthetic'"
-              @click="$emit('generateUserInput')"
-              class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-200 transition-colors"
-              title="讓 AI 生成一個創新的項目想法"
-            >
-              ✨ 隨機生成想法
-            </button>
-            <button
-              type="button"
-              @click="triggerExcelUpload"
-              :disabled="isImportingFromExcel"
-              class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200 transition-colors disabled:bg-indigo-50 disabled:text-indigo-300"
-              title="從 Excel 匯入摘要與章節內容"
-            >
-              {{ isImportingFromExcel ? "匯入中..." : "📥 從 Excel 匯入" }}
-            </button> -->
             <button
               type="button"
               @click="triggerWordUpload"
@@ -91,13 +74,6 @@
             </button>
           </div>
         </div>
-        <input
-          ref="excelInputRef"
-          type="file"
-          class="hidden"
-          accept=".xlsx,.xls"
-          @change="handleExcelFileChange"
-        />
         <input
           ref="wordInputRef"
           type="file"
@@ -269,11 +245,6 @@ import { useNotifications } from "~/composables/useNotifications";
 import { useLoading } from "~/composables/useLoading";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import {
-  applyExcelRows,
-  buildExcelReplyTargetMap,
-  extractExcelRows,
-} from "~/utils/excelImport";
-import {
   extractTextFromWord,
   callAutoFillApi,
   buildSectionSchema,
@@ -318,9 +289,7 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-const excelInputRef = ref(null);
 const wordInputRef = ref(null);
-const isImportingFromExcel = ref(false);
 
 // 內部狀態
 const selectedGrantId = ref(props.initialGrantId);
@@ -381,10 +350,6 @@ const dynamicSections = computed(() =>
     templateId: selectedTemplateId.value,
     templateGrantId: selectedGrantId.value,
   }),
-);
-
-const excelReplyTargetMap = computed(() =>
-  buildExcelReplyTargetMap(dynamicSections.value),
 );
 
 // 计算属性：检查是否准备好生成企劃，需要选择模板和输入摘要
@@ -470,18 +435,6 @@ const emitGeneratePlan = () => {
   emit("generatePlan", { summaries: [] });
 };
 
-// 触发Excel文件上传
-function triggerExcelUpload() {
-  if (isImportingFromExcel.value) {
-    return;
-  }
-  const input = excelInputRef.value;
-  if (input) {
-    input.value = "";
-    input.click();
-  }
-}
-
 // 触发Word文件上传
 function triggerWordUpload() {
   const input = wordInputRef.value;
@@ -550,60 +503,6 @@ async function handleWordFileChange(event) {
     notifyError(`匯入失敗：${message}`);
   } finally {
     hideLoading();
-  }
-}
-
-// 处理Excel文件选择，解析行数据并应用到动态字段
-async function handleExcelFileChange(event) {
-  const input = event?.target;
-  const file = input?.files?.[0];
-  if (input) {
-    input.value = "";
-  }
-  if (!file) {
-    return;
-  }
-
-  isImportingFromExcel.value = true;
-  try {
-    const buffer = await file.arrayBuffer();
-    const rows = extractExcelRows(buffer);
-    const result = applyExcelRows({
-      rows,
-      dynamicSections: dynamicSections.value,
-      replyTargetMap: excelReplyTargetMap.value,
-      onFill: (sectionId, propertyKey, value) => {
-        updateDynamicValue(sectionId, propertyKey, value);
-        ensureFieldExpanded(sectionId, propertyKey);
-      },
-    });
-
-    if (result.summaryText) {
-      modelValue.value = result.summaryText;
-    }
-
-    const messageParts = [];
-    if (result.summaryText) {
-      messageParts.push("已更新摘要內容");
-    }
-    if (result.appliedCount > 0) {
-      messageParts.push(`填入 ${result.appliedCount} 個欄位`);
-    }
-    if (result.skippedCount > 0) {
-      messageParts.push(`略過 ${result.skippedCount} 筆未匹配欄位`);
-    }
-
-    if (messageParts.length > 0) {
-      notifySuccess(`Excel 匯入完成：${messageParts.join("、")}`);
-    } else {
-      notifyError("Excel 檔案未包含可匯入的資料");
-    }
-  } catch (error) {
-    console.error("Failed to import Excel data", error);
-    const message = error?.message || "匯入過程發生未知錯誤";
-    notifyError(`匯入失敗：${message}`);
-  } finally {
-    isImportingFromExcel.value = false;
   }
 }
 
