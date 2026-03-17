@@ -20,6 +20,8 @@ export const useNotifications = () => {
   // 使用 useState 创建一个全局共享的通知数组
   // 所有组件都可以访问和修改这个共享的通知列表
   const notifications = useState<Notification[]>("notifications", () => []);
+  // 记录每条通知的自动关闭计时器，便于手动移除时同步清理。
+  const timeoutMap = new Map<string, ReturnType<typeof setTimeout>>();
 
   // ===== 添加通知的核心方法 =====
   // 向通知列表添加一条新的通知消息
@@ -30,7 +32,7 @@ export const useNotifications = () => {
   const add = (
     type: NotificationType,
     message: string,
-    duration: number = 5000 // 默认持续 5 秒后自动关闭
+    duration: number = 5000, // 默认持续 5 秒后自动关闭
   ) => {
     // 生成唯一的通知 ID
     const id = uuidv4();
@@ -44,15 +46,22 @@ export const useNotifications = () => {
 
     // 在指定时间后自动移除通知
     // 这样用户不需要手动关闭，通知会自动消失
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       remove(id);
     }, duration);
+    timeoutMap.set(id, timeoutId);
   };
 
   // ===== 移除通知的方法 =====
   // 根据通知 ID 从列表中移除指定的通知
   // 参数: id - 要移除的通知 ID
   const remove = (id: string) => {
+    const timeoutId = timeoutMap.get(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutMap.delete(id);
+    }
+
     // 查找通知在数组中的位置
     const index = notifications.value.findIndex((n) => n.id === id);
     // 如果找到了通知，则从数组中移除

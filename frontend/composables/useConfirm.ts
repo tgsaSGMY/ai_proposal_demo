@@ -26,7 +26,18 @@ const options = ref<ConfirmOptions | null>(null);
 
 // ===== 全局 Promise 解决函数 =====
 // 这个函数会被保存起来，用于在用户点击确认/取消时改变 Promise 的状态
-let resolvePromise: (value: boolean) => void;
+let resolvePromise: ((value: boolean) => void) | null = null;
+
+// ===== 统一完成确认流程 =====
+// 收敛确认/取消的收尾逻辑，避免遗漏状态重置
+const settleConfirm = (result: boolean) => {
+  if (resolvePromise) {
+    resolvePromise(result);
+    resolvePromise = null;
+  }
+  isVisible.value = false;
+  options.value = null;
+};
 
 // ===== 确认对话框组合式函数 =====
 /**
@@ -61,6 +72,11 @@ export const useConfirm = () => {
    *   - 用户点击取消：Promise 结果为 false
    */
   const confirm = (opts: ConfirmOptions): Promise<boolean> => {
+    // 如果前一個對話框尚未完成，先以取消結束舊 Promise，避免懸掛。
+    if (resolvePromise) {
+      settleConfirm(false);
+    }
+
     // ===== 设置对话框配置 =====
     // 合并用户传入的选项和默认值
     // 优先使用用户传入的值，如果没有则使用默认值
@@ -90,11 +106,7 @@ export const useConfirm = () => {
    */
   const handleConfirm = () => {
     // 调用保存的 Promise resolve 函数，传入 true（表示用户确认了）
-    if (resolvePromise) {
-      resolvePromise(true);
-    }
-    // 隐藏对话框
-    isVisible.value = false;
+    settleConfirm(true);
   };
 
   // ===== 处理用户点击"取消"按钮 =====
@@ -105,11 +117,7 @@ export const useConfirm = () => {
    */
   const handleCancel = () => {
     // 调用保存的 Promise resolve 函数，传入 false（表示用户取消了）
-    if (resolvePromise) {
-      resolvePromise(false);
-    }
-    // 隐藏对话框
-    isVisible.value = false;
+    settleConfirm(false);
   };
 
   // ===== 导出公共 API =====

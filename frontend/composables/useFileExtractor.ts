@@ -1,4 +1,5 @@
-// ===== 导入依赖库 =====
+// 主要是用于从用户上传的 Word (.docx) 和 PDF 文件中提取文本内容，并提供一个统一的接口来处理不同类型的文件。
+
 // 导入 Vue 响应式 API 和生命周期钩子
 import { ref, onMounted } from "vue";
 
@@ -69,7 +70,7 @@ async function loadPdfJs() {
       // 这样 PDF.js 知道在哪里找到 worker 脚本
       const workerPath = new URL(
         "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url
+        import.meta.url,
       ).href;
       pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
     }
@@ -138,7 +139,7 @@ export function useFileExtractor() {
       // 检查 PDF.js 库是否已加载
       if (!pdfjsLib) {
         throw new Error(
-          "PDF library is not loaded yet. Please try again in a moment."
+          "PDF library is not loaded yet. Please try again in a moment.",
         );
       }
 

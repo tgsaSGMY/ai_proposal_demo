@@ -23,9 +23,9 @@ export const useLoading = () => {
     // 设置加载状态为 true
     isLoading.value = true;
     // 设置加载消息（如果提供了消息，则显示；否则为空）
-    loadingMessage.value = message || "";
+    loadingMessage.value = message ?? "";
     // 设置是否显示进度条提示
-    showProgressHint.value = progressHint || false;
+    showProgressHint.value = progressHint ?? false;
   };
 
   // ===== 隐藏加载动画的方法 =====

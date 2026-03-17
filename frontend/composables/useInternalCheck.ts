@@ -1,5 +1,5 @@
 // ===== 导入依赖库 =====
-import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
+import { authenticatedFetch } from "~/composables/useAppAuth";
 
 // ===== 内部权限检查组合式函数 =====
 // 用于检查当前用户是否具有内部（管理员）权限
@@ -9,11 +9,10 @@ export const useInternalCheck = () => {
    * 通过 Supabase 数据库函数检查当前用户是否为内部人员（管理员）
    *
    * 工作原理：
-   *   1. 先检查用户是否已登录（有效会话）
-   *   2. 调用后端 /api/auth/me
-   *   3. 后端会解析 Bearer token，并同步 users/user_identities
-   *   4. 读取 users.role 判断是否为 internal
-   *   5. 返回检查结果
+   *   1. 调用后端 /api/auth/me
+   *   2. 后端会解析 Bearer token，并同步 users/user_identities
+   *   3. 读取 users.role 判断是否为 internal
+   *   4. 返回检查结果
    *
    * 好处：
    *   - 不需要在前端暴露内部白名单表的 select 权限
@@ -26,17 +25,6 @@ export const useInternalCheck = () => {
    */
   const checkIsInternal = async (): Promise<boolean> => {
     try {
-      // ===== 第 1 步：检查用户是否已登录 =====
-      // 虽然 RPC 会自动带上 Token，但先检查有没有登录
-      // 这样可以省去一次不必要的网络请求
-      const session = await getAppSession();
-
-      // 如果没有活跃的会话，说明用户未登录
-      if (!session.isAuthenticated) {
-        console.warn("User not logged in.");
-        return false;
-      }
-
       const config = useRuntimeConfig();
       const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 

@@ -1,11 +1,19 @@
 import { supabase } from "~/utils/supabaseClient";
 
+// 前端可辨識的登入狀態模型：支援 Supabase 與外部登入兩種來源。
 interface AppSession {
   isAuthenticated: boolean;
   accessToken: string | null;
   provider: "supabase" | "external" | null;
 }
 
+// 統一組出後端 API 根路徑，避免重複拼接字串。
+function getApiBaseUrl(): string {
+  const config = useRuntimeConfig();
+  return `${config.public.apiBaseUrl}/api`;
+}
+
+// 強制登出流程：先清 Supabase，再呼叫後端外部登入登出，最後導向登入頁。
 async function hardLogoutAndRedirect(): Promise<void> {
   try {
     await supabase.auth.signOut();
@@ -14,9 +22,8 @@ async function hardLogoutAndRedirect(): Promise<void> {
   }
 
   try {
-    const config = useRuntimeConfig();
-    const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-    await fetch(`${API_BASE_URL}/external-auth/logout`, {
+    const apiBaseUrl = getApiBaseUrl();
+    await fetch(`${apiBaseUrl}/external-auth/logout`, {
       method: "POST",
       credentials: "include",
     });
@@ -29,6 +36,7 @@ async function hardLogoutAndRedirect(): Promise<void> {
   }
 }
 
+// 取得目前 App Session：優先檢查 Supabase，若無再檢查外部登入 cookie 狀態。
 export async function getAppSession(): Promise<AppSession> {
   const {
     data: { session },
@@ -42,9 +50,8 @@ export async function getAppSession(): Promise<AppSession> {
     };
   }
 
-  const config = useRuntimeConfig();
-  const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-  const response = await fetch(`${API_BASE_URL}/auth/status`, {
+  const apiBaseUrl = getApiBaseUrl();
+  const response = await fetch(`${apiBaseUrl}/auth/status`, {
     method: "GET",
     credentials: "include",
   });
@@ -70,6 +77,7 @@ export async function getAppSession(): Promise<AppSession> {
     };
   }
 
+  // 未登入或驗證失敗時回傳統一的匿名狀態。
   return {
     isAuthenticated: false,
     accessToken: null,
@@ -77,6 +85,7 @@ export async function getAppSession(): Promise<AppSession> {
   };
 }
 
+// 包裝 fetch：自動附帶憑證與 Bearer token，若 401 則執行強制登出。
 export async function authenticatedFetch(
   input: string,
   init: RequestInit = {},
@@ -105,6 +114,7 @@ export async function authenticatedFetch(
   return response;
 }
 
+// 對外提供的登出 API，統一走強制登出流程。
 export async function appLogout(): Promise<void> {
   await hardLogoutAndRedirect();
 }
