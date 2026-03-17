@@ -564,7 +564,7 @@ watch(
  * - 計算計畫完成度百分比（基於 stored_answer 中填入的動態欄位）
  * - 指派顏色與樣式（accent）用於卡片展示
  * - 格式化最後更新時間為台灣時區格式
- * - 區分「生成模式」和「互動模式」
+ * - 目前僅顯示互動模式
  * @param record - 後端專案記錄
  * @param index - 專案在列表中的索引（用於循環指派顏色）
  * @param accentOverride - 可選的顏色樣式覆蓋
@@ -584,39 +584,25 @@ function decorateProject(
   };
   const totalFields = getDynamicFieldLabels(schemaOptions).length;
 
-  if (record.mode === "generator") {
-    // 生成模式：计算 stored_answer.user_input.dynamic_fields 中有 value 的数量 / totalFields
-    if (record.stored_answer?.user_input?.dynamic_fields) {
-      const dynamicFields = record.stored_answer.user_input.dynamic_fields;
-      const filledCount = Object.values(dynamicFields).filter(
-        (field: any) => field,
-      ).length;
-      completeness =
-        totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
-    } else {
-      completeness = 0;
-    }
+  // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / totalFields
+  if (record.stored_answer && record.stored_answer.chat_answers) {
+    const allKeys = Object.keys(record.stored_answer.chat_answers);
+    const filledCount = new Set(
+      allKeys
+        .filter(
+          (key) =>
+            key.includes("::") && key !== "main_idea" && key !== "main-idea",
+        )
+        .map((key) => key.split("::").slice(0, 2).join("::")),
+    ).size;
+    completeness =
+      totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
   } else {
-    // 对话模式：计算 stored_answer 中除了 main_idea 之外的字段数量 / totalFields
-    if (record.stored_answer && record.stored_answer.chat_answers) {
-      const allKeys = Object.keys(record.stored_answer.chat_answers);
-      const filledCount = new Set(
-        allKeys
-          .filter(
-            (key) =>
-              key.includes("::") && key !== "main_idea" && key !== "main-idea",
-          )
-          .map((key) => key.split("::").slice(0, 2).join("::")),
-      ).size;
-      completeness =
-        totalFields > 0 ? Math.round((filledCount / totalFields) * 100) : 0;
-    } else {
-      completeness = 0;
-    }
+    completeness = 0;
   }
   completeness = Math.min(Math.max(completeness, 0), 100);
 
-  const modeLabel = record.mode === "generator" ? "生成模式" : "互動模式";
+  const modeLabel = "互動模式";
   const lastUpdateSource = record.updated_at || record.created_at;
   const lastUpdate = dateFormatter.format(new Date(lastUpdateSource));
 

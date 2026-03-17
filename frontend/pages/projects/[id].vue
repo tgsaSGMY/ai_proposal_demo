@@ -135,25 +135,8 @@
           </p>
         </section>
 
-        <GeneratorModeWorkspace
-          v-if="isGeneratorMode"
-          :all-configs="allConfigs"
-          :selected-grant-id="selectedGrantId"
-          :selected-template-id="selectedTemplateId"
-          :dynamic-field-values="dynamicFieldValues"
-          :final-plan-content="finalPlanContent"
-          :current-sections="effectiveSections"
-          :project-record="projectRecord"
-          :current-grant="currentGrant"
-          :current-template="currentTemplate"
-          :build-final-user-input="buildFinalUserInput"
-          :use-model-type="useModelType"
-          @updateProjectRecord="handleGeneratorUpdate"
-          @candidateConfirmed="onCandidateConfirm"
-        />
-
         <section
-          v-else-if="!isGeneratorMode && workspaceReady"
+          v-else-if="workspaceReady"
           class="min-h-[80vh] rounded-3xl p-0"
         >
           <Chatbox
@@ -195,7 +178,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 // 导入子组件
 import Chatbox from "~/components/Chatbox.vue";
-import GeneratorModeWorkspace from "~/components/GeneratorModeWorkspace.vue";
 // 导入自定义组合式函数
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";
@@ -409,12 +391,6 @@ const savedPlanVersions = computed(() => {
   ];
 });
 
-// ===== 计算属性：是否为生成模式 =====
-// 检查项目是否为企劃生成模式
-const isGeneratorMode = computed(
-  () => projectRecord.value?.mode === "generator",
-);
-
 // ===== 计算属性：工作区是否就绪 =====
 // 检查项目、补助、模板和章节是否全部已加载
 const workspaceReady = computed(() =>
@@ -436,10 +412,8 @@ const lastUpdatedDisplay = computed(() => {
 });
 
 // ===== 计算属性：模式标签 =====
-// 返回项目模式的显示标签（生成模式或互动模式）
-const modeLabel = computed(() =>
-  projectRecord.value?.mode === "generator" ? "計畫生成模式" : "互動模式",
-);
+// 当前仅开放互动模式
+const modeLabel = computed(() => "互動模式");
 
 // ===== 计算属性：补助名称 =====
 // 根据选中的补助 ID，返回对应的补助名称
@@ -642,9 +616,6 @@ async function fetchProject() {
     selectedTemplateId.value = data.template_id || "";
     // 根據是否為內部用戶設置預設模型
     useModelType.value = isInternal.value ? "internal" : "external";
-    if (data.mode === "generator") {
-      await initializeGeneratorStateFromProject(data);
-    }
     hydrateInputStateFromStoredAnswer(data);
   } catch (error: any) {
     console.error("Failed to load project", error);
@@ -709,43 +680,6 @@ async function persistConversationHistory() {
     });
   } catch (error) {
     console.warn("Failed to sync conversation history", error);
-  }
-}
-
-// ===== 初始化生成器状态 =====
-// 从项目数据初始化生成模式的状态
-async function initializeGeneratorStateFromProject(record: ProjectRecord) {
-  if (record.mode !== "generator") {
-    return;
-  }
-  if (!allConfigs.value.length) {
-    try {
-      await fetchAllConfigs();
-    } catch (error) {
-      console.error("無法載入計畫模板設定", error);
-    }
-  }
-}
-
-// ===== 处理生成器更新 =====
-// 处理来自生成器工作区的状态更新，保存到后端
-async function handleGeneratorUpdate(payload: {
-  user_id: string;
-  grant_id: string | null;
-  template_id: string | null;
-  stored_answer: Record<string, any> | null;
-  // saved_plan: Record<string, any>;
-}) {
-  if (!projectRecord.value) return;
-  try {
-    await updateProject({
-      stored_answer: payload.stored_answer,
-      // saved_plan: payload.saved_plan,
-      grant_id: payload.grant_id,
-      template_id: payload.template_id,
-    });
-  } catch (error) {
-    console.warn("Failed to persist generator state", error);
   }
 }
 

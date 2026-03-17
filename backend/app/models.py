@@ -164,29 +164,6 @@ class ChatGuidanceResponse(BaseModel):
     message: str
 
 
-class ScrapeContextTarget(BaseModel):
-    """描述可供自動填寫的目標欄位。"""
-    section_id: str = Field(None, description="欄位所屬章節 ID。")
-    property_key: str = Field(None, description="欄位所屬的大項鍵。")
-    sub_field_key: str = Field(None, description="欄位的子項鍵，例如 reply / acceptance。")
-
-
-class ScrapeRequest(BaseModel):
-    """抓取網上資料請求"""
-    url: str
-    context_targets: List[ScrapeContextTarget] = Field(
-        default_factory=list,
-        description="可自動填寫的目標欄位清單，用於精準對應摘要內容。",
-    )
-    max_items: Optional[int] = Field(
-        default=4,
-        ge=1,
-        le=31,
-        description="期望最多回傳的自動填寫項目數量。",
-    )
-
-
-
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
 class RoutingRule(BaseModel):
     """定義一個模型路由規則，用於決定哪個請求應該由哪個模型處理。"""

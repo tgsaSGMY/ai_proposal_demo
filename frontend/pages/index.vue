@@ -390,7 +390,7 @@ interface PlanTypeOption {
 type UserPlanRole = "internal" | "vip" | "normal";
 
 interface ModeOption {
-  id: "interactive" | "generator";
+  id: "interactive";
   title: string;
   description: string;
   badge: string;
@@ -434,13 +434,6 @@ const modeOptions: ModeOption[] = [
     description:
       "保留更多對話節點，逐步確認每一段輸出，適合需要邊寫邊調整的專案。",
     badge: "聊天導向",
-  },
-  {
-    id: "generator",
-    title: "計畫生成模式",
-    description:
-      "一次輸出完整計畫草稿，適合已準備好資料、希望快速生成初稿的團隊。",
-    badge: "快速生成",
   },
 ];
 
@@ -962,22 +955,9 @@ async function enterChatStage() {
         const autofillResult = await runAttachmentAutofill(userId);
         if (autofillResult) {
           //直接存入stored answer
-          if (selectedMode.value === "generator") {
-            storedAnswerPayload = {
-              user_input: {
-                main_idea:
-                  autofillResult.mainIdea ||
-                  planSummary.value.trim() ||
-                  selectedPlanType.value?.title ||
-                  "",
-                dynamic_fields: autofillResult.dynamicFields,
-              },
-            };
-          } else {
-            storedAnswerPayload = {
-              chat_answers: autofillResult.dynamicFields,
-            };
-          }
+          storedAnswerPayload = {
+            chat_answers: autofillResult.dynamicFields,
+          };
         }
       } catch (autofillError) {
         console.error("Failed to auto-fill dynamic sections", autofillError);

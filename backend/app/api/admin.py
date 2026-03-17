@@ -1,16 +1,12 @@
 # 内部人員/系統獨有操作的api
 
-import json
 import logging
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.models import RoutingRule, UpdateSectionSettingsRequest,ScrapeRequest
+from app.models import RoutingRule, UpdateSectionSettingsRequest
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_supabase_service,get_llm_service,verify_internal_user
-from app.services.llm_service import LLMService
-from app.utils.scrape_website_text import scrape_website_text
-import httpx
+from .dependencies import get_supabase_service, verify_internal_user
 
 logger = logging.getLogger(__name__)
 
@@ -106,141 +102,6 @@ async def user_usage(user_id: str, supabase_service: SupabaseService = Depends(g
     """取得指定 user_id 的總用量 (cost)"""
     usage = await supabase_service.get_user_usage(user_id)
     return {"usage": usage} 
-
-@router.post("/scrape_and_analyze", summary="抓取網頁並由 AI 分析重點")
-async def scrape_and_analyze(
-    req: ScrapeRequest,
-    request: Request,
-    user_id: str = "dba4dabc-a24d-4e1a-aa2b-b239d06a8cf5",
-    llm_service: LLMService = Depends(get_llm_service),
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        # 1️⃣ 抓取網頁內容
-        scraped_text = scrape_website_text(req.url)
-        if not scraped_text.strip():
-            raise HTTPException(status_code=400, detail="無法抓取網站內容或內容為空。")
-
-        # 避免超長文字導致 token 超限
-        if len(scraped_text) > 10000:
-            scraped_text = scraped_text[:10000]
-
-        # 2️⃣ 準備 Prompt
-        max_items = req.max_items or 4
-        target_lines = []
-        for target in req.context_targets:
-            section_hint = (
-                    f" (section: {target.section_id}, field: {target.property_key}, sub: {target.sub_field_key})"
-                    if target.section_id and target.property_key and target.sub_field_key
-                    else ""
-            )
-            target_lines.append(f"- composite_key: {section_hint}")
-
-        targets_block = "\n".join(target_lines) if target_lines else "(未提供具體欄位，請僅在高度相關時回傳)"
-
-        system_prompt = f"""
-        你是一位精準的信息萃取專家。請閱讀提供的網頁原文，
-        只在內容與使用者的關注欄位高度相關時，建立自動填寫建議。
-
-        使用者正在撰寫商業計劃書。以下為潛在的目標欄位：
-        {targets_block}
-        請務必遵守以下要求：
-        1. 只輸出 JSON 物件，格式為：
-                {{
-                    "summary": "對原文的高度概括，1-2 句",
-                    "auto_fill": [
-                        {{
-                            "composite_key": "<section::field::sub>",
-                            "label": "對應欄位標籤",
-                            "relevance": "high" 或 "medium",
-                            "content": "從原文中提煉的重點，1-3 句內"
-                        }}
-                    ]
-                }}
-        2. composite_key 必須與使用者提供的目標欄位完全對應。
-        3. 最多提供 {max_items} 個 auto_fill 項目，若沒有高度相關內容則輸出空陣列。
-        4. 不得虛構或推測資訊。
-        5. content除了公司名等專有名詞外，其他一律使用繁體中文回答。
-        """
-
-        user_prompt = (
-                "網頁原文:\n---\n"
-                + scraped_text
-        )
-
-        # 3️⃣ 取得模型設定
-        model_registry = request.app.state.model_registry
-        model_to_use = model_registry.get("gpt-4.1-nano") or model_registry.get("gpt-4.5-turbo")
-        if not model_to_use:
-            raise HTTPException(status_code=500, detail="需要配置 GPT-3.5 或 GPT-4 模型。")
-
-        # 4️⃣ 組成 messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-
-        # 5️⃣ 調用 LLM API
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            summary_raw, llm_error, response_json = await llm_service.call_external_api(
-                client,
-                model_to_use,
-                messages,
-                is_json_output=True
-            )
-
-        if llm_error:
-            raise HTTPException(status_code=500, detail=f"LLM API Error: {llm_error}")
-
-        if summary_raw is None:
-            raise HTTPException(status_code=500, detail="LLM 回傳內容為空。")
-
-        # if response_json and model_to_use.get('type') == 'external':
-        #     await supabase_service.log_cost_usage(user_id, model_to_use, response_json)
-
-        try:
-            parsed_summary = json.loads(summary_raw)
-        except json.JSONDecodeError:
-            logger.warning("LLM 未回傳有效 JSON，回傳原始摘要。")
-            return {"summary": summary_raw.strip(), "auto_fill": []}
-
-        auto_fill_items = parsed_summary.get("auto_fill") or []
-        filtered_items = []
-        seen_keys = set()
-
-        for item in auto_fill_items:
-            composite_key = (item.get("composite_key") or "").strip()
-            content = (item.get("content") or "").strip()
-            relevance = (item.get("relevance") or "").lower()
-
-            if not composite_key or not content:
-                continue
-            if composite_key in seen_keys:
-                continue
-
-            filtered_items.append(
-                {
-                    "composite_key": composite_key,
-                    "label": item.get("label") or "",
-                    "relevance": relevance,
-                    "content": content,
-                }
-            )
-            seen_keys.add(composite_key)
-
-            if len(filtered_items) >= max_items:
-                break
-
-        parsed_summary["auto_fill"] = filtered_items
-        parsed_summary.setdefault("summary", "")
-
-        return parsed_summary
-
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logger.error(f"Error during scrape_and_analyze: {e}")
-        raise HTTPException(status_code=500, detail="伺服器內部錯誤")
 
 @router.post("/refresh-datasets", summary="手動刷新所有 datasets")
 async def refresh_datasets_endpoint(

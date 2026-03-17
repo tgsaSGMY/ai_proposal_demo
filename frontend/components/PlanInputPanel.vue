@@ -127,17 +127,6 @@
             生成更精準、更出色的內容！
           </p>
         </div>
-        <ReferenceLinker
-          :links="referenceLinks"
-          :available-fields="referenceFieldOptions"
-          @add="addReferenceLink"
-          @remove="removeReferenceLink"
-          @update="updateReferenceLink"
-          @analyze="handleAnalyzeLink"
-          @view-summary="viewLinkSummary"
-          class="mt-6"
-        />
-
         <div
           v-for="section in dynamicSections"
           :key="section.sectionId"
@@ -232,29 +221,6 @@
             </transition>
           </div>
         </div>
-
-        <div
-          v-if="isSummaryModalVisible"
-          @click.self="isSummaryModalVisible = false"
-          class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center"
-        >
-          <div
-            class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-4 sm:p-6"
-          >
-            <h3 class="text-base sm:text-lg font-bold mb-2 sm:mb-4">
-              AI 分析重點
-            </h3>
-            <p class="text-gray-700 whitespace-pre-wrap text-sm sm:text-base">
-              {{ currentSummary }}
-            </p>
-            <button
-              @click="isSummaryModalVisible = false"
-              class="mt-4 sm:mt-6 px-3 sm:px-4 py-2 bg-gray-200 rounded-md text-sm sm:text-base"
-            >
-              關閉
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -313,9 +279,6 @@ import {
   buildSectionSchema,
   processAutoFillResults,
 } from "~/utils/wordImport";
-import { authenticatedFetch } from "~/composables/useAppAuth";
-
-const referenceLinks = ref([]);
 
 const modelValue = defineModel();
 const dynamicValuesModel = defineModel("dynamicValues", {
@@ -420,27 +383,6 @@ const dynamicSections = computed(() =>
   }),
 );
 
-// 计算属性：从所有章节中收集可用的字段选项列表
-const referenceFieldOptions = computed(() => {
-  const sections = dynamicSections.value || [];
-  return sections.flatMap((section) =>
-    section.fields
-      .filter((field) => !field.value || field.value.trim() === "")
-      .map((field) => ({
-        section_id: section.sectionId,
-        property_key: field.propertyKey,
-        label: `${section.sectionName} · ${field.title}`,
-      })),
-  );
-});
-
-const analysisTargets = computed(() =>
-  referenceFieldOptions.value.map(({ section_id, property_key }) => ({
-    section_id,
-    property_key,
-  })),
-);
-
 const excelReplyTargetMap = computed(() =>
   buildExcelReplyTargetMap(dynamicSections.value),
 );
@@ -522,15 +464,10 @@ function computeFieldStatus(value) {
   return "可選填";
 }
 
-// 发送生成企劃事件，附带参考链接摘要
+// 发送生成企劃事件
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
-
-  const completedSummaries = referenceLinks.value
-    .filter((link) => link.status === "completed" && link.summary)
-    .map((link) => link.summary);
-
-  emit("generatePlan", { summaries: completedSummaries });
+  emit("generatePlan", { summaries: [] });
 };
 
 // 触发Excel文件上传
@@ -670,14 +607,6 @@ async function handleExcelFileChange(event) {
   }
 }
 
-const isSummaryModalVisible = ref(false);
-const currentSummary = ref("");
-
-// 添加新的参考链接
-function addReferenceLink() {
-  referenceLinks.value.push({ url: "", status: "pending", summary: "" });
-}
-
 // 确保指定字段处于展开状态
 function ensureFieldExpanded(sectionId, propertyKey) {
   const id = fieldPanelKey(sectionId, propertyKey);
@@ -687,152 +616,6 @@ function ensureFieldExpanded(sectionId, propertyKey) {
   const next = new Set(expandedFieldIds.value);
   next.add(id);
   expandedFieldIds.value = next;
-}
-
-// 应用自动填充条目到动态字段，返回已应用的条目列表
-function applyAutoFillEntries(autoFillItems = []) {
-  if (!Array.isArray(autoFillItems) || autoFillItems.length === 0) {
-    return [];
-  }
-
-  const applied = [];
-
-  autoFillItems.forEach((item) => {
-    const compositeKey = (item.composite_key || item.compositeKey || "").trim();
-    if (!compositeKey) {
-      return;
-    }
-
-    const [sectionId, propertyKey] = compositeKey.split("::");
-    if (!sectionId || !propertyKey) {
-      return;
-    }
-
-    const content = (item.content || "").trim();
-    if (!content) {
-      return;
-    }
-
-    const currentValue = internalDynamicValues.value[compositeKey] || "";
-    if (currentValue.trim()) {
-      return;
-    }
-
-    updateDynamicValue(sectionId, propertyKey, content);
-    ensureFieldExpanded(sectionId, propertyKey);
-
-    applied.push({
-      compositeKey,
-      label: item.label || "",
-      content,
-    });
-  });
-
-  return applied;
-}
-
-// 删除指定索引的参考链接
-function removeReferenceLink(index) {
-  referenceLinks.value.splice(index, 1);
-}
-
-// 更新参考链接的属性（URL、字段选择等）
-function updateReferenceLink({ index, field, value }) {
-  if (referenceLinks.value[index]) {
-    referenceLinks.value[index][field] = value;
-    if (field === "url") {
-      referenceLinks.value[index].status = "pending";
-      referenceLinks.value[index].summary = "";
-    }
-  }
-}
-
-// 查看参考链接的摘要信息
-function viewLinkSummary(index) {
-  if (referenceLinks.value[index]) {
-    currentSummary.value = referenceLinks.value[index].summary;
-    isSummaryModalVisible.value = true;
-  }
-}
-
-// 分析参考链接，调用后端API获取URL内容和生成摘要
-async function handleAnalyzeLink(index) {
-  const link = referenceLinks.value[index];
-  if (!link || !link.url) return;
-
-  link.status = "loading";
-  try {
-    const selectedFieldLabels =
-      Array.isArray(link.selectedFields) && link.selectedFields.length > 0
-        ? link.selectedFields
-        : null;
-
-    const targetFields = selectedFieldLabels
-      ? referenceFieldOptions.value.filter((field) =>
-          selectedFieldLabels.includes(field.label),
-        )
-      : referenceFieldOptions.value;
-
-    const contextTargets = targetFields.length
-      ? targetFields.map(({ section_id, property_key }) => ({
-          section_id,
-          property_key,
-        }))
-      : analysisTargets.value;
-
-    const response = await authenticatedFetch(
-      `${API_BASE_URL}/scrape_and_analyze`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: link.url,
-          context_targets: contextTargets,
-          max_items: selectedFieldLabels ? targetFields.length || 1 : 4,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || "分析失敗");
-    }
-
-    const result = await response.json();
-    const summaryText =
-      typeof result.summary === "string" ? result.summary.trim() : "";
-    const autoFillItems = Array.isArray(result.auto_fill)
-      ? result.auto_fill
-      : [];
-    const appliedEntries = applyAutoFillEntries(autoFillItems);
-
-    const summaryLines = [];
-    if (summaryText) {
-      summaryLines.push(summaryText);
-    }
-
-    if (appliedEntries.length > 0) {
-      if (summaryLines.length > 0) {
-        summaryLines.push("");
-      }
-      summaryLines.push("自動填寫欄位：");
-      appliedEntries.forEach((entry) => {
-        const label = entry.label || entry.compositeKey;
-        summaryLines.push(`- ${label}: ${entry.content}`);
-      });
-    }
-
-    const finalSummary = summaryLines.join("\n").trim();
-    link.summary = finalSummary || "此連結未產生可用的摘要。";
-    link.status = "completed";
-    if (selectedFieldLabels) {
-      link.selectedFields = [];
-    }
-  } catch (error) {
-    console.error(`Error analyzing URL ${link.url}:`, error);
-    link.status = "error";
-    link.summary = `分析失敗: ${error.message}`;
-  }
 }
 </script>
 
