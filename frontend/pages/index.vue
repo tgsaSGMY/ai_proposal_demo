@@ -56,12 +56,15 @@
                   v-if="plan.subsidyAmount || plan.submissionDeadline"
                   class="ml-auto w-full max-w-[220px] min-w-[150px] space-y-1 rounded-lg bg-gray-100 px-3 py-2"
                 >
-                  <p v-if="plan.subsidyAmount" class="text-xs text-gray-700">
-                    補助額：{{ plan.subsidyAmount }}
+                  <p
+                    v-if="plan.subsidyAmount"
+                    class="text-xs text-gray-700 font-semibold"
+                  >
+                    最高補助額：{{ plan.subsidyAmount }}
                   </p>
                   <p
                     v-if="plan.submissionDeadline"
-                    class="text-xs text-gray-700"
+                    class="text-xs text-gray-700 font-semibold"
                   >
                     送件截止：{{ plan.submissionDeadline }}
                   </p>

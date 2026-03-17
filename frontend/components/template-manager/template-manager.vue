@@ -58,7 +58,7 @@
             <th class="py-2">主題</th>
             <th class="py-2">付費方案</th>
             <th class="py-2">送件截止日期</th>
-            <th class="py-2 min-w-[220px]">補助額</th>
+            <th class="py-2 min-w-[220px]">最高補助額</th>
             <th class="py-2">圖示色</th>
             <th class="py-2">Logo</th>
             <th class="py-2">狀態</th>

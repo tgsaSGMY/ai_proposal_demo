@@ -90,7 +90,7 @@
           />
         </label>
         <label class="block space-y-1 md:col-span-2">
-          <span class="text-sm font-medium text-slate-700">補助額</span>
+          <span class="text-sm font-medium text-slate-700">最高補助額</span>
           <input
             v-model="templateForm.subsidy_amount"
             type="text"

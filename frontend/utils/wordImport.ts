@@ -1,9 +1,7 @@
-// ===== 导入依赖库 =====
-// 导入 mammoth 库用于从 Word 文件中提取文本
+// 主要運用在 Word 文件文本提取，例如首頁的專屬背景資料功能
+
 import mammoth from "mammoth";
 import { authenticatedFetch } from "~/composables/useAppAuth";
-
-// ===== Word 文件文本提取 =====
 
 /**
  * 从 Word 文档中提取纯文本

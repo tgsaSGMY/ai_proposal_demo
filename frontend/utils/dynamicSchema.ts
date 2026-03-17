@@ -1,27 +1,19 @@
-/**
- * ========================================
- * 动态输入字段 Schema 定义和工具函数
- * ========================================
- *
- * 此模块管理整个应用的动态字段结构，包括：
- * - 远程字段定义（依赖运行时配置）
- * - 复合键（composite key）生成和管理
- * - UI 视图模型（ViewModel）构建
- * - 字段值映射和验证
- * - 远程 Schema 加载和缓存
- *
- * 核心概念：
- *   - DynamicValueKey: 字段的唯一标识符（格式：section::field）
- *   - DynamicValueMap: 字段值的映射表（键值对存储）
- *   - DynamicSchemaSection: Schema 中的章节定义
- *   - DynamicSectionViewModel: 前端渲染用的视图模型
- */
+// 动态输入字段 Schema 定义和工具函数 -》可以看成提取每個模板的動態欄位
 
-// ===== 导入依赖库 =====
-// 导入 Supabase 数据库客户端（用于 RPC 调用）
+//  * 此模块管理整个应用的动态字段结构，包括：
+//  * - 远程字段定义（依赖运行时配置）
+//  * - 复合键（composite key）生成和管理
+//  * - UI 视图模型（ViewModel）构建
+//  * - 字段值映射和验证
+//  * - 远程 Schema 加载和缓存
+//  *
+//  * 核心概念：
+//  *   - DynamicValueKey: 字段的唯一标识符（格式：section::field）
+//  *   - DynamicValueMap: 字段值的映射表（键值对存储）
+//  *   - DynamicSchemaSection: Schema 中的章节定义
+//  *   - DynamicSectionViewModel: 前端渲染用的视图模型
 
 // ===== 类型定义部分 =====
-
 /**
  * 动态字段值的键类型
  *
@@ -222,10 +214,7 @@ function matchesTemplate(
   if (templateGrantId && section.templateGrantId !== templateGrantId) {
     return false;
   }
-  return Boolean(
-    (!templateId || section.templateId === templateId) &&
-    (!templateGrantId || section.templateGrantId === templateGrantId),
-  );
+  return true;
 }
 
 function getRenderableSections(options?: SchemaFilterOptions) {
