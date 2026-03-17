@@ -27,16 +27,6 @@
               </p>
             </div>
           </div>
-          <div class="flex flex-wrap gap-3">
-            <!-- <button
-              type="button"
-              class="rounded-full bg-[#ff4b5c] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b5c]/30 transition hover:-translate-y-0.5 hover:bg-[#ff2f45] disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="!canRequestPlan || isGenerating"
-              @click="requestGeneration"
-            >
-              {{ isGenerating ? "推演中..." : "啟動精準推演" }}
-            </button> -->
-          </div>
         </header>
 
         <div class="mt-6 flex-1 min-h-0">
@@ -76,54 +66,6 @@
                         class="text-sm leading-relaxed"
                         v-html="formatMessageForDisplay(message.content)"
                       ></p>
-                    </article>
-                  </template>
-
-                  <template v-else-if="message.type === 'question'">
-                    <article
-                      class="rounded-[28px] border border-[#ffe5da] bg-[#fff8f5] px-5 py-4 shadow-sm"
-                    >
-                      <p
-                        class="text-[11px] font-semibold uppercase tracking-[0.3em] text-[#ff7a5b]"
-                      >
-                        {{ message.label }}
-                      </p>
-                      <p
-                        class="mt-2 text-sm font-semibold text-slate-800 whitespace-pre-line"
-                      >
-                        {{ message.content }}
-                      </p>
-                    </article>
-                  </template>
-
-                  <template v-else-if="message.type === 'answer'">
-                    <article
-                      class="rounded-[28px] border border-[#e1e7ff] bg-white px-5 py-4 shadow-sm"
-                    >
-                      <div
-                        class="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-slate-400"
-                      >
-                        <span>
-                          {{
-                            message.source === "prefill"
-                              ? "已帶入答案"
-                              : "我的回答"
-                          }}
-                        </span>
-                        <button
-                          v-if="message.questionId"
-                          type="button"
-                          class="rounded-full border border-[#d7dcf8] px-3 py-1 text-[11px] font-semibold text-[#7a80b6] hover:bg-[#f4f5ff]"
-                          @click="() => editAnswer(message.questionId)"
-                        >
-                          修改
-                        </button>
-                      </div>
-                      <p
-                        class="mt-2 text-sm text-slate-700 whitespace-pre-line"
-                      >
-                        {{ message.content }}
-                      </p>
                     </article>
                   </template>
                 </div>
@@ -244,14 +186,6 @@
           @confirm="handleCandidateConfirm"
           @close="isCandidateSelectorVisible = false"
         />
-        <AnswerEditModal
-          :visible="isEditModalVisible"
-          :question-label="editQuestionLabel"
-          :question-prompt="editQuestionPrompt"
-          v-model:draft="editAnswerDraft"
-          @cancel="cancelEditAnswer"
-          @save="saveEditedAnswer"
-        />
       </div>
     </div>
     <div v-if="showSidebar" class="h-full w-full max-w-xs flex-shrink-0">
@@ -315,7 +249,6 @@ import {
   watch,
 } from "vue";
 import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
-import AnswerEditModal from "~/components/chat/AnswerEditModal.vue";
 import ChatSidebar from "~/components/chat/ChatSidebar.vue";
 import PlanVersionModal from "~/components/chat/helper/PlanVersionModal.vue";
 import FieldFileImportModal from "~/components/chat/helper/FieldFileImportModal.vue";
@@ -411,11 +344,6 @@ const lastCandidateSnapshot = ref("{}");
 const lastFinalSnapshot = ref("{}");
 const isCandidateSelectorVisible = ref(false);
 const chatInitialized = ref(false);
-const isEditModalVisible = ref(false);
-const editQuestionId = ref(null);
-const editQuestionLabel = ref("");
-const editQuestionPrompt = ref("");
-const editAnswerDraft = ref("");
 const isGenerationComplete = ref(false);
 const isFetchingNextQuestion = ref(false);
 const projectRealtimeChannel = ref(null);
@@ -491,14 +419,6 @@ function getCurrentTimestamp() {
   return new Date().toISOString();
 }
 
-// 從引導問題列表中查找指定 ID 的問題元數據
-function getQuestionMeta(questionId) {
-  if (!questionId) {
-    return null;
-  }
-  return guidedQuestions.find((item) => item.id === questionId) || null;
-}
-
 function touchAnswerMeta(questionId, timestamp) {
   if (!questionId) {
     return;
@@ -516,17 +436,12 @@ function touchAnswerMeta(questionId, timestamp) {
 // 構建用於 AI 對話的歷史消息負載，最多包含指定數量的最近消息，並格式化答案信息
 function buildConversationHistoryPayload(limit = 8) {
   const simpleHistory = [];
-  const allowedTypes = new Set(["text", "question", "answer"]);
+  const allowedTypes = new Set(["text"]);
   messages.value
     .filter((msg) => allowedTypes.has(msg.type))
     .slice(-limit)
     .forEach((msg) => {
       let content = msg.content || "";
-      if (msg.type === "answer" && msg.questionId) {
-        const meta = getQuestionMeta(msg.questionId);
-        const label = meta?.label || msg.questionId;
-        content = `${label}：${msg.content}`;
-      }
       if (!content.trim()) {
         return;
       }
@@ -743,39 +658,10 @@ async function streamAIGuidanceMessage(question) {
   return;
 }
 
-// 更新或插入答案消息，如果無內容則刪除該消息，支持自動滾動到底部
-function upsertAnswerMessage(
-  questionId,
-  content,
-  source = "user",
-  shouldScroll = true,
-) {
-  if (!questionId) {
-    return;
-  }
-  const text = (content || "").trim();
-  const index = messages.value.findIndex(
-    (msg) => msg.type === "answer" && msg.questionId === questionId,
-  );
-  if (!text) {
-    if (index >= 0) {
-      messages.value.splice(index, 1);
-    }
-    return;
-  }
-  if (shouldScroll) {
-    scrollToBottom();
-  }
-}
-
 watch(
   messages,
   (newMessages) => {
-    // 過濾掉 candidates 和 final 類型的消息，不存入 conversation_history
-    const filteredMessages = newMessages.filter(
-      (msg) => msg.type !== "candidates" && msg.type !== "final",
-    );
-    emit("messagesUpdated", filteredMessages);
+    emit("messagesUpdated", newMessages);
   },
   { deep: true },
 );
@@ -854,53 +740,13 @@ function extractPrefillValue(prefillMap, questionId) {
   return "";
 }
 
-// 打開編輯答案模態框，初始化編輯狀態和表單資料
-function editAnswer(questionId) {
-  if (!questionId) {
-    return;
-  }
-  const question = guidedQuestions.find((item) => item.id === questionId);
-  if (!question) {
-    return;
-  }
-  editQuestionId.value = question.id;
-  editQuestionLabel.value = question.label;
-  editQuestionPrompt.value = question.prompt;
-  editAnswerDraft.value = questionAnswers.value[question.id] || "";
-  isEditModalVisible.value = true;
-}
-
-// 取消編輯答案，重置編輯狀態和表單資料
-function cancelEditAnswer() {
-  isEditModalVisible.value = false;
-  editQuestionId.value = null;
-  editQuestionLabel.value = "";
-  editQuestionPrompt.value = "";
-  editAnswerDraft.value = "";
-}
-
-// 保存編輯的答案，更新問題答案狀態，同步答案消息到聊天記錄
-function saveEditedAnswer() {
-  if (!editQuestionId.value) {
-    return;
-  }
-  const normalized = (editAnswerDraft.value || "").trim();
-  questionAnswers.value = {
-    ...questionAnswers.value,
-    [editQuestionId.value]: normalized,
-  };
-  touchAnswerMeta(editQuestionId.value);
-  upsertAnswerMessage(editQuestionId.value, normalized, "user", false);
-  cancelEditAnswer();
-}
-
 // 獲取最後一個 AI 助手消息的內容，用作檔案匯入提示標籤，預設值為預設標籤
 function getLastAssistantMessageLabel() {
   for (let idx = messages.value.length - 1; idx >= 0; idx -= 1) {
     const message = messages.value[idx];
     if (
       message.role === "assistant" &&
-      (message.type === "text" || message.type === "answer") &&
+      message.type === "text" &&
       message.content &&
       message.content.trim()
     ) {

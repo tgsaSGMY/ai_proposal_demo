@@ -1,3 +1,4 @@
+<!-- 用途：編輯單一 Schema 節點，支援型別切換、子欄位管理與遞迴結構呈現。 -->
 <template>
   <div class="relative">
     <!-- 樹形連接線（縱線） -->
@@ -161,8 +162,10 @@ import {
   type SchemaNodeType,
 } from "./schema-tree";
 
+// 元件名稱，方便 DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "SchemaNodeEditor" });
 
+// 接收節點資料、階層深度與互動狀態。
 const props = defineProps({
   node: {
     type: Object as PropType<SchemaNode>,
@@ -186,10 +189,13 @@ const props = defineProps({
   },
 });
 
+// 對外事件：移除當前節點。
 const emit = defineEmits<{ (e: "remove"): void }>();
 
+// 控制節點詳情區是否收合。
 const collapsed = ref(true);
 
+// 可選的欄位型別。
 const typeOptions: SchemaNodeType[] = [
   "string",
   "number",
@@ -199,6 +205,7 @@ const typeOptions: SchemaNodeType[] = [
   "array",
 ];
 
+// 欄位型別對應顯示名稱。
 const typeLabels: Record<SchemaNodeType, string> = {
   string: "文字欄位",
   number: "數字",
@@ -208,12 +215,15 @@ const typeLabels: Record<SchemaNodeType, string> = {
   array: "清單",
 };
 
+// 以 computed 包裝 props.node，便於模板中統一存取。
 const node = computed(() => props.node);
 
+// 切換詳情區展開/收合狀態。
 function toggleDetails(): void {
   collapsed.value = !collapsed.value;
 }
 
+// 變更節點型別，並同步調整 object/array 所需結構。
 function handleTypeChange(event: Event): void {
   if (props.disabled) {
     return;
@@ -241,6 +251,7 @@ function handleTypeChange(event: Event): void {
   }
 }
 
+// 為 object 節點新增子欄位。
 function addChild(): void {
   if (props.disabled || node.value.type !== "object") {
     return;
@@ -254,6 +265,7 @@ function addChild(): void {
   );
 }
 
+// 移除 object 節點的指定子欄位。
 function removeChild(childId: string): void {
   if (props.disabled || node.value.type !== "object") {
     return;
@@ -264,6 +276,7 @@ function removeChild(childId: string): void {
   }
 }
 
+// 初始化 array 節點的 items 定義。
 function initializeArrayItem(): void {
   if (props.disabled || node.value.type !== "array") {
     return;

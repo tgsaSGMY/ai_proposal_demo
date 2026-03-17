@@ -1,3 +1,4 @@
+<!-- 用途：設定清單節點的編號樣式與子節點渲染行為。 -->
 <template>
   <div class="space-y-3 rounded-xl bg-slate-50 p-3">
     <label class="flex items-center gap-2 text-sm text-slate-600">
@@ -68,11 +69,13 @@
 <script setup lang="ts">
 import type { WordDocumentNode, WordListStyle } from "~/types/wordExport";
 
+// 接收目前節點與可用清單樣式。
 const props = defineProps<{
   node: WordDocumentNode;
   listStyleOptions: Array<{ label: string; value: string }>;
 }>();
 
+// 對外派發節點更新與新增子節點事件。
 const emit = defineEmits<{
   (
     e: "update",
@@ -82,6 +85,7 @@ const emit = defineEmits<{
   (e: "add-child", nodeId: string): void;
 }>();
 
+// 依節點層級給予預設清單樣式。
 function getListStyleForLevel(level: number): WordListStyle {
   switch (level) {
     case 2:
@@ -95,6 +99,7 @@ function getListStyleForLevel(level: number): WordListStyle {
   }
 }
 
+// 切換是否顯示編號。
 function handleListNumberingChange(event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {
@@ -108,6 +113,7 @@ function handleListNumberingChange(event: Event) {
   });
 }
 
+// 切換清單編號樣式。
 function handleListStyleChange(event: Event) {
   const target = event.target as HTMLSelectElement;
   emit("update", props.node.id, (node) => {
@@ -121,6 +127,7 @@ function handleListStyleChange(event: Event) {
   });
 }
 
+// 切換是否以子節點渲染清單項物件內容。
 function handleUseSubNodesChange(event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {

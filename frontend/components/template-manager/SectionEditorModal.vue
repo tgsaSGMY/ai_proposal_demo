@@ -1,3 +1,4 @@
+<!-- 調整章節的模組，包含新增/編輯章節內容與拖曳調整順序的功能。 -->
 <template>
   <Teleport to="body">
     <Transition name="fade">
@@ -123,9 +124,6 @@
                         </button>
                       </div>
                     </div>
-                    <!-- <p class="mt-2 text-xs text-slate-500">
-                      {{ jsonPreview(section.json_schema) }}
-                    </p> -->
                   </li>
                 </ul>
               </div>
@@ -236,15 +234,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { PropType } from "vue";
-import SchemaStructureEditor from "./SchemaStructureEditor.vue";
-import type { SchemaNode } from "./schema-tree";
+import SchemaStructureEditor from "./section-editor-helper/SchemaStructureEditor.vue";
+import type { SchemaNode } from "./section-editor-helper/schema-tree";
 import {
   buildSchemaFromEditorState,
   createEmptySchemaState,
   parseSchemaToEditorState,
   validateSchemaNodes,
-} from "./schema-tree";
+} from "./section-editor-helper/schema-tree";
 
+// 模板摘要資訊，提供顯示標題與上下文資訊使用。
 interface TemplateSummary {
   id: string;
   grant_id: string;
@@ -252,6 +251,7 @@ interface TemplateSummary {
   [key: string]: any;
 }
 
+// 章節資料模型，對應後端 section 記錄。
 interface SectionRecord {
   id: string;
   name: string;
@@ -262,6 +262,7 @@ interface SectionRecord {
   [key: string]: any;
 }
 
+// 表單狀態：新增/編輯章節時的暫存資料。
 interface SectionFormState {
   id: string;
   name: string;
@@ -272,6 +273,7 @@ interface SectionFormState {
   originalId: string | null;
 }
 
+// 建立/更新章節時送出的標準 payload。
 interface SectionMutationPayload {
   id: string;
   name: string;
@@ -280,6 +282,7 @@ interface SectionMutationPayload {
   originalId?: string | null;
 }
 
+// 接收彈窗顯示、模板資訊、章節清單與讀寫狀態。
 const props = defineProps({
   isVisible: {
     type: Boolean,
@@ -303,6 +306,7 @@ const props = defineProps({
   },
 });
 
+// 對外事件：關閉、新增、更新、刪除、拖曳重排。
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "create", payload: SectionMutationPayload): void;
@@ -311,15 +315,18 @@ const emit = defineEmits<{
   (e: "reorder", sections: SectionRecord[]): void;
 }>();
 
+// 本地章節列表與表單錯誤訊息。
 const localSections = ref<SectionRecord[]>([]);
 const formError = ref("");
 const formState = ref<SectionFormState>(getEmptyForm());
 const shouldAutoSelectFirst = ref(false);
 
+// 編輯模式判斷與拖曳暫存狀態。
 const isEditing = computed(() => Boolean(formState.value.originalId));
 const draggedSectionId = ref<string | null>(null);
 const dragOverSectionId = ref<string | null>(null);
 
+// 同步父層章節資料到本地，並維持固定排序。
 watch(
   () => props.sections,
   (sections) => {
@@ -343,6 +350,7 @@ watch(
   { immediate: true, deep: true },
 );
 
+// 控制彈窗開關時的初始化與重置流程。
 watch(
   () => props.isVisible,
   (visible) => {
@@ -357,6 +365,7 @@ watch(
   },
 );
 
+// 取得空白表單預設值（含 schema 編輯器初始狀態）。
 function getEmptyForm(): SectionFormState {
   const schemaState = createEmptySchemaState();
   return {
@@ -370,6 +379,7 @@ function getEmptyForm(): SectionFormState {
   };
 }
 
+// 首次進入彈窗時，優先自動選第一筆章節；若無資料則進入新增模式。
 function initializeFormForCurrentSections(): void {
   if (!shouldAutoSelectFirst.value) {
     return;
@@ -383,6 +393,7 @@ function initializeFormForCurrentSections(): void {
   }
 }
 
+// 切換到新增模式，並依目前最後順序推算下一個 order。
 function startCreate(preserveAutoSelect = false): void {
   formError.value = "";
   if (!preserveAutoSelect) {
@@ -408,6 +419,7 @@ function startCreate(preserveAutoSelect = false): void {
   };
 }
 
+// 載入既有章節到表單，進入編輯模式。
 function selectSection(section: SectionRecord): void {
   formError.value = "";
   shouldAutoSelectFirst.value = false;
@@ -423,6 +435,7 @@ function selectSection(section: SectionRecord): void {
   };
 }
 
+// 驗證表單並組裝 payload，依模式派發 create/update。
 function handleSave(): void {
   formError.value = "";
   const id = formState.value.id.trim();
@@ -465,6 +478,7 @@ function handleSave(): void {
   }
 }
 
+// 刪除前二次確認，避免誤刪章節。
 function emitDelete(section: SectionRecord): void {
   if (props.saving) {
     return;
@@ -476,6 +490,7 @@ function emitDelete(section: SectionRecord): void {
   emit("delete", section);
 }
 
+// 將 schema 縮短為摘要字串（目前僅供除錯或展示擴充使用）。
 function jsonPreview(schema?: Record<string, any> | null): string {
   if (!schema) {
     return "尚未定義 JSON Schema";
@@ -484,22 +499,26 @@ function jsonPreview(schema?: Record<string, any> | null): string {
   return text.length > 120 ? `${text.slice(0, 120)}...` : text;
 }
 
+// 關閉彈窗並清空本地表單狀態。
 function handleClose(): void {
   shouldAutoSelectFirst.value = false;
   resetForm();
   emit("close");
 }
 
+// 重置表單與錯誤訊息。
 function resetForm(): void {
   formError.value = "";
   formState.value = getEmptyForm();
 }
 
+// 清空拖曳中的來源/目標狀態。
 function resetDragState(): void {
   draggedSectionId.value = null;
   dragOverSectionId.value = null;
 }
 
+// 開始拖曳章節，記錄來源 section id。
 function handleDragStart(section: SectionRecord, event: DragEvent): void {
   if (props.saving || props.loading) {
     event.preventDefault();
@@ -509,6 +528,7 @@ function handleDragStart(section: SectionRecord, event: DragEvent): void {
   event.dataTransfer?.setData("text/plain", section.id);
 }
 
+// 拖曳經過目標章節時更新高亮目標。
 function handleDragOver(section: SectionRecord, event: DragEvent): void {
   if (!draggedSectionId.value || props.saving || props.loading) {
     return;
@@ -519,10 +539,12 @@ function handleDragOver(section: SectionRecord, event: DragEvent): void {
   }
 }
 
+// 拖曳結束後清理暫存狀態。
 function handleDragEnd(): void {
   resetDragState();
 }
 
+// 依拖放結果重新排序，僅回傳有變更 order 的章節給父層。
 function handleDrop(section: SectionRecord, event: DragEvent): void {
   if (!draggedSectionId.value || props.saving || props.loading) {
     return;
@@ -574,5 +596,6 @@ function handleDrop(section: SectionRecord, event: DragEvent): void {
   }
 }
 
+// 提供元件名稱，方便 DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "SectionEditorModal" });
 </script>

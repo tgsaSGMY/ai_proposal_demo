@@ -1,4 +1,4 @@
-<!-- 命令编辑模态帐组件：编辑自定义的API调用命令 -->
+<!-- 命令编辑模态帐组件：编辑自定义的API调用命令 (commands) -->
 <template>
   <Teleport to="body">
     <Transition
@@ -156,7 +156,7 @@ watch(
     form.description = value?.description || "";
     form.isCompany = value?.isCompany ?? false;
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 關閉模態框，觸發 update:modelValue 和 close 事件

@@ -1,3 +1,4 @@
+// 用途：提供章節 Schema 編輯器的資料模型、轉換與驗證工具函式。
 export type SchemaNodeType =
   | "object"
   | "array"
@@ -24,13 +25,16 @@ export interface SchemaParseResult {
   nodes: SchemaNode[];
 }
 
+// 本地遞增計數器，搭配時間戳產生節點唯一 ID。
 let nodeIdCounter = 0;
 
+// 建立編輯器節點 ID。
 function nextNodeId(): string {
   nodeIdCounter += 1;
   return `schema-node-${Date.now()}-${nodeIdCounter}`;
 }
 
+// 深拷貝單一節點（包含 children 與 items）。
 export function cloneNode(node: SchemaNode): SchemaNode {
   return {
     ...node,
@@ -39,10 +43,12 @@ export function cloneNode(node: SchemaNode): SchemaNode {
   };
 }
 
+// 深拷貝節點陣列，避免直接修改來源資料。
 export function cloneNodes(nodes: SchemaNode[]): SchemaNode[] {
   return nodes.map(cloneNode);
 }
 
+// 建立空白節點，並依型別補上 object/array 預設結構。
 export function createEmptyNode(
   type: SchemaNodeType,
   overrides: Partial<SchemaNode> = {},
@@ -85,6 +91,7 @@ export function createEmptyNode(
   };
 }
 
+// 將 JSON Schema 轉成編輯器可用的樹狀資料。
 export function parseSchemaToEditorState(
   schema?: Record<string, any> | null,
 ): SchemaParseResult {
@@ -105,6 +112,7 @@ export function parseSchemaToEditorState(
   };
 }
 
+// 遞迴解析單一 schema 節點為編輯器節點。
 function parseSchemaNode(
   key: string,
   schema: Record<string, any>,
@@ -155,6 +163,7 @@ function parseSchemaNode(
   return node;
 }
 
+// 將編輯器節點樹轉回 JSON Schema。
 export function buildSchemaFromEditorState(
   nodes: SchemaNode[],
   options: { id: string; title?: string; description?: string },
@@ -184,6 +193,7 @@ export function buildSchemaFromEditorState(
   return schema;
 }
 
+// 由節點陣列建立 properties 物件。
 function buildProperties(nodes: SchemaNode[]): Record<string, any> {
   return nodes.reduce<Record<string, any>>((acc, node) => {
     const key = node.key.trim();
@@ -195,6 +205,7 @@ function buildProperties(nodes: SchemaNode[]): Record<string, any> {
   }, {});
 }
 
+// 依節點型別組裝對應的 schema 片段。
 function buildSchemaNode(node: SchemaNode): Record<string, any> {
   const base: Record<string, any> = {
     type: node.type,
@@ -224,6 +235,7 @@ function buildSchemaNode(node: SchemaNode): Record<string, any> {
   return base;
 }
 
+// 驗證節點結構是否合法，回傳第一個錯誤訊息或 null。
 export function validateSchemaNodes(nodes: SchemaNode[]): string | null {
   const queue: SchemaNode[] = [...nodes];
   while (queue.length) {
@@ -234,9 +246,7 @@ export function validateSchemaNodes(nodes: SchemaNode[]): string | null {
     if (!current.isArrayItem && !current.key.trim()) {
       return "章節結構中的欄位需要設定欄位代號";
     }
-    // if (!current.title.trim()) {
-    //   return `欄位「${current.key || "未命名欄位"}」缺少顯示名稱`;
-    // }
+    // 若未填標題則預設使用 key，避免後續輸出空標題。
     if (!current.title.trim()) current.title = current.key.trim();
     if (current.type === "object") {
       current.children.forEach((child) => queue.push(child));
@@ -247,6 +257,7 @@ export function validateSchemaNodes(nodes: SchemaNode[]): string | null {
   return null;
 }
 
+// 建立空白 schema 編輯狀態。
 export function createEmptySchemaState(): SchemaParseResult {
   return {
     title: "",

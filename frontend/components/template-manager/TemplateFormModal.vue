@@ -1,3 +1,4 @@
+<!-- 模板表單彈窗 -->
 <template>
   <div
     v-if="isVisible"
@@ -225,6 +226,7 @@ import { computed, onBeforeUnmount, ref, watch, type PropType } from "vue";
 import { supabase } from "~/utils/supabaseClient";
 import { useNotifications } from "~/composables/useNotifications";
 
+// 模板表單資料模型，對應前端可編輯欄位。
 interface TemplateFormState {
   id: string;
   grant_id: string;
@@ -239,11 +241,13 @@ interface TemplateFormState {
   isOpen: boolean;
 }
 
+// 主題下拉選項型別。
 interface GrantOption {
   label: string;
   value: string;
 }
 
+// 接收彈窗顯示、主題選項、模式與儲存狀態。
 const props = defineProps({
   isVisible: {
     type: Boolean,
@@ -263,27 +267,33 @@ const props = defineProps({
   },
 });
 
+// 與父層雙向綁定模板表單。
 const templateForm = defineModel<TemplateFormState>("templateForm", {
   required: true,
 });
 
+// 對外派發提交與取消事件。
 const emit = defineEmits<{
   (e: "submit"): void;
   (e: "cancel"): void;
 }>();
 
+// 通知與 Supabase 相關設定。
 const { success, error: notifyError } = useNotifications();
 const runtimeConfig = useRuntimeConfig();
 const supabaseUrl = runtimeConfig.public.supabaseUrl;
 
+// Logo 上傳互動狀態：檔案輸入、拖曳中、暫存預覽、待上傳檔案。
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDraggingLogo = ref(false);
 const localLogoPreview = ref<string | null>(null);
 const selectedLogoFile = ref<File | null>(null);
 
+// Logo 上傳允許副檔名與儲存 bucket。
 const ACCEPTED_EXTENSIONS = ["png", "jpg", "jpeg"];
 const LOGO_BUCKET = "logos";
 
+// 取得遠端 Logo 預覽位址；若已是完整網址則直接使用。
 const remoteLogoPreview = computed(() => {
   const path = templateForm.value.logo_storage_path?.trim();
   if (!path) return "";
@@ -296,10 +306,12 @@ const remoteLogoPreview = computed(() => {
   return `${supabaseUrl}/storage/v1/object/${path}`;
 });
 
+// 優先使用本地預覽，若無則顯示遠端已儲存圖檔。
 const activeLogoPreview = computed(
   () => localLogoPreview.value || remoteLogoPreview.value,
 );
 
+// 顯示預估儲存路徑，便於使用者理解最終檔名。
 const displayStoragePath = computed(() => {
   if (templateForm.value.logo_storage_path) {
     return templateForm.value.logo_storage_path;
@@ -311,6 +323,7 @@ const displayStoragePath = computed(() => {
   return normalized ? `logos/${normalized}_logo` : "尚未上傳";
 });
 
+// 關閉彈窗時清理預覽 URL 與拖曳狀態，避免記憶體殘留。
 watch(
   () => props.isVisible,
   (visible) => {
@@ -321,14 +334,17 @@ watch(
   },
 );
 
+// 開啟原生檔案選擇器。
 function openFilePicker() {
   fileInputRef.value?.click();
 }
 
+// 更新拖曳進入/離開狀態，控制拖曳提示樣式。
 function handleLogoDrag(state: boolean) {
   isDraggingLogo.value = state;
 }
 
+// 處理拖放上傳：取第一個檔案進入驗證流程。
 function onLogoDrop(event: DragEvent) {
   event.preventDefault();
   isDraggingLogo.value = false;
@@ -338,6 +354,7 @@ function onLogoDrop(event: DragEvent) {
   }
 }
 
+// 處理檔案選擇器變更，並在處理後清空 input 值。
 function onLogoFileChange(event: Event) {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0] || null;
@@ -347,6 +364,7 @@ function onLogoFileChange(event: Event) {
   target.value = "";
 }
 
+// 驗證副檔名後設定待上傳檔案與本地預覽。
 function handleLogoSelection(file: File) {
   const extension = resolveFileExtension(file);
   if (!ACCEPTED_EXTENSIONS.includes(extension)) {
@@ -358,6 +376,7 @@ function handleLogoSelection(file: File) {
   setLocalPreview(file);
 }
 
+// 將模板 ID 標準化為可用於檔名的安全字串。
 function sanitizeTemplateId(rawId: string) {
   return rawId
     .trim()
@@ -365,6 +384,7 @@ function sanitizeTemplateId(rawId: string) {
     .replace(/[^a-z0-9-_]/g, "-");
 }
 
+// 優先用檔名判斷副檔名，必要時退回 MIME type 判斷。
 function resolveFileExtension(file: File): string {
   const extensionFromName = file.name.split(".").pop()?.toLowerCase();
   if (extensionFromName && ACCEPTED_EXTENSIONS.includes(extensionFromName)) {
@@ -376,9 +396,10 @@ function resolveFileExtension(file: File): string {
   return "jpg";
 }
 
+// 上傳目前選取的 Logo 至 Supabase，成功後回寫公開路徑。
 async function uploadLogoFile(): Promise<boolean> {
   if (!selectedLogoFile.value) {
-    return true; // 沒有選擇檔案就不需要上傳
+    return true; // 沒有選擇檔案就不需要上傳。
   }
 
   const templateId = templateForm.value.id?.trim();
@@ -425,14 +446,18 @@ async function uploadLogoFile(): Promise<boolean> {
   }
 }
 
+// 提供給父層取得目前暫存的 Logo 檔案。
 function getSelectedLogoFile(): File | null {
   return selectedLogoFile.value;
 }
+
+// 建立本地預覽 URL 前先釋放舊 URL，避免記憶體洩漏。
 function setLocalPreview(file: File) {
   resetLocalPreview();
   localLogoPreview.value = URL.createObjectURL(file);
 }
 
+// 釋放本地預覽 URL。
 function resetLocalPreview() {
   if (localLogoPreview.value) {
     URL.revokeObjectURL(localLogoPreview.value);
@@ -440,13 +465,16 @@ function resetLocalPreview() {
   }
 }
 
+// 元件卸載時回收本地預覽 URL。
 onBeforeUnmount(() => {
   resetLocalPreview();
 });
 
+// 暴露方法給父層主動讀取待上傳檔案。
 defineExpose({
   getSelectedLogoFile,
 });
 
+// 提供元件名稱，方便 Vue DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "TemplateFormModal" });
 </script>

@@ -1,3 +1,4 @@
+<!-- 主題管理 -->
 <template>
   <section class="bg-white rounded-2xl shadow p-5">
     <div class="flex items-center justify-between mb-4">
@@ -62,12 +63,14 @@
 <script setup lang="ts">
 import type { PropType } from "vue";
 
+// 主題資料的最小結構，保留索引簽名以相容後端擴充欄位。
 interface GrantRecord {
   id: string;
   name: string;
   [key: string]: any;
 }
 
+// 接收父層提供的主題清單。
 const props = defineProps({
   grants: {
     type: Array as PropType<GrantRecord[]>,
@@ -75,11 +78,13 @@ const props = defineProps({
   },
 });
 
+// 對外派發事件：編輯既有主題、新增主題、重新整理列表。
 const emit = defineEmits<{
   (e: "edit", grant: GrantRecord): void;
   (e: "new"): void;
   (e: "refresh"): void;
 }>();
 
+// 提供元件名稱，方便 Vue DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "GrantListSection" });
 </script>

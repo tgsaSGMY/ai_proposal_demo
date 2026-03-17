@@ -1,3 +1,4 @@
+<!-- 用途：遞迴編輯 Word 節點樹，整合不同節點型別面板與子節點操作。 -->
 <template>
   <div
     class="recursive-node-editor space-y-3"
@@ -297,6 +298,7 @@ import type {
   WordListStyle,
 } from "~/types/wordExport";
 
+// 章節資料來源（供資料欄位候選解析）。
 interface SectionRecord {
   id: string;
   name: string;
@@ -305,6 +307,7 @@ interface SectionRecord {
   } | null;
 }
 
+// 接收目前節點、父節點層級、章節與選項清單。
 const props = defineProps({
   node: {
     type: Object as PropType<WordDocumentNode>,
@@ -342,6 +345,7 @@ const props = defineProps({
   },
 });
 
+// 對外事件：更新節點、刪除節點、新增子節點。
 const emit = defineEmits<{
   (
     e: "update",
@@ -352,20 +356,25 @@ const emit = defineEmits<{
   (e: "add-child", nodeId: string): void;
 }>();
 
+// 路徑工具：取得當前節點可用欄位候選。
 const { getColumnCandidates } = createWordSchemaPathHelpers(
   () => props.sections,
 );
 
+// 自訂表格工具：確保結構與舊欄位同步。
 const { syncLegacyCustomTableCellFields, ensureCustomTableConfig } =
   createCustomTableNodeHelpers(generateNodeId);
 
+// 節點最大層級限制，避免過深巢狀。
 const MAX_LEVEL = 5;
 
+// 依父層級推算下一層級，並限制上限。
 function getNextLevel(baseLevel?: number) {
   const resolvedBase = baseLevel ?? props.parentLevel ?? 1;
   return Math.min(resolvedBase + 1, MAX_LEVEL);
 }
 
+// 確保當前節點 level 與父層關係一致。
 function ensureNodeLevel() {
   const targetLevel = getNextLevel(props.parentLevel);
   if (props.node.level === targetLevel) {
@@ -376,8 +385,10 @@ function ensureNodeLevel() {
   });
 }
 
+// 元件掛載時先校正一次層級。
 onMounted(ensureNodeLevel);
 
+// 當父層級變動時重新校正當前節點 level。
 watch(
   () => props.parentLevel,
   () => {
@@ -386,10 +397,12 @@ watch(
   { immediate: true },
 );
 
+// 派發目前節點更新事件的統一出口。
 function updateNode(updater: (node: WordDocumentNode) => void) {
   emit("update", props.node.id, updater);
 }
 
+// 處理子面板回傳更新（需確認 nodeId 為當前節點）。
 function handleChildPanelUpdate(
   nodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -398,6 +411,7 @@ function handleChildPanelUpdate(
   updateNode(updater);
 }
 
+// 處理資料綁定更新，並同步檢查 dataPath 相關設定。
 function handleDataBindingUpdate(
   nodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -409,6 +423,7 @@ function handleDataBindingUpdate(
   });
 }
 
+// 處理表格設定更新，並同步檢查 dataPath 相關設定。
 function handleTableConfigUpdate(
   nodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -420,6 +435,7 @@ function handleTableConfigUpdate(
   });
 }
 
+// 處理自訂表格設定更新，並同步檢查 dataPath 相關設定。
 function handleCustomTableConfigUpdate(
   nodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -431,10 +447,12 @@ function handleCustomTableConfigUpdate(
   });
 }
 
+// 子面板請求新增子節點時向外轉發。
 function handlePanelAddChild(nodeId: string) {
   emit("add-child", nodeId);
 }
 
+// 切換節點型別並初始化/清除對應設定。
 function handleTypeChange(event: Event) {
   const target = event.target as HTMLSelectElement;
   updateNode((node) => {
@@ -457,6 +475,7 @@ function handleTypeChange(event: Event) {
   });
 }
 
+// 更新節點標題。
 function handleLabelChange(event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -464,6 +483,7 @@ function handleLabelChange(event: Event) {
   });
 }
 
+// 更新自訂文字模板內容。
 function handleTemplateChange(event: Event) {
   const target = event.target as HTMLTextAreaElement;
   updateNode((node) => {
@@ -471,6 +491,7 @@ function handleTemplateChange(event: Event) {
   });
 }
 
+// 段落編號開關切換，關閉時清除編號樣式。
 function handleParagraphNumberingToggle(event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -483,6 +504,7 @@ function handleParagraphNumberingToggle(event: Event) {
   });
 }
 
+// 變更段落編號樣式。
 function handleParagraphNumberStyleChange(event: Event) {
   const target = event.target as HTMLSelectElement;
   updateNode((node) => {
@@ -490,6 +512,7 @@ function handleParagraphNumberStyleChange(event: Event) {
   });
 }
 
+// 變更固定表格行數。
 function handleFixedLayoutRowsChange(event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -503,6 +526,7 @@ function handleFixedLayoutRowsChange(event: Event) {
   });
 }
 
+// 變更固定表格列數。
 function handleFixedLayoutColsChange(event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -516,6 +540,7 @@ function handleFixedLayoutColsChange(event: Event) {
   });
 }
 
+// 新增固定表格單元格設定。
 function handleAddTableCell() {
   updateNode((node) => {
     const fixedLayout = ensureTableFixedLayout(node);
@@ -527,6 +552,7 @@ function handleAddTableCell() {
   });
 }
 
+// 移除指定固定表格單元格設定。
 function handleRemoveTableCell(cellIndex: number) {
   updateNode((node) => {
     if (node.table?.fixedLayout?.cells) {
@@ -535,6 +561,7 @@ function handleRemoveTableCell(cellIndex: number) {
   });
 }
 
+// 更新單元格 row 值。
 function handleCellRowChange(cellIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -544,6 +571,7 @@ function handleCellRowChange(cellIndex: number, event: Event) {
   });
 }
 
+// 更新單元格 col 值。
 function handleCellColChange(cellIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -553,6 +581,7 @@ function handleCellColChange(cellIndex: number, event: Event) {
   });
 }
 
+// 更新單元格固定標籤。
 function handleCellLabelChange(cellIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -562,6 +591,7 @@ function handleCellLabelChange(cellIndex: number, event: Event) {
   });
 }
 
+// 更新單元格資料路徑。
 function handleCellDataPathChange(cellIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -571,6 +601,7 @@ function handleCellDataPathChange(cellIndex: number, event: Event) {
   });
 }
 
+// 更新單元格是否為標題欄。
 function handleCellIsHeaderChange(cellIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   updateNode((node) => {
@@ -580,6 +611,7 @@ function handleCellIsHeaderChange(cellIndex: number, event: Event) {
   });
 }
 
+// 處理子節點更新（遞迴節點回傳）。
 function handleChildUpdate(
   childNodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -589,14 +621,16 @@ function handleChildUpdate(
   });
 }
 
+// 處理子節點刪除。
 function handleChildRemove(childNodeId: string) {
   updateNode((node) => {
     removeNodeById(node.children, childNodeId);
   });
 }
 
+// 新增子節點：當前節點直接新增或轉交更深層子節點處理。
 function handleAddChild(childNodeId: string) {
-  // 如果是在當前節點下添加子節點
+  // 若目標是當前節點，直接新增一個 paragraph 子節點。
   if (childNodeId === props.node.id) {
     updateNode((node) => {
       addChildNodeById([node], node.id, (parent) => ({
@@ -607,7 +641,7 @@ function handleAddChild(childNodeId: string) {
       }));
     });
   } else {
-    // 轉發給子節點處理
+    // 否則轉交到對應子節點內新增。
     handleChildUpdate(childNodeId, (node) => {
       addChildNodeById([node], node.id, (parent) => ({
         id: generateNodeId(),
@@ -619,6 +653,7 @@ function handleAddChild(childNodeId: string) {
   }
 }
 
+// 生成節點 ID（優先使用 crypto.randomUUID）。
 function generateNodeId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -626,11 +661,13 @@ function generateNodeId(): string {
   return `node_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+// 取得節點可用欄位候選。
 function getNodeColumnCandidates(node: WordDocumentNode) {
   if (!node.sectionId) return [];
   return getColumnCandidates(node.sectionId, node.dataPath);
 }
 
+// 確保固定表格結構存在並回傳。
 function ensureTableFixedLayout(node: WordDocumentNode) {
   if (!node.table) {
     node.table = { columns: [] };
@@ -645,6 +682,7 @@ function ensureTableFixedLayout(node: WordDocumentNode) {
   return node.table.fixedLayout;
 }
 
+// 當資料路徑變更時，同步清理不再可用的欄位配置。
 function handleNodeDataPathChange(node: WordDocumentNode) {
   if (node.type === "table" && node.table?.columns?.length) {
     const allow = new Set(getNodeColumnCandidates(node).map((opt) => opt.key));

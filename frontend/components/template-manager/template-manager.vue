@@ -1,3 +1,4 @@
+<!-- 模板管理 -->
 <template>
   <section class="bg-white rounded-2xl shadow p-5 space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -237,6 +238,7 @@ import type { PropType } from "vue";
 import type { WordExportConfigEntry } from "~/types/wordExport";
 import type { NameRecommendConfig } from "~/types/nameRecommend";
 
+// 模板資料結構，兼容後端擴充欄位。
 interface TemplateRecord {
   id: string;
   grant_id: string;
@@ -255,11 +257,13 @@ interface TemplateRecord {
   [key: string]: any;
 }
 
+// 主題下拉選單的顯示資料。
 interface GrantOption {
   label: string;
   value: string;
 }
 
+// 接收模板資料、主題選項、主題名稱映射與載入狀態。
 const props = defineProps({
   templates: {
     type: Array as PropType<TemplateRecord[]>,
@@ -279,20 +283,24 @@ const props = defineProps({
   },
 });
 
+// 與父層同步目前主題篩選值。
 const templateFilter = defineModel<string>("templateFilter", {
   required: true,
 });
 
+// 控制操作選單、拖曳狀態與拖曳目標索引。
 const openMenuId = ref<string | null>(null);
 const menuTriggers = ref<HTMLElement | null>(null);
 const draggedTemplateIndex = ref<number | null>(null);
 const dragOverTemplateIndex = ref<number | null>(null);
 
+// 只有在「全部主題」且非 loading 時允許拖曳排序。
 const isAllThemesSelected = computed(() => !templateFilter.value);
 const canDragReorder = computed(
   () => isAllThemesSelected.value && !props.loading,
 );
 
+// 將 order 轉成可排序數字；無效值一律放到最後。
 function getTemplateOrderValue(template: TemplateRecord) {
   const numeric = Number(template.order);
   return Number.isFinite(numeric) && numeric > 0
@@ -300,6 +308,7 @@ function getTemplateOrderValue(template: TemplateRecord) {
     : Number.MAX_SAFE_INTEGER;
 }
 
+// 模板排序規則：order -> grant_id -> name。
 function sortTemplates(list: TemplateRecord[]) {
   return [...list].sort((a, b) => {
     const orderDiff = getTemplateOrderValue(a) - getTemplateOrderValue(b);
@@ -314,6 +323,7 @@ function sortTemplates(list: TemplateRecord[]) {
   });
 }
 
+// 依主題篩選後回傳排序結果，確保顯示順序穩定。
 const filteredTemplates = computed(() => {
   if (!templateFilter.value) {
     return sortTemplates(props.templates);
@@ -323,6 +333,7 @@ const filteredTemplates = computed(() => {
   );
 });
 
+// 開始拖曳時記錄來源索引，並設定 drag 效果。
 function startDragTemplate(index: number, event: DragEvent) {
   if (!canDragReorder.value) {
     return;
@@ -333,6 +344,7 @@ function startDragTemplate(index: number, event: DragEvent) {
   }
 }
 
+// 拖曳經過目標列時更新高亮索引。
 function dragOverTemplate(index: number, event: DragEvent) {
   if (!canDragReorder.value || draggedTemplateIndex.value === null) {
     return;
@@ -344,6 +356,7 @@ function dragOverTemplate(index: number, event: DragEvent) {
   dragOverTemplateIndex.value = index;
 }
 
+// 完成拖放後重新計算順序並回傳給父層持久化。
 function dropTemplate(index: number, event: DragEvent) {
   if (!canDragReorder.value) {
     return;
@@ -376,12 +389,13 @@ function dropTemplate(index: number, event: DragEvent) {
   emit("reorder", payload);
 }
 
+// 清理拖曳暫存狀態。
 function dragEndTemplate() {
   draggedTemplateIndex.value = null;
   dragOverTemplateIndex.value = null;
 }
 
-// 滾動時關閉菜單
+// 頁面捲動時自動關閉選單，避免定位偏移造成誤點。
 onMounted(() => {
   const handleScroll = () => {
     if (openMenuId.value) {
@@ -394,6 +408,7 @@ onMounted(() => {
   });
 });
 
+// 切換指定模板的更多操作選單。
 const toggleMenu = (templateId: string) => {
   if (props.loading) {
     return;
@@ -401,12 +416,14 @@ const toggleMenu = (templateId: string) => {
   openMenuId.value = openMenuId.value === templateId ? null : templateId;
 };
 
+// 關閉目前展開的操作選單。
 const closeMenu = () => {
   openMenuId.value = null;
 };
 
+// 計算操作選單在視窗中的定位，避免超出可視範圍。
 const getMenuPosition = (templateId: string) => {
-  // 尋找對應的菜單觸發按鈕
+  // 尋找對應的菜單觸發按鈕。
   const trigger = document.querySelector(
     `[data-template-id="${templateId}"]`,
   ) as HTMLElement;
@@ -424,16 +441,16 @@ const getMenuPosition = (templateId: string) => {
   const viewportHeight = window.innerHeight;
   const viewportWidth = window.innerWidth;
 
-  // 判斷菜單是否應該顯示在上方或下方
+  // 判斷菜單是否應該顯示在上方或下方。
   const spaceBelow = viewportHeight - rect.bottom;
   const showAbove = spaceBelow < menuHeight && rect.top > menuHeight;
 
-  // 計算相對於文檔（考慮滾動）的頂部位置
+  // 計算相對於文檔（考慮滾動）的頂部位置。
   const top = showAbove
     ? `${rect.top + scrollY - menuHeight - 8}px`
     : `${rect.top + scrollY + rect.height + 8}px`;
 
-  // 計算左側位置
+  // 計算左側位置。
   const rightPos = viewportWidth - rect.right;
   const leftPos = rect.left - menuWidth + rect.width;
 
@@ -444,17 +461,19 @@ const getMenuPosition = (templateId: string) => {
   } else if (leftPos >= 0) {
     style.left = `${leftPos + scrollX}px`;
   } else {
-    style.right = "16px"; // 如果都不行就距離右邊 16px
+    style.right = "16px"; // 若無法左右對齊，退回固定右側間距。
   }
 
   return style;
 };
 
+// 點擊功能選單後派發對應事件並關閉選單。
 const handleAction = (action: string, template: TemplateRecord) => {
   emit(action as any, template);
   closeMenu();
 };
 
+// 對外事件：模板操作與拖曳排序結果。
 const emit = defineEmits<{
   (e: "edit", template: TemplateRecord): void;
   (e: "sections", template: TemplateRecord): void;
@@ -467,5 +486,6 @@ const emit = defineEmits<{
   (e: "new"): void;
 }>();
 
+// 提供元件名稱，方便 Vue DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "TemplateListSection" });
 </script>

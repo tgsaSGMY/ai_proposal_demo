@@ -290,15 +290,6 @@ watch(
   },
 );
 
-const formattedFileSize = computed(() => {
-  const total = selectedFiles.value.reduce((sum, f) => sum + f.size, 0);
-  if (total === 0) return "";
-  if (total >= 1024 * 1024) {
-    return `${(total / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  return `${(total / 1024).toFixed(1)} KB`;
-});
-
 const canConfirm = computed(() => {
   return Boolean(
     analysisResult.value && editableValue.value.trim() && !isAnalyzing.value,
@@ -312,8 +303,8 @@ function formatFileSize(bytes: number): string {
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
-// 重置所有表單狀態，清空已選文件和分析結果
 
+// 重置所有表單狀態，清空已選文件和分析結果
 function resetState() {
   selectedFiles.value = [];
   analysisResult.value = null;
@@ -337,9 +328,9 @@ function handleFileChange(event: Event) {
   if (target) {
     target.value = "";
   }
-  // 處理拖拽事件，更新UI反饋和添加文件
 }
 
+// 處理拖拽事件，更新UI反饋和添加文件
 function handleDragOver() {
   dragActive.value = true;
 }
@@ -380,20 +371,20 @@ function addFiles(files: File[]) {
   selectedFiles.value.push(...newFiles);
   analysisResult.value = null;
   editableValue.value = props.fieldValue || "";
-  // 移除指定索引的文件或清除所有已選文件
   errorMessage.value = "";
 }
 
+// 移除指定索引的文件或清除所有已選文件
 function removeFile(idx: number) {
   selectedFiles.value.splice(idx, 1);
 }
 
 function clearAllFiles() {
   selectedFiles.value = [];
-  // 調用後端API分析上傳的文件，使用OCR和AI增強字段內容
   analysisResult.value = null;
 }
 
+// 調用後端API分析上傳的文件，使用OCR和AI增強字段內容
 async function analyzeFile() {
   if (selectedFiles.value.length === 0) {
     notifyError("請先選擇要分析的檔案。");
@@ -443,11 +434,11 @@ async function analyzeFile() {
     errorMessage.value = message;
     notifyError(`分析失敗：${message}`);
   } finally {
-    // 發送確認事件並關閉模態框
     isAnalyzing.value = false;
   }
 }
 
+// 發送確認事件並關閉模態框
 function emitConfirm() {
   if (!analysisResult.value || !editableValue.value.trim()) {
     return;

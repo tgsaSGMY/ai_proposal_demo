@@ -1,4 +1,4 @@
-<!-- 聊天侧边栏组件：显示聊天历史列表和新建对话按钮 -->
+<!-- 聊天侧边栏组件：显示聊天關鍵指令和版本歷史 -->
 <template>
   <div class="flex h-screen flex-col rounded-[32px] bg-white shadow-lg">
     <div class="flex-[0.7] overflow-hidden border-b border-slate-200">

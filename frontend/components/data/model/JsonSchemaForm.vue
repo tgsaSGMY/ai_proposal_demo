@@ -1,4 +1,4 @@
-<!-- JSON Schema 表单组件：根据 Schema 动态生成表单输入框,/modal裏的章節面積， editor的組件 -->
+<!-- JSON Schema 表单组件：根据 Schema 动态生成表单输入框,/modal裏的章節編輯，system prompt渲染的組件 -->
 <template>
   <div class="space-y-4 sm:space-y-6">
     <div v-for="(propInfo, key) in schema.properties || {}" :key="key">

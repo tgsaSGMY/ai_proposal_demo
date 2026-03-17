@@ -1,3 +1,4 @@
+<!-- 用途：管理整體章節 Schema 結構，負責根欄位增刪與雙向同步編輯狀態。 -->
 <template>
   <div class="space-y-4">
     <div class="grid gap-4">
@@ -54,8 +55,10 @@ import type { PropType } from "vue";
 import SchemaNodeEditor from "./SchemaNodeEditor.vue";
 import { cloneNodes, createEmptyNode, type SchemaNode } from "./schema-tree";
 
+// 元件名稱，方便 DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "SchemaStructureEditor" });
 
+// 接收 schema 節點、章節描述與可編輯狀態。
 const props = defineProps({
   modelValue: {
     type: Array as PropType<SchemaNode[]>,
@@ -71,15 +74,18 @@ const props = defineProps({
   },
 });
 
+// 對外同步事件：節點樹與描述欄位。
 const emit = defineEmits<{
   (e: "update:modelValue", value: SchemaNode[]): void;
   (e: "update:description", value: string): void;
 }>();
 
+// 本地可編輯副本，避免直接改動 props。
 const tree = ref<SchemaNode[]>(cloneNodes(props.modelValue));
 const localDescription = ref(props.description);
 let syncing = false;
 
+// 當父層 modelValue 變動時，重新同步本地樹狀資料。
 watch(
   () => props.modelValue,
   (value) => {
@@ -92,6 +98,7 @@ watch(
   { deep: true },
 );
 
+// 當父層描述更新時，同步到本地輸入框。
 watch(
   () => props.description,
   (value) => {
@@ -102,6 +109,7 @@ watch(
   },
 );
 
+// 監聽本地樹狀變更並回傳深拷貝，避免引用共享。
 watch(
   tree,
   (value) => {
@@ -113,8 +121,10 @@ watch(
   { deep: true },
 );
 
+// 本地描述變動即時向外同步。
 watch(localDescription, (value) => emit("update:description", value));
 
+// 新增根層欄位節點。
 function addRootField(): void {
   if (props.disabled) {
     return;
@@ -126,6 +136,7 @@ function addRootField(): void {
   );
 }
 
+// 遞迴移除指定節點（支援 object children 與 array items）。
 function removeNode(
   targetId: string,
   nodes: SchemaNode[] = tree.value,

@@ -1,3 +1,4 @@
+<!-- 用途：設定自訂表格節點的列欄尺寸與儲存格內容片段（文字/資料欄位）。 -->
 <template>
   <div class="space-y-4 rounded-xl bg-slate-50 p-3">
     <div class="grid gap-3 md:grid-cols-2">
@@ -160,6 +161,7 @@ import { createCustomTableNodeHelpers } from "~/composables/template-manager/use
 import { createWordSchemaPathHelpers } from "~/composables/template-manager/useWordSchemaPath";
 import type { WordDocumentNode } from "~/types/wordExport";
 
+// Schema 欄位結構（僅保留此元件需要使用的欄位）。
 interface SchemaField {
   title?: string;
   type?: string;
@@ -167,17 +169,20 @@ interface SchemaField {
   items?: { properties?: Record<string, SchemaField> };
 }
 
+// 章節資料來源，用於生成可綁定欄位選單。
 interface SectionRecord {
   id: string;
   name: string;
   json_schema?: { properties?: Record<string, SchemaField> } | null;
 }
 
+// 接收目前節點與章節清單。
 const props = defineProps<{
   node: WordDocumentNode;
   sections: SectionRecord[];
 }>();
 
+// 對外派發節點更新事件。
 const emit = defineEmits<{
   (
     e: "update",
@@ -186,10 +191,12 @@ const emit = defineEmits<{
   ): void;
 }>();
 
+// 路徑工具：依章節與 dataPath 取得候選欄位。
 const { getColumnCandidates } = createWordSchemaPathHelpers(
   () => props.sections,
 );
 
+// 自訂表格工具：確保結構完整、維護內容片段與舊欄位同步。
 const {
   syncLegacyCustomTableCellFields,
   normalizeCustomTableCells,
@@ -201,6 +208,7 @@ const {
   handleCustomTableCellContentTypeChange,
 } = createCustomTableNodeHelpers(generateNodeId);
 
+// 產生內容片段 ID。
 function generateNodeId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -208,11 +216,13 @@ function generateNodeId(): string {
   return `node_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+// 依節點所在章節回傳可綁定欄位。
 function getNodeColumnCandidates(node: WordDocumentNode) {
   if (!node.sectionId) return [];
   return getColumnCandidates(node.sectionId, node.dataPath);
 }
 
+// 更新列/欄尺寸並做範圍限制，同步正規化儲存格。
 function handleDimensionChange(dimension: "rows" | "cols", event: Event) {
   const raw = Number((event.target as HTMLInputElement | null)?.value || 1);
   const sanitized = Number.isFinite(raw) ? Math.floor(raw) : 1;

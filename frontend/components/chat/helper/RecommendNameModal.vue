@@ -1,5 +1,4 @@
-<!-- 推荐名称模态帐组件：基于描述推荐字段名称 -->
-\n
+<!-- 推荐名称组件：根據計畫書大綱生成建議標題 -->
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
@@ -265,13 +264,13 @@ watch(
   () => props.suggestions,
   (s) => {
     options.value = s || [];
-  }
+  },
 );
 watch(
   () => props.originalName,
   (v) => {
     if (!selected.value) selected.value = v || "";
-  }
+  },
 );
 
 // 輸入自定義名稱時自動選中

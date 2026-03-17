@@ -1,5 +1,4 @@
-<!-- /components/BatchSyntheticModal.vue -->
-<!-- 批量简易模态帐组件：批量组合章节内容生成提案 -->
+<!-- 批量生成 AI 計畫组件：批量组合章节内容生成提案 -->
 <template>
   <div
     v-if="visible"

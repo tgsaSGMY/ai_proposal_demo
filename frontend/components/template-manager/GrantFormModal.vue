@@ -1,3 +1,4 @@
+<!-- 主題表單彈窗 -->
 <template>
   <div
     v-if="isVisible"
@@ -68,17 +69,20 @@
 <script setup lang="ts">
 import type { PropType } from "vue";
 
+// 主題資料型別，保留擴充欄位避免未來新增欄位造成型別衝突。
 interface GrantRecord {
   id: string;
   name: string;
   [key: string]: any;
 }
 
+// 表單僅維護主題 ID 與顯示名稱兩個欄位。
 interface GrantFormState {
   id: string;
   name: string;
 }
 
+// 控制彈窗顯示、模式（新增/編輯）與儲存中狀態。
 const props = defineProps({
   isVisible: {
     type: Boolean,
@@ -94,14 +98,17 @@ const props = defineProps({
   },
 });
 
+// 與父層雙向綁定主題表單狀態。
 const grantForm = defineModel<GrantFormState>("grantForm", {
   required: true,
 });
 
+// 對外提供提交與取消事件。
 const emit = defineEmits<{
   (e: "submit"): void;
   (e: "cancel"): void;
 }>();
 
+// 提供元件名稱，方便 Vue DevTools 與錯誤追蹤辨識。
 defineOptions({ name: "GrantFormModal" });
 </script>

@@ -1,5 +1,4 @@
-<!-- /components/DraftPlanEditorModal.vue -->
-<!-- 草稿方案编辑模态帐组件：新建或编辑方案前会草稿 -->
+<!-- 計畫编辑模态件：新建或编辑方案前会草稿 -->
 <template>
   <div
     class="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-2 sm:p-0"

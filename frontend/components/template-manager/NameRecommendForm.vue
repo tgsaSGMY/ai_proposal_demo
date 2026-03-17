@@ -1,3 +1,4 @@
+<!-- 模板列表裏的名稱推薦 -->
 <template>
   <Teleport to="body">
     <Transition name="fade">
@@ -131,6 +132,7 @@ import {
   type NameRecommendConfig,
 } from "~/types/nameRecommend";
 
+// 模板摘要資訊，僅保留本元件會使用到的欄位。
 interface TemplateSummary {
   id: string;
   grant_id: string;
@@ -138,6 +140,7 @@ interface TemplateSummary {
   name_recommend_config?: NameRecommendConfig | null;
 }
 
+// 接收彈窗狀態、目前模板與儲存中狀態。
 const props = defineProps({
   isVisible: { type: Boolean, default: false },
   template: {
@@ -147,14 +150,17 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
 });
 
+// 對外事件：關閉彈窗、送出命名設定。
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "save", config: NameRecommendConfig): void;
 }>();
 
+// 命名特性文字與範例輸入欄位（可動態增減）。
 const traits = ref("");
 const exampleInputs = ref<string[]>([]);
 
+// 當彈窗開啟或切換模板時，同步載入模板既有設定。
 watch(
   () => [props.template, props.isVisible] as const,
   ([template, visible]) => {
@@ -165,6 +171,7 @@ watch(
   { immediate: true },
 );
 
+// 讀取模板設定並正規化，限制範例數量不超過上限。
 function syncFromTemplate(template = props.template) {
   const normalized = normalizeNameRecommendConfig(
     template?.name_recommend_config ?? null,
@@ -175,11 +182,13 @@ function syncFromTemplate(template = props.template) {
     : [""];
 }
 
+// 新增一個空白範例輸入欄，達上限後不再新增。
 function addExample() {
   if (exampleInputs.value.length >= MAX_EXAMPLES) return;
   exampleInputs.value.push("");
 }
 
+// 移除指定範例；若全空則保留一個空白欄位維持可編輯體驗。
 function removeExample(index: number) {
   exampleInputs.value.splice(index, 1);
   if (!exampleInputs.value.length) {
@@ -187,6 +196,7 @@ function removeExample(index: number) {
   }
 }
 
+// 清理輸入內容（去空白、去重複、套用上限）後再送出。
 function handleSave() {
   const sanitizedExamples = exampleInputs.value
     .map((item) => item.trim())
@@ -194,7 +204,7 @@ function handleSave() {
       if (!item) {
         return false;
       }
-      // avoid duplicates while keeping first occurrence
+      // 避免重複項，且保留第一次出現的順序。
       return arr.indexOf(item) === idx;
     })
     .slice(0, MAX_EXAMPLES);
@@ -207,6 +217,7 @@ function handleSave() {
   emit("save", payload);
 }
 
+// 統一關閉事件出口，供多個按鈕共用。
 function emitClose() {
   emit("close");
 }

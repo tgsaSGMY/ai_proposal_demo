@@ -1,3 +1,4 @@
+<!-- 調整文檔的模組，包含設定字體、建立章節分組與調整節點順序的功能。 -->
 <template>
   <div
     v-if="isVisible && template"
@@ -451,7 +452,7 @@ import {
 } from "~/composables/template-manager/useWordNumbering";
 import { buildPreviewSectionDataMap } from "~/composables/template-manager/useWordPreviewSampleData";
 import { exportPlanUsingWordConfig } from "~/utils/exportToWord";
-import RecursiveNodeEditor from "./RecursiveNodeEditor.vue";
+import RecursiveNodeEditor from "./word-helper/RecursiveNodeEditor.vue";
 import type {
   WordDocumentNode,
   WordDocumentNodeType,
@@ -462,12 +463,14 @@ import type {
   WordCustomTableCellContent,
 } from "~/types/wordExport";
 
+// 模板基本資訊，包含歷史版本設定。
 interface TemplateRecord {
   id: string;
   name: string;
   word_export_config?: WordExportConfigEntry[] | null;
 }
 
+// Schema 欄位結構（遞迴定義），供節點自動產生使用。
 interface SchemaField {
   title?: string;
   type?: string;
@@ -477,6 +480,7 @@ interface SchemaField {
   };
 }
 
+// 章節資料與其 JSON Schema 定義。
 interface SectionRecord {
   id: string;
   name: string;
@@ -485,6 +489,7 @@ interface SectionRecord {
   } | null;
 }
 
+// Word 文件的預設字體樣式。
 const DEFAULT_STYLE = {
   headingFont: "Times New Roman",
   headingSizePt: 18,
@@ -497,6 +502,7 @@ const DEFAULT_STYLE = {
   bodyBold: false,
 };
 
+// 接收彈窗顯示、模板資訊、章節資料與儲存中狀態。
 const props = defineProps({
   isVisible: { type: Boolean, default: false },
   template: {
@@ -510,13 +516,16 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
 });
 
+// 對外事件：關閉編輯器、儲存新版本。
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "save", payload: WordExportTemplateConfig): void;
 }>();
 
+// 通知工具：目前僅使用錯誤提示。
 const { error: notifyError } = useNotifications();
 
+// 可選字體清單。
 const FONT_OPTIONS = [
   "Times New Roman",
   "Arial",
@@ -529,6 +538,7 @@ const FONT_OPTIONS = [
   "黑體",
 ];
 
+// 可新增節點型別選項。
 const NODE_TYPE_OPTIONS: Array<{ label: string; value: WordDocumentNodeType }> =
   [
     { label: "次標題", value: "subHeading" },
@@ -539,6 +549,7 @@ const NODE_TYPE_OPTIONS: Array<{ label: string; value: WordDocumentNodeType }> =
     { label: "自訂文字", value: "customText" },
   ];
 
+// 清單編號樣式選項。
 const LIST_STYLE_OPTIONS = [
   { label: "一、 二、 三、", value: "chineseNumber" },
   { label: "1. 2. 3.", value: "arabicNumber" },
@@ -546,15 +557,18 @@ const LIST_STYLE_OPTIONS = [
   { label: "• ◦ ▪", value: "bullet" },
 ];
 
+// 取得自訂表格節點初始化輔助函式。
 const { ensureCustomTableConfig } =
   createCustomTableNodeHelpers(generateNodeId);
 
+// 編輯器主狀態（文件樣式、章節布局、節點樹）。
 const formState = ref<WordExportTemplateConfig>({
   documentStyle: { ...DEFAULT_STYLE },
   sectionLayouts: [],
   nodes: [],
 });
 
+// 版本歷史依建立時間新到舊排序。
 const versionHistory = computed<WordExportConfigEntry[]>(() => {
   const list = props.template?.word_export_config ?? [];
   return [...list].sort(
@@ -562,7 +576,7 @@ const versionHistory = computed<WordExportConfigEntry[]>(() => {
   );
 });
 
-// 章節分組接口
+// 章節分組模型：一個章節標記加上其內容節點。
 interface ChapterGroup {
   id: string;
   title: string;
@@ -571,7 +585,7 @@ interface ChapterGroup {
   isManual?: boolean; // 是否為手動添加的章節標記
 }
 
-// 章節分組邏輯
+// 將平面節點依章節標記切分為多個章節群組。
 const groupedNodes = computed<ChapterGroup[]>(() => {
   if (!formState.value.nodes || formState.value.nodes.length === 0) {
     return [];
@@ -621,23 +635,28 @@ const groupedNodes = computed<ChapterGroup[]>(() => {
   return groups;
 });
 
+// 目前選取的章節 tab。
 const selectedChapterId = ref<string>("");
 
+// 依選取章節過濾，只顯示單一章節內容。
 const filteredChapters = computed(() => {
   return groupedNodes.value.filter(
     (group) => group.id === selectedChapterId.value,
   );
 });
 
+// 取得節點在根節點陣列中的索引。
 function getNodeGlobalIndex(nodeId: string): number {
   if (!formState.value.nodes) return -1;
   return formState.value.nodes.findIndex((n) => n.id === nodeId);
 }
 
+// 取得章節在分組清單中的索引。
 function getChapterGlobalIndex(chapterId: string): number {
   return groupedNodes.value.findIndex((group) => group.id === chapterId);
 }
 
+// 移動整個章節（含章節內所有節點）的位置。
 function moveChapter(chapterId: string, direction: "up" | "down") {
   const allNodes = ensureNodesRoot();
   const currentChapterIndex = getChapterGlobalIndex(chapterId);
@@ -656,7 +675,7 @@ function moveChapter(chapterId: string, direction: "up" | "down") {
 
   if (!currentChapter || !targetChapter) return;
 
-  // 找到章节在所有节点中的范围
+  // 找到章節在所有節點中的範圍。
   const currentStartIndex = allNodes.findIndex(
     (n) => n.id === currentChapter.nodes[0]?.id,
   );
@@ -669,21 +688,21 @@ function moveChapter(chapterId: string, direction: "up" | "down") {
 
   if (currentStartIndex === -1 || targetStartIndex === -1) return;
 
-  // 提取当前章节和目标章节的所有节点
+  // 提取目前章節的整段節點。
   const currentChapterNodes = allNodes.splice(
     currentStartIndex,
     currentChapter.nodes.length,
   );
 
-  // 计算新的插入位置
+  // 計算新的插入位置。
   let insertIndex: number;
   if (direction === "up") {
-    // 上移：insert before 目标章节
+    // 上移：插入到目標章節前面。
     insertIndex = allNodes.findIndex(
       (n) => n.id === targetChapter.nodes[0]?.id,
     );
   } else {
-    // 下移：insert after 目标章节
+    // 下移：插入到目標章節後面。
     const newTargetEndIndex = allNodes.findIndex(
       (n) => n.id === targetChapter.nodes[targetChapter.nodes.length - 1]?.id,
     );
@@ -693,6 +712,7 @@ function moveChapter(chapterId: string, direction: "up" | "down") {
   allNodes.splice(insertIndex, 0, ...currentChapterNodes);
 }
 
+// 新增一個章節標記節點，作為章節分組起點。
 function addChapterMarker() {
   const newNode: WordDocumentNode = {
     id: generateNodeId(),
@@ -705,6 +725,7 @@ function addChapterMarker() {
   ensureNodesRoot().push(newNode);
 }
 
+// 在指定節點後方插入新節點。
 function addNodeAfterNode(nodeId: string, chapterId: string) {
   const nodes = ensureNodesRoot();
   const chapter = groupedNodes.value.find((group) => group.id === chapterId);
@@ -727,6 +748,7 @@ function addNodeAfterNode(nodeId: string, chapterId: string) {
   nodes.splice(insertAfterIndex + 1, 0, newNode);
 }
 
+// 在章節尾端新增節點。
 function addNodeToChapter(chapterId: string) {
   const nodes = ensureNodesRoot();
   const chapter = groupedNodes.value.find((group) => group.id === chapterId);
@@ -760,6 +782,7 @@ function addNodeToChapter(chapterId: string) {
   nodes.splice(lastIndex + 1, 0, newNode);
 }
 
+// 編輯章節標題，並同步更新 label。
 function editChapterTitle(chapterId: string) {
   const chapter = groupedNodes.value.find((group) => group.id === chapterId);
   const currentTitle = chapter?.title ?? "";
@@ -773,6 +796,7 @@ function editChapterTitle(chapterId: string) {
   });
 }
 
+// 刪除整個章節（含章節內所有節點）。
 function removeChapter(chapterId: string) {
   const chapter = groupedNodes.value.find((group) => group.id === chapterId);
   if (!chapter) return;
@@ -787,6 +811,7 @@ function removeChapter(chapterId: string) {
   formState.value.nodes = nodes.filter((node) => !idsToRemove.has(node.id));
 }
 
+// 轉換章節資料為下拉選單格式。
 const sectionOptions = computed(() =>
   props.sections.map((section) => ({
     label: section.name,
@@ -794,6 +819,7 @@ const sectionOptions = computed(() =>
   })),
 );
 
+// 彈窗開啟時載入最新版本設定。
 watch(
   () => [props.isVisible, props.template, props.sections],
   ([visible]) => {
@@ -804,6 +830,7 @@ watch(
   { immediate: true },
 );
 
+// 章節變動時維持 selectedChapterId 的有效性。
 watch(
   groupedNodes,
   (groups) => {
@@ -824,6 +851,7 @@ watch(
   { immediate: true },
 );
 
+// 遞迴初始化節點預設值，確保 customTable 結構完整。
 function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
   if (!nodes) return;
   nodes.forEach((node) => {
@@ -837,6 +865,7 @@ function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
   });
 }
 
+// 將版本資料灌入編輯表單，並在失敗時回退到預設配置。
 function hydrateForm(base?: WordExportTemplateConfig) {
   try {
     const documentStyle = {
@@ -844,7 +873,7 @@ function hydrateForm(base?: WordExportTemplateConfig) {
       ...(base?.documentStyle || {}),
     };
 
-    // 使用 JSON 序列化确保数据可用，避免 Vue 响应式代理问题
+    // 使用 JSON 序列化確保資料可用，避免 Vue 響應式代理影響。
     const layouts = base?.sectionLayouts
       ? JSON.parse(JSON.stringify(base.sectionLayouts))
       : [];
@@ -863,7 +892,7 @@ function hydrateForm(base?: WordExportTemplateConfig) {
     };
   } catch (error) {
     console.error("Error hydrating form:", error);
-    // 使用默认值
+    // 回退至預設值，避免編輯器失效。
     formState.value = {
       documentStyle: { ...DEFAULT_STYLE },
       sectionLayouts: [],
@@ -872,10 +901,12 @@ function hydrateForm(base?: WordExportTemplateConfig) {
   }
 }
 
+// 套用歷史版本配置。
 function applyVersion(version: WordExportConfigEntry) {
   hydrateForm(version.config);
 }
 
+// 產生節點唯一 ID（優先使用 crypto.randomUUID）。
 function generateNodeId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -884,20 +915,13 @@ function generateNodeId(): string {
 }
 
 /**
- * 生成默认文档节点结构（参考 exportPlanToWordDefault 的逻辑）
- * 为每个 section 生成：
- * 1. 章节标题 (sectionTitle) - level 1
- * 2. 递归处理 schema properties - level 2+
- *    - 对象 → 次标题 (subHeading) + 递归
- *    - 数组of字符串 → 清单 (list) - 根据深度自动选择样式
- *    - 数组of对象 → 表格 (table) - 根据深度自动选择样式
- *    - 简单值 → 段落 (paragraph)
+ * 依章節 schema 產生預設節點樹（含章節標題、次標題、段落、清單、表格）。
  */
 function generateDefaultNodes(): WordDocumentNode[] {
   const nodes: WordDocumentNode[] = [];
 
   for (const section of props.sections) {
-    // 添加章节标题节点（level 1）
+    // 新增章節標題節點（level 1）。
     nodes.push({
       id: generateNodeId(),
       label: section.name,
@@ -906,7 +930,7 @@ function generateDefaultNodes(): WordDocumentNode[] {
       level: 1,
     });
 
-    // 递归处理 schema properties（从 level 2 开始）
+    // 遞迴處理 schema properties（從 level 2 開始）。
     const schemaProps = section.json_schema?.properties;
     if (schemaProps) {
       const childNodes = generateNodesFromSchema(
@@ -923,8 +947,8 @@ function generateDefaultNodes(): WordDocumentNode[] {
 }
 
 /**
- * 从 schema properties 递归生成节点
- * 为每个属性创建副标题，然后根据类型创建内容节点
+ * 由 schema properties 遞迴生成節點。
+ * 每個屬性會先建立次標題，再依型別建立內容節點。
  */
 function generateNodesFromSchema(
   sectionId: string,
@@ -938,7 +962,7 @@ function generateNodesFromSchema(
     const path = parentPath ? `${parentPath}.${key}` : key;
     const label = field.title || key;
 
-    // 为每个属性添加副标题，设置正确的 level
+    // 為每個屬性新增次標題並帶入對應 level。
     nodes.push({
       id: generateNodeId(),
       label,
@@ -949,7 +973,7 @@ function generateNodesFromSchema(
 
     if (field.type === "array") {
       if (field.items?.properties) {
-        // 数组of对象 → 表格，自动展平嵌套对象字段到叶子节点
+        // 陣列物件 -> 表格：自動展平巢狀欄位到葉節點。
         const columns: WordTableColumn[] = [];
 
         const flattenTableColumns = (
@@ -962,7 +986,7 @@ function generateNodesFromSchema(
               ? `${prefix} > ${itemField.title || itemKey}`
               : itemField.title || itemKey;
 
-            // 只添加叶子节点（非对象、非数组类型的字段）
+            // 僅加入葉節點（非 object、非 array）。
             if (itemField?.type !== "object" && itemField?.type !== "array") {
               columns.push({
                 key: fullKey,
@@ -970,7 +994,7 @@ function generateNodesFromSchema(
               });
             }
 
-            // 如果嵌套字段是物件，继续展平
+            // 若欄位仍是物件則繼續展平。
             if (itemField?.type === "object" && itemField?.properties) {
               flattenTableColumns(itemField.properties, fullKey);
             }
@@ -991,7 +1015,7 @@ function generateNodesFromSchema(
           },
         });
       } else {
-        // 数组of字符串/简单值 → 清单，根据 level 自动选择样式
+        // 陣列字串/簡單值 -> 清單，樣式依設定顯示。
         nodes.push({
           id: generateNodeId(),
           label: `${label} 清单`,
@@ -1006,7 +1030,7 @@ function generateNodesFromSchema(
         });
       }
     } else if (field.type === "object" && field.properties) {
-      // 对象 → 递归处理嵌套属性，递增 level
+      // 物件 -> 遞迴處理巢狀屬性，level 遞增。
       const nestedNodes = generateNodesFromSchema(
         sectionId,
         field.properties,
@@ -1015,7 +1039,7 @@ function generateNodesFromSchema(
       );
       nodes.push(...nestedNodes);
     } else {
-      // 简单值 → 段落
+      // 其他簡單值 -> 段落節點。
       nodes.push({
         id: generateNodeId(),
         label: `${label} 内容`,
@@ -1030,6 +1054,7 @@ function generateNodesFromSchema(
   return nodes;
 }
 
+// 確保根節點陣列存在後回傳。
 function ensureNodesRoot(): WordDocumentNode[] {
   if (!formState.value.nodes) {
     formState.value.nodes = [];
@@ -1037,6 +1062,7 @@ function ensureNodesRoot(): WordDocumentNode[] {
   return formState.value.nodes;
 }
 
+// 建立新節點的預設工廠函式。
 function createNode(
   overrides: Partial<WordDocumentNode> = {},
 ): WordDocumentNode {
@@ -1051,6 +1077,7 @@ function createNode(
   };
 }
 
+// 新增節點；若指定 parentId 則新增為子節點。
 function addNode(parentId?: string) {
   const newNode = createNode();
   if (!parentId) {
@@ -1065,6 +1092,7 @@ function addNode(parentId?: string) {
   });
 }
 
+// 以 id 更新節點內容。
 function updateNode(
   nodeId: string,
   updater: (node: WordDocumentNode) => void,
@@ -1072,10 +1100,12 @@ function updateNode(
   updateNodeById(formState.value.nodes, nodeId, updater);
 }
 
+// 移動節點上下順序。
 function moveNode(nodeId: string, direction: "up" | "down") {
   moveNodeById(formState.value.nodes, nodeId, direction);
 }
 
+// 依 dataPath 深度推算節點層級，並限制最大層級。
 function calculateNodeLevelFromDataPath(dataPath: string | undefined): number {
   if (!dataPath) return 2;
   const segments = parseDataPath(dataPath);
@@ -1084,6 +1114,7 @@ function calculateNodeLevelFromDataPath(dataPath: string | undefined): number {
   return Math.min(2 + segments.length, 5);
 }
 
+// 將自訂表格欄位值格式化為可顯示文字。
 function formatCustomTableFieldValue(value: any): string {
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) {
@@ -1105,6 +1136,7 @@ function formatCustomTableFieldValue(value: any): string {
   return String(value);
 }
 
+// 依 cell content 設定取得自訂表格儲存格內容。
 function getCustomTableCellContentValue(
   node: WordDocumentNode,
   sectionData: Record<string, any> | null,
@@ -1121,6 +1153,7 @@ function getCustomTableCellContentValue(
   return formatCustomTableFieldValue(value);
 }
 
+// 兼容新舊資料格式，組合自訂表格儲存格最終顯示字串。
 function getCustomTableCellDisplayValue(
   node: WordDocumentNode,
   cell: WordCustomTableCell | undefined,
@@ -1128,7 +1161,7 @@ function getCustomTableCellDisplayValue(
 ): string {
   if (!cell) return "";
 
-  // Read contents without mutating - use existing contents or fallback to legacy fields
+  // 讀取 contents 時不改動原資料，並兼容舊欄位格式。
   let contents: WordCustomTableCellContent[];
   if (Array.isArray(cell.contents) && cell.contents.length > 0) {
     contents = cell.contents;
@@ -1165,10 +1198,12 @@ function handleRecursiveNodeUpdate(
   }
 }
 
+// 遞迴節點編輯器：刪除指定節點。
 function handleRecursiveNodeRemove(nodeId: string) {
   removeNodeById(formState.value.nodes, nodeId);
 }
 
+// 遞迴節點編輯器：在指定父節點下新增子節點。
 function handleRecursiveNodeAddChild(nodeId: string) {
   addChildNodeById(formState.value.nodes, nodeId, (parent) => ({
     id: generateNodeId(),
@@ -1178,10 +1213,11 @@ function handleRecursiveNodeAddChild(nodeId: string) {
   }));
 }
 
+// 深拷貝並清理資料，確保可序列化後再保存。
 function sanitizeForClone(
   data: WordExportTemplateConfig,
 ): WordExportTemplateConfig {
-  // 创建一个清洁的副本，只包含可序列化的数据
+  // 建立乾淨副本，只保留可序列化欄位。
   return {
     documentStyle: {
       headingFont: data.documentStyle?.headingFont,
@@ -1201,6 +1237,7 @@ function sanitizeForClone(
   };
 }
 
+// 保存前先驗證節點配置，再派發 save 事件。
 function handleSave() {
   try {
     let invalidNodes = false;
@@ -1224,7 +1261,7 @@ function handleSave() {
       return;
     }
 
-    // 使用 sanitize 函数確保數據可被序列化
+    // 使用 sanitize 函式確保資料可被序列化。
     const cleanData = sanitizeForClone(formState.value);
     if (!cleanData || !cleanData.documentStyle) {
       throw new Error("保存數據不完整");
@@ -1239,6 +1276,7 @@ function handleSave() {
   }
 }
 
+// 格式化版本建立時間。
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1248,7 +1286,7 @@ function formatDate(value: string) {
 }
 
 /**
- * Render a node with dummy data for preview
+ * 以範例資料渲染單一節點為預覽 HTML。
  */
 function renderNodePreview(
   node: WordDocumentNode,
@@ -1402,7 +1440,7 @@ function renderNodePreview(
 
     html += `<${listTag} style="margin: 6px 0; padding-left: 0; list-style: none;">`;
 
-    // 清單內為對象且使用子節點時：依「每個 list item」逐項渲染，每項用 itemDataMap 渲染所有 children（含段落與內層清單），避免把多項用逗號合併或把內層清單壓平
+    // 當清單項為物件且啟用子節點時，逐項渲染避免資料被扁平化。
     if (
       node.list?.itemConfig?.useSubNodes &&
       items.length > 0 &&
@@ -1438,7 +1476,7 @@ function renderNodePreview(
                 ),
               };
             } else if (firstChild.dataPath.includes(parentPathPrefix)) {
-              // 子節點可能是從 section 起的完整路徑（如 執行步驟及方法.細分方法.細分名稱），當前 item 已是 list 項，取「細分方法.」之後的相對路徑
+              // 子節點可能是從 section 起的完整路徑，需轉成 list item 相對路徑。
               const after =
                 firstChild.dataPath.indexOf(parentPathPrefix) +
                 parentPathPrefix.length;
@@ -1490,7 +1528,7 @@ function renderNodePreview(
                   ),
                 };
               } else if (childNode.dataPath.includes(parentPathPrefix)) {
-                // 子節點為完整路徑（如 執行步驟及方法.細分方法.說明）時，取 list 項相對路徑
+                // 子節點若是完整路徑，轉為 list item 相對路徑再渲染。
                 const after =
                   childNode.dataPath.indexOf(parentPathPrefix) +
                   parentPathPrefix.length;
@@ -1555,7 +1593,7 @@ function renderNodePreview(
     </div>`;
   }
 
-  // 遞歸渲染子節點（適用於所有節點類型，但清單類型的子節點已經在清單項處理中處理過了）
+  // 遞迴渲染子節點（list 型別已在清單區塊中處理，不重複渲染）。
   if (node.children?.length && node.type !== "list") {
     for (const childNode of node.children) {
       html += renderNodePreview(childNode, sectionDataMap, headingCounters);
@@ -1568,7 +1606,7 @@ function renderNodePreview(
 }
 
 /**
- * Get value from object by dot-notation path
+ * 依 dot path 從物件中取值，支援陣列聚合。
  */
 function getValueByPath(obj: Record<string, any>, path?: string): any {
   if (!path || obj == null) return obj;
@@ -1607,7 +1645,7 @@ function getValueByPath(obj: Record<string, any>, path?: string): any {
 }
 
 /**
- * Generate HTML preview of the document
+ * 生成整份文件的 HTML 預覽內容。
  */
 function generatePreviewHtml(): string {
   const sectionDataMap = buildPreviewSectionDataMap(
@@ -1617,7 +1655,7 @@ function generatePreviewHtml(): string {
 
   const headingCounters = createHeadingCounterState();
 
-  // Render all nodes
+  // 依節點順序組裝完整預覽 HTML。
   let html = `
     <!DOCTYPE html>
     <html lang="zh-TW">
@@ -1709,13 +1747,14 @@ const {
   handleIframeLoad,
   handlePreviewExport,
 } = useWordPreview({
+  // 當樣式或節點變更時，自動重新生成預覽。
   source: () => [formState.value.documentStyle, formState.value.nodes],
   generatePreviewHtml,
   notifyError,
 });
 
 /**
- * Generate docx document from current form state
+ * 依目前配置生成 docx Blob（不自動下載）。
  */
 async function generateDocxDocument(): Promise<Blob> {
   const sectionDataMap = buildPreviewSectionDataMap(
@@ -1739,6 +1778,7 @@ async function generateDocxDocument(): Promise<Blob> {
   );
 }
 
+// 綁定下載流程：由 composable 接管錯誤提示與檔名。
 const { handleDownloadWord } = useWordDownload({
   generateDocxDocument,
   getFileName: () => `${props.template?.name || "文檔"}_預覽.docx`,

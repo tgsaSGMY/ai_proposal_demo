@@ -1,4 +1,4 @@
-<!-- 方案候选项选择器组件：从多个生成的方案中选择一个 -->
+<!-- 方案候选项选择器组件：从多个（目前是兩個）生成的方案中选择一个方案 -->
 <template>
   <Transition name="fade">
     <div
@@ -189,20 +189,20 @@ watch(
       }
     }
   },
-  { immediate: false }
+  { immediate: false },
 );
 
 // 计算属性：检查所有章节是否都已选择候选方案
 const isAllSectionsSelected = computed(() =>
-  props.sections.every((s) => selected[s.id] !== undefined)
+  props.sections.every((s) => selected[s.id] !== undefined),
 );
 
 // 计算属性：统计已选择的章节数量
 const selectedCount = computed(() =>
   props.sections.reduce(
     (acc, s) => (selected[s.id] !== undefined ? acc + 1 : acc),
-    0
-  )
+    0,
+  ),
 );
 
 // 選擇某個 section 的候選索引

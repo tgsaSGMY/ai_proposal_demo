@@ -1,4 +1,4 @@
-<!-- 编辑字段模态帐组件：编辑动态schema中的个年字段 -->
+<!-- 答案编辑组件：编辑需求 （點擊鉛筆icon會打開此模態框） -->
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
@@ -114,7 +114,7 @@ watch(
     } else {
       value.value = props.initialValue || "";
     }
-  }
+  },
 );
 
 // 監聽初始值變化，在模態框打開時更新編輯內容
@@ -124,7 +124,7 @@ watch(
     if (isOpenModel.value) {
       value.value = v || "";
     }
-  }
+  },
 );
 // 發送確認事件並關閉模態框
 

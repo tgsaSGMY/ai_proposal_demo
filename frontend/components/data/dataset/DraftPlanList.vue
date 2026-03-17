@@ -1,4 +1,3 @@
-<!-- /components/DraftPlanList.vue -->
 <!-- 方案草稿列表组件：显示正在编辑的方案草稿 -->
 <template>
   <div>

@@ -1,4 +1,4 @@
-<!-- 方案库编辑模态帐组件：编辑保存在个人或企业库中的方案 -->
+<!-- 方案库编辑模态帐组件：编辑方案名稱或描述 -->
 <template>
   <Teleport to="body">
     <Transition
@@ -59,9 +59,7 @@
                 <h2 class="text-2xl font-bold text-gray-900 leading-tight mt-1">
                   {{ currentProject?.title || "專案資訊" }}
                 </h2>
-                <p class="text-sm text-gray-500 mt-1">
-                  更新專案名稱與描述，讓團隊成員能即時掌握最新內容。
-                </p>
+                <p class="text-sm text-gray-500 mt-1">更新專案名稱與描述</p>
               </div>
             </div>
 
@@ -146,13 +144,14 @@ watch(
     formState.title = project?.title ?? "";
     formState.description = project?.description ?? "";
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 检查表单是否可以提交，需要标题和描述都不为空
 const canSubmit = computed(
   () =>
-    formState.title.trim().length > 0 && formState.description.trim().length > 0
+    formState.title.trim().length > 0 &&
+    formState.description.trim().length > 0,
 );
 
 // 关闭模态框并发送关闭事件

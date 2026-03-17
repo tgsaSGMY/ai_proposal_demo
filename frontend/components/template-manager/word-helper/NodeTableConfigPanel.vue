@@ -1,3 +1,4 @@
+<!-- 用途：設定表格節點欄位勾選、列標題與表格轉置行為。 -->
 <template>
   <div class="space-y-3 rounded-xl bg-slate-50 p-3">
     <label class="flex items-center gap-2 text-sm text-slate-600">
@@ -97,6 +98,7 @@
 import { createWordSchemaPathHelpers } from "~/composables/template-manager/useWordSchemaPath";
 import type { WordDocumentNode, WordTableColumn } from "~/types/wordExport";
 
+// Schema 欄位結構（供欄位候選分析）。
 interface SchemaField {
   title?: string;
   type?: string;
@@ -104,17 +106,20 @@ interface SchemaField {
   items?: { properties?: Record<string, SchemaField> };
 }
 
+// 章節資料來源模型。
 interface SectionRecord {
   id: string;
   name: string;
   json_schema?: { properties?: Record<string, SchemaField> } | null;
 }
 
+// 接收節點與章節資料。
 const props = defineProps<{
   node: WordDocumentNode;
   sections: SectionRecord[];
 }>();
 
+// 對外派發節點更新事件。
 const emit = defineEmits<{
   (
     e: "update",
@@ -123,15 +128,18 @@ const emit = defineEmits<{
   ): void;
 }>();
 
+// 依章節與 dataPath 取得可用欄位候選。
 const { getColumnCandidates } = createWordSchemaPathHelpers(
   () => props.sections,
 );
 
+// 取得目前節點可勾選的表格欄位。
 function getNodeColumnCandidates(node: WordDocumentNode) {
   if (!node.sectionId) return [];
   return getColumnCandidates(node.sectionId, node.dataPath);
 }
 
+// 確保節點具有 table 與 columns 結構。
 function ensureTableConfig(node: WordDocumentNode) {
   if (!node.table) {
     node.table = { columns: [] };
@@ -142,6 +150,7 @@ function ensureTableConfig(node: WordDocumentNode) {
   return node.table;
 }
 
+// 切換是否使用自訂欄位標題。
 function handleCustomHeadersChange(event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {
@@ -149,6 +158,7 @@ function handleCustomHeadersChange(event: Event) {
   });
 }
 
+// 切換是否轉置表格。
 function handleTransposeChange(event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {
@@ -156,6 +166,7 @@ function handleTransposeChange(event: Event) {
   });
 }
 
+// 更新指定欄位顯示名稱。
 function handleColumnLabelChange(colIndex: number, event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {
@@ -165,6 +176,7 @@ function handleColumnLabelChange(colIndex: number, event: Event) {
   });
 }
 
+// 調整欄位順序（上移/下移）。
 function moveTableColumn(columnIndex: number, direction: "up" | "down") {
   emit("update", props.node.id, (node) => {
     if (!node.table?.columns) return;
@@ -179,6 +191,7 @@ function moveTableColumn(columnIndex: number, direction: "up" | "down") {
   });
 }
 
+// 勾選/取消欄位，更新表格 columns 清單。
 function handleColumnToggle(option: WordTableColumn, event: Event) {
   const target = event.target as HTMLInputElement;
   emit("update", props.node.id, (node) => {
