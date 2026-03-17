@@ -1,6 +1,8 @@
+# 生成 AI 執行履歷的 PDF，包含事件和對話記錄，並保持良好的排版和格式 （timeline render的東西生成pdf）。
+
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import timezone, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List

@@ -1,4 +1,4 @@
-# 集中管理所有 Service 的依賴注入
+# 用途：集中管理 API 層的依賴注入、登入身份解析與內部人員權限驗證。
 
 from fastapi import Request, Depends, HTTPException, Header, status
 from app.services.supabase_service import SupabaseService
@@ -9,6 +9,7 @@ import time
 from app.core.app_jwt import decode_app_access_token
 from app.config import EXTERNAL_OAUTH_PROVIDER
 
+# 短期快取：避免同一 token 在短時間內重複查詢 Supabase。
 AUTH_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
 AUTH_CONTEXT_CACHE_TTL_SECONDS = 20
 APP_TOKEN_COOKIE_NAME = "app_access_token"
@@ -27,7 +28,7 @@ async def get_current_user_id(
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ) -> str:
     """
-    從 Authorization Header 解析 Token 並驗證使用者，回傳 user_id
+    從 Authorization Header 或 Cookie 解析 token，驗證後回傳 canonical user_id。
     """
     user_ctx = await _resolve_user_context_from_auth(
         request=request,
@@ -43,7 +44,7 @@ async def get_current_user_context(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
     """
-    Resolve and return canonical user context from Bearer token.
+    解析並回傳 canonical user context（含 id/email/role/provider）。
     """
     return await _resolve_user_context_from_auth(
         request=request,
@@ -58,16 +59,19 @@ async def _resolve_user_context_from_auth(
     authorization: Optional[str],
     supabase_service: SupabaseService,
 ) -> Dict[str, Any]:
+    # 優先從 Authorization 取 Bearer token。
     header_token: Optional[str] = None
     if authorization and authorization.startswith("Bearer "):
         candidate = authorization.split(" ")[1].strip()
         if candidate and candidate.lower() not in {"null", "undefined"}:
             header_token = candidate
 
+    # 同時支援從 Cookie 讀取 app access token。
     cookie_token = request.cookies.get(APP_TOKEN_COOKIE_NAME)
 
     candidate_tokens = [token for token in [header_token, cookie_token] if token]
 
+    # Header 與 Cookie 都沒有 token 時，直接拒絕。
     if not candidate_tokens:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,18 +82,21 @@ async def _resolve_user_context_from_auth(
     for token in candidate_tokens:
         now = time.time()
         cached = AUTH_CONTEXT_CACHE.get(token)
+        # 命中快取且未過期時直接回傳，降低外部查詢成本。
         if cached and cached.get("expires_at", 0) > now:
             return cached["user_ctx"]
 
         try:
             auth_user = None
             try:
+                # 優先當作 Supabase token 驗證。
                 user_response = supabase_service.client.auth.get_user(token)
                 auth_user = user_response.user
             except Exception:
                 auth_user = None
 
             if auth_user:
+                # 將 Supabase 身份映射/建立為本系統 canonical user。
                 canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
                     auth_user_id=auth_user.id,
                     email=auth_user.email,
@@ -102,6 +109,7 @@ async def _resolve_user_context_from_auth(
                     "provider": "supabase",
                 }
             else:
+                # 若非 Supabase token，改走應用層 JWT 驗證。
                 payload = decode_app_access_token(token)
                 canonical_user_id = payload.get("sub")
                 if not canonical_user_id:
@@ -123,15 +131,18 @@ async def _resolve_user_context_from_auth(
                     "provider": payload.get("provider", EXTERNAL_OAUTH_PROVIDER),
                 }
 
+            # 寫入短期快取，減少同 token 重複驗證成本。
             AUTH_CONTEXT_CACHE[token] = {
                 "user_ctx": user_ctx,
                 "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
             }
             return user_ctx
         except Exception as exc:
+            # 記錄最後一次錯誤，若所有候選 token 都失敗再統一拋出 401。
             last_error = exc
             continue
 
+    # 所有候選 token 都驗證失敗時統一回應未授權。
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired authentication token",
@@ -143,6 +154,7 @@ async def verify_internal_user(
     supabase_service: SupabaseService = Depends(get_supabase_service)
 ):
     """
+    驗證内部人員權限的 Dependency:
     Dependency:
     1. 解析 Authorization Token 驗證是否登入
     2. 解析 canonical user 並檢查 users.role 是否為 'internal'

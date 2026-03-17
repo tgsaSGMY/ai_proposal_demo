@@ -1,3 +1,5 @@
+# 从模型返回的字符串中提取 JSON 对象，处理可能的格式问题，并返回解析结果或错误信息。
+
 from typing import Dict, Any, Tuple, Optional
 import json
 import re

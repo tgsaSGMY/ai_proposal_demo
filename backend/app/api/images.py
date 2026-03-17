@@ -1,18 +1,18 @@
 """
-Images API routes
-Handles image retrieval and deletion with proper authorization checks
+生成圖片相關的 API 端點，包含：
+- 取得專案圖片列表（含 signed URL）
+- 刪除圖片
+- 根據計畫書內容豐富提示詞
+- 立即生成圖片（支援參考圖片微調）
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from app.api.dependencies import get_supabase_service, get_current_user_id, get_llm_service
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
-from app.utils.routing import resolve_model
 from typing import Dict, Any, List, Optional
 import logging
-import json
 import httpx
-from app.config import DEFAULT_MODEL_ID
 
 logger = logging.getLogger(__name__)
 

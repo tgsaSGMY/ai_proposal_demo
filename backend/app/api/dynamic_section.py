@@ -1,3 +1,4 @@
+# 用途：提供動態章節與欄位的 CRUD API，供前台管理界面使用。
 import logging
 from typing import List, Optional
 

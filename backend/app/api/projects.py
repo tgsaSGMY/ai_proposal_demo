@@ -244,7 +244,7 @@ async def update_project(
     return record
 
 
-@router.patch("/{project_id}", response_model=Dict[str, Any], summary="更新專案（支援軟刪除）")
+@router.patch("/{project_id}", response_model=Dict[str, Any], summary="軟刪除專案")
 async def patch_project(
     project_id: str,
     payload: ProjectUpdateRequest,
@@ -256,24 +256,6 @@ async def patch_project(
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
     return record
-
-
-@router.delete("/{project_id}", status_code=204, summary="刪除專案")
-async def delete_project(
-    project_id: str,
-    # 注入剛剛寫好的 get_current_user_id 獲取 user_id
-    user_id: str = Depends(get_current_user_id), 
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    # 刪除指定專案，須驗證使用者為專案擁有者
-    # 將 project_id 和 user_id 一起傳給 Service
-    success = await supabase_service.delete_project_record(project_id, user_id)
-    
-    if not success:
-        # 如果刪除失敗（可能是找不到 ID，或是 ID 存在但 user_id 不對）
-        # 為了安全，通常統一回傳 404，不讓駭客知道該 ID 是否存在
-        raise HTTPException(status_code=404, detail="Project not found or permission denied")
-    return None
 
 
 @router.get("/{project_id}/timeline", summary="取得專案的 AI 執行時間軸")

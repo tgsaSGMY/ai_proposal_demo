@@ -100,7 +100,7 @@ async def suggest_sensitive_terms(
 
     return {"terms": deduped[:20]}
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED, summary="保存數據集條目")
 async def save_dataset_entries(
     req: SaveDatasetRequest,
     background_tasks: BackgroundTasks,
@@ -109,6 +109,7 @@ async def save_dataset_entries(
     """
     異步保存數據集條目到 Supabase。
     此操作立即返回，並在後台執行實際的資料庫寫入。
+    （保存至最終數據集）
     """
     
     async def background_task(entries: List[DatasetEntry]):

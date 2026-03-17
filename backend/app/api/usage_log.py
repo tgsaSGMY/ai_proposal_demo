@@ -1,3 +1,4 @@
+# 用途：提供使用量分析的 API 端點，包含趨勢分析、分組統計與篩選器選項。
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ def _resolve_date_range(
     start_date: Optional[date],
     end_date: Optional[date],
 ) -> tuple[date, date]:
+    """解析查詢日期區間，若未提供則回退到最近 N 天。"""
     today = datetime.utcnow().date()
     default_start = today - timedelta(days=DEFAULT_LOOKBACK_DAYS - 1)
     resolved_start = start_date or default_start
@@ -33,6 +35,7 @@ def _resolve_date_range(
 
 
 def _normalize_value(value: Any) -> Any:
+    """將日期時間物件正規化為 ISO 字串，便於 API 回傳。"""
     if isinstance(value, (datetime, date)):
         if isinstance(value, datetime):
             return value.isoformat()
@@ -41,21 +44,8 @@ def _normalize_value(value: Any) -> Any:
 
 
 def _normalize_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """逐欄位正規化資料列中的值。"""
     return {key: _normalize_value(val) for key, val in row.items()}
-
-
-def _parse_iso_datetime(iso_string: str) -> Optional[datetime]:
-    """Parse ISO datetime string and strip timezone info to make it naive UTC"""
-    if not iso_string:
-        return None
-    try:
-        dt = datetime.fromisoformat(iso_string)
-        # Strip timezone info to make it naive (UTC)
-        if dt.tzinfo:
-            dt = dt.replace(tzinfo=None)
-        return dt
-    except (ValueError, TypeError):
-        return None
 
 
 async def _fetch_all(
@@ -64,13 +54,14 @@ async def _fetch_all(
     filters: Optional[Dict[str, Any]] = None,
     group_by: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """从 Supabase 表中获取数据（自动分页，避免默认 1000 笔上限）。"""
+    """從 Supabase 表取得資料（自動分頁，避免預設 1000 筆上限）。"""
     try:
         page_size = 1000
         offset = 0
         all_rows: List[Dict[str, Any]] = []
 
         while True:
+            # 使用 range 分頁查詢，避免一次撈取過大量資料。
             query = client.from_(table_name).select("*").range(offset, offset + page_size - 1)
 
             if filters:
@@ -103,6 +94,7 @@ async def _fetch_all(
 
 
 async def _get_user_emails(user_ids: List[str], supabase_service: SupabaseService) -> Dict[str, str]:
+    """批次查詢 user_id 對應 email，查不到時提供可讀 fallback。"""
     if not user_ids:
         return {}
     
@@ -121,43 +113,12 @@ async def _get_user_emails(user_ids: List[str], supabase_service: SupabaseServic
     except Exception as e:
         logger.warning(f"Failed to fetch emails from users table: {e}", exc_info=True)
     
-    # Fallback (保持你原本的邏輯)
+    # 補齊無法查到的帳號，避免前端顯示空白。
     for uid in user_ids:
         if uid not in user_emails:
-            user_emails[uid] = f"User {uid[:8]}..." # 可以美化一下 fallback
+            user_emails[uid] = f"User {uid[:8]}..."
             
     return user_emails
-
-def _aggregate_by_field(
-    rows: List[Dict[str, Any]],
-    group_field: str,
-    agg_fields: Dict[str, str],
-    order_by: tuple[str, bool] = ("total_cost", False),
-) -> List[Dict[str, Any]]:
-    """按字段分组并聚合数据"""
-    groups = {}
-    
-    for row in rows:
-        key = row.get(group_field, "UNASSIGNED")
-        if key not in groups:
-            groups[key] = {group_field: key}
-            for agg_field, agg_type in agg_fields.items():
-                if agg_type == "sum":
-                    groups[key][agg_field] = 0
-                elif agg_type == "count":
-                    groups[key][agg_field] = 0
-        
-        for agg_field, agg_type in agg_fields.items():
-            if agg_type == "sum":
-                groups[key][agg_field] += row.get(agg_field, 0) or 0
-            elif agg_type == "count":
-                groups[key][agg_field] += 1
-    
-    result = list(groups.values())
-    if order_by:
-        result.sort(key=lambda x: x.get(order_by[0], 0), reverse=order_by[1])
-    
-    return result
 
 
 @router.get("/analytics")
@@ -171,13 +132,14 @@ async def get_usage_analytics(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     _: Any = Depends(verify_internal_user),
 ):
-    """获取使用量分析数据"""
+    """取得使用量分析資料，回傳趨勢、分組統計與可用篩選條件。"""
     try:
+        # 先解析查詢區間，後續統計都會以此範圍為準。
         range_start_date, range_end_date = _resolve_date_range(start_date, end_date)
         range_start_dt = datetime.combine(range_start_date, time.min)
         range_end_dt = datetime.combine(range_end_date + timedelta(days=1), time.min)
 
-        # 构建过滤条件
+        # 建立基本篩選條件（含 created_at 區間）。
         filters = {
             "created_at": {
                 "gte": range_start_dt.isoformat(),
@@ -194,10 +156,10 @@ async def get_usage_analytics(
         if action:
             filters["action"] = action
 
-        # 获取日期范围内的所有数据
+        # 讀取指定區間內的 usage logs。
         all_logs = await _fetch_all(supabase_service.client, "usage_logs", filters)
         
-        # 聚合范围数据
+        # 全域摘要統計（區間成本、Token、呼叫次數、活躍專案數）。
         range_metrics = {
             "total_cost": sum(row.get("cost", 0) or 0 for row in all_logs),
             "total_input_tokens": sum(row.get("input_token", 0) or 0 for row in all_logs),
@@ -206,18 +168,15 @@ async def get_usage_analytics(
             "total_calls": len(all_logs),
         }
 
-        # 获取今月数据
+        # 預留本月統計資料（目前僅保留查詢流程，回傳尚未單獨使用）。
         now = datetime.utcnow()
         mtd_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         mtd_filters = {"created_at": {"gte": mtd_start.isoformat(), "lt": now.isoformat()}}
         if user_id:
             mtd_filters["user_id"] = user_id
-        mtd_logs = await _fetch_all(supabase_service.client, "usage_logs", mtd_filters)
-        global_metrics = {}
 
-        # 按日期聚合趋势
+        # 依日期彙總趨勢資料。
         trend_dict = {}
         for row in all_logs:
             date_str = row.get("created_at", "")[:10] if row.get("created_at") else ""
@@ -235,9 +194,9 @@ async def get_usage_analytics(
             trend_dict[date_str]["outputTokens"] += row.get("output_token", 0) or 0
         trend_rows = sorted(trend_dict.values(), key=lambda x: x["date"])
 
-        # 按用户聚合，并用邮箱替换显示
+        # 依使用者彙總，並將 user_id 轉成 email 顯示。
         user_dict = {}
-        user_projects_dict = {}  # Track unique projects per user
+        user_projects_dict = {}
         for row in all_logs:
             uid = row.get("user_id") or "UNASSIGNED"
             if uid not in user_dict:
@@ -253,20 +212,20 @@ async def get_usage_analytics(
             user_dict[uid]["inputTokens"] += row.get("input_token", 0) or 0
             user_dict[uid]["outputTokens"] += row.get("output_token", 0) or 0
             user_dict[uid]["callCount"] += 1
-            # Track unique projects
+            # 用 set 追蹤每位使用者觸及的唯一專案數。
             pid = row.get("project_id")
             if pid:
                 user_projects_dict[uid].add(pid)
         
-        # 添加项目计数
+        # 補上每位使用者的專案數欄位。
         for uid in user_dict:
             user_dict[uid]["projectCount"] = len(user_projects_dict.get(uid, set()))
         
-        # 批量获取用户邮箱
+        # 批次查詢 email，避免逐筆查詢造成額外負擔。
         user_ids_list = [uid for uid in user_dict.keys() if uid != "UNASSIGNED"]
         user_emails = await _get_user_emails(user_ids_list, supabase_service)
         
-        # 用邮箱替换用户ID显示
+        # 將 userId 對應成可讀 email。
         user_rows_with_email = []
         for uid, user_data in user_dict.items():
             email_display = user_emails.get(uid, uid) if uid != "UNASSIGNED" else "UNASSIGNED"
@@ -275,9 +234,9 @@ async def get_usage_analytics(
         
         user_rows = sorted(user_rows_with_email, key=lambda x: x["totalCost"], reverse=True)[:10]
 
-        # 按项目聚合，并追踪用户
+        # 依專案彙總，並保留建立者 user_id 供 email 對應。
         project_dict = {}
-        project_user_dict = {}  # Track user for each project
+        project_user_dict = {}
         for row in all_logs:
             pid = row.get("project_id") or "UNLINKED"
             uid = row.get("user_id") or "UNASSIGNED"
@@ -296,11 +255,11 @@ async def get_usage_analytics(
             project_dict[pid]["outputTokens"] += row.get("output_token", 0) or 0
             project_dict[pid]["callCount"] += 1
         
-        # 获取项目对应用户的邮箱
+        # 查詢專案所屬使用者 email。
         project_user_ids = list(set(project_user_dict.values()))
         project_emails = await _get_user_emails(project_user_ids, supabase_service)
         
-        # 添加用户邮箱到项目数据
+        # 將 email 回填到專案彙總資料。
         for pid, user_data in project_dict.items():
             uid = user_data["userId"]
             email_display = project_emails.get(uid, uid) if uid != "UNASSIGNED" else "UNASSIGNED"
@@ -309,7 +268,7 @@ async def get_usage_analytics(
         project_rows_all = sorted(project_dict.values(), key=lambda x: x["totalCost"], reverse=True)
         project_rows = project_rows_all[:10]
 
-        # 按行为聚合
+        # 依 action 彙總成本與呼叫數。
         action_dict = {}
         for row in all_logs:
             act = row.get("action") or "未標註"
@@ -323,7 +282,7 @@ async def get_usage_analytics(
             action_dict[act]["callCount"] += 1
         action_rows = sorted(action_dict.values(), key=lambda x: x["totalCost"], reverse=True)
 
-        # 按模型聚合
+        # 依模型彙總成本、Token 與平均成本。
         model_dict = {}
         for row in all_logs:
             mid = row.get("model_id") or "未知模型"
@@ -346,7 +305,7 @@ async def get_usage_analytics(
                 model_dict[mid]["avgCost"] = model_dict[mid]["totalCost"] / model_dict[mid]["callCount"]
         model_rows = sorted(model_dict.values(), key=lambda x: x["totalCost"], reverse=True)
 
-        # 获取过滤选项
+        # 取得前端篩選器所需候選值（user/project/model/action）。
         all_logs_no_filter = await _fetch_all(supabase_service.client, "usage_logs", {})
         
         option_users_ids = list(set(row.get("user_id") for row in all_logs_no_filter if row.get("user_id")))[:120]
@@ -354,7 +313,7 @@ async def get_usage_analytics(
         option_models = list(set(row.get("model_id") for row in all_logs_no_filter if row.get("model_id")))[:120]
         option_actions = list(set(row.get("action") for row in all_logs_no_filter if row.get("action")))[:120]
 
-        # 为过滤选项中的用户获取邮箱
+        # 篩選器中的使用者同樣轉換成 email 顯示。
         option_users_emails = await _get_user_emails(option_users_ids, supabase_service)
         option_users = [
             {"id": uid, "email": option_users_emails.get(uid, uid), "lastUsed": None}

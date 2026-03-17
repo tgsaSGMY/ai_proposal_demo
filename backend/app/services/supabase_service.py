@@ -127,45 +127,6 @@ class SupabaseService:
             )
             return None
 
-    async def log_sft_data_point(self, grant_id: str, template_id: str,section_id: str, prompt: str, final_answer: dict, source_type: str):
-        """记录一个可用于 SFT 的数据点"""
-        stmt = text("""
-            INSERT INTO datasets (source_type, grant_id, template_id, section_id,prompt, final_answer)
-            VALUES (:source_type,  :grant_id, :template_id, :section_id, :prompt, :final_answer);
-        """)
-        params = {
-            "source_type": source_type,
-            "grant_id": grant_id,
-            "template_id": template_id,
-            "section_id": section_id,
-            "prompt": prompt,
-            "final_answer": json.dumps(final_answer)
-        }
-        await asyncio.to_thread(self._execute_sql, stmt, params)
-        print(f"SFT data point from '{source_type}' logged to datasets table.")
-    
-    async def log_actor_critic_run(self, prompt: str, grant_id: str, template_id: str, section_id: str, initial_answer: dict, critic_json: dict, final_answer: dict):
-        """記錄一次完整的 Actor-Critic 流程數據。"""
-        stmt = """
-            INSERT INTO datasets (
-                source_type, grant_id, template_id, section_id,
-                prompt, initial_answer, critic_json, final_answer
-            )
-            VALUES (
-                'actor_critic', :grant_id, :template_id, :section_id,
-                :prompt, :initial_answer, :critic_json, :final_answer
-            );
-        """
-        params = {
-            "grant_id": grant_id, "template_id": template_id, "section_id": section_id,
-            "prompt": prompt,
-            "initial_answer": json.dumps(initial_answer),
-            "critic_json": json.dumps(critic_json),
-            "final_answer": json.dumps(final_answer)
-        }
-        await asyncio.to_thread(self._execute_sql, stmt, params)
-        print("Actor-Critic run logged to datasets table.")
-
     async def log_execution_event(
         self,
         *,
@@ -193,31 +154,8 @@ class SupabaseService:
             if response.data:
                 logger.debug(f"Execution event logged: {event_type} for project {project_id}")
         except Exception:
-            logger.error("Failed to log execution event", exc_info=True)
-            
-    def register_new_model(self, model_id: str, display_name: str, base_model_id: str, adapter_path: str, tags: list = None):
-        """将新训练的模型注册到数据库"""
-        print(f"Registering new model '{model_id}' to database...")
-        stmt = text("""
-            INSERT INTO models (id, display_name, provider, type, base_model_id, adapter_path, tags, description,updated_at)
-            VALUES (:id, :display_name, 'internal_lora', 'internal', :base_model_id, :adapter_path, :tags, :description,NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                adapter_path = EXCLUDED.adapter_path,
-                updated_at = NOW(); 
-        """)
-        with self.get_db_session() as session:
-            session.execute(stmt, {
-                "id": model_id,
-                "display_name": display_name,
-                "base_model_id": base_model_id,
-                "adapter_path": adapter_path,
-                "tags": tags if tags else [],
-                "description": f"Fine-tuned model based on {base_model_id}"
-            })
-            session.commit()
-        print("Model registration successful.")
-    
-    
+            logger.error("Failed to log execution event", exc_info=True)    
+
     async def get_grant_by_id(self, grant_id: str) -> Optional[Dict[str, Any]]:
         """根据 ID 获取单个 grant 的信息。"""
         if not grant_id:
@@ -237,7 +175,6 @@ class SupabaseService:
         except Exception as e:
             print(f"Error fetching grant by id '{grant_id}': {e}")
             return None
-
 
     async def get_template_by_id(self, template_id: str, grant_id: str) -> Optional[Dict[str, Any]]:
         """根据 ID 获取单个 plan_template 的信息。"""
@@ -864,17 +801,6 @@ class SupabaseService:
         )
         return response.data[0] if response.data else None
 
-    async def delete_project_record(self, project_id: str, user_id: str) -> bool:
-        """軟刪除指定專案（設置 is_deleted = true）。"""
-        response = (
-            self.client.from_("projects")
-            .update({"is_deleted": True})
-            .eq("id", project_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        return len(response.data) > 0
-
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
 
@@ -924,10 +850,6 @@ class SupabaseService:
             logger.warning("Failed to check internal email in whitelist", exc_info=True)
             return False
 
-    @staticmethod
-    def _placeholder_email(user_id: str) -> str:
-        return f"{user_id}@placeholder.local"
-
     async def resolve_or_create_user_by_supabase_identity(
         self,
         *,
@@ -935,13 +857,13 @@ class SupabaseService:
         email: Optional[str],
     ) -> Dict[str, Any]:
         """
-        Resolve canonical user from Supabase auth identity.
+        依 Supabase Auth 身分解析（或建立）對應的系統使用者。
 
-        Guarantees:
-        - A public.users record exists.
-        - A public.user_identities mapping exists for provider='supabase'.
-        - Role is synchronized from whitelist (internal) into users.role.
-        - Implicitly merges with existing user by email to prevent duplicates.
+        保證事項：
+        - public.users 一定存在對應紀錄。
+        - provider='supabase' 的 public.user_identities 映射一定存在。
+        - 會依 whitelist 的內部帳號規則同步 users.role。
+        - 若找不到身分映射，會以 email 嘗試合併既有帳號以避免重複。
         """
         try:
             identity_resp = (
@@ -962,12 +884,12 @@ class SupabaseService:
         if identity and identity.get("user_id"):
             user_row = await self.get_user_by_id(identity["user_id"])
 
-        # ====== FIX: Merge by email if identity not found ======
+        # 若查無身分映射，改用 email 嘗試關聯既有 canonical user。
         if not user_row and email:
             user_row = await self.get_user_by_email(email)
 
         if not user_row:
-            preferred_email = email or self._placeholder_email(auth_user_id)
+            preferred_email = email
             insert_payload = {
                 "email": preferred_email,
                 "role": "normal",
@@ -982,7 +904,7 @@ class SupabaseService:
                 raise ValueError("Failed to create canonical user record")
             user_row = inserted.data[0]
 
-        # Keep identity mapping updated only when needed to avoid write-on-every-request latency.
+        # 僅在映射資料變動時才 upsert，避免每次請求都寫入造成延遲。
         mapped_email = email or user_row.get("email")
         if (not identity) or identity.get("email") != mapped_email or identity.get("user_id") != user_row.get("id"):
             self.client.from_("user_identities").upsert(
@@ -1030,11 +952,11 @@ class SupabaseService:
 
     async def ensure_canonical_user_id(self, user_id: Optional[str]) -> Optional[str]:
         """
-        Normalize incoming user_id to public.users.id.
+        將輸入的 user_id 正規化為 public.users.id。
 
-        - If already a users.id, return it.
-        - If it is a supabase auth uid, map through user_identities.
-        - If unresolved, return None to keep FK-safe writes.
+        - 若本身已是 users.id，直接回傳。
+        - 若為 Supabase Auth UID，透過 user_identities 轉換。
+        - 若無法解析，回傳 None 以維持外鍵安全寫入。
         """
         if not user_id:
             return None
@@ -1071,12 +993,12 @@ class SupabaseService:
         role: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Resolve canonical user from external OAuth identity.
+        依外部 OAuth 身分解析（或建立）對應的系統使用者。
 
-        Guarantees:
-        - A public.users record exists.
-        - A public.user_identities mapping exists for this provider/subject.
-        - Existing role is preserved unless a valid role is explicitly provided.
+        保證事項：
+        - public.users 一定存在對應紀錄。
+        - 指定 provider/provider_subject 的 user_identities 映射一定存在。
+        - 除非明確提供合法 role，否則保留原有角色設定。
         """
         try:
             identity_resp = (
@@ -1108,7 +1030,7 @@ class SupabaseService:
             insert_payload = {
                 "email": preferred_email,
                 "role": normalized_role or "normal",
-                # users.auth_source is a channel summary; keep provider-specific value in user_identities.
+                # users.auth_source 只記錄來源類型；provider 細節保存在 user_identities。
                 "auth_source": "external",
                 "status": "active",
                 "last_login_at": datetime.now(timezone.utc).isoformat(),
@@ -1160,23 +1082,6 @@ class SupabaseService:
             for log in response.data:
                 usage += log['cost']
         return usage
-
-    async def check_quota(self, user_id: str, model_type: str) -> tuple[bool, str]:
-        """检查用户是否有足够的配额使用指定类型的模型"""
-        if user_id == "admin":
-            return True, "Admin user has unlimited quota."
-        
-        user = await self.get_user_by_id(user_id)
-        if not user:
-            return False, "User not found."
-
-        usage = await self.get_user_usage(user_id)
-
-        remaining = user['external_quota'] - usage
-        if remaining <= 0:
-            return False, "External quota exhausted."
-        
-        return True, "Quota available." 
 
     async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None):
         """记录一次模型使用"""
@@ -1242,7 +1147,6 @@ class SupabaseService:
             logger.error(f"Failed to delete routing rule with id '{rule_id}': {e}", exc_info=True)
             raise Exception(f"Failed to delete routing rule: {str(e)}")
     
-
     async def retrieve_similar_datasets(
         self,
         query_prompt: str,
@@ -1317,7 +1221,6 @@ class SupabaseService:
         except Exception as e:
             print(f"Error adding dataset entry: {e}")
             raise
-
 
     async def get_all_datasets(
         self,
@@ -1707,4 +1610,3 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to fetch images for project {project_id}: {e}", exc_info=True)
             return []
-

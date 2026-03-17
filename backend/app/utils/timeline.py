@@ -1,3 +1,5 @@
+# 將對話歷史和執行日誌合併成一個時間線，並提供時間解析和版本正規化的工具函數。
+
 from __future__ import annotations
 
 import re

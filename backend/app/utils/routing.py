@@ -1,3 +1,5 @@
+# 路由解析器，根據主題、模板、區段等信息決定使用哪個模型來處理請求。
+
 from typing import Dict, Any, Optional
 from app.config import DEFAULT_MODEL_ID
 import logging
@@ -5,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: Any, is_external: Optional[bool] = None) -> Optional[Dict[str, Any]]:
-    """寻找路由模型"""
+    """尋找路由模型"""
     logger.debug(
         "Resolving model for grant '%s', template '%s', section '%s', is_external=%s",
         grant_id,
@@ -13,7 +15,7 @@ def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: A
         section_id,
         is_external,
     )
-    # 路由规则已经按优先级排序
+    # 路由規則已經按優先級排序
     for rule in app_state.routing_rules:
         grant_match = (rule['grant_id'] is None or rule['grant_id'] == grant_id)
         template_match = (rule.get('template_id') is None or rule['template_id'] == template_id)
@@ -37,7 +39,7 @@ def resolve_model(grant_id: str, template_id: str, section_id: str, app_state: A
             else:
                 logger.warning(f"Routing rule points to a non-existent model '{model_id}'.")
     
-    # 如果没有规则匹配，使用默认模型
+    # 如果沒有規則匹配，使用默認模型
     default_model_info = app_state.model_registry.get(DEFAULT_MODEL_ID)
     if default_model_info:
         logger.info(

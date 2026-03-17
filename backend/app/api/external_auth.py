@@ -1,3 +1,5 @@
+# 用途：提供外部 OAuth 認證相關的 API，供前台使用者登入與授權。
+
 import hmac
 import json
 import logging
@@ -32,6 +34,7 @@ VIP_PLAN_IDS = {2, 3}
 
 
 def _require_enabled() -> None:
+    # 確保外部 OAuth 功能已啟用；未啟用時直接回 503。
     if not EXTERNAL_OAUTH_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -40,6 +43,7 @@ def _require_enabled() -> None:
 
 
 def _require_provider_config() -> None:
+    # 檢查 OAuth 必要設定是否齊全，避免登入流程進行到一半才失敗。
     missing = []
     if not EXTERNAL_OAUTH_AUTHORIZE_URL:
         missing.append("EXTERNAL_OAUTH_AUTHORIZE_URL")
@@ -57,18 +61,20 @@ def _require_provider_config() -> None:
 
 
 def _build_redirect_uri(request: FastAPIRequest) -> str:
-    # 取得網址後，強制將 scheme 轉換為 https (避免 Nginx 反向代理導致變回 http)
+    # 產生後端 callback URL，並強制轉成 https（避免反向代理下被還原成 http）。
     url = request.url_for("external_oauth_callback")
     return str(url.replace(scheme="https"))
 
 
 def _frontend_callback_url() -> str:
+    # 取得前端 callback URL；未設定時退回本機預設值。
     if EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL:
         return EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL
     return "http://localhost:3000/external-auth-callback"
 
 
 def _is_secure_request(request: FastAPIRequest) -> bool:
+    # 判斷是否應設定 secure cookie（同時考慮反向代理 header 與前端 callback 設定）。
     proto = request.headers.get("x-forwarded-proto", "")
     frontend_callback = (_frontend_callback_url() or "").lower()
     callback_requires_https = frontend_callback.startswith("https://")
@@ -76,6 +82,7 @@ def _is_secure_request(request: FastAPIRequest) -> bool:
 
 
 def _json_post_form(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    # 以 x-www-form-urlencoded 送出 POST，並解析 JSON 回應。
     body = urlencode(payload).encode("utf-8")
     req = Request(
         url,
@@ -89,6 +96,7 @@ def _json_post_form(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
+    # 以 Bearer token 送出 GET，並解析 JSON 回應。
     req = Request(
         url,
         headers={"Authorization": f"Bearer {token}"},
@@ -98,7 +106,9 @@ def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
         raw = resp.read().decode("utf-8")
         return json.loads(raw)
 
+
 def _resolve_role_from_plan(profile_data: Dict[str, Any]) -> str:
+    # 根據訂閱方案決定角色：VIP 方案映射為 vip，其餘為 normal。
     subscription = profile_data.get("subscription")
     if not isinstance(subscription, dict):
         return "normal"
@@ -117,7 +127,7 @@ def _resolve_role_from_plan(profile_data: Dict[str, Any]) -> str:
 
 
 def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
-    # 對應你截圖的格式，如果有 'data' 欄位，就拿裡面那一層；否則保持原來的那層
+    # 抽取外部 provider 的 user profile，兼容 data 包裹與平面兩種格式。
     logger.info("User info received from OAuth provider: %s", user_info)
     profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
 
@@ -136,8 +146,9 @@ def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@router.get("/redirect")
+@router.get("/redirect", summary="導向外部 OAuth 授權頁")
 async def external_oauth_redirect(request: FastAPIRequest):
+    # 建立授權連結與 state cookie，並導向 provider 授權頁。
     _require_enabled()
     _require_provider_config()
 
@@ -164,7 +175,7 @@ async def external_oauth_redirect(request: FastAPIRequest):
     return response
 
 
-@router.get("/callback", name="external_oauth_callback")
+@router.get("/callback", name="external_oauth_callback", summary="處理外部 OAuth 回呼並登入")
 async def external_oauth_callback(
     request: FastAPIRequest,
     code: Optional[str] = Query(None),
@@ -172,6 +183,7 @@ async def external_oauth_callback(
     error: Optional[str] = Query(None),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
+    # 驗證 callback 參數，完成 token 交換、取得使用者資訊並簽發 app token。
     _require_enabled()
     _require_provider_config()
 
@@ -238,16 +250,18 @@ async def external_oauth_callback(
     return response
 
 
-@router.post("/logout")
+@router.post("/logout", summary="登出外部 OAuth 使用者")
 async def external_oauth_logout():
+    # 清除登入相關 cookie，回傳 204 表示登出完成。
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(APP_TOKEN_COOKIE_NAME, path="/")
     response.delete_cookie(STATE_COOKIE_NAME, path="/")
     return response
 
 
-@router.get("/redirect-url")
+@router.get("/redirect-url", summary="取得需註冊到 OAuth 供應商的回呼網址")
 async def get_external_redirect_url(request: FastAPIRequest):
-    """Expose backend callback URL that must be registered on the OAuth provider."""
+    """回傳後端 callback URL，供外部 OAuth 平台白名單設定使用。"""
+    # 此端點主要用於部署檢查或後台設定頁顯示 callback URL。
     _require_enabled()
     return {"redirect_url": _build_redirect_uri(request)}

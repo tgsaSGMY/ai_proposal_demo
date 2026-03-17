@@ -1,3 +1,5 @@
+# 用途：提供計畫模板管理的 API 端點，包含 Grant/Template/Section 的 CRUD 操作，以及模板 Logo 的文件上傳處理。
+
 import logging
 import re
 import time
@@ -67,13 +69,13 @@ def _with_cache_busting_token(url: Optional[str]) -> Optional[str]:
 
 
 def _sanitize_storage_key_part(value: str) -> str:
-    """Normalize dynamic path segments for Supabase object keys."""
+    """將輸入值轉換成適合用於 Supabase Storage Key 的格式，僅保留字母、數字、底線和連字符，其他字符替換為連字符。"""
     cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", (value or "").strip().lower()).strip("-")
     return cleaned or "default"
 
 
 def _build_logo_object_path(grant_id: str, template_id: str, file_extension: str) -> str:
-    """Use grant/template namespaced path to prevent cross-template collisions."""
+    """使用 grant/template 命名空間的路徑以防止跨模板衝突。"""
     safe_grant = _sanitize_storage_key_part(grant_id)
     safe_template = _sanitize_storage_key_part(template_id)
     safe_ext = _sanitize_storage_key_part(file_extension) or "png"

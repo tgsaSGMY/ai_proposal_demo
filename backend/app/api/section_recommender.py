@@ -1,5 +1,6 @@
-"""Section recommender API that leverages the shared LLM service."""
-
+"""
+章節推薦 API，利用共享的 LLM 服務生成章節改版建議。（動態欄位配置中心的AI推薦）
+"""
 import json
 import logging
 from typing import Any, Dict, List

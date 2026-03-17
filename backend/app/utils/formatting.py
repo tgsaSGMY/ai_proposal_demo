@@ -1,3 +1,4 @@
+# 格式化工具，將 JSON 数据根据 schema 转换为可读的字符串输出，在生成企劃書的時候被用來丟進去模型裏
 
 from typing import Dict, Any
 

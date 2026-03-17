@@ -1,7 +1,7 @@
 # 使用ai生成内容功能的api
+
 from io import BytesIO
 import asyncio
-import copy
 import httpx
 from datetime import datetime, timezone
 from fastapi import (
@@ -28,9 +28,6 @@ from app.models import (
     SectionGenerateResponse,
     AutoFillRequest,
     SyntheticInputRequest,
-    ChatGuidanceRequest,
-    ChatGuidanceResponse,
-    GenerateFieldContentRequest,
 )
 from app.core.app_jwt import decode_app_access_token
 from app.services.llm_service import LLMService
@@ -62,6 +59,7 @@ HIDDEN_REPLY_BLOCK_PATTERN = re.compile(
 RESPONSE_END_MARKER = "【回復結束】"
 
 def extract_hidden_field_responses(text: Optional[str]) -> Dict[str, str]:
+    # 從 LLM 回應中提取隱藏欄位的值，根據特定格式解析出欄位 ID 和對應的值，返回一個字典。
     if not text:
         return {}
     match = HIDDEN_REPLY_BLOCK_PATTERN.search(text)
@@ -211,6 +209,7 @@ def _build_field_analysis_prompt(
     subfield_label: str,
     current_value: str,
 ) -> str:
+    # 根據欄位資訊生成分析提示，指導 LLM 生成增強內容，要求完全避免與原始輸入重疊。
     readable_title = field_title or "未命名欄位"
     readable_desc = field_description or "無額外描述"
     readable_label = subfield_label or readable_title
@@ -238,6 +237,7 @@ def _build_field_analysis_prompt(
 
 
 def _extract_output_text(payload: Dict[str, Any]) -> str:
+    # 從 LLM 回應的 payload 中提取文本輸出，優先尋找 direct_text 字段，若無則從 output blocks 中提取，最後嘗試從特定格式的隱藏欄位中提取。
     direct_text = payload.get("output_text")
     if direct_text:
         if isinstance(direct_text, list):
@@ -647,6 +647,7 @@ def build_history_entry(role: str, content: str):
     }
 
 def normalize_meta_payload(meta_payload: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    # 將原始的 meta_payload 轉換為統一格式的字典，提取每個欄位的 updated_at 時間戳，並以欄位 ID 為鍵，包含 updated_at 的字典為值。
     normalized: Dict[str, Dict[str, str]] = {}
     if not isinstance(meta_payload, dict):
         return normalized
@@ -666,6 +667,7 @@ def normalize_meta_payload(meta_payload: Optional[Dict[str, Any]]) -> Dict[str, 
     return normalized
 
 def touch_meta_field(meta_map: Dict[str, Dict[str, str]], field_id: str, timestamp: Optional[str] = None) -> None:
+    
     if not field_id:
         return
     final_timestamp = (timestamp or get_current_timestamp()).strip()
@@ -1784,106 +1786,6 @@ async def autofill_from_document(
         logger.error(f"Error during document auto-fill: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/generate_field_content", summary="根據已填寫欄位生成單個欄位內容")
-async def generate_field_content(
-    request_data: GenerateFieldContentRequest,
-    request: Request,
-    llm_service: LLMService = Depends(get_llm_service),
-):
-    # 根據已填寫的欄位和計畫信息，使用 LLM 為單個目標欄位推斷並生成最佳內容，若已有內容則進行擴展或優化
-    """根據已填寫的欄位推估單個欄位應該填寫的內容"""
-    
-    model_registry = request.app.state.model_registry or {}
-    model_info = model_registry.get("gpt-5-mini") or model_registry.get("gpt-4.1-mini")
-    
-    if not model_info:
-        raise HTTPException(
-            status_code=500,
-            detail="Model not configured for field content generation."
-        )
-    
-    # 構建已填寫欄位的描述
-    filled_desc = ""
-    if request_data.filled_fields:
-        filled_items = [
-            f"- {label}: {value[:100]}{'...' if len(value) > 100 else ''}"
-            for label, value in request_data.filled_fields.items()
-        ]
-        filled_desc = "\n".join(filled_items)
-    
-    # 構建上下文信息
-    context = f"""
-計畫名稱：{request_data.plan_name or '未提供'}
-計畫摘要：{request_data.plan_summary or '未提供'}
-
-已填寫的欄位：
-{filled_desc if filled_desc else '（無）'}
-"""
-    
-    # 【修正 2】在 System Prompt 中明確加入 "JSON" 關鍵字
-    system_prompt = """你是一位專業的計畫書撰寫助手。你的任務是根據計畫的已填寫欄位內容，推估並生成新欄位的最佳內容。
-
-重要規則：
-1. 只根據已提供的上下文信息進行推論，不要臆測不存在的資訊
-2. 保持內容的邏輯連貫性和專業性
-3. 生成的內容應該補充而非重複已有內容
-4. 使用繁體中文，語調專業、清晰
-5. **請務必使用 JSON 格式輸出結果** (Output must be in JSON format)"""
-
-    user_prompt = f"""{context}
-
-需要填寫的欄位：
-- 欄位名稱：{request_data.field_title}
-- 欄位說明：{request_data.field_description if request_data.field_description else '（無）'}
-- 子欄位標籤：{request_data.subfield_label}
-- 當前值：{request_data.current_value if request_data.current_value else '（未填寫）'}
-
-請根據上述已填寫的欄位和當前的計畫信息，為【{request_data.subfield_label}】生成合適的內容。
-若當前值已存在，你可以在此基礎上進行擴展或優化。
-
-輸出格式範例 (JSON)：
-{{
-  "generated_content": "這裡填寫生成的內容..."
-}}"""
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response, error, _ = await llm_service.call_external_api(
-                client,
-                model_info,
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                is_json_output=True # 這會觸發 response_format={"type": "json_object"}
-            )
-        
-        if error:
-            # 這裡可以捕獲更詳細的錯誤
-            logger.error(f"Field content generation failed. Model: {model_info}, Error: {error}")
-            raise HTTPException(status_code=500, detail=f"AI service error: {error}")
-        
-        try:
-            result = json.loads(response)
-            generated_content = result.get("generated_content", "").strip()
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON response: {response}")
-            raise HTTPException(status_code=500, detail="Invalid AI response format")
-        
-        return {
-            "generated_content": generated_content
-        }
-    
-    except httpx.HTTPStatusError as e:
-        # 捕捉 HTTP 錯誤並顯示 OpenAI 回傳的詳細訊息
-        error_msg = e.response.text
-        logger.error(f"OpenAI API Error: {error_msg}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"AI Provider Error: {error_msg}")
-        
-    except Exception as e:
-        logger.error(f"Error generating field content: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @router.post("/field_file_analysis", summary="針對單一欄位進行檔案輔助分析")
 async def field_file_analysis(

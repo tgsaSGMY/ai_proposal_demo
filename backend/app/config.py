@@ -43,20 +43,3 @@ EXTERNAL_OAUTH_AUTHORIZE_URL = os.getenv("EXTERNAL_OAUTH_AUTHORIZE_URL", "")
 EXTERNAL_OAUTH_TOKEN_URL = os.getenv("EXTERNAL_OAUTH_TOKEN_URL", "")
 EXTERNAL_OAUTH_USERINFO_URL = os.getenv("EXTERNAL_OAUTH_USERINFO_URL", "")
 EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL = os.getenv("EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL", "http://localhost:3000/external-auth-callback")
-# # Keep only required values in env; non-sensitive defaults stay in code.
-# EXTERNAL_OAUTH_ENABLED = True
-# EXTERNAL_OAUTH_PROVIDER = "external"
-# EXTERNAL_OAUTH_CLIENT_ID = os.getenv("EXTERNAL_OAUTH_CLIENT_ID", "")
-# EXTERNAL_OAUTH_CLIENT_SECRET = os.getenv("EXTERNAL_OAUTH_CLIENT_SECRET", "")
-# EXTERNAL_OAUTH_AUTHORIZE_URL = os.getenv("EXTERNAL_OAUTH_AUTHORIZE_URL", "")
-# EXTERNAL_OAUTH_TOKEN_URL = os.getenv("EXTERNAL_OAUTH_TOKEN_URL", "")
-# EXTERNAL_OAUTH_USERINFO_URL = ""
-# EXTERNAL_OAUTH_SCOPE = "openid profile email"
-# EXTERNAL_OAUTH_REDIRECT_URI = ""
-# EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL = "http://localhost:3000/external-auth-callback"
-
-# # Public PEM key string used to verify id_token signature.
-# # If provided as a single-line env var, use escaped newlines (\\n).
-# EXTERNAL_OAUTH_PEM_PUBLIC_KEY = os.getenv("EXTERNAL_OAUTH_PEM_PUBLIC_KEY", "")
-# EXTERNAL_OAUTH_ISSUER = ""
-# EXTERNAL_OAUTH_AUDIENCE = ""
