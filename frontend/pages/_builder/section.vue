@@ -1,3 +1,4 @@
+<!-- 動態欄位配置中心 -->
 <template>
   <ClientOnly>
     <div class="py-6 px-2 sm:px-4 md:py-10 md:px-8">
@@ -323,7 +324,7 @@
                         </td>
                         <td class="py-2 pr-0 text-right whitespace-nowrap">
                           <button
-                            @click="startEditField(section, field)"
+                            @click="startEditField(field)"
                             class="text-indigo-600 hover:text-indigo-800 mr-3"
                           >
                             編輯
@@ -549,21 +550,6 @@ const availableTemplates = computed(() => {
 const isTemplateSelected = computed(() =>
   Boolean(selectedGrantId.value && selectedTemplateId.value),
 );
-
-// ===== 计算属性：当前架构标签 =====
-// 返回格式化的补助类别和模板名称
-const currentSchemaLabel = computed(() => {
-  if (!selectedGrantId.value || !selectedTemplateId.value) {
-    return "未選擇";
-  }
-  const grantName =
-    grants.value.find((g) => g.id === selectedGrantId.value)?.name ||
-    selectedGrantId.value;
-  const templateName =
-    availableTemplates.value.find((t) => t.id === selectedTemplateId.value)
-      ?.name || selectedTemplateId.value;
-  return `${grantName}/${templateName}`;
-});
 
 // ===== 工具函数：克隆章节 =====
 // 创建章节对象的浅拷贝，用于编辑操作
@@ -794,7 +780,7 @@ function openCreateField(section) {
 
 // ===== 开始编辑欄位 =====
 // 打开指定欄位的编辑界面
-function startEditField(section, field) {
+function startEditField(field) {
   editingField.value = cloneField(field);
 }
 
@@ -924,13 +910,6 @@ async function dropSection(targetIndex, event) {
   // Swap sections in array
   const [draggedSection] = sections.value.splice(sourceIndex, 1);
   sections.value.splice(targetIndex, 0, draggedSection);
-
-  // Recalculate order for all affected sections
-  const sectionIdsToUpdate = sections.value.map((s, idx) => ({
-    id: s.id,
-    oldOrder: s.order,
-    newOrder: idx + 1,
-  }));
 
   draggedSectionIndex.value = null;
 

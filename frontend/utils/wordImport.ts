@@ -42,7 +42,7 @@ export async function extractTextFromWord(file: File): Promise<string> {
  *
  * 工作流程：
  *   1. 构建请求 payload
- *   2. 添加 main_idea 对象（用于提取企劃名称和摘要）
+ *   2. 添加 main_idea 对象（用于提取計畫名称和摘要）
  *   3. 将原始 sections 放在后面
  *   4. 添加 prompt_mode 标记为 "word_import"
  *   5. 发送 POST 请求到后端 API
@@ -82,7 +82,7 @@ export async function callAutoFillApi(
   apiBaseUrl: string, // 后端 API 基础 URL
 ): Promise<Record<string, any>> {
   // ===== 构建请求 Payload =====
-  // 添加 main_idea 对象（用于后端生成企劃名称和摘要）
+  // 添加 main_idea 对象（用于后端生成計畫名称和摘要）
   const mainIdea = {
     section_id: "main_idea",
     section_name: "Main Idea",

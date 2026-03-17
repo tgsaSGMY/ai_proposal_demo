@@ -1,3 +1,4 @@
+<!-- 數據庫管理 -->
 <template>
   <ClientOnly>
     <div class="p-4 md:p-8">
@@ -5,7 +6,7 @@
         <h1 class="text-xl sm:text-2xl font-bold">
           數據庫管理
           <p class="text-sm sm:text-md text-gray-400 mb-2 sm:mb-0">
-            當某類企劃書生成效果不好時，能夠將外部資料轉爲生成資料，讓AI學習提升效果。也能夠檢查並移除生成資料，確保數據庫品質。
+            當某類計畫書生成效果不好時，能夠將外部資料轉爲生成資料，讓AI學習提升效果。也能夠檢查並移除生成資料，確保數據庫品質。
           </p>
         </h1>
         <button
@@ -320,7 +321,6 @@ import { useConfirm } from "~/composables/useConfirm";
 const { confirm } = useConfirm();
 const isSaving = ref(false);
 const isRefreshing = ref(false);
-const error = ref(null);
 const { allConfigs } = usePlanGenerator();
 
 // ===== 模态框和编辑状态 =====
@@ -538,24 +538,17 @@ async function initializeDatasets() {
   hideLoading();
 }
 onMounted(async () => {
+  const { checkIsInternal } = useInternalCheck();
+  const isInternal = await checkIsInternal();
+  if (!isInternal) {
+    window.location.href = "/";
+    return;
+  }
+
   // ===== 页面挂载时初始化 =====
   // 使用 lifecycle 预加载的数据集初始化页面
   await initializeDatasets();
   datasets.value = allDatasets.value;
-});
-
-// ===== 内部用户检查 =====
-// 检查当前用户是否为内部人员，否则重定向到首页
-onMounted(async () => {
-  const { checkIsInternal } = useInternalCheck();
-
-  // 執行檢查
-  const isInternal = await checkIsInternal();
-
-  if (!isInternal) {
-    // 如果不是內部人員，重定向到外部版本頁面
-    window.location.href = "/";
-  }
 });
 
 // ===== 打开编辑模态框 =====

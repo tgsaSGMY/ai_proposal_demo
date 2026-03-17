@@ -1,3 +1,4 @@
+<!-- 内部人員使用的數據生產工作室，支持批量 AI 生成、手動標註和計畫編輯，建立高品質計畫書數據集。 -->
 <template>
   <ClientOnly>
     <div class="p-4 sm:p-6 md:p-8">
@@ -7,7 +8,7 @@
         <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2 sm:mb-0">
           模擬數據生產工作室
           <p class="text-sm sm:text-md text-gray-400 mb-2 sm:mb-0">
-            當某類企劃書生成效果不好時，可以使用此頁面生成優秀的企劃書讓AI學習。
+            當某類計畫書生成效果不好時，可以使用此頁面生成優秀的計畫書讓AI學習。
           </p>
         </h1>
 
@@ -22,13 +23,13 @@
             @click="handleCreateDraft('golden')"
             class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
           >
-            🏆 導入範例企劃書
+            🏆 導入範例計畫書
           </button>
           <!-- <button
             @click="handleCreateDraft('internal')"
             class="btn-secondary w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-2"
           >
-            📝 新建生成企劃
+            📝 新建生成計畫
           </button> -->
         </div>
       </header>
@@ -82,11 +83,11 @@ useHead({
     {
       name: "description",
       content:
-        "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯，建立高品質計畫書數據集。",
+        "高效的數據生產工作室。支持批量 AI 生成、手動標註和計畫編輯，建立高品質計畫書數據集。",
     },
     {
       name: "keywords",
-      content: "數據生產,AI 生成,標註,企劃,工作室",
+      content: "數據生產,AI 生成,標註,計畫,工作室",
     },
     {
       property: "og:title",
@@ -94,13 +95,13 @@ useHead({
     },
     {
       property: "og:description",
-      content: "高效的數據生產工作室。支持批量 AI 生成、手動標註和企劃編輯。",
+      content: "高效的數據生產工作室。支持批量 AI 生成、手動標註和計畫編輯。",
     },
   ],
 });
 
 // ===== 输入框模态框处理函数 =====
-// 处理用户在输入框模态框中的提交操作（重命名或创建企劃）
+// 处理用户在输入框模态框中的提交操作（重命名或创建計畫）
 async function handleInputModalSubmit(value) {
   isInputModalVisible.value = false;
   if (!value || !value.trim()) return;
@@ -120,7 +121,7 @@ async function handleInputModalSubmit(value) {
       );
       if (!response.ok)
         throw new Error("重命名失败: " + (await response.text()));
-      success(`企劃已重命名为 "${value}"`);
+      success(`計畫已重命名为 "${value}"`);
       fetchDrafts();
     } catch (e) {
       errorNotification(e.message);
@@ -155,7 +156,7 @@ function handleInputModalCancel() {
 
 // ===== 导入依赖库 =====
 // 导入 Vue 核心库
-import { ref, onMounted, onUnmounted, computed } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 // 导入 Supabase 数据库客户端
 import { supabase } from "~/utils/supabaseClient";
 // 导入自定义组合式函数和通知服务
@@ -173,7 +174,7 @@ import { useLoading } from "~/composables/useLoading";
 import { getDynamicFieldDefinitions } from "~/utils/dynamicSchema";
 
 // ===== 模态框状态数据 =====
-// 用于重命名或创建企劃的输入框模态框状态
+// 用于重命名或创建計畫的输入框模态框状态
 const isInputModalVisible = ref(false);
 const inputModalTitle = ref("");
 const inputModalMessage = ref("");
@@ -196,23 +197,23 @@ const isBatchModalVisible = ref(false);
 // 实时数据库频道引用，用于监听数据变化
 let realtimeChannel = null;
 
-// ===== 企劃编辑操作 =====
-// 处理重命名企劃的模态框打开
+// ===== 計畫编辑操作 =====
+// 处理重命名計畫的模态框打开
 async function handleRenameDraft(draft) {
-  inputModalTitle.value = "重命名企劃";
-  inputModalMessage.value = "请输入新的企劃名称:";
+  inputModalTitle.value = "重命名計畫";
+  inputModalMessage.value = "请输入新的計畫名称:";
   inputModalDefaultValue.value = draft.name;
   inputModalMode = "rename";
   inputModalDraft = draft;
   isInputModalVisible.value = true;
 }
 
-// ===== 删除企劃 =====
-// 显示确认对话框并删除选中的企劃
+// ===== 删除計畫 =====
+// 显示确认对话框并删除选中的計畫
 async function handleDeleteDraft(draft) {
   const isConfirmed = await confirm({
-    title: "確認刪除企劃",
-    message: `您確定要刪除企劃 "${draft.name}" 嗎？\n\n⚠️ 此操作無法撤銷。`,
+    title: "確認刪除計畫",
+    message: `您確定要刪除計畫 "${draft.name}" 嗎？\n\n⚠️ 此操作無法撤銷。`,
     confirmText: "確認刪除",
     cancelText: "取消",
     confirmColor: "danger",
@@ -230,7 +231,7 @@ async function handleDeleteDraft(draft) {
       },
     );
     if (!response.ok) throw new Error("删除失败: " + (await response.text()));
-    success(`企劃 "${draft.name}" 已被删除。`);
+    success(`計畫 "${draft.name}" 已被删除。`);
     fetchDrafts();
   } catch (e) {
     errorNotification(e.message);
@@ -238,7 +239,7 @@ async function handleDeleteDraft(draft) {
 }
 
 // ===== 获取草稿列表 =====
-// 从数据库中获取所有企劃草稿，按创建时间倒序排列
+// 从数据库中获取所有計畫草稿，按创建时间倒序排列
 async function fetchDrafts() {
   const { data, error } = await supabase
     .from("draft_plans")
@@ -255,21 +256,30 @@ async function fetchDrafts() {
 // ===== 生命周期钩子 =====
 // 页面挂载时，初始化配置和草稿列表，并监听实时数据变化
 onMounted(async () => {
-  showLoading("加载中...");
-  await fetchAllConfigs(); // Fetch configs for Batch modal
-  await fetchDrafts();
-  realtimeChannel = supabase
-    .channel("public:draft_plans")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "draft_plans" },
-      (payload) => {
-        fetchDrafts();
-      },
-    )
-    .subscribe();
+  const { checkIsInternal } = useInternalCheck();
+  const isInternal = await checkIsInternal();
+  if (!isInternal) {
+    window.location.href = "/";
+    return;
+  }
 
-  hideLoading();
+  showLoading("加载中...");
+  try {
+    await fetchAllConfigs(); // Fetch configs for Batch modal
+    await fetchDrafts();
+    realtimeChannel = supabase
+      .channel("public:draft_plans")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "draft_plans" },
+        () => {
+          fetchDrafts();
+        },
+      )
+      .subscribe();
+  } finally {
+    hideLoading();
+  }
 });
 
 // ===== 组件卸载 =====
@@ -280,22 +290,8 @@ onUnmounted(() => {
   }
 });
 
-// ===== 内部用户检查 =====
-// 检查当前用户是否为内部人员，否则重定向到首页
-onMounted(async () => {
-  const { checkIsInternal } = useInternalCheck();
-
-  // 執行檢查
-  const isInternal = await checkIsInternal();
-
-  if (!isInternal) {
-    // 如果不是內部人員，重定向到外部版本頁面
-    window.location.href = "/";
-  }
-});
-
 // ===== 打开编辑器 =====
-// 打开选中的企劃编辑器，初始化 user_input 和 plan_content 对象
+// 打开选中的計畫编辑器，初始化 user_input 和 plan_content 对象
 function openEditor(draft) {
   // Make sure user_input and plan_content are valid objects
   if (!draft.user_input) draft.user_input = {};
@@ -303,12 +299,12 @@ function openEditor(draft) {
   selectedDraft.value = draft;
 }
 
-// ===== 创建企劃 =====
-// 显示输入框模态框，用于创建新的企劃（手动标注或生成企劃）
+// ===== 创建計畫 =====
+// 显示输入框模态框，用于创建新的計畫（手动标注或生成計畫）
 async function handleCreateDraft(mode) {
-  inputModalTitle.value = "新建企劃";
-  inputModalMessage.value = `请输入新的企劃名称 (${
-    mode === "golden" ? "手动标注" : "生成企劃"
+  inputModalTitle.value = "新建計畫";
+  inputModalMessage.value = `请输入新的計畫名称 (${
+    mode === "golden" ? "手动标注" : "生成計畫"
   })：`;
   inputModalDefaultValue.value = "";
   inputModalMode = "create";
@@ -317,7 +313,7 @@ async function handleCreateDraft(mode) {
 }
 
 // ===== 批量 AI 生成 =====
-// 启动批量 AI 生成任务，将新企劃添加到草稿列表
+// 启动批量 AI 生成任务，将新計畫添加到草稿列表
 async function handleBatchStart(payload) {
   try {
     const schemaOptions = {
@@ -356,26 +352,25 @@ async function handleBatchStart(payload) {
 }
 
 // ===== 保存到最终数据集 =====
-// 将企劃保存到最终数据集，然后删除对应的草稿
+// 将計畫保存到最终数据集，然后删除对应的草稿
 async function handleSaveToFinalDataset(draftToSave, finalInputs) {
   const {
     id: draftId,
     plan_content,
-    user_input,
     grant_id,
     template_id,
     mode,
   } = draftToSave;
 
   if (!plan_content || Object.keys(plan_content).length === 0) {
-    errorNotification("計劃書内容为空，无法保存。");
+    errorNotification("計畫書内容为空，无法保存。");
     return;
   }
 
   // 顯示確認對話框
   const isConfirmed = await confirm({
     title: "確認保存至最終數據集",
-    message: `您確定要保存企劃 "${draftToSave.name}" 至最終數據集嗎？\n\n⚠️ 保存後此數據將自動刪除。\n💾 建議先下載 Word 檔案企劃書。`,
+    message: `您確定要保存計畫 "${draftToSave.name}" 至最終數據集嗎？\n\n⚠️ 保存後此數據將自動刪除。\n💾 建議先下載 Word 檔案計畫書。`,
     confirmText: "確認保存",
     cancelText: "取消",
     confirmColor: "primary",
@@ -417,7 +412,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
 
         const entry = {
           source_type:
-            mode === "synthetic" || mode == "internal"
+            mode === "synthetic" || mode === "internal"
               ? "synthetic_data"
               : "golden_samples",
           grant_id: grant_id,
@@ -450,7 +445,7 @@ async function handleSaveToFinalDataset(draftToSave, finalInputs) {
     if (response.status !== 202)
       throw new Error("保存至数据集失败: " + (await response.text()));
 
-    success(`企劃 "${draftToSave.name}" 已成功保存至最终数据集！`);
+    success(`計畫 "${draftToSave.name}" 已成功保存至最终数据集！`);
     await authenticatedFetch(`${API_BASE_URL}/draft_plans/${draftId}`, {
       method: "DELETE",
     });

@@ -260,8 +260,8 @@ async def generate_plan(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
-    # 生成完整計劃書，根據指定的 grant 和 template，為每個章節非同步生成多個候選版本，支援外部模型和自訂選擇
-    """主功能 -> 生成完整計劃書，可生成多候选版本"""
+    # 生成完整計畫書，根據指定的 grant 和 template，為每個章節非同步生成多個候選版本，支援外部模型和自訂選擇
+    """主功能 -> 生成完整計畫書，可生成多候选版本"""
     
     # 從 app_state 獲取所有配置
     app_state = request.app.state
@@ -1103,7 +1103,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
     完成百分比：{len(a_desc.splitlines())} / {len(all_questions)}
 
     【重要規則】
-    只負責幫忙填寫和完善欄位至可送件水準，不負責生成完整計劃書文本。
+    只負責幫忙填寫和完善欄位至可送件水準，不負責生成完整計畫書文本。
     絕對禁止重複詢問【已填資料】中的欄位。
     若【已填資料】中已有內容，請直接根據這些內容，詢問【待填欄位】中的下一項。
     你的首要目標是推進進度，直接引導至：{next_q_label}
@@ -1121,8 +1121,8 @@ async def websocket_chat_guidance(websocket: WebSocket):
     若使用者的回答不清楚，請不需要直接詢問下一個欄位，先進一步追問以釐清。
     每詢問一個問題的時候，可以根據上下文生成建議性的答案輔助用戶。
     需要使用鼓勵方式，并且需要補充說目前還剩多少題未完成，讓用戶不那麽快放棄。
-    在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計劃書內容。
-    完成後，推薦用戶點擊右下角的「輸出完整推演」按鈕來產出完整計劃書文本，不需要推薦幫忙其他東西了，因爲你負責的是完善欄位，而這時候你的任務完成了。
+    在全部問題都回答完畢之後，看系統記錄的“已填”選項。一次過列出來所有“無”，“等下填寫”，“空”之類的答案的欄位，并且建議用戶填寫他們以優化計畫書內容。
+    完成後，推薦用戶點擊右下角的「輸出完整推演」按鈕來產出完整計畫書文本，不需要推薦幫忙其他東西了，因爲你負責的是完善欄位，而這時候你的任務完成了。
     
     【隱藏回復欄位格式】
     - 當你確認某個欄位已完成或你代為生成了內容或優化內容時，請在可見回覆結束後追加一段隱藏資訊，必須要和你回復用戶的資訊一摸一樣。
@@ -1359,7 +1359,7 @@ async def generate_synthetic_input(
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
-    # 根據 random 或 reverse 模式生成合成用戶輸入，支援隨機生成新構想或反推現有計劃書內容，統一返回 main_idea 和 dynamic_fields 格式
+    # 根據 random 或 reverse 模式生成合成用戶輸入，支援隨機生成新構想或反推現有計畫書內容，統一返回 main_idea 和 dynamic_fields 格式
     """根據模式生成用戶輸入，使用統一的動態字段格式。
     
     支持兩種模式：
@@ -1521,7 +1521,7 @@ async def recommend_project_names(
     supabase_service: SupabaseService = Depends(get_supabase_service),
     user_id: str = Depends(get_current_user_id),
 ):
-    # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計劃書風格的創新專案名稱
+    # 根據補助主題、已填寫欄位和參考範例，使用 LLM 推薦最多 5 個符合計畫書風格的創新專案名稱
     """根據 current_answers 和其他上下文推薦最多 5 個專案名稱，回傳 JSON { names: [...] }"""
     model_registry = request.app.state.model_registry or {}
     model_info = model_registry.get("gemini-3-flash-preview") or model_registry.get("gpt-4.1-mini")
@@ -1592,7 +1592,7 @@ async def recommend_project_names(
         else ""
     )
 
-    system_prompt = f"""你是一位資深的政府補助計畫命名專家，擁有豐富的企劃書撰寫經驗。
+    system_prompt = f"""你是一位資深的政府補助計畫命名專家，擁有豐富的計畫書撰寫經驗。
 你的任務是根據專案的核心內容、補助計畫類型和已填寫的欄位信息，生成專業、具有吸引力的計畫名稱。
 
 ## 命名原則：
@@ -1683,7 +1683,7 @@ async def recommend_project_names(
         raise HTTPException(status_code=500, detail="Recommendation service error")
 
 
-@router.post("/autofill_from_document", summary="從文檔自動填充計劃書內容")
+@router.post("/autofill_from_document", summary="從文檔自動填充計畫書內容")
 async def autofill_from_document(
     request_data: AutoFillRequest,
     request: Request,
@@ -1714,7 +1714,7 @@ async def autofill_from_document(
 
     # 構建 User Prompt
     user_prompt = f"""
-    這是需要你處理的計劃書文檔全文：
+    這是需要你處理的計畫書文檔全文：
     --- DOCUMENT START ---
     {request_data.document_text}
     --- DOCUMENT END ---
@@ -1791,7 +1791,7 @@ async def generate_field_content(
     request: Request,
     llm_service: LLMService = Depends(get_llm_service),
 ):
-    # 根據已填寫的欄位和計劃信息，使用 LLM 為單個目標欄位推斷並生成最佳內容，若已有內容則進行擴展或優化
+    # 根據已填寫的欄位和計畫信息，使用 LLM 為單個目標欄位推斷並生成最佳內容，若已有內容則進行擴展或優化
     """根據已填寫的欄位推估單個欄位應該填寫的內容"""
     
     model_registry = request.app.state.model_registry or {}

@@ -29,7 +29,7 @@ export function resolveNodeScopedPath(
   }
 
   // Handle full schema paths in list-item context, e.g.
-  // basePath="工作重點", path="分項計劃.工作重點.工作項目" => "工作重點.工作項目"
+  // basePath="工作重點", path="分項計畫.工作重點.工作項目" => "工作重點.工作項目"
   const marker = `.${basePrefix}`;
   const markerIndex = path.indexOf(marker);
   if (markerIndex >= 0) {

@@ -4,7 +4,6 @@
       <div
         v-if="isVisible"
         class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 px-4 py-6 backdrop-blur"
-        @click.self="handleClose"
       >
         <div
           class="relative flex w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"

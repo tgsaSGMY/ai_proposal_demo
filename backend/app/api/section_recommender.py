@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api", tags=["Section Recommender"])
 MAX_DOCUMENT_PREVIEW_CHARS = 20000
 MODEL_INFO = {"id": "gpt-5-mini", "provider": "openai", "type": "external"}
 SYSTEM_PROMPT = (
-    "你是專精於科技研發企劃書的資深顧問，擅長分析章節與欄位結構，"
+    "你是專精於科技研發計畫書的資深顧問，擅長分析章節與欄位結構，"
     "並以條列、具體的方式提供改版建議。"
     "參考現在的結構，只做微調建議，并且内容風格務求簡潔明瞭易懂。"
     "你不需要提供更進一步的建議，像是“若要，我可以...”"

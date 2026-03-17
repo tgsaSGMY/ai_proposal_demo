@@ -1,5 +1,5 @@
 // 通用 map 定義
-// 主要是使用在_builder page中黃金樣本、生成企劃、AI生成的標籤顏色定義，以及專案狀態的文字顏色定義
+// 主要是使用在_builder page中黃金樣本、生成計畫、AI生成的標籤顏色定義，以及專案狀態的文字顏色定義
 
 interface MapEntry {
   label: string;

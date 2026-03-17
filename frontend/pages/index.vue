@@ -21,7 +21,7 @@
               請選擇目標補助計畫
             </p>
             <p class="mt-2 text-sm text-[#5f6c96]">
-              針對您的需求，挑選適合的AI企劃模型
+              針對您的需求，挑選適合的AI計畫模型
             </p>
           </div>
 
@@ -99,7 +99,7 @@
             <p
               class="mt-2 text-sm font-semibold leading-relaxed text-amber-800"
             >
-              引擎產生計劃內容僅供參考。請根據公司實際研發進行計劃調整。
+              引擎產生計畫內容僅供參考。請根據公司實際研發進行計畫調整。
             </p>
           </section>
 
@@ -131,7 +131,7 @@
           <header class="flex flex-wrap items-start justify-between gap-4">
             <div class="space-y-2">
               <h2 class="text-2xl font-semibold text-slate-900">
-                為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬企劃
+                為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬計畫
               </h2>
               <p class="text-sm text-slate-500">
                 這些資訊會作為進入 Chatbox 前的基礎情境，AI 會優先引用這些內容。
@@ -341,11 +341,11 @@ useHead({
     {
       name: "description",
       content:
-        "AI 驅動的計劃書生成工具，支援 SIIR、IMDP、CITD 等多種補助計畫類型，一鍵生成專業計畫書草稿。",
+        "AI 驅動的計畫書生成工具，支援 SIIR、IMDP、CITD 等多種補助計畫類型，一鍵生成專業計畫書草稿。",
     },
     {
       name: "keywords",
-      content: "計劃書生成, AI 企劃, 政府補助, SIIR, IMDP, CITD, 智能寫作",
+      content: "計畫書生成, AI 計畫, 政府補助, SIIR, IMDP, CITD, 智能寫作",
     },
     {
       property: "og:title",
@@ -354,7 +354,7 @@ useHead({
     {
       property: "og:description",
       content:
-        "AI 驅動的計劃書生成工具，支援多種補助計畫類型，一鍵生成專業計畫書草稿。",
+        "AI 驅動的計畫書生成工具，支援多種補助計畫類型，一鍵生成專業計畫書草稿。",
     },
     { property: "og:type", content: "website" },
     { name: "robots", content: "index, follow" },
@@ -478,7 +478,7 @@ const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const SUPABASE_BUCKET_URL = config.public.supabaseUrl;
 
-// 从数据库加载企劃类型
+// 从数据库加载計畫类型
 async function loadPlanTypes() {
   try {
     const response = await fetch(`${API_BASE_URL}/plan_templates`, {
@@ -534,7 +534,7 @@ const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
 const currentStage = ref(1);
 const selectedPlanType = ref<PlanTypeOption | null>(null);
 const selectedMode = ref<ModeOption["id"] | null>("interactive");
-const planName = ref("計劃草稿");
+const planName = ref("計畫草稿");
 const planSummary = ref("");
 const planBackground = ref("");
 const backgroundFiles = ref<BackgroundAttachment[]>([]);
@@ -856,10 +856,6 @@ function removeBackgroundAttachment(id: string) {
 
 function clearBackgroundAttachments() {
   backgroundFiles.value = [];
-}
-
-function selectPlanType(plan: PlanTypeOption) {
-  selectedPlanType.value = plan;
 }
 
 function buildSelectionKey(

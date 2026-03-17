@@ -1,41 +1,60 @@
+<!-- 主要是一个内部使用的成本分析仪表板页面，提供了对 AI 模型使用情况和成本的深入洞察。用户可以通过不同的维度（如用户、项目、模型、功能）来分析成本分布和趋势。 -->
 <template>
   <ClientOnly>
-    <div class="usage-analytics-page">
-      <section class="hero">
+    <div class="min-h-screen bg-gray-50 p-4 text-gray-800">
+      <section
+        class="mb-6 flex items-end justify-between gap-8 max-[900px]:flex-col max-[900px]:items-start"
+      >
         <div>
-          <p class="hero-eyebrow">AI Ops · Internal Only</p>
-          <h1>內部成本儀表板</h1>
-          <p class="hero-subtitle">
+          <p class="text-xs uppercase tracking-[0.1em] text-gray-500">
+            AI Ops · Internal Only
+          </p>
+          <h1 class="mb-1 text-3xl font-bold">內部成本儀表板</h1>
+          <p class="max-w-[48ch] text-sm text-gray-500">
             透過維度與聚合快速定位成本熱區，判斷燃燒速度、超級用戶、昂貴行為與模型性價比。
           </p>
         </div>
-        <div class="hero-meta">
-          <p class="hero-range">{{ rangeSummary }}</p>
-          <p class="hero-update">
+        <div class="text-right text-sm max-[900px]:text-left">
+          <p class="font-semibold text-gray-700">{{ rangeSummary }}</p>
+          <p class="mb-2">
             上次更新：
-            <span>{{
+            <span class="font-semibold text-gray-700">{{
               analytics?.lastUpdated
                 ? formatDateTime(analytics.lastUpdated)
                 : "尚未取得"
             }}</span>
           </p>
-          <button class="btn btn-primary" @click="refresh" :disabled="loading">
+          <button
+            class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+            @click="refresh"
+            :disabled="loading"
+          >
             {{ loading ? "更新中..." : "重新整理" }}
           </button>
         </div>
       </section>
 
-      <section class="glass-panel control-panel">
-        <div class="panel-row">
-          <div class="form-field full">
-            <label>時間範圍</label>
-            <div class="preset-buttons">
+      <section
+        class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+      >
+        <div
+          class="mb-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]"
+        >
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >時間範圍</label
+            >
+            <div class="flex flex-wrap gap-2">
               <button
                 v-for="preset in rangePresets"
                 :key="preset.key"
                 type="button"
-                class="btn btn-chip"
-                :class="{ active: filters.preset === preset.key }"
+                class="rounded-lg border px-3 py-1.5 text-sm font-semibold transition"
+                :class="
+                  filters.preset === preset.key
+                    ? 'border-blue-500 bg-blue-50 text-blue-800'
+                    : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+                "
                 @click="setPreset(preset.key)"
               >
                 {{ preset.label }}
@@ -43,26 +62,39 @@
             </div>
           </div>
         </div>
-        <div class="panel-row">
-          <div class="form-field">
-            <label>開始日期</label>
+        <div
+          class="mb-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]"
+        >
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >開始日期</label
+            >
             <input
               type="date"
               v-model="filters.startDate"
               @change="onCustomRange"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
             />
           </div>
-          <div class="form-field">
-            <label>結束日期</label>
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >結束日期</label
+            >
             <input
               type="date"
               v-model="filters.endDate"
               @change="onCustomRange"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
             />
           </div>
-          <div class="form-field">
-            <label>使用者</label>
-            <select v-model="filters.userId">
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >使用者</label
+            >
+            <select
+              v-model="filters.userId"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+            >
               <option value="">全部</option>
               <option
                 v-for="user in filterOptions.users"
@@ -73,9 +105,14 @@
               </option>
             </select>
           </div>
-          <div class="form-field">
-            <label>專案</label>
-            <select v-model="filters.projectId">
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >專案</label
+            >
+            <select
+              v-model="filters.projectId"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+            >
               <option value="">全部</option>
               <option
                 v-for="project in filterOptions.projects"
@@ -86,9 +123,14 @@
               </option>
             </select>
           </div>
-          <div class="form-field">
-            <label>模型</label>
-            <select v-model="filters.modelId">
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >模型</label
+            >
+            <select
+              v-model="filters.modelId"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+            >
               <option value="">全部</option>
               <option
                 v-for="model in filterOptions.models"
@@ -99,9 +141,14 @@
               </option>
             </select>
           </div>
-          <div class="form-field">
-            <label>功能 / Action</label>
-            <select v-model="filters.action">
+          <div>
+            <label class="mb-1 block text-[0.85rem] font-medium text-gray-700"
+              >功能 / Action</label
+            >
+            <select
+              v-model="filters.action"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800"
+            >
               <option value="">全部</option>
               <option
                 v-for="actionOption in filterOptions.actions"
@@ -113,16 +160,16 @@
             </select>
           </div>
         </div>
-        <div class="panel-actions">
+        <div class="flex gap-4 max-[900px]:flex-col">
           <button
-            class="btn btn-primary"
+            class="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             @click="applyFilters"
             :disabled="loading"
           >
             套用篩選
           </button>
           <button
-            class="btn btn-ghost"
+            class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             @click="resetFilters"
             :disabled="loading"
@@ -130,48 +177,80 @@
             重置
           </button>
         </div>
-        <p v-if="errorMessage" class="error-pill">{{ errorMessage }}</p>
+        <p
+          v-if="errorMessage"
+          class="mt-2 rounded-md bg-red-100 px-3 py-1.5 text-xs text-red-800"
+        >
+          {{ errorMessage }}
+        </p>
       </section>
 
-      <section v-if="analytics" class="grid grid-overview">
-        <article class="kpi-card">
-          <p class="kpi-label">總成本</p>
-          <p class="kpi-value">{{ formatCurrency(overview.totalCostMTD) }}</p>
-          <p class="kpi-hint">含所有時間區間内的呼叫</p>
+      <section
+        v-if="analytics"
+        class="mb-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]"
+      >
+        <article
+          class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+        >
+          <p class="text-[0.8rem] font-medium text-gray-500">總成本</p>
+          <p class="my-1 text-2xl font-bold text-gray-800">
+            {{ formatCurrency(overview.totalCostMTD) }}
+          </p>
+          <p class="text-xs text-gray-400">含所有時間區間内的呼叫</p>
         </article>
-        <article class="kpi-card">
-          <p class="kpi-label">區間 Token 消耗</p>
-          <p class="kpi-value">
+        <article
+          class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+        >
+          <p class="text-[0.8rem] font-medium text-gray-500">區間 Token 消耗</p>
+          <p class="my-1 text-2xl font-bold text-gray-800">
             {{ formatTokens(overview.totalInputTokens) }} /
             {{ formatTokens(overview.totalOutputTokens) }}
           </p>
-          <p class="kpi-hint">Input / Output</p>
+          <p class="text-xs text-gray-400">Input / Output</p>
         </article>
-        <article class="kpi-card">
-          <p class="kpi-label">活躍專案 · 呼叫數</p>
-          <p class="kpi-value">
+        <article
+          class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+        >
+          <p class="text-[0.8rem] font-medium text-gray-500">
+            活躍專案 · 呼叫數
+          </p>
+          <p class="my-1 text-2xl font-bold text-gray-800">
             {{ overview.activeProjects }} / {{ overview.totalCalls }}
           </p>
-          <p class="kpi-hint">範圍內至少一次呼叫</p>
+          <p class="text-xs text-gray-400">範圍內至少一次呼叫</p>
         </article>
       </section>
 
-      <section v-if="analytics" class="grid grid-major">
-        <article class="glass-panel trend-card">
-          <header>
+      <section
+        v-if="analytics"
+        class="mb-6 grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
+      >
+        <article
+          class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <header class="mb-6">
             <div>
-              <p class="section-eyebrow">Global Overview</p>
-              <h2>30 天成本走勢</h2>
+              <p
+                class="text-[0.7rem] font-semibold uppercase tracking-[0.05em] text-gray-500"
+              >
+                Global Overview
+              </p>
+              <h2 class="my-1 text-xl font-bold text-gray-800">
+                30 天成本走勢
+              </h2>
             </div>
-            <div class="trend-meta">
+            <div class="text-sm text-gray-600">
               <p>最大單日：{{ formatCurrency(trendMaxCost) }}</p>
             </div>
           </header>
-          <div v-if="!trendPoints.length" class="empty-state">
+          <div
+            v-if="!trendPoints.length"
+            class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500"
+          >
             暫無資料，請調整範圍或等待新呼叫。
           </div>
-          <div v-else class="trend-body">
-            <svg viewBox="0 0 100 40">
+          <div v-else class="mt-3">
+            <svg viewBox="0 0 100 40" class="h-[150px] w-full stroke-blue-500">
               <defs>
                 <linearGradient
                   id="trendGradient"
@@ -191,81 +270,148 @@
                 stroke-width="1.8"
               />
             </svg>
-            <div class="trend-footer">
+            <div class="mb-3 mt-2 flex justify-between text-xs text-gray-500">
               <span>{{ trendRange.start }}</span>
               <span>{{ trendRange.end }}</span>
             </div>
-            <button class="btn btn-expand" @click="showTrendModal = true">
+            <button
+              class="rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-blue-500 transition hover:border-blue-500 hover:bg-blue-50"
+              @click="showTrendModal = true"
+            >
               查看詳情 →
             </button>
           </div>
         </article>
 
-        <article class="glass-panel" v-if="topUsers.length">
-          <header>
-            <p class="section-eyebrow">By User</p>
-            <h2>用戶分析</h2>
+        <article
+          class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+          v-if="topUsers.length"
+        >
+          <header class="mb-6">
+            <p
+              class="text-[0.7rem] font-semibold uppercase tracking-[0.05em] text-gray-500"
+            >
+              By User
+            </p>
+            <h2 class="my-1 text-xl font-bold text-gray-800">用戶分析</h2>
           </header>
-          <table>
+          <table class="mt-3 w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th>用戶郵箱</th>
-                <th>成本</th>
-                <th>Tokens</th>
-                <th>呼叫</th>
-                <th>專案數</th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  用戶郵箱
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  成本
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  Tokens
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  呼叫
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  專案數
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="user in topUsers" :key="user.userId">
-                <td>{{ user.email }}</td>
-                <td>{{ formatCurrency(user.totalCost) }}</td>
-                <td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ user.email }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ formatCurrency(user.totalCost) }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
                   {{ formatTokens(user.inputTokens) }} /
                   {{ formatTokens(user.outputTokens) }}
                 </td>
-                <td>{{ user.callCount }}</td>
-                <td>{{ user.projectCount }}</td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ user.callCount }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ user.projectCount }}
+                </td>
               </tr>
             </tbody>
           </table>
           <button
             v-if="allUsers.length > 3"
-            class="btn btn-secondary"
+            class="mt-4 w-full rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-blue-500 transition hover:border-blue-500 hover:bg-blue-50"
             @click="showUserDetailsModal = true"
           >
             查看詳情 →
           </button>
         </article>
 
-        <article class="glass-panel" v-if="topProjects.length">
-          <header>
-            <p class="section-eyebrow">By Project</p>
-            <h2>單一企劃成本</h2>
+        <article
+          class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+          v-if="topProjects.length"
+        >
+          <header class="mb-6">
+            <p
+              class="text-[0.7rem] font-semibold uppercase tracking-[0.05em] text-gray-500"
+            >
+              By Project
+            </p>
+            <h2 class="my-1 text-xl font-bold text-gray-800">單一計畫成本</h2>
           </header>
-          <table>
+          <table class="mt-3 w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th>Project ID</th>
-                <th>成本</th>
-                <th>Tokens</th>
-                <th>呼叫</th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  Project ID
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  成本
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  Tokens
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  呼叫
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="project in topProjects" :key="project.projectId">
-                <td>{{ project.projectId }}</td>
-                <td>{{ formatCurrency(project.totalCost) }}</td>
-                <td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ project.projectId }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ formatCurrency(project.totalCost) }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
                   {{ formatTokens(project.inputTokens) }} /
                   {{ formatTokens(project.outputTokens) }}
                 </td>
-                <td>{{ project.callCount }}</td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ project.callCount }}
+                </td>
               </tr>
             </tbody>
           </table>
           <button
-            class="btn btn-secondary"
+            class="mt-4 w-full rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-semibold text-blue-500 transition hover:border-blue-500 hover:bg-blue-50"
             @click="showProjectDetailsModal = true"
           >
             查看詳情 →
@@ -273,32 +419,51 @@
         </article>
       </section>
 
-      <section v-if="analytics" class="grid grid-duo">
-        <article class="glass-panel">
-          <header>
-            <p class="section-eyebrow">By Action</p>
-            <h2>功能成本分佈</h2>
+      <section
+        v-if="analytics"
+        class="mb-6 grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]"
+      >
+        <article
+          class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <header class="mb-6">
+            <p
+              class="text-[0.7rem] font-semibold uppercase tracking-[0.05em] text-gray-500"
+            >
+              By Action
+            </p>
+            <h2 class="my-1 text-xl font-bold text-gray-800">功能成本分佈</h2>
           </header>
-          <div v-if="!analytics.byAction.length" class="empty-state">
+          <div
+            v-if="!analytics.byAction.length"
+            class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500"
+          >
             無行為記錄。
           </div>
-          <div v-else class="action-list">
+          <div v-else class="mt-3 flex flex-col gap-3">
             <div
               v-for="actionRow in analytics.byAction"
               :key="actionRow.action"
-              class="action-row"
+              class="flex items-center justify-between gap-4"
             >
               <div>
-                <p class="action-name">{{ actionRow.action }}</p>
-                <p class="action-sub">{{ actionRow.callCount }} 次</p>
+                <p class="text-sm font-semibold text-gray-800">
+                  {{ actionRow.action }}
+                </p>
+                <p class="text-xs text-gray-500">
+                  {{ actionRow.callCount }} 次
+                </p>
               </div>
-              <div class="action-bar">
-                <span class="action-value">{{
-                  formatCurrency(actionRow.totalCost)
-                }}</span>
-                <div class="bar">
+              <div class="flex-1">
+                <span
+                  class="block text-right text-[0.8rem] font-medium text-gray-700"
+                  >{{ formatCurrency(actionRow.totalCost) }}</span
+                >
+                <div
+                  class="mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200"
+                >
                   <span
-                    class="fill"
+                    class="block h-full rounded bg-gradient-to-r from-blue-500 to-cyan-500"
                     :style="{ width: `${actionWidth(actionRow.totalCost)}%` }"
                   ></span>
                 </div>
@@ -307,46 +472,102 @@
           </div>
         </article>
 
-        <article class="glass-panel">
-          <header>
-            <p class="section-eyebrow">By Model</p>
-            <h2>模型性價比</h2>
+        <article
+          class="overflow-x-auto rounded-lg border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <header class="mb-6">
+            <p
+              class="text-[0.7rem] font-semibold uppercase tracking-[0.05em] text-gray-500"
+            >
+              By Model
+            </p>
+            <h2 class="my-1 text-xl font-bold text-gray-800">模型性價比</h2>
           </header>
-          <table v-if="modelStats.length">
+          <table
+            v-if="modelStats.length"
+            class="mt-3 w-full border-collapse text-sm"
+          >
             <thead>
               <tr>
-                <th>模型</th>
-                <th>成本</th>
-                <th>Tokens</th>
-                <th>呼叫</th>
-                <th>平均成本</th>
-                <th>佔比</th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  模型
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  成本
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  Tokens
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  呼叫
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  平均成本
+                </th>
+                <th
+                  class="border-b border-gray-200 bg-gray-50 px-2 py-2 text-left text-[0.8rem] font-semibold text-gray-700"
+                >
+                  佔比
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="model in modelStats" :key="model.modelId">
-                <td>{{ model.modelId }}</td>
-                <td>{{ formatCurrency(model.totalCost) }}</td>
-                <td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ model.modelId }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ formatCurrency(model.totalCost) }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
                   {{ formatTokens(model.inputTokens) }} /
                   {{ formatTokens(model.outputTokens) }}
                 </td>
-                <td>{{ model.callCount }}</td>
-                <td>{{ formatCurrency(model.avgCost) }}</td>
-                <td>{{ model.share.toFixed(1) }}%</td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ model.callCount }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ formatCurrency(model.avgCost) }}
+                </td>
+                <td class="border-b border-gray-200 px-2 py-2 text-gray-700">
+                  {{ model.share.toFixed(1) }}%
+                </td>
               </tr>
             </tbody>
           </table>
-          <div v-else class="empty-state">尚無模型資料</div>
+          <div
+            v-else
+            class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500"
+          >
+            尚無模型資料
+          </div>
         </article>
       </section>
 
-      <p v-if="!analytics && !loading" class="empty-state">
+      <p
+        v-if="!analytics && !loading"
+        class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-gray-500"
+      >
         尚未取得任何使用資料，請先套用篩選。
       </p>
 
-      <div v-if="loading" class="loading-overlay">
-        <div class="spinner"></div>
+      <div
+        v-if="loading"
+        class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/75 backdrop-blur-sm"
+      >
+        <div
+          class="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500"
+        ></div>
         <p>資料更新中...</p>
       </div>
 
@@ -398,6 +619,7 @@ import ProjectDetailsModal from "~/components/usage-analytics/ProjectDetailsModa
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
+// 儀表板核心資料與 UI 狀態
 const analytics = ref(null);
 const loading = ref(false);
 const errorMessage = ref("");
@@ -407,12 +629,14 @@ const showProjectDetailsModal = ref(false);
 const { error: notifyError, success } = useNotifications();
 const { checkIsInternal } = useInternalCheck();
 
+// 預設時間區間快捷選項
 const rangePresets = [
   { key: "7d", label: "近 7 天", days: 7 },
   { key: "30d", label: "近 30 天", days: 30 },
   { key: "90d", label: "近 90 天", days: 90 },
 ];
 
+// 查詢條件（會組成 API 參數）
 const filters = reactive({
   preset: "30d",
   startDate: formatDate(shiftDays(new Date(), -29)),
@@ -423,6 +647,7 @@ const filters = reactive({
   action: "",
 });
 
+// 下拉選單可選項（由後端回傳）
 const filterOptions = reactive({
   users: [],
   projects: [],
@@ -430,6 +655,7 @@ const filterOptions = reactive({
   actions: [],
 });
 
+// 儀表板總覽指標；若尚未載入則回傳預設值避免模板判斷複雜化
 const overview = computed(
   () =>
     analytics.value?.globalOverview || {
@@ -442,26 +668,29 @@ const overview = computed(
     },
 );
 
+// 首屏只顯示前 3 名，用於摘要卡片
 const topUsers = computed(() => {
   const allUsers = analytics.value?.byUser?.rows || [];
   return allUsers.slice(0, 3);
 });
 
+// 詳細 modal 使用完整清單
 const allUsers = computed(() => analytics.value?.byUser?.rows || []);
 
+// 首屏只顯示前 3 個專案
 const topProjects = computed(() => {
   const allProjects = analytics.value?.byProject?.rows || [];
   return allProjects.slice(0, 3);
 });
 
+// 專案詳細 modal 使用完整清單
 const allProjects = computed(() => analytics.value?.byProject?.rows || []);
 
-const totalCostInRange = computed(() => overview.value.rangeCost || 0);
-
+// 計算模型成本佔比，作為模型性價比表格欄位
 const modelStats = computed(() => {
   const models = analytics.value?.byModel || [];
   const total =
-    totalCostInRange.value ||
+    overview.value.rangeCost ||
     models.reduce((acc, row) => acc + (row.totalCost || 0), 0);
   if (!models.length || total === 0) {
     return [];
@@ -472,6 +701,7 @@ const modelStats = computed(() => {
   }));
 });
 
+// 將趨勢資料轉為 SVG polyline 座標
 const trendPoints = computed(() => {
   const trend = analytics.value?.trend || [];
   if (trend.length <= 1) return [];
@@ -485,12 +715,14 @@ const trendPoints = computed(() => {
     .join(" ");
 });
 
+// 供摘要顯示「區間最大單日成本」
 const trendMaxCost = computed(() => {
   const trend = analytics.value?.trend || [];
   if (!trend.length) return 0;
   return Math.max(...trend.map((p) => p.cost));
 });
 
+// 供圖表底部顯示趨勢實際日期範圍
 const trendRange = computed(() => {
   const trend = analytics.value?.trend || [];
   if (!trend.length) {
@@ -502,10 +734,12 @@ const trendRange = computed(() => {
   };
 });
 
+// 右上角顯示目前套用日期區間
 const rangeSummary = computed(
   () => `${filters.startDate} → ${filters.endDate}`,
 );
 
+// 將成本格式化為易讀金額
 function formatCurrency(value) {
   const number = Number(value || 0);
   if (number >= 1) {
@@ -515,6 +749,7 @@ function formatCurrency(value) {
   return `$${number.toExponential(2)}`;
 }
 
+// 將 token 數量轉成 K/M 顯示
 function formatTokens(value) {
   const numeric = Number(value || 0);
   if (numeric >= 1_000_000) return `${(numeric / 1_000_000).toFixed(1)}M`;
@@ -522,22 +757,26 @@ function formatTokens(value) {
   return numeric.toLocaleString();
 }
 
+// 日期格式統一為 yyyy-mm-dd，對齊 input[type=date]
 function formatDate(dateInput) {
   const d = new Date(dateInput);
   return d.toISOString().slice(0, 10);
 }
 
+// 儀表板顯示使用的完整日期時間格式
 function formatDateTime(isoString) {
   const d = new Date(isoString);
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
 }
 
+// 日期平移工具：根據 offset 取得相對日期
 function shiftDays(base, offset) {
   const clone = new Date(base);
   clone.setDate(clone.getDate() + offset);
   return clone;
 }
 
+// Action 長條圖寬度比例（以當前查詢內最大成本為 100%）
 function actionWidth(cost) {
   const rows = analytics.value?.byAction || [];
   if (!rows.length) return 0;
@@ -545,10 +784,12 @@ function actionWidth(cost) {
   return Math.min(100, (cost / max) * 100);
 }
 
+// 手動調整日期時，切換為自訂區間模式
 function onCustomRange() {
   filters.preset = "custom";
 }
 
+// 點選快捷範圍後同步更新起訖日期
 function setPreset(key) {
   const preset = rangePresets.find((item) => item.key === key);
   if (!preset) return;
@@ -557,6 +798,7 @@ function setPreset(key) {
   filters.startDate = formatDate(shiftDays(new Date(), -(preset.days - 1)));
 }
 
+// 重置所有篩選，並立即重新查詢
 function resetFilters() {
   filters.preset = "30d";
   filters.startDate = formatDate(shiftDays(new Date(), -29));
@@ -568,6 +810,7 @@ function resetFilters() {
   applyFilters();
 }
 
+// 防呆：確保開始日不晚於結束日
 function validateRange() {
   if (!filters.startDate || !filters.endDate) {
     return false;
@@ -575,6 +818,7 @@ function validateRange() {
   return new Date(filters.startDate) <= new Date(filters.endDate);
 }
 
+// 主查詢函式：依 filters 取得分析資料並更新選單來源
 async function fetchAnalytics(showToast = false) {
   loading.value = true;
   errorMessage.value = "";
@@ -614,6 +858,7 @@ async function fetchAnalytics(showToast = false) {
   }
 }
 
+// 先驗證日期再查詢，避免送出無效請求
 async function applyFilters() {
   if (!validateRange()) {
     const msg = "請確認開始日期早於結束日期";
@@ -624,8 +869,10 @@ async function applyFilters() {
   await fetchAnalytics(false);
 }
 
+// 手動刷新時顯示成功提示
 const refresh = () => fetchAnalytics(true);
 
+// 僅允許內部帳號進入；初次掛載即載入資料
 onMounted(async () => {
   const isInternal = await checkIsInternal();
   if (!isInternal) {
@@ -635,424 +882,3 @@ onMounted(async () => {
   await fetchAnalytics();
 });
 </script>
-
-<style scoped>
-.usage-analytics-page {
-  min-height: 100vh;
-  padding: 1rem;
-  background: #f9fafb;
-  color: #1f2937;
-}
-
-.hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
-}
-
-.hero-eyebrow {
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b7280;
-  font-size: 0.75rem;
-}
-
-.hero h1 {
-  font-size: 1.875rem;
-  margin-bottom: 0.25rem;
-  font-weight: bold;
-}
-
-.hero-subtitle {
-  color: #6b7280;
-  max-width: 48ch;
-  font-size: 0.875rem;
-}
-
-.hero-meta {
-  text-align: right;
-  font-size: 0.875rem;
-}
-
-.hero-meta p {
-  margin-bottom: 0.5rem;
-}
-
-.hero-meta span {
-  font-weight: 600;
-  color: #374151;
-}
-
-.hero-range {
-  font-weight: 600;
-  color: #374151;
-}
-
-.btn {
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  border: none;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-}
-
-.btn-primary:not(:disabled):hover {
-  background: #2563eb;
-}
-
-.btn-ghost {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-ghost:not(:disabled):hover {
-  background: #d1d5db;
-}
-
-.btn-chip {
-  background: #f3f4f6;
-  color: #374151;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid #e5e7eb;
-}
-
-.btn-chip.active {
-  border-color: #3b82f6;
-  background: #eff6ff;
-  color: #1e40af;
-}
-
-.glass-panel {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow-x: auto;
-}
-
-.panel-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.form-field label {
-  display: block;
-  font-size: 0.85rem;
-  color: #374151;
-  margin-bottom: 0.35rem;
-  font-weight: 500;
-}
-
-.form-field input,
-.form-field select {
-  width: 100%;
-  border-radius: 0.375rem;
-  border: 1px solid #d1d5db;
-  padding: 0.5rem 0.75rem;
-  background: white;
-  color: #1f2937;
-  font-size: 0.875rem;
-}
-
-.preset-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.panel-actions {
-  display: flex;
-  gap: 1rem;
-}
-
-.error-pill {
-  margin-top: 0.5rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 0.375rem;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.8rem;
-}
-
-.grid-overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.kpi-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.kpi-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.kpi-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0.35rem 0;
-  color: #1f2937;
-}
-
-.kpi-hint {
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
-
-.grid-major {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.5rem;
-}
-
-.section-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 0.75rem;
-  font-size: 0.875rem;
-  overflow-x: auto;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.5rem 0.5rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-th {
-  font-size: 0.8rem;
-  color: #374151;
-  font-weight: 600;
-  background: #f9fafb;
-}
-
-td {
-  color: #374151;
-}
-
-.glass-panel {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow-x: auto;
-}
-
-.grid-duo {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.5rem;
-}
-
-.action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.action-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: center;
-}
-
-.action-name {
-  font-weight: 600;
-  color: #1f2937;
-  font-size: 0.875rem;
-}
-
-.action-sub {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.action-bar {
-  flex: 1;
-}
-
-.action-value {
-  display: block;
-  text-align: right;
-  font-size: 0.8rem;
-  color: #374151;
-  font-weight: 500;
-}
-
-.bar {
-  width: 100%;
-  height: 0.4rem;
-  border-radius: 0.25rem;
-  background: #e5e7eb;
-  overflow: hidden;
-  margin-top: 0.25rem;
-}
-
-.bar .fill {
-  display: block;
-  height: 100%;
-  border-radius: 0.25rem;
-  background: linear-gradient(90deg, #3b82f6, #06b6d4);
-}
-
-.trend-card svg {
-  width: 100%;
-  height: 150px;
-  stroke: #3b82f6;
-}
-
-.trend-footer {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.btn-expand {
-  background: #f3f4f6;
-  color: #3b82f6;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-expand:hover {
-  background: #eff6ff;
-  border-color: #3b82f6;
-}
-
-.btn-secondary {
-  margin-top: 1rem;
-  background: #f3f4f6;
-  color: #3b82f6;
-  border: 1px solid #d1d5db;
-  border-radius: 0.375rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: 100%;
-}
-
-.btn-secondary:hover {
-  background: #eff6ff;
-  border-color: #3b82f6;
-}
-
-.trend-body {
-  margin-top: 0.75rem;
-}
-
-.empty-state {
-  text-align: center;
-  color: #6b7280;
-  padding: 1.5rem;
-  border: 1px dashed #d1d5db;
-  border-radius: 0.5rem;
-  background: #f9fafb;
-}
-
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  backdrop-filter: blur(2px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  background: rgba(255, 255, 255, 0.75);
-  z-index: 50;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-header {
-  margin-bottom: 1.5rem;
-}
-
-header p.section-eyebrow {
-  margin: 0;
-}
-
-header h2 {
-  margin: 0.25rem 0;
-  font-size: 1.25rem;
-  font-weight: bold;
-  color: #1f2937;
-}
-
-@media (max-width: 900px) {
-  .hero {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .hero-meta {
-    text-align: left;
-  }
-
-  .panel-actions {
-    flex-direction: column;
-  }
-}
-</style>

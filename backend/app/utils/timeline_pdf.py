@@ -17,9 +17,9 @@ _TAIWAN_TZ = timezone(timedelta(hours=8))
 
 _EVENT_TYPE_LABELS = {
     "stored_answer_updated": "已更新答案",
-    "plan_revision_started": "開始修訂企劃書名字",
-    "plan_generation_started": "開始生成企劃書",
-    "plan_generation_completed": "企劃書生成完成",
+    "plan_revision_started": "開始修訂計畫書名字",
+    "plan_generation_started": "開始生成計畫書",
+    "plan_generation_completed": "計畫書生成完成",
     "section_generated": "章節生成完成",
 }
 

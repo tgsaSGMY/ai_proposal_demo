@@ -1,3 +1,4 @@
+<!-- 重設密碼 -->
 <template>
   <ClientOnly>
     <div class="flex items-center justify-center p-4 sm:p-6 min-h-screen">

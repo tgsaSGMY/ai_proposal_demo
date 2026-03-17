@@ -228,7 +228,7 @@
           d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
         ></path>
       </svg>
-      {{ isGenerating ? "正在生成..." : "生成完整計劃書" }}
+      {{ isGenerating ? "正在生成..." : "生成完整計畫書" }}
     </button>
   </div>
 </template>
@@ -352,7 +352,7 @@ const dynamicSections = computed(() =>
   }),
 );
 
-// 计算属性：检查是否准备好生成企劃，需要选择模板和输入摘要
+// 计算属性：检查是否准备好生成計畫，需要选择模板和输入摘要
 const isReadyToGenerate = computed(() => {
   return (
     selectedTemplateId.value &&
@@ -429,7 +429,7 @@ function computeFieldStatus(value) {
   return "可選填";
 }
 
-// 发送生成企劃事件
+// 发送生成計畫事件
 const emitGeneratePlan = () => {
   if (!isReadyToGenerate.value) return;
   emit("generatePlan", { summaries: [] });

@@ -78,7 +78,7 @@
             目前尚無已儲存的計畫
           </p>
           <p class="mt-2 text-sm text-gray-500">
-            回到首頁生成企劃後，我們會自動把成果同步到這裡。
+            回到首頁生成計畫後，我們會自動把成果同步到這裡。
           </p>
           <NuxtLink
             to="/"
@@ -395,7 +395,6 @@ import PlanImageGeneratorModal from "~/components/PlanImageGeneratorModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
-import { useInternalCheck } from "~/composables/useInternalCheck";
 // 引入元件與 composables：處理編輯 modal、圖片生成、使用者資訊、內部權限判定、通知與確認對話等功能
 
 import {
@@ -477,7 +476,7 @@ useHead({
     },
     {
       name: "keywords",
-      content: "計畫庫, 計畫管理, 計畫追蹤, TGSA, AI 企劃",
+      content: "計畫庫, 計畫管理, 計畫追蹤, TGSA, AI 計畫",
     },
     {
       property: "og:title",
@@ -503,10 +502,6 @@ const isImageGeneratorOpen = ref(false);
 const selectedProjectForImage = ref<ProjectCard | null>(null);
 const isSupportPanelOpen = ref(false);
 
-// internal check
-const { checkIsInternal } = useInternalCheck();
-const isInternal = ref(false);
-
 const router = useRouter();
 const { confirm } = useConfirm();
 const { success, error: notifyError } = useNotifications();
@@ -530,8 +525,6 @@ definePageMeta({
 onMounted(async () => {
   document.addEventListener("click", handleDocumentClick);
   await refreshUser();
-  // determine if current user is internal
-  isInternal.value = await checkIsInternal();
 });
 
 onBeforeUnmount(() => {
@@ -543,10 +536,8 @@ watch(
   async (userId) => {
     if (userId) {
       await fetchProjects();
-      isInternal.value = await checkIsInternal();
     } else {
       projects.value = [];
-      isInternal.value = false;
     }
   },
   { immediate: true },
@@ -557,7 +548,7 @@ watch(
  * - 計算計畫完成度百分比（基於 stored_answer 中填入的動態欄位）
  * - 指派顏色與樣式（accent）用於卡片展示
  * - 格式化最後更新時間為台灣時區格式
- * - 顯示企劃書類型（補助主題 / 模板）
+ * - 顯示計畫類型（補助主題 / 模板）
  * @param record - 後端專案記錄
  * @param index - 專案在列表中的索引（用於循環指派顏色）
  * @param accentOverride - 可選的顏色樣式覆蓋
@@ -717,13 +708,6 @@ function openEdit(project: ProjectCard) {
  * @param project - 要生成圖片的專案卡片物件
  */
 function openGenerateImage(project: ProjectCard) {
-  // runtime guard: only internal users can open the image generator
-  // if (!isInternal.value) {
-  //   notifyError("僅限內部人員使用圖片生成功能");
-  //   menuOpenId.value = null;
-  //   return;
-  // }
-
   selectedProjectForImage.value = project;
   isImageGeneratorOpen.value = true;
   menuOpenId.value = null;

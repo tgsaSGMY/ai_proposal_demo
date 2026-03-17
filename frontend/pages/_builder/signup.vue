@@ -1,3 +1,4 @@
+<!-- 内部人員注冊界面 -->
 <template>
   <div class="flex items-center justify-center px-4 sm:p-6">
     <div class="w-full max-w-md">
@@ -267,7 +268,6 @@
 <script setup>
 import { supabase } from "~/utils/supabaseClient";
 import { authenticatedFetch } from "~/composables/useAppAuth";
-// 引入 Supabase 客戶端，用於呼叫 RPC 與 auth（處理註冊、登入等行為）
 
 definePageMeta({
   middleware: "redirect-if-authenticated",

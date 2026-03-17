@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click="closeModal">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
-        <h2>企劃成本詳情</h2>
+        <h2>計畫成本詳情</h2>
         <button class="btn-close" @click="closeModal">✕</button>
       </div>
 
@@ -30,7 +30,7 @@
             </tr>
           </tbody>
         </table>
-        <div v-else class="empty-state">無企劃資料</div>
+        <div v-else class="empty-state">無計畫資料</div>
       </div>
     </div>
   </div>

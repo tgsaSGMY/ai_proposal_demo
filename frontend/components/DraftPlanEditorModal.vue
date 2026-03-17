@@ -170,7 +170,7 @@ async function validateAndSyncSchemaWithContent() {
     // 如果有刪除的字段，通知用戶
     if (hasChanges) {
       planContent.value = { ...planContent.value }; // 觸發響應性更新
-      const message = `檢測到模板結構已更新，以下已刪除的字段已從企劃中移除：\n\n${deletedFields.map((f) => `• ${f}`).join("\n")}\n\n企劃已自動同步到最新結構。`;
+      const message = `檢測到模板結構已更新，以下已刪除的字段已從計畫中移除：\n\n${deletedFields.map((f) => `• ${f}`).join("\n")}\n\n計畫已自動同步到最新結構。`;
       info(message);
     }
   } catch (err) {
@@ -396,7 +396,7 @@ async function saveRejectedAnswersToDb(rejected) {
   }
 }
 
-// 处理自动填充，更新企劃内容
+// 处理自动填充，更新計畫内容
 function handleAutoFillInModal(filledContent) {
   if (!planContent.value) planContent.value = {};
   Object.assign(planContent.value, filledContent);
@@ -465,10 +465,10 @@ async function getUserIdOrNotify() {
   return userId;
 }
 
-// 处理企劃生成，调用后端API生成多个候选方案
+// 处理計畫生成，调用后端API生成多个候选方案
 async function handleGeneratePlanInModal(outerPayload) {
   isGeneratingPlan.value = true;
-  showLoading("正在生成計劃書...", true);
+  showLoading("正在生成計畫書...", true);
   try {
     const finalUserInput = buildFinalUserInputForGeneration(
       outerPayload?.summaries,
@@ -508,7 +508,7 @@ async function handleGeneratePlanInModal(outerPayload) {
 
     candidatePlan.value = processedCandidates;
     showCandidateModal.value = true; // 显示选择模态框
-    success("計劃書已生成!");
+    success("計畫書已生成!");
     debounceSave();
   } catch (e) {
     errorNotification(`生成失敗: ${e.message}`);

@@ -9,7 +9,7 @@
       <input
         type="text"
         v-model="searchTerm"
-        placeholder="搜索企劃名稱..."
+        placeholder="搜索計畫名稱..."
         class="w-full max-w-full sm:max-w-xs px-3 sm:px-4 py-2 rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 bg-white text-gray-800 text-sm sm:text-base transition"
       />
       <select
@@ -19,7 +19,6 @@
         <option value="">所有模式</option>
         <option value="synthetic">AI 生成</option>
         <option value="golden">手動標注</option>
-        <!-- <option value="internal">生成企劃書</option> -->
       </select>
     </div>
 
@@ -157,7 +156,7 @@
         />
       </svg>
       <p class="text-gray-400 text-sm sm:text-base">
-        没有找到符合條件的企劃草稿。
+        没有找到符合條件的計畫草稿。
       </p>
     </div>
   </div>
@@ -245,7 +244,7 @@ function getStatusText(status) {
   const map = {
     completed: "已完成",
     generating_idea: "生成想法中...",
-    generating_plan: "生成計劃中...",
+    generating_plan: "生成計畫中...",
     completed_idea: "已生成想法",
     pending: "待处理",
     error: "失敗",

@@ -1,3 +1,5 @@
+// 用於 Word 檔案，將內容渲染成 docx 的段落和表格結構
+
 import {
   Paragraph,
   TextRun,
@@ -232,7 +234,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
     );
 
     // 表格行
-    rows.forEach((row, rowIndex) => {
+    rows.forEach((row) => {
       // 檢查是否是 SWOT 表格的 secondary header 行
       // 只有當整行都是「Opportunity機會」和「Threat威脅」時，才是 secondary header
       const isSecondaryHeader =
@@ -318,7 +320,7 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
         .map((line: string) => line.trim())
         .filter((line: string) => line);
 
-      lines.forEach((line: string, lineIndex: number) => {
+      lines.forEach((line: string) => {
         if (line) {
           // 檢測圖片占位符，在原地 highlight
           const imagePattern = /【圖[:：][^】]+】/g;

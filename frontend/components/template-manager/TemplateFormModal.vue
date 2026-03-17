@@ -2,7 +2,6 @@
   <div
     v-if="isVisible"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
-    @click.self="emit('cancel')"
   >
     <section
       class="bg-white rounded-2xl shadow p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4"

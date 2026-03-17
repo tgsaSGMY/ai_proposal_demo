@@ -375,7 +375,7 @@
             class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:-translate-y-0.5 hover:border-gray-300"
             @click="switchToExternalView"
           >
-            返回企劃填寫界面
+            返回計畫填寫界面
           </button>
 
           <button

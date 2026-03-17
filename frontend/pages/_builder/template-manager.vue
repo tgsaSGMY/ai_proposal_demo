@@ -1,3 +1,4 @@
+<!-- 内部使用的主題與模板管理界面，提供對補助主題（Grant）和計畫模板的增刪改查功能，以及相關設定的管理。用於控制前臺用戶在選擇方案時可見的主題和模板選項。 -->
 <template>
   <ClientOnly>
     <div class="p-4 md:p-8 space-y-6">
@@ -191,6 +192,7 @@ interface TemplateReorderPayload {
   order: number;
 }
 
+// 主畫面資料與 UI 狀態
 const grants = ref<GrantRecord[]>([]);
 const templates = ref<TemplateRecord[]>([]);
 const templateFilter = ref("");
@@ -216,11 +218,13 @@ const showNameRecommendModal = ref(false);
 const nameRecommendTemplate = ref<TemplateRecord | null>(null);
 const nameRecommendSaving = ref(false);
 
+// Grant 表單狀態
 const grantForm = ref<GrantFormState>({
   id: "",
   name: "",
 });
 
+// Template 表單狀態
 const templateForm = ref<TemplateFormState>({
   id: "",
   grant_id: "",
@@ -242,16 +246,19 @@ const TEMPLATE_MANAGER_API = `${API_BASE_URL}/template-manager`;
 const { success, error: notifyError } = useNotifications();
 const { checkIsInternal } = useInternalCheck();
 
+// 給下拉選單使用的 Grant 清單
 const grantOptions = computed(() =>
   grants.value.map((grant) => ({ label: grant.name, value: grant.id })),
 );
 
+// 提供模板列表快速查詢 Grant 名稱
 const grantNameMap = computed(() => {
   const map = new Map<string, string>();
   grants.value.forEach((grant) => map.set(grant.id, grant.name));
   return map;
 });
 
+// 通用授權請求包裝：有 body 時補上 JSON Content-Type
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) {
@@ -264,6 +271,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   });
 }
 
+// 通用 JSON API 請求：統一錯誤處理與型別回傳
 async function fetchJsonWithAuth<T>(
   url: string,
   options: RequestInit = {},
@@ -276,6 +284,7 @@ async function fetchJsonWithAuth<T>(
   return response.json();
 }
 
+// 載入指定 Grant + Template 的章節列表
 async function fetchSections(grantId: string, templateId: string) {
   const params = new URLSearchParams({
     grant_id: grantId,
@@ -286,6 +295,7 @@ async function fetchSections(grantId: string, templateId: string) {
   );
 }
 
+// FormData 專用請求（支援檔案上傳）
 async function fetchWithFormDataAuth(
   url: string,
   formData: FormData,
@@ -304,6 +314,7 @@ async function fetchWithFormDataAuth(
   return response.json();
 }
 
+// 首頁初始化：一次拉取 grants 與 templates
 async function loadInitialData() {
   try {
     const [grantData, templateData] = await Promise.all([
@@ -317,6 +328,7 @@ async function loadInitialData() {
   }
 }
 
+// 開啟 Grant 表單；create 模式會先清空
 function openGrantModal(mode: "create" | "edit") {
   grantFormMode.value = mode;
   if (mode === "create") {
@@ -325,11 +337,13 @@ function openGrantModal(mode: "create" | "edit") {
   showGrantModal.value = true;
 }
 
+// 關閉 Grant 表單並重置狀態
 function closeGrantModal() {
   showGrantModal.value = false;
   resetGrantForm();
 }
 
+// 開啟 Template 表單；create 模式會先清空
 function openTemplateModal(mode: "create" | "edit") {
   templateFormMode.value = mode;
   if (mode === "create") {
@@ -338,11 +352,13 @@ function openTemplateModal(mode: "create" | "edit") {
   showTemplateModal.value = true;
 }
 
+// 關閉 Template 表單並重置狀態
 function closeTemplateModal() {
   showTemplateModal.value = false;
   resetTemplateForm();
 }
 
+// 重置 Grant 表單與編輯狀態
 function resetGrantForm() {
   grantForm.value = {
     id: "",
@@ -352,6 +368,7 @@ function resetGrantForm() {
   grantEditingId.value = null;
 }
 
+// 將指定 Grant 資料帶入編輯表單
 function startGrantEdit(grant: GrantRecord) {
   grantFormMode.value = "edit";
   grantEditingId.value = grant.id;
@@ -362,6 +379,7 @@ function startGrantEdit(grant: GrantRecord) {
   openGrantModal("edit");
 }
 
+// 送出 Grant 表單：create / update 共用入口
 async function handleGrantSubmit() {
   if (!grantForm.value.id.trim() || !grantForm.value.name.trim()) {
     notifyError("請完整填寫 Grant ID 與名稱");
@@ -409,6 +427,7 @@ async function handleGrantSubmit() {
   }
 }
 
+// 重置 Template 表單與編輯狀態
 function resetTemplateForm() {
   templateFormMode.value = "create";
   templateEditingKeys.value = null;
@@ -427,6 +446,7 @@ function resetTemplateForm() {
   };
 }
 
+// 將指定 Template 資料帶入編輯表單
 function startTemplateEdit(template: TemplateRecord) {
   templateFormMode.value = "edit";
   templateEditingKeys.value = { grant_id: template.grant_id, id: template.id };
@@ -446,6 +466,7 @@ function startTemplateEdit(template: TemplateRecord) {
   openTemplateModal("edit");
 }
 
+// 送出 Template 表單：含文字欄位與可選 logo 檔案上傳
 async function handleTemplateSubmit() {
   if (
     !templateForm.value.grant_id ||
@@ -520,6 +541,7 @@ async function handleTemplateSubmit() {
   }
 }
 
+// 更新模板排序：只送出實際有變動的項目，避免不必要 API 請求
 async function handleTemplateReorder(
   changedTemplates: TemplateReorderPayload[],
 ) {
@@ -582,6 +604,7 @@ async function handleTemplateReorder(
   }
 }
 
+// 開啟章節編輯器並載入該模板章節
 async function openSectionEditor(template: TemplateRecord) {
   sectionModalTemplate.value = template;
   sectionRecords.value = [];
@@ -589,12 +612,14 @@ async function openSectionEditor(template: TemplateRecord) {
   await fetchSectionsForTemplate(template);
 }
 
+// 關閉章節編輯器並清除暫存狀態
 function closeSectionModal() {
   showSectionModal.value = false;
   sectionModalTemplate.value = null;
   sectionRecords.value = [];
 }
 
+// 重新抓取當前模板章節
 async function fetchSectionsForTemplate(template: TemplateRecord) {
   sectionLoading.value = true;
   try {
@@ -606,6 +631,7 @@ async function fetchSectionsForTemplate(template: TemplateRecord) {
   }
 }
 
+// 新增章節
 async function handleSectionCreate(payload: SectionMutationPayload) {
   const template = sectionModalTemplate.value;
   if (!template) {
@@ -633,6 +659,7 @@ async function handleSectionCreate(payload: SectionMutationPayload) {
   }
 }
 
+// 更新章節；若有改 id，會使用 originalId 指向舊紀錄
 async function handleSectionUpdate(payload: SectionMutationPayload) {
   const template = sectionModalTemplate.value;
   if (!template) {
@@ -660,6 +687,7 @@ async function handleSectionUpdate(payload: SectionMutationPayload) {
   }
 }
 
+// 刪除章節並刷新列表
 async function handleSectionDelete(section: SectionRecord) {
   sectionSaving.value = true;
   try {
@@ -678,6 +706,7 @@ async function handleSectionDelete(section: SectionRecord) {
   }
 }
 
+// 章節排序更新
 async function handleSectionReorder(changedSections: SectionRecord[]) {
   const template = sectionModalTemplate.value;
   if (!template || !changedSections?.length) {
@@ -709,6 +738,7 @@ async function handleSectionReorder(changedSections: SectionRecord[]) {
   }
 }
 
+// 開啟 Word 設定編輯器並預載章節資料
 async function openWordEditor(template: TemplateRecord) {
   try {
     wordEditorTemplate.value = template;
@@ -723,12 +753,14 @@ async function openWordEditor(template: TemplateRecord) {
   }
 }
 
+// 關閉 Word 設定編輯器並清空暫存
 function closeWordEditorModal() {
   showWordEditorModal.value = false;
   wordEditorTemplate.value = null;
   wordEditorSections.value = [];
 }
 
+// 儲存 Word 匯出設定：以版本快照方式 append 到設定歷史
 async function handleWordEditorSave(config: WordExportTemplateConfig) {
   const template = wordEditorTemplate.value;
   if (!template) {
@@ -780,16 +812,19 @@ async function handleWordEditorSave(config: WordExportTemplateConfig) {
   }
 }
 
+// 開啟推薦名稱設定 modal
 function openNameRecommendModal(template: TemplateRecord) {
   nameRecommendTemplate.value = template;
   showNameRecommendModal.value = true;
 }
 
+// 關閉推薦名稱設定 modal
 function closeNameRecommendModal() {
   showNameRecommendModal.value = false;
   nameRecommendTemplate.value = null;
 }
 
+// 儲存推薦名稱設定；若內容為空則清除後端設定
 async function handleNameRecommendSave(config: NameRecommendConfig) {
   const template = nameRecommendTemplate.value;
   if (!template) {
@@ -819,6 +854,7 @@ async function handleNameRecommendSave(config: NameRecommendConfig) {
   }
 }
 
+// 建立 Word 設定版本 ID（優先使用原生 UUID）
 function createWordConfigVersionId() {
   if (
     typeof crypto !== "undefined" &&
@@ -829,6 +865,7 @@ function createWordConfigVersionId() {
   return `wordcfg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+// 僅內部使用者可進入本頁，通過後才載入初始資料
 onMounted(async () => {
   const isInternal = await checkIsInternal();
   if (!isInternal) {

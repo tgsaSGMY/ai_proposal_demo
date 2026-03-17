@@ -1,3 +1,4 @@
+<!-- 模型陪著中心 -->
 <template>
   <ClientOnly>
     <div class="py-6 px-2 sm:px-4 md:py-10 md:px-8">
@@ -12,7 +13,7 @@
               模型配置中心
             </h1>
             <p class="text-gray-500">
-              為不同的計劃書章節分配最適合的 AI 模型。
+              為不同的計畫書章節分配最適合的 AI 模型。
             </p>
           </div>
           <button
@@ -336,20 +337,6 @@ const { success, error: errorNotification } = useNotifications();
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 
-// ===== 生命周期钩子 =====
-// 页面挂载时检查用户是否为内部人员
-onMounted(async () => {
-  const { checkIsInternal } = useInternalCheck();
-
-  // 執行檢查
-  const isInternal = await checkIsInternal();
-
-  if (!isInternal) {
-    // 如果不是內部人員，重定向到外部版本頁面
-    window.location.href = "/";
-  }
-});
-
 // ===== 数据状态 =====
 // 存储所有配置、模型、路由规则及用户选择
 const allConfigs = ref([]);
@@ -442,7 +429,17 @@ function initializeGlobalModels() {
   savedGlobalInternalModelId.value = internalGlobalRule?.model_id || "";
 }
 
-onMounted(fetchData);
+onMounted(async () => {
+  const { checkIsInternal } = useInternalCheck();
+  const isInternal = await checkIsInternal();
+
+  if (!isInternal) {
+    window.location.href = "/";
+    return;
+  }
+
+  await fetchData();
+});
 
 // ===== 刷新配置 =====
 // 调用 API 刷新所有配置数据，获取最新的模板和模型列表
@@ -474,16 +471,6 @@ async function refreshConfigurations() {
     isRefreshing.value = false;
   }
 }
-
-// ===== 计算属性：默认模型 ID =====
-// 通过优先级系统查找默认应用的模型 ID
-const defaultModelId = computed(() => {
-  // 通過優先級系統查找默認應用的模型 ID
-  const globalRule = routingRules.value.find(
-    (r) => !r.grant_id && !r.section_id,
-  );
-  return globalRule ? globalRule.model_id : null;
-});
 
 // ===== 获取章节的应用规则 =====
 // 根据 section ID 和模型类型（内部/外部），获取应用的路由规则
@@ -703,7 +690,14 @@ async function saveGlobalModels() {
 // ===== 侦听器：模板列表变化 =====
 // 当可用模板列表变化时，自动选择第一个模板
 watch(availableTemplates, (newTemplates) => {
-  if (newTemplates) {
+  if (!newTemplates.length) {
+    selectedTemplateId.value = "";
+    return;
+  }
+
+  if (
+    !newTemplates.find((template) => template.id === selectedTemplateId.value)
+  ) {
     selectedTemplateId.value = newTemplates[0].id;
   }
 });

@@ -154,7 +154,7 @@
                     class="flex-1 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50 px-6 py-3 text-base font-semibold text-amber-700 transition hover:bg-amber-100 hover:border-amber-400 disabled:opacity-50"
                     @click="enrichPrompt"
                     :disabled="!prompt.trim() || isGenerating || isEnriching"
-                    title="按照計劃書內容豐富圖片描述"
+                    title="按照計畫書內容豐富圖片描述"
                   >
                     <svg
                       v-if="isEnriching"
@@ -187,7 +187,7 @@
                       />
                     </svg>
                     <span>{{
-                      isEnriching ? "豐富中..." : "按照計劃書修飾描述"
+                      isEnriching ? "豐富中..." : "按照計畫書修飾描述"
                     }}</span>
                   </button>
 
@@ -795,7 +795,7 @@ function copyPrompt(text: string) {
     });
 }
 
-// 根据企劃内容丰富提示词
+// 根据計畫内容丰富提示词
 async function enrichPrompt() {
   if (!prompt.value.trim() || !props.projectId) return;
 
@@ -822,7 +822,7 @@ async function enrichPrompt() {
 
     const data = await response.json();
     prompt.value = data.enriched_prompt;
-    success("描述已根據計劃書內容豐富");
+    success("描述已根據計畫書內容豐富");
   } catch (error: any) {
     console.error("Failed to enrich prompt", error);
     notifyError(error?.message || "豐富描述失敗，請稍後再試");

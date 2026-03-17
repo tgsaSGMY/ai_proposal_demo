@@ -171,7 +171,7 @@ class EnrichPromptResponse(BaseModel):
     enriched_prompt: str
 
 
-@router.post("/enrich-prompt", response_model=EnrichPromptResponse, summary="按照計劃書內容豐富描述")
+@router.post("/enrich-prompt", response_model=EnrichPromptResponse, summary="按照計畫書內容豐富描述")
 async def enrich_prompt(
     request_data: EnrichPromptRequest,
     request: Request,
@@ -179,10 +179,10 @@ async def enrich_prompt(
     llm_service: LLMService = Depends(get_llm_service),
     user_id: str = Depends(get_current_user_id),
 ):
-    # 根據專案計劃書內容使用 LLM 豐富圖片描述，使其更符合計劃書內容並適合生成圖片
+    # 根據專案計畫書內容使用 LLM 豐富圖片描述，使其更符合計畫書內容並適合生成圖片
     """
-    根據專案的計劃書內容（stored_answer）來豐富使用者提供的圖片描述。
-    使用 LLM 服務生成更詳細且符合計劃書內容的描述。
+    根據專案的計畫書內容（stored_answer）來豐富使用者提供的圖片描述。
+    使用 LLM 服務生成更詳細且符合計畫書內容的描述。
     """
     try:
         # 1) 驗證使用者是否為該 project 的擁有者
@@ -190,7 +190,7 @@ async def enrich_prompt(
         if not project:
             raise HTTPException(status_code=403, detail="Project not found or access denied")
 
-        # 2) 取得計劃書內容
+        # 2) 取得計畫書內容
         stored_answer = project.get("stored_answer", "")
         if not stored_answer:
             raise HTTPException(
@@ -200,16 +200,16 @@ async def enrich_prompt(
 
         # 3) 使用 LLM 豐富描述
         # 構建用於 LLM 的 prompt
-        enrichment_prompt = f"""請根據以下計劃書內容，豐富並詳細化使用者提供的圖片描述。
+        enrichment_prompt = f"""請根據以下計畫書內容，豐富並詳細化使用者提供的圖片描述。
         
-計劃書內容：
+計畫書內容：
 {stored_answer}
 
 原始圖片描述：
 {request_data.prompt}
 
-請生成一個更詳細、更符合計劃書內容的圖片描述。描述未來會被用作圖片生成並放入企劃書。描述應該：
-1. 融合計劃書中的關鍵概念和細節
+請生成一個更詳細、更符合計畫書內容的圖片描述。描述未來會被用作圖片生成並放入計畫書。描述應該：
+1. 融合計畫書中的關鍵概念和細節
 2. 變得更加具體和詳細
 3. 保留使用者原始意圖的同時提升專業性
 4. 控制在 200 字左右

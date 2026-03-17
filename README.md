@@ -1,21 +1,21 @@
-# AI 企劃書平台
+# AI 計畫書平台
 
-AI 提案平台是一個智能化的計劃書生成系統，利用先進的大型語言模型（LLM）和向量檢索技術，自動化地為用戶生成高品質的計劃書和提案內容。該平台支持多模板、多章節的靈活配置，並提供合成數據生成、批量生成和版本管理等功能。
+AI 提案平台是一個智能化的計畫書生成系統，利用先進的大型語言模型（LLM）和向量檢索技術，自動化地為用戶生成高品質的計畫書和提案內容。該平台支持多模板、多章節的靈活配置，並提供合成數據生成、批量生成和版本管理等功能。
 
 ## 核心功能
 
 ### 內容生成
 
-- 利用 AI 模型自動生成計劃書內容，支持多版本（候選版本）並行生成
+- 利用 AI 模型自動生成計畫書內容，支持多版本（候選版本）並行生成
 - 基於 JSON Schema 的結構化內容生成
 - 支持自訂提示詞和評論優化流程
 - 集成網頁抓取功能，從外部資源自動提取相關信息
 
-### 計劃書管理
+### 計畫書管理
 
-- 支持多層級結構：計劃書（Grant）→ 模板（Template）→ 章節（Section）
+- 支持多層級結構：計畫書（Grant）→ 模板（Template）→ 章節（Section）
 - 靈活的配置管理系統，支持動態配置更新
-- 計劃書的版本控制和內容編輯
+- 計畫書的版本控制和內容編輯
 
 ### 數據集與訓練
 
@@ -26,7 +26,7 @@ AI 提案平台是一個智能化的計劃書生成系統，利用先進的大�
 
 ### 模型路由
 
-- 靈活的模型路由規則系統，支持按計劃書、模板、章節等維度配置
+- 靈活的模型路由規則系統，支持按計畫書、模板、章節等維度配置
 - 動態模型選擇，支持優先級管理
 
 ### 文檔處理
@@ -143,7 +143,7 @@ npm run preview
 
 #### POST /api/generate_plan
 
-生成完整的計劃書內容
+生成完整的計畫書內容
 
 請求體：
 
@@ -171,7 +171,7 @@ npm run preview
 ```json
 {
   "mode": "random",
-  "grant_name": "計劃書名稱",
+  "grant_name": "計畫書名稱",
   "template_name": "模板名稱",
   "section_name": "章節名稱",
   "user_id": "user123",
@@ -201,7 +201,7 @@ npm run preview
 
 #### GET /api/config/grant/{grant_id}
 
-獲取計劃書配置
+獲取計畫書配置
 
 #### PUT /api/config/section/{section_id}
 
@@ -221,7 +221,7 @@ backend/
 │   │   ├── generate.py         # 內容生成相關端點
 │   │   ├── datasets.py         # 數據集管理端點
 │   │   ├── admin.py            # 管理後台端點
-│   │   ├── draft_plan.py       # 計劃書編輯端點
+│   │   ├── draft_plan.py       # 計畫書編輯端點
 │   │   ├── config.py           # 配置管理端點
 │   │   └── dependencies.py     # 依賴注入
 │   ├── core/                   # 核心業務邏輯
@@ -246,18 +246,18 @@ backend/
 frontend/
 ├── pages/                      # 頁面組件
 │   ├── index.vue              # 主頁
-│   └── _builder/              # 計劃書編輯器子頁面
+│   └── _builder/              # 計畫書編輯器子頁面
 │       ├── dataset.vue        # 數據集管理
 │       ├── model.vue          # 模型配置
 │       └── management.vue     # 通用管理界面
 ├── components/                # 可復用組件
 │   ├── PlanInputPanel.vue    # 輸入面板
 │   ├── PlanOutputPanel.vue   # 輸出面板
-│   ├── DraftPlanList.vue     # 計劃書列表
+│   ├── DraftPlanList.vue     # 計畫書列表
 │   ├── BatchSyntheticModal.vue # 批量生成對話框
 │   └── ...                    # 其他組件
 ├── composables/               # Vue 組合式 API 邏輯
-│   ├── usePlanGenerator.ts    # 計劃書生成邏輯
+│   ├── usePlanGenerator.ts    # 計畫書生成邏輯
 │   ├── useNotifications.ts    # 通知管理
 │   ├── useLoading.ts          # 加載狀態
 │   └── useConfirm.ts          # 確認對話框
@@ -271,7 +271,7 @@ frontend/
 
 ## 主要工作流程
 
-### 1. 計劃書生成流程
+### 1. 計畫書生成流程
 
 1. 用戶輸入核心需求（user_input）
 2. 系統根據配置選擇相應的模型和提示詞
@@ -288,9 +288,9 @@ frontend/
 
 ### 3. 批量生成流程
 
-1. 用戶指定計劃書、模板和生成數量
+1. 用戶指定計畫書、模板和生成數量
 2. 系統自動生成多個合成輸入
-3. 針對每個輸入生成對應的計劃書內容
+3. 針對每個輸入生成對應的計畫書內容
 4. 批量保存數據集
 
 ## 數據流
@@ -363,7 +363,7 @@ Nuxt 應用可部署到 Vercel、Netlify 等平台
 
 初始發佈版本，包含核心功能：
 
-- 計劃書生成
+- 計畫書生成
 - 數據集管理
 - 模型路由
 - 配置管理

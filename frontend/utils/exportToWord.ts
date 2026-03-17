@@ -1,4 +1,4 @@
-// frontend/utils/exportToWord.ts
+// 這個檔案包含了從後端獲取 Word Export 配置、根據配置渲染內容，以及導出 Word 文件的核心邏輯
 
 import {
   Document,
@@ -64,7 +64,7 @@ function renderSectionContent(
     if (Object.prototype.hasOwnProperty.call(data, key)) {
       const value = data[key];
       const propInfo = schemaProperties[key];
-      const title = propInfo.title || "" || keyToTitle(key);
+      const title = propInfo.title || keyToTitle(key);
 
       if (value === null || value === "") continue;
 
@@ -77,7 +77,7 @@ function renderSectionContent(
             (item) => typeof item === "object" && item !== null,
           );
 
-          if (allObjectItems && value.length > 0) {
+          if (allObjectItems) {
             // 如果是 array of objects，直接传递 JSON 字符串给渲染器
             renderer.addKeyValue(title, JSON.stringify(value));
           } else {
@@ -1587,7 +1587,7 @@ async function exportPlanToWordDefault(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = projectTitle ? `${projectTitle}.docx` : "計劃書草稿.docx";
+  link.download = projectTitle ? `${projectTitle}.docx` : "計畫書草稿.docx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

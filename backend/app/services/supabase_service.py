@@ -497,7 +497,7 @@ class SupabaseService:
 
         section_label = section_name or section_id or "指定章節"
         base_intro = (
-            f"你是一位頂尖的政府補助案企劃書撰寫專家。你的任務是為一份主題爲「{grant_id}」，模板為 「{template_id}」的計畫書，生成「{section_label}」章節的內容。\n\n"
+            f"你是一位頂尖的政府補助案計畫書撰寫專家。你的任務是為一份主題爲「{grant_id}」，模板為 「{template_id}」的計畫書，生成「{section_label}」章節的內容。\n\n"
             "請嚴格依照以下 JSON Schema 結構與說明進行輸出，除了 JSON 物件本身，不得包含任何額外的說明、開頭、或結尾文字。"
         )
         return f"{base_intro}\n\n```json\n{schema_str}\n```".strip()
@@ -567,12 +567,12 @@ class SupabaseService:
 
 
     async def get_all_draft_plans(self) -> List[Dict[str, Any]]:
-        """获取所有企劃草稿"""
+        """获取所有計畫草稿"""
         response = self.client.from_("draft_plans").select("*").order("created_at", desc=True).execute()
         return response.data if response.data else []
 
     async def create_draft_plan(self, name: str, mode: str, grant_id: Optional[str] = None, template_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """创建一个新的企劃草稿"""
+        """创建一个新的計畫草稿"""
         
         # 检查同名草稿
         existing_response = self.client.from_("draft_plans").select("id").eq("name", name).execute()
@@ -598,7 +598,7 @@ class SupabaseService:
         return response.data if response.data else None
     
     async def update_draft_plan(self, draft_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """更新一个企劃草稿"""
+        """更新一个計畫草稿"""
         if "updated_at" not in data:
             # 设置为东八区时间
             tz = timezone(timedelta(hours=8))
@@ -608,7 +608,7 @@ class SupabaseService:
         return response.data[0] if response.data else None
 
     async def delete_draft_plan(self, draft_id: str) -> bool:
-        """删除一个企劃草稿"""
+        """删除一个計畫草稿"""
         response = self.client.from_("draft_plans").delete().eq("id", draft_id).execute()
         return len(response.data) > 0
 

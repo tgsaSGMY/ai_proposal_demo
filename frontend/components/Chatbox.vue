@@ -1159,9 +1159,9 @@ async function handleRecommendConfirm(selectedName) {
   const projectPlanSummary = props.projectSummary || "";
   const userInput = joinedText;
   const finalUserInput =
-    "計劃名稱: " +
+    "計畫名稱: " +
     projectPlanName +
-    "\n\n計劃摘要: " +
+    "\n\n計畫摘要: " +
     projectPlanSummary +
     "\n\n" +
     userInput;

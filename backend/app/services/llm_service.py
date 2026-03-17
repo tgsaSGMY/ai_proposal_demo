@@ -1031,7 +1031,7 @@ class LLMService:
 
         # ========== 使用重試機制包裝 API 調用和 JSON 處理 ==========
         async def generate_and_parse_with_retry():
-            """調用 API 並解析 JSON，支持重試。包括內容驗證，避免生成空白企劃書"""
+            """調用 API 並解析 JSON，支持重試。包括內容驗證，避免生成空白計畫書"""
             raw_output, llm_error, resp_json = await self.call_external_api(
                 http_session,
                 model_to_use,
