@@ -148,7 +148,7 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import JsonSchemaForm from "./JsonSchemaForm.vue";
+import JsonSchemaForm from "../../data/model/JsonSchemaForm.vue";
 import mammoth from "mammoth";
 import { exportPlanToWord } from "@/utils/exportToWord";
 import { useLoading } from "~/composables/useLoading";

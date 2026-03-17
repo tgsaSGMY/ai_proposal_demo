@@ -390,8 +390,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import PlanLibraryEditModal from "~/components/PlanLibraryEditModal.vue";
-import PlanImageGeneratorModal from "~/components/PlanImageGeneratorModal.vue";
+import PlanLibraryEditModal from "~/components/plan-library/PlanLibraryEditModal.vue";
+import PlanImageGeneratorModal from "~/components/plan-library/PlanImageGeneratorModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";

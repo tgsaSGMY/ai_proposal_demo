@@ -300,7 +300,7 @@ useHead({
 // 导入 Vue 核心库
 import { ref, onMounted, reactive, watch, computed, nextTick } from "vue";
 // 导入子组件和工具函数
-import DatasetEditModal from "~/components/DatasetEditModal.vue";
+import DatasetEditModal from "~/components/data/management/DatasetEditModal.vue";
 import { getSourceTypeClass, getSourceTypeName } from "~/utils/textMapping";
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { authenticatedFetch } from "~/composables/useAppAuth";

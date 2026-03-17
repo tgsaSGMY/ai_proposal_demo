@@ -1,4 +1,4 @@
-<!-- 输入提示词模态帐组件：提示用户输入并提供上下文信息 -->
+<!-- 模擬數據生產工作室裏面的輸入計劃名稱功能 -->
 <template>
   <div
     v-if="visible"
@@ -47,7 +47,7 @@ watch(
   () => props.defaultValue,
   (val) => {
     inputValue.value = val || "";
-  }
+  },
 );
 
 // 提交输入值，发送给父组件

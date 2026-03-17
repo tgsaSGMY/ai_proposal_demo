@@ -267,7 +267,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import CommandEditModal from "~/components/CommandEditModal.vue";
+import CommandEditModal from "~/components/commands/CommandEditModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useNotifications } from "~/composables/useNotifications";

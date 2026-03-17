@@ -1,4 +1,4 @@
-<!-- JSON Schema 表单组件：根据 Schema 动态生成表单输入框 -->
+<!-- JSON Schema 表单组件：根据 Schema 动态生成表单输入框,/modal裏的章節面積， editor的組件 -->
 <template>
   <div class="space-y-4 sm:space-y-6">
     <div v-for="(propInfo, key) in schema.properties || {}" :key="key">
@@ -118,7 +118,7 @@
                   class="w-full flex items-center justify-between px-3 sm:px-4 py-2 text-left text-xs sm:text-sm font-medium text-gray-600 hover:bg-indigo-100 transition disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
                   @click="
                     toggleCollapse(
-                      makeBlockKey('array-item', `${key}-${index}`)
+                      makeBlockKey('array-item', `${key}-${index}`),
                     )
                   "
                 >
@@ -129,7 +129,7 @@
                     class="w-4 h-4 text-gray-500 transition-transform duration-200"
                     :class="{
                       'rotate-90': !isCollapsed(
-                        makeBlockKey('array-item', `${key}-${index}`)
+                        makeBlockKey('array-item', `${key}-${index}`),
                       ),
                     }"
                     xmlns="http://www.w3.org/2000/svg"
@@ -149,7 +149,7 @@
                   <div
                     v-if="
                       !isCollapsed(
-                        makeBlockKey('array-item', `${key}-${index}`)
+                        makeBlockKey('array-item', `${key}-${index}`),
                       )
                     "
                     class="p-3 sm:p-4 pt-0 relative"
@@ -301,7 +301,7 @@ watch(
   () => {
     collapsedKeys.value = new Set();
   },
-  { deep: true }
+  { deep: true },
 );
 
 // 更新指定键的值，发送更新事件给父组件

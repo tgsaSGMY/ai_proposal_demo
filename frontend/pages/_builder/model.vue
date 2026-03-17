@@ -301,7 +301,7 @@ definePageMeta({
 // 导入 Vue 核心库
 import { ref, onMounted, computed, watch } from "vue";
 // 导入子组件和服务
-import ModelSelectorCard from "~/components/ModelSelectorCard.vue";
+import ModelSelectorCard from "~/components/data/model/ModelSelectorCard.vue";
 import { authenticatedFetch } from "~/composables/useAppAuth";
 import { useNotifications } from "~/composables/useNotifications";
 

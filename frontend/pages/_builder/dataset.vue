@@ -165,10 +165,10 @@ import { useNotifications } from "~/composables/useNotifications";
 import { useConfirm } from "~/composables/useConfirm";
 import { authenticatedFetch } from "~/composables/useAppAuth";
 // 导入子组件
-import DraftPlanList from "~/components/DraftPlanList.vue";
-import BatchSyntheticModal from "~/components/BatchSyntheticModal.vue";
-import DraftPlanEditorModal from "~/components/DraftPlanEditorModal.vue";
-import InputPromptModal from "~/components/InputPromptModal.vue";
+import DraftPlanList from "~/components/data/dataset/DraftPlanList.vue";
+import BatchSyntheticModal from "~/components/data/dataset/BatchSyntheticModal.vue";
+import DraftPlanEditorModal from "~/components/data/dataset/DraftPlanEditorModal.vue";
+import InputPromptModal from "~/components/data/dataset/InputPromptModal.vue";
 // 导入加载状态和动态模式生成工具
 import { useLoading } from "~/composables/useLoading";
 import { getDynamicFieldDefinitions } from "~/utils/dynamicSchema";

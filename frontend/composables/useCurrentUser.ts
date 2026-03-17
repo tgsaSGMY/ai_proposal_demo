@@ -1,7 +1,7 @@
 // ===== 导入依赖库 =====
 // 导入 Vue 类型定义
 import type { Ref } from "vue";
-import { authenticatedFetch } from "~/composables/useAppAuth";
+import { authenticatedFetch, getAppSession } from "~/composables/useAppAuth";
 
 // ===== 返回值类型定义 =====
 // 定义 useCurrentUser 函数的返回值接口
@@ -67,7 +67,18 @@ export function useCurrentUser(): UseCurrentUserResult {
     // 设置加载标志为 true
     isFetchingUser.value = true;
     try {
-      const cacheKey = "auth-me";
+      // ===== 获取 Supabase 会话信息 =====
+      // 从 Supabase 认证系统获取当前用户的会话
+      const session = await getAppSession();
+
+      if (!session.isAuthenticated) {
+        userId.value = null;
+        lastResolvedAt.value = 0;
+        lastResolvedToken.value = null;
+        return userId.value;
+      }
+
+      const cacheKey = session.accessToken || "external-cookie";
       const now = Date.now();
       if (
         !force &&

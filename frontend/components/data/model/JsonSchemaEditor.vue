@@ -1,4 +1,4 @@
-<!-- JSON Schema 编辑器组件：可视化编辑 JSON Schema 定义的动态字段 -->
+<!-- JSON Schema 编辑器组件：可视化编辑 JSON Schema 定义的动态字段， /model裏的章節編輯的組件 -->
 <template>
   <div class="space-y-3">
     <div

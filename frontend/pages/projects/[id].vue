@@ -177,7 +177,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 // 导入子组件
-import Chatbox from "~/components/Chatbox.vue";
+import Chatbox from "~/components/chat/Chatbox.vue";
 // 导入自定义组合式函数
 import { usePlanGenerator } from "~/composables/usePlanGenerator";
 import { useNotifications } from "~/composables/useNotifications";

@@ -314,13 +314,13 @@ import {
   ref,
   watch,
 } from "vue";
-import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
-import AnswerEditModal from "~/components/AnswerEditModal.vue";
+import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
+import AnswerEditModal from "~/components/chat/AnswerEditModal.vue";
 import ChatSidebar from "~/components/ChatSidebar.vue";
 import PlanVersionModal from "~/components/PlanVersionModal.vue";
-import FieldFileImportModal from "~/components/editor/helper/FieldFileImportModal.vue";
-import EditFieldModal from "~/components/editor/helper/EditFieldModal.vue";
-import RecommendNameModal from "~/components/editor/helper/RecommendNameModal.vue";
+import FieldFileImportModal from "~/components/chat/helper/FieldFileImportModal.vue";
+import EditFieldModal from "~/components/chat/helper/EditFieldModal.vue";
+import RecommendNameModal from "~/components/chat/helper/RecommendNameModal.vue";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 import { useInternalCheck } from "~/composables/useInternalCheck";

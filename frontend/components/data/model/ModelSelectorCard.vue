@@ -193,7 +193,7 @@
 <script setup>
 import { ref } from "vue";
 import { authenticatedFetch } from "~/composables/useAppAuth";
-import SectionSettingsPanel from "~/components/SectionSettingsPanel.vue";
+import SectionSettingsPanel from "~/components/data/model/SectionSettingsPanel.vue";
 
 const props = defineProps({
   section: { type: Object, required: true },

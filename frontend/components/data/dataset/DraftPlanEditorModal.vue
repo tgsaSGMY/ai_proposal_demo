@@ -83,9 +83,9 @@ import {
   makeCompositeKey,
 } from "~/utils/dynamicSchema";
 import { authenticatedFetch } from "~/composables/useAppAuth";
-import PlanInputPanel from "~/components/PlanInputPanel.vue";
-import PlanOutputPanel from "~/components/PlanOutputPanel.vue";
-import PlanCandidateSelector from "~/components/PlanCandidateSelector.vue";
+import PlanInputPanel from "~/components/data/dataset/PlanInputPanel.vue";
+import PlanOutputPanel from "~/components/data/dataset/PlanOutputPanel.vue";
+import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 
 const props = defineProps({

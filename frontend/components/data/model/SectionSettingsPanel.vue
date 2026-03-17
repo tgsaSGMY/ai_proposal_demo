@@ -1,4 +1,4 @@
-<!-- 章节配置面板组件：配置章节的字段和提示词 -->
+<!-- 章节配置面板组件：配置章节的字段和提示词 （章節編輯） -->
 <template>
   <div class="space-y-6 sm:space-y-8">
     <!-- 引用網路來源開關 -->
@@ -104,7 +104,7 @@
 
 <script setup>
 import { reactive, watch, ref } from "vue";
-import JsonSchemaEditor from "~/components/JsonSchemaEditor.vue";
+import JsonSchemaEditor from "~/components/data/model/JsonSchemaEditor.vue";
 
 const props = defineProps({
   sectionData: { type: Object, default: null },
@@ -150,7 +150,7 @@ watch(
   () => editableData.system_prompt,
   (newVal) => {
     isJsonSchema.value = parseSystemPrompt(newVal);
-  }
+  },
 );
 
 watch(
@@ -159,7 +159,7 @@ watch(
     if (newVal) {
       editableData.system_prompt = newVal.system_prompt || "";
       editableData.custom_prompt_list = JSON.parse(
-        JSON.stringify(newVal.custom_prompt_list || [])
+        JSON.stringify(newVal.custom_prompt_list || []),
       );
       editableData.search_external =
         typeof newVal.search_external === "boolean"
@@ -169,7 +169,7 @@ watch(
       isJsonSchema.value = parseSystemPrompt(editableData.system_prompt);
     }
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true },
 );
 
 // 處理 JSON Schema 編輯器的更新
@@ -195,7 +195,7 @@ function deepClone(obj) {
 // 提供一個方法讓父組件獲取當前的資料
 function getEditableData() {
   const finalPrompts = editableData.custom_prompt_list.filter(
-    (p) => p && p.trim() !== ""
+    (p) => p && p.trim() !== "",
   );
 
   let finalSystemPrompt = editableData.system_prompt;

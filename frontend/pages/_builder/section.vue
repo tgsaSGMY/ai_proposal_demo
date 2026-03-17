@@ -502,7 +502,7 @@ import { useConfirm } from "~/composables/useConfirm";
 import { useLoading } from "~/composables/useLoading";
 import { useInternalCheck } from "~/composables/useInternalCheck";
 // 导入子组件
-import SectionRecommenderModal from "~/components/SectionRecommenderModal.vue";
+import SectionRecommenderModal from "~/components/data/section/SectionRecommenderModal.vue";
 
 // ===== 初始化服务 =====
 // 获取通知、确认、加载状态等服务
