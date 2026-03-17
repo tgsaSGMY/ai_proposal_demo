@@ -316,7 +316,7 @@ import {
 } from "vue";
 import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
 import AnswerEditModal from "~/components/chat/AnswerEditModal.vue";
-import ChatSidebar from "~/components/chat/helper/ChatSidebar.vue";
+import ChatSidebar from "~/components/chat/ChatSidebar.vue";
 import PlanVersionModal from "~/components/chat/helper/PlanVersionModal.vue";
 import FieldFileImportModal from "~/components/chat/helper/FieldFileImportModal.vue";
 import EditFieldModal from "~/components/chat/helper/EditFieldModal.vue";
