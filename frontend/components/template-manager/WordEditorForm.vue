@@ -2,7 +2,6 @@
   <div
     v-if="isVisible && template"
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
-    @click.self="emit('close')"
   >
     <section
       class="w-full max-w-8xl max-h-full overflow-y-auto rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
