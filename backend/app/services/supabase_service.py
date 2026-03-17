@@ -800,7 +800,7 @@ class SupabaseService:
             return None
 
     async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant_name 和 template_name。"""
+        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant/template 顯示資訊。"""
         response = (
             self.client.from_("projects")
             .select("*")
@@ -825,7 +825,7 @@ class SupabaseService:
             for template in grant.templates:
                 templates_lookup[(grant.id, template.id)] = template
         
-        # 為每個專案補充 grant_name 和 template_name
+        # 為每個專案補充 grant_name、template_name 和 template_icon_bg
         projects = response.data
         for project in projects:
             grant_id = project.get("grant_id")
@@ -839,8 +839,10 @@ class SupabaseService:
             
             if grant_id and template_id and (grant_id, template_id) in templates_lookup:
                 project["template_name"] = templates_lookup[(grant_id, template_id)].name
+                project["template_icon_bg"] = templates_lookup[(grant_id, template_id)].iconBg
             else:
                 project["template_name"] = None
+                project["template_icon_bg"] = None
         
         return projects
 

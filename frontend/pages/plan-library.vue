@@ -100,18 +100,9 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <span
                     class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-                    :class="[project.accent.tagBg, project.accent.tagText]"
+                    :style="buildTypeBadgeStyle(project.templateIconBg)"
                   >
                     {{ project.type }}
-                  </span>
-                  <span v-if="project.grantName" class="text-xs text-gray-500">
-                    {{ project.grantName }}
-                  </span>
-                  <span
-                    v-if="project.templateName"
-                    class="text-xs text-gray-500"
-                  >
-                    / {{ project.templateName }}
                   </span>
                 </div>
                 <h3
@@ -436,6 +427,7 @@ interface ProjectRecord {
   plan_type_id?: string | null;
   grant_name?: string | null;
   template_name?: string | null;
+  template_icon_bg?: string | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -450,6 +442,7 @@ interface ProjectCard {
   accent: Accent;
   grantName: string | null;
   templateName: string | null;
+  templateIconBg: string | null;
   record: ProjectRecord;
 }
 
@@ -564,7 +557,7 @@ watch(
  * - 計算計畫完成度百分比（基於 stored_answer 中填入的動態欄位）
  * - 指派顏色與樣式（accent）用於卡片展示
  * - 格式化最後更新時間為台灣時區格式
- * - 目前僅顯示互動模式
+ * - 顯示企劃書類型（補助主題 / 模板）
  * @param record - 後端專案記錄
  * @param index - 專案在列表中的索引（用於循環指派顏色）
  * @param accentOverride - 可選的顏色樣式覆蓋
@@ -602,7 +595,9 @@ function decorateProject(
   }
   completeness = Math.min(Math.max(completeness, 0), 100);
 
-  const modeLabel = "互動模式";
+  const grantLabel = record.grant_name || "未分類主題";
+  const templateLabel = record.template_name || "未指定模板";
+  const proposalType = `${grantLabel} / ${templateLabel}`;
   const lastUpdateSource = record.updated_at || record.created_at;
   const lastUpdate = dateFormatter.format(new Date(lastUpdateSource));
 
@@ -610,14 +605,39 @@ function decorateProject(
     id: record.id,
     title: record.title,
     description: record.description || "尚未提供描述",
-    type: modeLabel,
+    type: proposalType,
     completeness,
     lastUpdate,
     accent,
     grantName: record.grant_name || null,
     templateName: record.template_name || null,
+    templateIconBg: record.template_icon_bg || null,
     record,
   };
+}
+
+function buildTypeBadgeStyle(iconBg?: string | null) {
+  const bg = (iconBg || "").trim();
+  if (!bg) {
+    return {};
+  }
+  const textColor = isLightColor(bg) ? "#374151" : "#ffffff";
+  return {
+    backgroundColor: bg,
+    color: textColor,
+  };
+}
+
+function isLightColor(color: string) {
+  const hex = color.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return true;
+  }
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.65;
 }
 
 /**

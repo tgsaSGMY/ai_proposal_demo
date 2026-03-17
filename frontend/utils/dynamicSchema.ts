@@ -4,7 +4,7 @@
  * ========================================
  *
  * 此模块管理整个应用的动态字段结构，包括：
- * - 静态字段定义（不依赖运行时配置）
+ * - 远程字段定义（依赖运行时配置）
  * - 复合键（composite key）生成和管理
  * - UI 视图模型（ViewModel）构建
  * - 字段值映射和验证
@@ -51,8 +51,6 @@ export type DynamicValueKey = string;
  *   }
  */
 export type DynamicValueMap = Record<DynamicValueKey, string>;
-
-import { supabase } from "~/utils/supabaseClient";
 
 // ===== Schema 属性定义 =====
 /**
@@ -156,150 +154,6 @@ export interface DynamicFieldDefinition {
   label: string; // 组合标签（用于查询和匹配）
 }
 
-const RAW_DYNAMIC_SCHEMA: Record<
-  string,
-  {
-    title: string;
-    properties: Record<string, { title: string; description: string }>;
-  }
-> = {
-  "二、研發動機": {
-    title: "二、研發動機",
-    properties: {
-      核心問題: {
-        title: "1.技術或服務的核心問題是甚麼?",
-        description: "要解決什麼核心技術問題?",
-      },
-      市場規模: {
-        title: "2.目標客戶與目標市場?",
-        description: "說明：你要賣給誰?越明確越好。",
-      },
-    },
-  },
-  // "三、解決辦法": {
-  //   title: "三、解決辦法",
-  //   properties: {
-  //     產品內容: {
-  //       title: "1.具體說明你的產品或服務是什麼?",
-  //       description: "請清楚具體說明，你要研發或設計的服務是什麼?",
-  //     },
-  //     關鍵技術: {
-  //       title: "2.關鍵技術為何",
-  //       description:
-  //         "關鍵環節詳細說明\nex1: 研發上最困難的地方在哪裡?或是花最多時間的項目、印象最深刻的地方?\nex2: 目前流程最卡的地方在哪?解決關鍵的痛點",
-  //     },
-  //     商業模式運作流程: {
-  //       title: "3.商業模式運作流程",
-  //       description: "舉例：客戶登入→使用平台→取得反饋→改良產品→行銷推廣",
-  //     },
-  //   },
-  // },
-  // "四、創新性分析與驗收方式": {
-  //   title: "四、創新性分析與驗收方式",
-  //   properties: {
-  //     既有流程說明: {
-  //       title: "1.技術或服務的創新性?既有流程說明",
-  //       description: "現在的作業流程説明\n不需要包含痛點",
-  //     },
-  //     測試與檢測方式: {
-  //       title: "2.公司自行測試與第三方檢測方式為何?",
-  //       description:
-  //         "請說明公司與客戶間如何確認品質（自行測試方式），以及是否委託第三方檢測（例如 SGS）及其範圍與標準。",
-  //     },
-  //   },
-  // },
-  // "五、競爭力分析": {
-  //   title: "五、競爭力分析",
-  //   properties: {
-  //     競爭者介紹: {
-  //       title: "1.目前貴司在業界生態中的競爭者介紹",
-  //       description: "你認為的競爭對手有誰?為什麼是他? 建議2-3家",
-  //     },
-  //     差異性: {
-  //       title: "2.這些競爭者與本產品/服務的差異在哪?",
-  //       description:
-  //         "你的競爭優勢是什麼? 客戶買你產品的關鍵原因是什麼?\n價格? 產品更好用? 品質比客人好?",
-  //     },
-  //   },
-  // },
-  // "六、計畫目標、效益": {
-  //   title: "六、計畫目標、效益",
-  //   properties: {
-  //     查核點量化數值: {
-  //       title: "1.具體查核點量化數值",
-  //       description:
-  //         "(如:研發可產出的具體量化指標，例如產品(尺寸、規格)、功能測試(通過SGS抗衝擊測試等)",
-  //     },
-  //     量化效益: {
-  //       title: "3.量化效益",
-  //       description:
-  //         "此依據為計劃標準格式:\n(1)增加產值 元\n(2)產出新產品或服務共 項\n(3)衍生商品或服務數共 項\n(4)促成投資額 元(新購設備)\n(5)降低成本 元\n(6)增加就業人數 人\n(7)成立新公司 家\n(8)發明專利共 件\n(9)新型、新式樣專利共 件",
-  //     },
-  //   },
-  // },
-  // "七、可行性分析": {
-  //   title: "七、可行性分析",
-  //   properties: {
-  //     過往研究成果: {
-  //       title: "1.過往研究成果",
-  //       description:
-  //         "(例:是否有過往研發紀錄影像、照片、樣品、討論會議側錄等已在申請前就以佈局研發?)",
-  //     },
-  //     公司背景: {
-  //       title: "2.公司背景、商業化與參展紀錄",
-  //       description:
-  //         "請敘述公司背景（技術、優勢、規模、團隊經驗等），並說明商業化接軌情況（例如是否已有潛在客戶或 MOU）以及歷年參展或得獎紀錄。",
-  //     },
-  //   },
-  // },
-  // "八、功能規格": {
-  //   title: "八、功能規格(計畫可驗收指標)",
-  //   properties: {
-  //     非硬體標的規格: {
-  //       title: "1.非硬體標的規格",
-  //       description: "(例:平台功能、相容性、辨識度...)",
-  //     },
-  //     硬體標的規格: {
-  //       title: "2.硬體標的規格",
-  //       description: "(例:機械強度、耐磨、防水等級...)",
-  //     },
-  //   },
-  // },
-  // "九、智財分析": {
-  //   title: "九、智財分析",
-  //   properties: {
-  //     專利申請狀況: {
-  //       title: "1.是否已有完成專利申請?",
-  //       description:
-  //         "(1)例:委託專利事務所紀錄、申請送出紀錄、完成申請公文、多國專利等\n(2)後續如何進行智財佈局規劃?專利主張為何?是否會與其他業者專利有衝突?",
-  //     },
-  //     // 測試檢驗規劃: {
-  //     //   title: "2.將進行那些測試.檢驗",
-  //     //   description: "",
-  //     // },
-  //   },
-  // },
-  // // "十、經費": {
-  // //   title: "十、經費",
-  // //   properties: {
-  // //     人事費: {
-  // //       title: "1.每月人事費(公司人事費)",
-  // //       description: "目前貴司的人事費用情況",
-  // //     },
-  // //     材料費: {
-  // //       title: "2.每月研發材料費【研發所需材料費用，品項名稱必須相符】",
-  // //       description:
-  // //         "目前貴司過往會採買的材料清單\n**可獨立運行非材料費**\n(計畫中須能配合開發票出來核銷)\n業務說明編列方式及注意事項",
-  // //     },
-  // //     委外單位費: {
-  // //       title: "3.每月委外單位費(例如SGS檢驗)",
-  // //       description:
-  // //         "例如：本專案預計檢測、開發、設計、行銷，委外單位?合作單位在該計畫中負責項目?花多少錢?",
-  // //     },
-  // //   },
-  // // },
-};
-
 // ===== 远程 API 数据接口 =====
 /**
  * 从后端 API 返回的字段定义（远程格式）
@@ -341,32 +195,9 @@ interface RemoteDynamicSection {
 // 默认 Schema ID（当没有指定时使用）
 const DEFAULT_SCHEMA_ID = "default";
 
-// ===== 静态 Schema 初始化 =====
-/**
- * 从静态定义生成回退 Schema 章节数组
- *
- * 说明：
- *   - 将 RAW_DYNAMIC_SCHEMA（硬编码的字段定义）转换为 DynamicSchemaSection 格式
- *   - 当后端 API 加载失败时，使用此静态定义作为回退方案
- *   - 这样即使网络问题也能保证应用继续工作
- */
-const FALLBACK_SCHEMA_SECTIONS: DynamicSchemaSection[] = Object.entries(
-  RAW_DYNAMIC_SCHEMA,
-).map(([sectionKey, sectionValue]) => ({
-  id: sectionKey,
-  title: sectionValue.title,
-  properties: Object.entries(sectionValue.properties).map(
-    ([propertyKey, propertyValue]) => ({
-      key: propertyKey,
-      title: propertyValue.title,
-      description: propertyValue.description,
-    }),
-  ),
-}));
-
 // ===== 全局状态管理 =====
 // 当前活跃的 Schema 章节（内存中的副本）
-let schemaSections: DynamicSchemaSection[] = [...FALLBACK_SCHEMA_SECTIONS];
+let schemaSections: DynamicSchemaSection[] = [];
 // 当前活跃的模板 ID（用于字段过滤）
 let activeTemplateId: string | null = null;
 // 当前活跃的补助金 ID（用于字段过滤）
@@ -375,13 +206,6 @@ let activeTemplateGrantId: string | null = null;
 interface SchemaFilterOptions {
   templateId?: string | null;
   templateGrantId?: string | null;
-}
-
-function cloneFallbackSections(): DynamicSchemaSection[] {
-  return FALLBACK_SCHEMA_SECTIONS.map((section) => ({
-    ...section,
-    properties: section.properties.map((property) => ({ ...property })),
-  }));
 }
 
 function matchesTemplate(
@@ -507,18 +331,12 @@ export async function ensureDynamicSchemaLoaded(options?: {
       templateId,
       templateGrantId,
     });
-    const resolvedSections =
-      remoteSections.length > 0 ? remoteSections : cloneFallbackSections();
-    schemaSections = resolvedSections;
-    return resolvedSections;
+    schemaSections = remoteSections;
+    return remoteSections;
   } catch (error) {
-    console.warn(
-      "Failed to load dynamic schema from API, fallback to static definition.",
-      error,
-    );
-    const fallbackSections = cloneFallbackSections();
-    schemaSections = fallbackSections;
-    return fallbackSections;
+    console.warn("Failed to load dynamic schema from API.", error);
+    schemaSections = [];
+    return [];
   }
 }
 /**
@@ -743,12 +561,3 @@ export function getAllCompositeKeys(options?: SchemaFilterOptions): string[] {
     ),
   );
 }
-
-/**
- * 獲取所有動態字段的標籤清單（用於 AI 提示）
- * 返回所有字段的完整標籤，用於向 AI 模型描述可用的字段
- *
- * 用途：生成合成輸入時傳給後端 API
- * @returns 字段標籤的字符串數組
- */
-export { schemaSections as STATIC_DYNAMIC_SCHEMA };
