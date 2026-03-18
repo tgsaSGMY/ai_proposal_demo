@@ -66,7 +66,7 @@
                     v-if="plan.submissionDeadline"
                     class="text-xs text-gray-700 font-semibold"
                   >
-                    送件截止：{{ plan.submissionDeadline }}
+                    送件時間：{{ plan.submissionDeadline }}
                   </p>
                 </div>
               </div>
