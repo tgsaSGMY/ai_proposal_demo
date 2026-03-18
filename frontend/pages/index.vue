@@ -84,7 +84,7 @@
                 v-if="isPlanLocked(plan)"
                 class="mt-2 text-xs font-semibold text-amber-700"
               >
-                需升級會員才能使用
+                升級付費會員，立即開通此計畫
               </p>
             </button>
           </div>
@@ -550,7 +550,7 @@ const DOUBLE_CLICK_THRESHOLD = 600; // ms
 
 function handlePlanClick(plan: PlanTypeOption) {
   if (isPlanLocked(plan)) {
-    notifyWarning("此計畫需升級會員才能使用");
+    notifyWarning("升級付費會員，立即開通此計畫");
     return;
   }
 
@@ -919,7 +919,7 @@ function handlePlanTypeConfirm() {
     return;
   }
   if (isPlanLocked(selectedPlanType.value)) {
-    notifyWarning("此計畫需升級會員才能使用");
+    notifyWarning("升級付費會員，立即開通此計畫");
     return;
   }
   const configSelection = resolvePlanConfig(selectedPlanType.value);
