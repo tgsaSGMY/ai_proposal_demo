@@ -9,8 +9,8 @@ services:
       - ./backend/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks: # <--- 新增这行
-      - default # <--- 新增这行
+    networks:
+      - default
       - supabase_net
 
   nuxt-frontend:
@@ -37,8 +37,8 @@ services:
     depends_on:
       - fastapi-backend
       - nuxt-frontend
-    networks: # <--- 新增
-      - default # <--- 保持默认网络，以便连接 fastapi 和 nuxt
+    networks:
+      - default
       - supabase_net
 
 networks:
