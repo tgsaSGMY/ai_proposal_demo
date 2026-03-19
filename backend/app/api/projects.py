@@ -2,11 +2,11 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_supabase_service, get_current_user_id
+from app.api.dependencies import get_supabase_service, get_current_user_id, get_current_user_context
 from app.services.supabase_service import SupabaseService
 from app.utils.timeline import build_timeline_entries, normalize_versions, parse_iso_timestamp
 from app.utils.timeline_pdf import render_timeline_pdf
@@ -218,10 +218,21 @@ async def get_project_sections(
 @router.post("", response_model=Dict[str, Any], status_code=201, summary="新增專案記錄")
 async def create_project(
     payload: ProjectBase,
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 建立新的專案記錄，自動關聯當前使用者 ID
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
+    # 檢查專案額度 (Slot Limit)
+    can_create = await supabase_service.check_project_slot_availability(user_id, role)
+    if not can_create:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您已達到專案數量上限。免費用戶僅限 1 個專案，請刪除舊專案後再試。" if role == "normal" else "您已達到專案數量上限。"
+        )
+
     data = payload.dict(exclude_none=True)
     data["user_id"] = user_id
     record = await supabase_service.create_project_record(data)
@@ -234,10 +245,22 @@ async def create_project(
 async def update_project(
     project_id: str,
     payload: ProjectUpdateRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 更新指定專案的內容，須驗證使用者為專案擁有者
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
+    # 對於 Normal 使用者，檢查是否為最新專案 (Read-only logic)
+    if role == "normal":
+        is_latest = await supabase_service.is_latest_project(user_id, project_id)
+        if not is_latest:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。如需編輯此專案，請升級方案。"
+            )
+
     record = await supabase_service.update_project_record(project_id, user_id, payload.dict(exclude_none=True))
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
@@ -248,11 +271,24 @@ async def update_project(
 async def patch_project(
     project_id: str,
     payload: ProjectUpdateRequest,
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     # 部分更新指定專案的內容，須驗證使用者為專案擁有者
-    record = await supabase_service.update_project_record(project_id, user_id, payload.dict(exclude_none=True))
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
+    # 允許軟刪除 (is_deleted)，但其他更新需檢查 Read-only
+    data = payload.dict(exclude_none=True)
+    if role == "normal" and not data.get("is_deleted"):
+        is_latest = await supabase_service.is_latest_project(user_id, project_id)
+        if not is_latest:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。"
+            )
+
+    record = await supabase_service.update_project_record(project_id, user_id, data)
     if not record:
         raise HTTPException(status_code=404, detail="Project not found or permission denied")
     return record

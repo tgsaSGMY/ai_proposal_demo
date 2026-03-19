@@ -279,9 +279,14 @@
           </div>
 
           <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <p class="text-sm text-slate-400">
-              將以 {{ resolvedTemplateName || "預設模板" }} 啟動 Chatbox。
-            </p>
+            <div class="space-y-1">
+              <p class="text-sm text-slate-400">
+                將以 {{ resolvedTemplateName || "預設模板" }} 啟動 Chatbox。
+              </p>
+              <p v-if="isSlotFull && currentUserRole === 'normal'" class="text-xs font-semibold text-rose-500">
+                ⚠️ 您已達到 1 個專案的上限，請先刪除既有專案再建立新專案。
+              </p>
+            </div>
             <div class="flex gap-3">
               <button
                 class="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-500"
@@ -294,22 +299,25 @@
                 class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
                 type="button"
                 :disabled="
-                  !canEnterChat || isProcessingBackground || isCreatingProject
+                  !canEnterChat || isProcessingBackground || isCreatingProject || isSlotFull
                 "
                 :class="{
                   'opacity-60 cursor-not-allowed':
                     !canEnterChat ||
                     isProcessingBackground ||
-                    isCreatingProject,
+                    isCreatingProject ||
+                    isSlotFull,
                 }"
                 @click="enterChatStage"
               >
                 {{
-                  isProcessingBackground
-                    ? "解析附件中..."
-                    : isCreatingProject
-                      ? "建立工作區..."
-                      : "進入工作區"
+                  isSlotFull
+                    ? "額度已滿"
+                    : isProcessingBackground
+                      ? "解析附件中..."
+                      : isCreatingProject
+                        ? "建立工作區..."
+                        : "進入工作區"
                 }}
               </button>
             </div>
@@ -429,6 +437,14 @@ interface PlanTemplate {
 
 const planTypes = ref<PlanTypeOption[]>([]);
 const currentUserRole = ref<UserPlanRole>("normal");
+const activeProjectsCount = ref(0);
+
+const isSlotFull = computed(() => {
+  if (currentUserRole.value === "normal") {
+    return activeProjectsCount.value >= 1;
+  }
+  return activeProjectsCount.value >= 50; // VIP Limit
+});
 
 const modeOptions: ModeOption[] = [
   {
@@ -472,8 +488,21 @@ async function loadCurrentUserRole() {
 onMounted(async () => {
   await refreshUser();
   await loadCurrentUserRole();
+  await fetchProjectsCount();
   await loadPlanTypes();
 });
+
+async function fetchProjectsCount() {
+  try {
+    const response = await authenticatedFetch(`${API_BASE_URL}/projects`);
+    if (response.ok) {
+      const projects = await response.json();
+      activeProjectsCount.value = projects.length;
+    }
+  } catch (error) {
+    console.error("Failed to fetch projects count", error);
+  }
+}
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
 const SUPABASE_BUCKET_URL = config.public.supabaseUrl;
@@ -616,6 +645,7 @@ const resolvedTemplateName = computed(() => {
 
 const canEnterChat = computed(() =>
   Boolean(
+    !isSlotFull.value &&
     selectedMode.value &&
     planName.value.trim() &&
     planSummary.value.trim() &&

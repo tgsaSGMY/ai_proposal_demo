@@ -1412,6 +1412,93 @@ class SupabaseService:
         
         asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token, project_id=project_id, action=action))
 
+    async def get_daily_usage_stats(self, user_id: str) -> Dict[str, Any]:
+        """
+        獲取使用者當日的統計數據 (台北時間 UTC+8)。
+        包含：今日建立的專案數、今日消耗的總 token 數。
+        """
+        from app.config import THROTTLING_PROJECT_THRESHOLD
+
+        # 取得台北時間今日 00:00:00
+        tz_taipei = timezone(timedelta(hours=8))
+        now_taipei = datetime.now(tz_taipei)
+        today_start = now_taipei.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_iso = today_start.isoformat()
+
+        # 1. 統計今日建立的專案數 (排除已刪除)
+        projects_resp = (
+            self.client.from_("projects")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .gte("created_at", today_start_iso)
+            .execute()
+        )
+        projects_today = projects_resp.count or 0
+
+        # 2. 統計今日使用的 Token 數
+        usage_resp = (
+            self.client.from_("usage_logs")
+            .select("input_token, output_token")
+            .eq("user_id", user_id)
+            .gte("created_at", today_start_iso)
+            .execute()
+        )
+        
+        total_tokens = 0
+        if usage_resp.data:
+            for log in usage_resp.data:
+                total_tokens += (log.get("input_token") or 0) + (log.get("output_token") or 0)
+
+        return {
+            "projects_today": projects_today,
+            "total_tokens_today": total_tokens,
+            "needs_throttling": projects_today > THROTTLING_PROJECT_THRESHOLD
+        }
+
+    async def check_project_slot_availability(self, user_id: str, role: str) -> bool:
+        """
+        檢查使用者是否還能建立新專案。
+        - normal: 只能有 1 個非刪除專案。
+        - vip/internal: 依配置上限 (目前配置為 50)。
+        """
+        from app.config import SLOT_NORMAL_MAX_PROJECTS, SLOT_VIP_MAX_PROJECTS
+
+        # 獲取所有非刪除的專案總數
+        resp = (
+            self.client.from_("projects")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .execute()
+        )
+        active_count = resp.count or 0
+
+        limit = SLOT_NORMAL_MAX_PROJECTS
+        if role in ("vip", "internal"):
+            limit = SLOT_VIP_MAX_PROJECTS
+
+        return active_count < limit
+
+    async def is_latest_project(self, user_id: str, project_id: str) -> bool:
+        """
+        檢查指定的 project_id 是否為該使用者最新建立且未刪除的專案。
+        用於 Normal 使用者降級後的編輯權限判斷。
+        """
+        resp = (
+            self.client.from_("projects")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        
+        if not resp.data:
+            return False
+        
+        return str(resp.data[0]["id"]) == str(project_id)
+
     async def get_exemplars_by_ids(self, ids: List[int]) -> List[Dict[str, Any]]:
         """
         根據提供的 ID 列表，從 dataset_entries 表中高效地獲取多條範例記錄。

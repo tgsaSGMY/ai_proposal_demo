@@ -105,6 +105,7 @@
               v-model="draftMessage"
               class="mt-3 w-full min-h-16 resize-none rounded-[28px] border border-[#edf0ff] bg-[#f8f9ff] p-4 pr-14 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-[#ff4b5c] focus:bg-white focus:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 transition-all overflow-hidden"
               :placeholder="composerPlaceholder"
+              :disabled="props.isReadOnly"
               @keydown.enter.prevent="handleEnter"
               @input="handleTextareaInput"
               @compositionstart="handleCompositionStart"
@@ -113,8 +114,9 @@
             ></textarea>
             <button
               type="button"
-              class="absolute right-6 bottom-5 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e4e7ff] bg-white text-[#ff6b6b] shadow hover:bg-[#fff6f6]"
+              class="absolute right-6 bottom-5 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e4e7ff] bg-white text-[#ff6b6b] shadow hover:bg-[#fff6f6] disabled:cursor-not-allowed disabled:opacity-50"
               @click="openAttachmentModal"
+              :disabled="props.isReadOnly"
               title="匯入檔案輔助填寫"
             >
               <svg
@@ -282,6 +284,7 @@ const props = defineProps({
   savedPlanVersions: { type: Array, default: () => [] },
   showSidebar: { type: Boolean, default: false },
   selectedModel: { type: String, default: "" },
+  isReadOnly: { type: Boolean, default: false },
 });
 
 const isGenerating = computed(() => props.isGenerating);
@@ -382,6 +385,9 @@ function formatMessageForDisplay(raw) {
 }
 
 const composerPlaceholder = computed(() => {
+  if (props.isReadOnly) {
+    return "唯讀模式：此專案已鎖定，無法編輯。";
+  }
   if (!props.grantId || !props.templateId) {
     return "請先完成第一階段的設定";
   }
@@ -395,8 +401,9 @@ const composerPlaceholder = computed(() => {
 });
 
 const canSendMessage = computed(() => {
-  // 项目已选择、不是生成完成状态、且AI没有正在思考下一个问题
+  // 项目已选择、不是生成完成状态、且AI没有正在思考下一个问题、且非唯讀
   return Boolean(
+    !props.isReadOnly &&
     props.grantId &&
     props.templateId &&
     !isGenerationComplete.value &&
@@ -405,7 +412,7 @@ const canSendMessage = computed(() => {
 });
 
 const canRequestPlan = computed(() => {
-  return Boolean(props.grantId && props.templateId);
+  return Boolean(!props.isReadOnly && props.grantId && props.templateId);
 });
 
 const hasCandidatePlan = computed(
@@ -640,7 +647,9 @@ async function streamAIGuidanceMessage(question) {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.isStreaming) {
             lastMsg.isStreaming = false;
-            lastMsg.content = lastMsg.content || "抱歉，無法取得 AI 回應。";
+            lastMsg.content = msg.message || lastMsg.content || "抱歉，無法取得 AI 回應。";
+          } else if (msg.message) {
+            notifyError(msg.message);
           }
           isFetchingNextQuestion.value = false;
         }

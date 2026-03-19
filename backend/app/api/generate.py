@@ -32,10 +32,11 @@ from app.models import (
 from app.core.app_jwt import decode_app_access_token
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_llm_service, get_supabase_service, get_current_user_id
+from .dependencies import get_llm_service, get_supabase_service, get_current_user_id, get_current_user_context
 from app.utils.extract_json import extract_json_block  
+from app.utils.throttling import apply_throttling_if_needed
 from typing import Dict, Any, Optional, List
-from app.config import OPENAI_API_KEY
+from app.config import OPENAI_API_KEY, QUOTA_NORMAL_DAILY_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -258,11 +259,35 @@ async def generate_plan(
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
 ):
     # 生成完整計畫書，根據指定的 grant 和 template，為每個章節非同步生成多個候選版本，支援外部模型和自訂選擇
     """主功能 -> 生成完整計畫書，可生成多候选版本"""
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
+    # 1. 檢查每日額度與 Throttling
+    usage_stats = await supabase_service.get_daily_usage_stats(user_id)
     
+    # 檢查 Token 額度 (僅 Normal)
+    if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"您已達到每日 AI 生成額度 ({QUOTA_NORMAL_DAILY_TOKENS} tokens)。請明天再試或聯繫管理員升級方案。"
+        )
+    
+    # 2. 檢查專案是否唯讀 (Normal 且 project_id 存在時)
+    if role == "normal" and request_data.project_id:
+        is_latest = await supabase_service.is_latest_project(user_id, request_data.project_id)
+        if not is_latest:
+            raise HTTPException(
+                status_code=403,
+                detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。請升級方案以解除限制。"
+            )
+
+    # 3. 執行 Throttling (VIP/Internal 從第 4 個專案開始慢速)
+    await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
+
     # 從 app_state 獲取所有配置
     app_state = request.app.state
     all_grants_config = getattr(app_state, "all_grants_config", [])
@@ -446,11 +471,33 @@ async def revise_plan_version(
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
 ):
     # 根據現有版本內容進行修訂，結合更新的問答摘要與用戶輸入，為每個章節生成改進的候選版本，同時記錄執行事件
     if not request_data.current_version or not isinstance(request_data.current_version, dict):
         raise HTTPException(status_code=400, detail="current_version is required for revision.")
+
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
+    # 1. 檢查每日額度與 Throttling
+    usage_stats = await supabase_service.get_daily_usage_stats(user_id)
+    if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"您已達到每日 AI 生成額度 ({QUOTA_NORMAL_DAILY_TOKENS} tokens)。"
+        )
+    
+    # 2. 檢查唯讀權限
+    if role == "normal" and request_data.project_id:
+        is_latest = await supabase_service.is_latest_project(user_id, request_data.project_id)
+        if not is_latest:
+            raise HTTPException(
+                status_code=403,
+                detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。"
+            )
+
+    await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
 
     app_state = request.app.state
     all_grants_config = getattr(app_state, "all_grants_config", [])
@@ -955,6 +1002,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
     
     # Extract user_id from WebSocket query parameter or headers
     user_id = ""
+    role = "normal"
     supabase_service = getattr(websocket.app.state, "supabase_service", None)
     
     # Try to get token from query parameters (passed as ?token=...)
@@ -979,6 +1027,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     email=user_response.user.email,
                 )
                 user_id = canonical_user["id"]
+                role = canonical_user.get("role", "normal")
         except Exception as e:
             try:
                 payload = decode_app_access_token(token)
@@ -987,6 +1036,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     user_row = await supabase_service.get_user_by_id(canonical_user_id)
                     if user_row and user_row.get("id"):
                         user_id = user_row["id"]
+                        role = user_row.get("role", "normal")
             except Exception as decode_error:
                 logger.warning(f"Failed to extract user from WebSocket token: {e}; app token decode error: {decode_error}")
     
@@ -1299,6 +1349,28 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
                 if not user_msg:
                     continue
+
+                # 1. 檢查每日額度 (Token Quota)
+                usage_stats = await supabase_service.get_daily_usage_stats(user_id)
+                if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": f"您已達到每日 AI 生成額度 ({QUOTA_NORMAL_DAILY_TOKENS} tokens)。"
+                    })
+                    continue
+
+                # 2. 檢查唯讀權限 (Read-only for old projects)
+                if role == "normal" and project_id:
+                    is_latest = await supabase_service.is_latest_project(user_id, project_id)
+                    if not is_latest:
+                        await websocket.send_json({
+                            "event": "error",
+                            "message": "唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。請升級方案以解除限制。"
+                        })
+                        continue
+
+                # 3. 執行 Throttling
+                await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
 
                 # prepare user entry but DO NOT append yet — only persist if stream completes
                 user_entry = build_history_entry("user", user_msg)

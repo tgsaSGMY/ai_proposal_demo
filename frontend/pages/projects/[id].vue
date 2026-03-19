@@ -91,6 +91,20 @@
           </div>
         </header>
 
+        <!-- 唯讀模式提醒 -->
+        <div
+          v-if="isReadOnly && !isProjectLoading"
+          class="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm"
+        >
+          <Icon name="ph:lock-keyhole-light" class="h-6 w-6 text-amber-600" />
+          <div>
+            <p class="text-sm font-bold text-amber-900">唯讀模式</p>
+            <p class="text-xs font-semibold text-amber-700">
+              您目前的方案僅支援編輯最新建立的一個專案。此專案已被鎖定，如需編輯請升級方案或刪除其他較新的專案。
+            </p>
+          </div>
+        </div>
+
         <section
           v-if="isProjectLoading"
           class="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-rose-200 bg-white/80 p-10 text-center text-gray-500"
@@ -155,6 +169,7 @@
             :project-id="projectRecord?.id || ''"
             :saved-plan-versions="savedPlanVersions"
             :selected-model="selectedModel"
+            :is-read-only="isReadOnly"
             show-sidebar
             @generatePlan="handleChatPlanGeneration"
             @finalizeCandidates="onCandidateConfirm"
@@ -332,6 +347,8 @@ const modelGroups = ref([
   },
 ]);
 const isInternal = ref(false);
+const userRole = ref<"normal" | "vip" | "internal">("normal");
+const isReadOnly = ref(false);
 const lastGenerationPrompt = ref("");
 const isPersistingProject = ref(false);
 const conversationSyncTimer = ref<ReturnType<typeof setTimeout> | null>(null);
@@ -343,6 +360,17 @@ onMounted(async () => {
 
   // 執行檢查
   isInternal.value = await checkIsInternal();
+
+  // 獲取當前用戶角色
+  try {
+    const meResp = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
+    if (meResp.ok) {
+      const me = await meResp.json();
+      userRole.value = me.role || "normal";
+    }
+  } catch (e) {
+    console.error("Failed to load user role", e);
+  }
 
   // 如果是內部用戶，預設使用內部模型
   if (isInternal.value) {
@@ -594,6 +622,24 @@ async function fetchProject() {
     }
     const data: ProjectRecord = await response.json();
     projectRecord.value = data;
+
+    // 唯讀模式檢查 (Normal 使用者降級邏輯)
+    if (userRole.value === "normal") {
+      try {
+        const listResp = await authenticatedFetch(`${API_BASE_URL}/projects`);
+        if (listResp.ok) {
+          const allProjects = await listResp.json();
+          if (allProjects.length > 0) {
+            // 列表預設依 updated_at 降序，需自行改依 created_at 降序判斷誰是最早建立的最新專案
+            const sortedProjects = allProjects.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            const latest = sortedProjects[0]; 
+            isReadOnly.value = String(latest.id) !== String(projectId.value);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to check read-only status", e);
+      }
+    }
 
     // 从 saved_plan 中提取最新版本的内容用于显示
     if (data.saved_plan) {

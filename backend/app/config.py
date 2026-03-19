@@ -34,6 +34,19 @@ APP_JWT_SECRET = os.getenv("APP_JWT_SECRET", "")
 APP_JWT_ISSUER = "ai-proposal-platform"
 APP_JWT_EXPIRES_SECONDS = 86400
 
+# Plan Limits & Quotas
+# Token limits (Daily)
+QUOTA_NORMAL_DAILY_TOKENS = 400000
+QUOTA_VIP_DAILY_TOKENS = 999999999  # Practically unlimited
+
+# Project Slot Limits
+SLOT_NORMAL_MAX_PROJECTS = 1
+SLOT_VIP_MAX_PROJECTS = 50
+
+# Throttling
+THROTTLING_PROJECT_THRESHOLD = 3  # Start throttling from 4th project (0, 1, 2, 3 -> OK, 4 -> Slow)
+THROTTLING_DELAY_SECONDS = 10
+
 # External OAuth provider settings
 EXTERNAL_OAUTH_ENABLED = True
 EXTERNAL_OAUTH_PROVIDER = os.getenv("EXTERNAL_OAUTH_PROVIDER", "tgsa_oauth")
