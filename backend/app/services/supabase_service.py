@@ -1085,15 +1085,17 @@ class SupabaseService:
 
     async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None):
         """记录一次模型使用"""
+        """GPT生成模型的input token可能高估了，因爲我沒單獨計算cache tokens,而是全部算在input token裏了，但爲了簡化計算，我們暫時這樣處理。"""
         canonical_user_id = await self.ensure_canonical_user_id(user_id)
 
         model_type = model_info.get('type', 'internal') 
         cost = 0.0
-        # 简单估算成本，只用external modal 的 output token
         if model_type == 'external' and model_info.get('cost_info'):
-            cost_per_million = model_info['cost_info'].get('output', 0)
-            cost = (output_token / 1_000_000) * cost_per_million
+            input_cost_per_million = model_info['cost_info'].get('input', 0)
+            output_cost_per_million = model_info['cost_info'].get('output', 0)
+            cost = (input_token / 1_000_000) * input_cost_per_million + (output_token / 1_000_000) * output_cost_per_million
 
+        print(f"Logging usage for user_id={canonical_user_id}, model={model_info['id']} ({model_type}), input_tokens={input_token}, output_tokens={output_token}, cost=${cost:.6f}")
         new_log = {
             "user_id": canonical_user_id,
             "model_id": model_info['id'],
@@ -1386,6 +1388,7 @@ class SupabaseService:
         output_token = 0
         
         provider = model_to_use.get('provider', 'unknown')
+        print("response_json for cost logging:", response_json)
         
         try:
             if provider == 'openai':
@@ -1400,7 +1403,7 @@ class SupabaseService:
                 usage = response_json.get('usageMetadata', {})
                 print(usage)
                 input_token = usage.get('promptTokenCount', 0)
-                output_token = usage.get('candidatesTokenCount', 0)
+                output_token = usage.get('candidatesTokenCount', 0) + usage.get('thoughtsTokenCount', 0)
             else:
                 # Ollama 或其他提供者可能有不同的格式
                 usage = response_json.get('usage', {})
