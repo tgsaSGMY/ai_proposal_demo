@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, Request, Response
 
 from app.api.dependencies import (
     get_current_user_context,
@@ -14,14 +14,16 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 @router.get("/me")
-async def get_me(user_ctx: Dict[str, Any] = Depends(get_current_user_context)):
+async def get_me(response: Response, user_ctx: Dict[str, Any] = Depends(get_current_user_context)):
     """回傳由 Bearer Token 解析出的標準化使用者資訊。"""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return user_ctx
 
 
 @router.get("/status")
 async def get_auth_status(
     request: Request,
+    response: Response,
     authorization: Optional[str] = Header(None),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
@@ -29,6 +31,7 @@ async def get_auth_status(
     輕量認證探針端點，固定回傳 200。
     主要給前端登入頁 middleware 使用，避免產生大量 401 噪音。
     """
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     try:
         # 成功解析 token 時僅回傳前端需要的最小身份資訊。
         user_ctx = await _resolve_user_context_from_auth(
