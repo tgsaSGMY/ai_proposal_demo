@@ -1083,7 +1083,7 @@ class SupabaseService:
                 usage += log['cost']
         return usage
 
-    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None):
+    async def log_usage(self, user_id: str, model_info: Dict[str, Any], input_token: int, output_token: int, project_id: Optional[str] = None, action: Optional[str] = None, image_token: int = 0):
         """记录一次模型使用"""
         """GPT生成模型的input token可能高估了，因爲我沒單獨計算cache tokens,而是全部算在input token裏了，但爲了簡化計算，我們暫時這樣處理。"""
         canonical_user_id = await self.ensure_canonical_user_id(user_id)
@@ -1093,9 +1093,22 @@ class SupabaseService:
         if model_type == 'external' and model_info.get('cost_info'):
             input_cost_per_million = model_info['cost_info'].get('input', 0)
             output_cost_per_million = model_info['cost_info'].get('output', 0)
-            cost = (input_token / 1_000_000) * input_cost_per_million + (output_token / 1_000_000) * output_cost_per_million
+            non_image_output_token = max((output_token or 0) - (image_token or 0), 0)
+            cost = (input_token / 1_000_000) * input_cost_per_million + (non_image_output_token / 1_000_000) * output_cost_per_million
+            if image_token:
+                # Gemini image output pricing: 120 USD per 1M image tokens
+                cost += (image_token / 1_000_000) * 120.0
 
-        print(f"Logging usage for user_id={canonical_user_id}, model={model_info['id']} ({model_type}), input_tokens={input_token}, output_tokens={output_token}, cost=${cost:.6f}")
+        logger.info(
+            "Logging usage user_id=%s model=%s(%s) input_tokens=%s output_tokens=%s image_tokens=%s cost=$%.6f",
+            canonical_user_id,
+            model_info['id'],
+            model_type,
+            input_token,
+            output_token,
+            image_token,
+            cost,
+        )
         new_log = {
             "user_id": canonical_user_id,
             "model_id": model_info['id'],
@@ -1111,7 +1124,7 @@ class SupabaseService:
             new_log["action"] = action
         
         self.client.from_("usage_logs").insert(new_log).execute()
-        print(f"Logged usage for user {canonical_user_id or 'NULL'}: ${cost} for {model_type} model.")
+        logger.info("Logged usage for user %s: $%s for %s model.", canonical_user_id or 'NULL', cost, model_type)
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
@@ -1386,24 +1399,26 @@ class SupabaseService:
         """
         input_token = 0
         output_token = 0
+        image_token = 0
         
         provider = model_to_use.get('provider', 'unknown')
-        print("response_json for cost logging:", response_json)
+        logger.debug("response_json for cost logging: %s", response_json)
         
         try:
             if provider == 'openai':
                 # OpenAI 格式（同時支援流式和非流式）
                 usage = response_json.get('usage', {})
-                print(usage)
+                logger.debug("openai usage metadata: %s", usage)
                 # 優先使用 input_tokens/output_tokens（非流式），如果沒有則使用 prompt_tokens/completion_tokens（流式）
                 input_token = usage.get('input_tokens') or usage.get('prompt_tokens', 0)
                 output_token = usage.get('output_tokens') or usage.get('completion_tokens', 0)
             elif provider == 'gemini':
                 # Gemini 格式
                 usage = response_json.get('usageMetadata', {})
-                print(usage)
+                logger.debug("gemini usage metadata: %s", usage)
                 input_token = usage.get('promptTokenCount', 0)
                 output_token = usage.get('candidatesTokenCount', 0) + usage.get('thoughtsTokenCount', 0)
+                image_token = usage.get('imageTokenCount', 0)
             else:
                 # Ollama 或其他提供者可能有不同的格式
                 usage = response_json.get('usage', {})
@@ -1413,7 +1428,7 @@ class SupabaseService:
             logger.error(f"Failed to extract token counts from response: {e}", exc_info=True)
             return
         
-        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token, project_id=project_id, action=action))
+        asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token, project_id=project_id, action=action, image_token=image_token))
 
     async def get_daily_usage_stats(self, user_id: str) -> Dict[str, Any]:
         """
@@ -1615,12 +1630,10 @@ class SupabaseService:
                 img_bytes,
                 {"content-type": content_type}
             )
-            logger.debug(f"Supabase upload response: {upload_resp}")
 
             # 嘗試以不同方式解析 public url（兼容不同 SDK 版本）
             public_resp = self.client.storage.from_(self.bucket_name).get_public_url(path)
-            logger.debug(f"Supabase get_public_url raw response: {public_resp}")
-
+            
             public_url = None
             if isinstance(public_resp, dict):
                 public_url = public_resp.get("publicURL") or public_resp.get("publicUrl") or public_resp.get("publicurl")
