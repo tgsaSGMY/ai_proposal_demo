@@ -497,7 +497,7 @@ async def revise_plan_version(
                 detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。"
             )
 
-    await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
+    await apply_throttling_if_needed(usage_stats["needs_project_throttling"], user_id)
 
     app_state = request.app.state
     all_grants_config = getattr(app_state, "all_grants_config", [])
@@ -1370,7 +1370,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                         continue
 
                 # 3. 執行 Throttling
-                await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
+                await apply_throttling_if_needed(usage_stats["needs_project_throttling"], user_id)
 
                 # prepare user entry but DO NOT append yet — only persist if stream completes
                 user_entry = build_history_entry("user", user_msg)

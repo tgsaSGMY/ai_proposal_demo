@@ -291,7 +291,7 @@ const isGenerating = computed(() => props.isGenerating);
 const showSidebar = computed(() => Boolean(props.showSidebar));
 
 const generateBtnText = ref("推演中...");
-let humorousTimeout: any = null;
+let humorousTimeout = null;
 
 watch(() => props.isGenerating, (newVal) => {
   if (newVal) {
