@@ -119,7 +119,7 @@ def _resolve_role_from_plan(profile_data: Dict[str, Any]) -> str:
 
     plan_id = plan.get("id")
     try:
-        plan_id_int = int(plan_id)
+        plan_id_int = int(str(plan_id)) if plan_id is not None else -1
     except (TypeError, ValueError):
         return "normal"
 
@@ -129,7 +129,8 @@ def _resolve_role_from_plan(profile_data: Dict[str, Any]) -> str:
 def _derive_profile(user_info: Dict[str, Any]) -> Dict[str, Any]:
     # 抽取外部 provider 的 user profile，兼容 data 包裹與平面兩種格式。
     logger.info("User info received from OAuth provider: %s", user_info)
-    profile_data = user_info.get("data") if isinstance(user_info.get("data"), dict) else user_info
+    data_field = user_info.get("data")
+    profile_data: Dict[str, Any] = data_field if isinstance(data_field, dict) else user_info
 
     subject = profile_data.get("sub") or profile_data.get("id")
     email = profile_data.get("email")
@@ -251,11 +252,23 @@ async def external_oauth_callback(
 
 
 @router.post("/logout", summary="登出外部 OAuth 使用者")
-async def external_oauth_logout():
+async def external_oauth_logout(request: FastAPIRequest):
     # 清除登入相關 cookie，回傳 204 表示登出完成。
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    response.delete_cookie(APP_TOKEN_COOKIE_NAME, path="/")
-    response.delete_cookie(STATE_COOKIE_NAME, path="/")
+    response.delete_cookie(
+        key=APP_TOKEN_COOKIE_NAME,
+        path="/",
+        secure=_is_secure_request(request),
+        samesite="lax",
+        httponly=True,
+    )
+    response.delete_cookie(
+        key=STATE_COOKIE_NAME,
+        path="/",
+        secure=_is_secure_request(request),
+        samesite="lax",
+        httponly=True,
+    )
     return response
 
 

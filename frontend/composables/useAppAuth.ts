@@ -21,6 +21,15 @@ async function hardLogoutAndRedirect(): Promise<void> {
     // Ignore and continue logout cleanup.
   }
 
+  // Forcefully clear Supabase local storage tokens in case signOut failed
+  if (typeof window !== "undefined") {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        localStorage.removeItem(key);
+      }
+    }
+  }
+
   try {
     const apiBaseUrl = getApiBaseUrl();
     await fetch(`${apiBaseUrl}/external-auth/logout`, {
@@ -54,6 +63,7 @@ export async function getAppSession(): Promise<AppSession> {
   const response = await fetch(`${apiBaseUrl}/auth/status`, {
     method: "GET",
     credentials: "include",
+    cache: "no-store",
   });
 
   if (response.ok) {
