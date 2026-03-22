@@ -267,7 +267,7 @@ async def generate_plan(
     role = user_ctx.get("role", "normal")
 
     # 1. 檢查每日額度與 Throttling
-    usage_stats = await supabase_service.get_daily_usage_stats(user_id)
+    usage_stats = await supabase_service.get_daily_usage_stats(user_id, role)
     
     # 檢查 Token 額度 (僅 Normal)
     if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
@@ -285,8 +285,8 @@ async def generate_plan(
                 detail="唯讀模式：您目前的方案僅支援編輯最新建立的一個專案。請升級方案以解除限制。"
             )
 
-    # 3. 執行 Throttling (VIP/Internal 從第 4 個專案開始慢速)
-    await apply_throttling_if_needed(usage_stats["needs_throttling"], user_id)
+    # 3. 執行 Throttling
+    await apply_throttling_if_needed(usage_stats["needs_project_throttling"], user_id)
 
     # 從 app_state 獲取所有配置
     app_state = request.app.state
@@ -481,7 +481,7 @@ async def revise_plan_version(
     role = user_ctx.get("role", "normal")
 
     # 1. 檢查每日額度與 Throttling
-    usage_stats = await supabase_service.get_daily_usage_stats(user_id)
+    usage_stats = await supabase_service.get_daily_usage_stats(user_id, role)
     if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
         raise HTTPException(
             status_code=403,
@@ -1351,7 +1351,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     continue
 
                 # 1. 檢查每日額度 (Token Quota)
-                usage_stats = await supabase_service.get_daily_usage_stats(user_id)
+                usage_stats = await supabase_service.get_daily_usage_stats(user_id, role)
                 if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
                     await websocket.send_json({
                         "event": "error",

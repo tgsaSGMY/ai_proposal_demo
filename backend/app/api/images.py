@@ -7,7 +7,8 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from app.api.dependencies import get_supabase_service, get_current_user_id, get_llm_service
+from app.api.dependencies import get_supabase_service, get_current_user_id, get_current_user_context, get_llm_service
+from app.utils.throttling import apply_throttling_if_needed
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
 from typing import Dict, Any, List, Optional
@@ -177,14 +178,26 @@ async def enrich_prompt(
     request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
 ):
     # 根據專案計畫書內容使用 LLM 豐富圖片描述，使其更符合計畫書內容並適合生成圖片
     """
     根據專案的計畫書內容（stored_answer）來豐富使用者提供的圖片描述。
     使用 LLM 服務生成更詳細且符合計畫書內容的描述。
     """
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+
     try:
+        # 0) 檢查 token 額度
+        from app.config import QUOTA_NORMAL_DAILY_TOKENS
+        usage_stats = await supabase_service.get_daily_usage_stats(user_id, role)
+        if role == "normal" and usage_stats["total_tokens_today"] >= QUOTA_NORMAL_DAILY_TOKENS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"您已達到每日 AI 生成額度 ({QUOTA_NORMAL_DAILY_TOKENS} tokens)。"
+            )
+
         # 1) 驗證使用者是否為該 project 的擁有者
         project = await supabase_service.get_project_by_id(request_data.project_id, user_id)
         if not project:
@@ -296,7 +309,7 @@ async def generate_image(
     request: GenerateImageRequest,
     supabase_service: SupabaseService = Depends(get_supabase_service),
     llm_service: LLMService = Depends(get_llm_service),
-    user_id: str = Depends(get_current_user_id),
+    user_ctx: Dict[str, Any] = Depends(get_current_user_context),
 ):
     # 根據提示詞立即生成圖片並上傳至 Storage，支援參考圖片微調模式，產生有效的 signed URL 供客戶端訪問
     """
@@ -304,13 +317,20 @@ async def generate_image(
     將圖片上傳到 Storage 並記錄到資料庫。
     支援微調模式：如果提供了參考圖片，會記錄參考信息。
     """
+    user_id = user_ctx["id"]
+    role = user_ctx.get("role", "normal")
+    
     try:
-        # 1) 驗證使用者是否為該 project 的擁有者
+        # 1) 檢查每日額度與 Throttling
+        usage_stats = await supabase_service.get_daily_usage_stats(user_id, role)
+        await apply_throttling_if_needed(usage_stats["needs_image_throttling"], user_id)
+        
+        # 2) 驗證使用者是否為該 project 的擁有者
         project = await supabase_service.get_project_by_id(request.project_id, user_id)
         if not project:
             raise HTTPException(status_code=403, detail="Project not found or access denied")
 
-        # 2) 如果有參考圖片，驗證參考圖片所有權
+        # 3) 如果有參考圖片，驗證參考圖片所有權
         if request.reference_image_id:
             try:
                 reference_image = (

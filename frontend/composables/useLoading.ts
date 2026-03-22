@@ -14,23 +14,45 @@ export const useLoading = () => {
   // 是否显示进度条提示（对于长时间操作）
   const showProgressHint = useState<boolean>("showProgressHint", () => false);
 
+  // 用於儲存逾時 ID，以便隨時清除
+  const humorousTimeoutId = useState<any>("humorousTimeoutId", () => null);
+
   // ===== 显示加载动画的方法 =====
   // 启动加载状态，显示加载动画
   // 参数:
   //   - message: 加载时显示的消息（可选）
   //   - progressHint: 是否显示进度条提示（可选）
   const show = (message?: string, progressHint?: boolean) => {
+    // 每次調用 show 前，先清除之前的 timer
+    if (humorousTimeoutId.value) {
+      clearTimeout(humorousTimeoutId.value);
+      humorousTimeoutId.value = null;
+    }
+
     // 设置加载状态为 true
     isLoading.value = true;
     // 设置加载消息（如果提供了消息，则显示；否则为空）
     loadingMessage.value = message ?? "";
     // 设置是否显示进度条提示
     showProgressHint.value = progressHint ?? false;
+
+    // 建立一個 15 秒後的定時器，如果仍處於 isLoading 狀態，便切換到幽默訊息
+    humorousTimeoutId.value = setTimeout(() => {
+      if (isLoading.value) {
+        loadingMessage.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂打字中... 🧙‍♂️💨";
+      }
+    }, 15000);
   };
 
   // ===== 隐藏加载动画的方法 =====
   // 隐藏加载动画，恢复正常状态
   const hide = () => {
+    // 隱藏時清除定時器
+    if (humorousTimeoutId.value) {
+      clearTimeout(humorousTimeoutId.value);
+      humorousTimeoutId.value = null;
+    }
+
     // 设置加载状态为 false
     isLoading.value = false;
     // 清空加载消息

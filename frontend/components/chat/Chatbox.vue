@@ -166,7 +166,7 @@
                 :disabled="!canRequestPlan || isGenerating"
                 @click="requestGeneration"
               >
-                {{ isGenerating ? "推演中..." : "輸出完整推演" }}
+                {{ isGenerating ? generateBtnText : "輸出完整推演" }}
               </button>
               <button
                 v-if="isFetchingNextQuestion"
@@ -289,6 +289,27 @@ const props = defineProps({
 
 const isGenerating = computed(() => props.isGenerating);
 const showSidebar = computed(() => Boolean(props.showSidebar));
+
+const generateBtnText = ref("推演中...");
+let humorousTimeout: any = null;
+
+watch(() => props.isGenerating, (newVal) => {
+  if (newVal) {
+    generateBtnText.value = "推演中...";
+    if (humorousTimeout) clearTimeout(humorousTimeout);
+    humorousTimeout = setTimeout(() => {
+      if (props.isGenerating) {
+        generateBtnText.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂打字中... 🧙‍♂️💨";
+      }
+    }, 15000);
+  } else {
+    generateBtnText.value = "推演中...";
+    if (humorousTimeout) {
+      clearTimeout(humorousTimeout);
+      humorousTimeout = null;
+    }
+  }
+});
 
 const { confirm } = useConfirm();
 const { error: notifyError } = useNotifications();

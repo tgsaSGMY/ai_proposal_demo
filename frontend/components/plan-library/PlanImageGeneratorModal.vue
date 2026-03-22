@@ -226,7 +226,7 @@
                       <path d="M21 15l-5-5L5 21" />
                     </svg>
                     <span>{{
-                      isGenerating ? "生成中..." : "立即生成圖片"
+                      generateBtnText
                     }}</span>
                   </button>
                 </div>
@@ -638,6 +638,8 @@ const emit = defineEmits<Emits>();
 
 const prompt = ref("");
 const isGenerating = ref(false);
+const generateBtnText = ref("立即生成圖片");
+let humorousTimeout: any = null;
 const isEnriching = ref(false);
 const isLoadingImages = ref(false);
 const images = ref<ImageRecord[]>([]);
@@ -713,6 +715,15 @@ async function handleGenerate() {
   if (!prompt.value.trim() || !props.projectId) return;
 
   isGenerating.value = true;
+  generateBtnText.value = "生成中...";
+  
+  if (humorousTimeout) clearTimeout(humorousTimeout);
+  humorousTimeout = setTimeout(() => {
+    if (isGenerating.value) {
+      generateBtnText.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂畫圖中... 🎨💨";
+    }
+  }, 15000);
+
   try {
     // 調用後端 API 生成圖片
     const response = await authenticatedFetch(
@@ -753,6 +764,11 @@ async function handleGenerate() {
     notifyError(error?.message || "圖片生成失敗，請稍後再試");
   } finally {
     isGenerating.value = false;
+    generateBtnText.value = "立即生成圖片";
+    if (humorousTimeout) {
+      clearTimeout(humorousTimeout);
+      humorousTimeout = null;
+    }
   }
 }
 

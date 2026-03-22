@@ -1415,12 +1415,17 @@ class SupabaseService:
         
         asyncio.create_task(self.log_usage(user_id, model_to_use, input_token, output_token, project_id=project_id, action=action))
 
-    async def get_daily_usage_stats(self, user_id: str) -> Dict[str, Any]:
+    async def get_daily_usage_stats(self, user_id: str, role: str = "normal") -> Dict[str, Any]:
         """
         獲取使用者當日的統計數據 (台北時間 UTC+8)。
-        包含：今日建立的專案數、今日消耗的總 token 數。
+        包含：今日建立的專案數、今日生成的圖片數、今日消耗的總 token 數。
         """
-        from app.config import THROTTLING_PROJECT_THRESHOLD
+        from app.config import (
+            THROTTLING_NORMAL_PROJECTS,
+            THROTTLING_VIP_PROJECTS,
+            THROTTLING_NORMAL_IMAGES,
+            THROTTLING_VIP_IMAGES
+        )
 
         # 取得台北時間今日 00:00:00
         tz_taipei = timezone(timedelta(hours=8))
@@ -1438,7 +1443,18 @@ class SupabaseService:
         )
         projects_today = projects_resp.count or 0
 
-        # 2. 統計今日使用的 Token 數
+        # 2. 統計今日生成的圖片數
+        images_resp = (
+            self.client.from_("usage_logs")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .eq("action", "生成圖片")
+            .gte("created_at", today_start_iso)
+            .execute()
+        )
+        images_today = images_resp.count or 0
+
+        # 3. 統計今日使用的 Token 數
         usage_resp = (
             self.client.from_("usage_logs")
             .select("input_token, output_token")
@@ -1452,10 +1468,15 @@ class SupabaseService:
             for log in usage_resp.data:
                 total_tokens += (log.get("input_token") or 0) + (log.get("output_token") or 0)
 
+        project_limit = THROTTLING_VIP_PROJECTS if role in ("vip", "internal") else THROTTLING_NORMAL_PROJECTS
+        image_limit = THROTTLING_VIP_IMAGES if role in ("vip", "internal") else THROTTLING_NORMAL_IMAGES
+
         return {
             "projects_today": projects_today,
+            "images_today": images_today,
             "total_tokens_today": total_tokens,
-            "needs_throttling": projects_today > THROTTLING_PROJECT_THRESHOLD
+            "needs_project_throttling": projects_today > project_limit,
+            "needs_image_throttling": images_today > image_limit
         }
 
     async def check_project_slot_availability(self, user_id: str, role: str) -> bool:
