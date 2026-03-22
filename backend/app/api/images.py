@@ -47,13 +47,11 @@ async def get_project_images(
     try:
         # 1) 驗證使用者是否為該 project 的擁有者
         project = await supabase_service.get_project_by_id(project_id, user_id)
-        print(project)
         if not project:
             raise HTTPException(status_code=403, detail="Project not found or access denied")
 
         # 2) 從資料庫取得該 project 的所有圖片
         images = await supabase_service.get_images_by_project(project_id)
-        print(images)
 
         # 3) 為每個圖片產生 signed URL（使用 service key，會繞過 RLS）
         result = []
@@ -381,7 +379,6 @@ async def generate_image(
                 reference_image_data = None
 
         # 5) 調用圖片生成 API，如果有參考圖片則傳過去
-        print("reference image data:", reference_image_data)
         image_bytes, api_error, response_json = await llm_service._generate_image_from_api(
             prompt=optimized_prompt,
             image=reference_image_data

@@ -732,7 +732,6 @@ class LLMService:
     def _extract_external_sources(provider: Optional[str], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """從提供者的 payload 中提取引用/來源 URL。"""
 
-        print(payload)
         sources: List[Dict[str, Any]] = []
         if not isinstance(payload, dict):
             return sources
@@ -859,10 +858,8 @@ class LLMService:
             # 從生成結果中獲取圖像
             image_bytes = None
             for part in response.parts:
-                print(part)
                 if part.inline_data is not None:
                     image_bytes = part.inline_data.data
-                    print(f"Generated image of size: {len(image_bytes)} bytes")
                     break
             
             if not image_bytes:
@@ -870,16 +867,37 @@ class LLMService:
             
             # 構建響應 JSON 格式（用於成本記錄）
             response_json = {}
+            logger.info(f"Image generation response object: {response}")
             try:
                 if hasattr(response, 'usage_metadata'):
+                    usage_meta = response.usage_metadata
+                    prompt_tokens = usage_meta.prompt_token_count or 0
+                    candidates_tokens = usage_meta.candidates_token_count or 0
+                    thoughts_tokens = usage_meta.thoughts_token_count or 0
+
+                    image_tokens = 0
+                    for detail in (getattr(usage_meta, "candidates_tokens_details", None) or []):
+                        modality = str(getattr(detail, "modality", "")).upper()
+                        if "IMAGE" in modality:
+                            image_tokens += int(getattr(detail, "token_count", 0) or 0)
+
+                    text_output_tokens = max(candidates_tokens - image_tokens, 0)
+                    text_thought_tokens = text_output_tokens + thoughts_tokens
+
                     response_json = {
                         "usageMetadata": {
-                            "promptTokenCount": response.usage_metadata.prompt_token_count,
-                            "candidatesTokenCount": response.usage_metadata.candidates_token_count,
+                            "promptTokenCount": prompt_tokens,
+                            "candidatesTokenCount": candidates_tokens,
+                            "thoughtsTokenCount": thoughts_tokens,
+                            "imageTokenCount": image_tokens,
+                            "textThoughtTokenCount": text_thought_tokens,
+                            "totalTokenCount": usage_meta.total_token_count or (prompt_tokens + candidates_tokens + thoughts_tokens),
                         }
                     }
+                else:
+                    logger.warning("Response object does not have usage_metadata attribute")
             except Exception as e:
-                logger.warning(f"Failed to extract usage metadata: {e}")
+                logger.warning(f"Failed to extract usage metadata: {e}", exc_info=True)
             
             return image_bytes, None, response_json
                 

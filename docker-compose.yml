@@ -3,6 +3,10 @@ version: "3.8"
 services:
   fastapi-backend:
     image: jianheng0831/ai_proposal_platform:latest
+    # 如果你想直接從 Dockerfile 建立映像，可以使用 build 指令，並指定上下文和 Dockerfile 路徑
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
     container_name: fastapi_server
     restart: always
     env_file:
@@ -24,6 +28,10 @@ services:
 
   nginx-proxy:
     image: jianheng0831/ai_proposal_nginx:latest
+    # 如果你想直接從 Dockerfile 建立映像，可以使用 build 指令，並指定上下文和 Dockerfile 路徑
+    # build:
+    #   context: ./nginx
+    #   dockerfile: Dockerfile
     container_name: nginx_proxy
     restart: always
     ports:
