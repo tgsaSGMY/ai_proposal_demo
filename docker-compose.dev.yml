@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  nginx-proxy:
+    # 覆蓋原本的上線 image 名稱，改為強制本地端建構
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: ai_proposal_nginx_local_dev
+    ports:
+      - "80:80"
+    volumes:
+      # 在開發環境，使用開發版設定檔覆蓋上線版設定檔
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf
