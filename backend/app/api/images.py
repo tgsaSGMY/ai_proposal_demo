@@ -5,6 +5,7 @@
 - 根據計畫書內容豐富提示詞
 - 立即生成圖片（支援參考圖片微調）
 """
+import os
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from app.api.dependencies import get_supabase_service, get_current_user_id, get_current_user_context, get_llm_service
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/images", tags=["images"])
 
 SUPABASE_INTERNAL_BASE = "http://supabase-kong:8000"
-SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
+SUPABASE_PUBLIC_PROXY_BASE = os.getenv("SUPABASE_PUBLIC_PROXY_BASE", "https://aiproposal.tgsa.com.tw/supabase")
 
 
 def _normalize_public_url(url: Optional[str]) -> Optional[str]:

@@ -1,6 +1,7 @@
 # 用途：提供計畫模板管理的 API 端點，包含 Grant/Template/Section 的 CRUD 操作，以及模板 Logo 的文件上傳處理。
 
 import logging
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional
@@ -20,7 +21,7 @@ from app.models import (
 from app.services.supabase_service import SupabaseService
 
 SUPABASE_INTERNAL_BASE = "http://supabase-kong:8000"
-SUPABASE_PUBLIC_PROXY_BASE = "https://aiproposal.tgsa.com.tw/supabase"
+SUPABASE_PUBLIC_PROXY_BASE = os.getenv("SUPABASE_PUBLIC_PROXY_BASE", "https://aiproposal.tgsa.com.tw/supabase")
 
 logger = logging.getLogger(__name__)
 
