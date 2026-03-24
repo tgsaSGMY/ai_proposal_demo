@@ -60,9 +60,9 @@ async def suggest_sensitive_terms(
         "1) 只回傳具體詞彙，不要回傳描述句。\n"
         "2) 不要回傳單字元或純符號。\n"
         "3) 不要重複。\n"
-        "4) 最多 20 個。\n"
+        "4) 最多 20 個，可少於20個。\n"
+        "5) 已經使用 OOO 去除敏感資訊的詞匯不再標記為敏感詞。那些常用的詞語也不需要被標記。\n"
         f"已存在詞清單（避免重複）：{existing_terms_str}\n\n"
-        f"用戶輸入：{prompt_text}\n\n"
         f"輸出 JSON：{final_answer_str}"
     )
 

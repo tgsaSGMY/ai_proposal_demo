@@ -71,9 +71,6 @@ export function useSensitiveMasking() {
     terms: string[],
   ): string => {
     if (!html || !terms?.length) return String(html || "");
-    if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-      return String(html);
-    }
 
     const sortedTerms = [...terms]
       .map((term) => normalizeTerm(term))
@@ -82,85 +79,19 @@ export function useSensitiveMasking() {
 
     if (!sortedTerms.length) return String(html);
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(
-      `<div id="hl-root">${String(html)}</div>`,
-      "text/html",
+    const escapedTerms = sortedTerms.map((term) =>
+      term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
     );
-    const root = doc.getElementById("hl-root");
-    if (!root) return String(html);
+    const pattern = new RegExp(`(${escapedTerms.join("|")})`, "g");
 
-    const skipTags = new Set([
-      "MARK",
-      "STRONG",
-      "B",
-      "H1",
-      "H2",
-      "H3",
-      "H4",
-      "H5",
-      "H6",
-      "TH",
-    ]);
-
-    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const textNodes: Node[] = [];
-    let node = walker.nextNode();
-    while (node) {
-      textNodes.push(node);
-      node = walker.nextNode();
-    }
-
-    for (const textNode of textNodes) {
-      const parent = (textNode as ChildNode).parentElement;
-      if (!parent || skipTags.has(parent.tagName)) continue;
-
-      const text = textNode.nodeValue || "";
-      if (!text.trim()) continue;
-
-      const fragment = doc.createDocumentFragment();
-      let cursor = 0;
-      let changed = false;
-
-      while (cursor < text.length) {
-        let matchedTerm = "";
-        let matchedIndex = -1;
-
-        for (const term of sortedTerms) {
-          const index = text.indexOf(term, cursor);
-          if (index === -1) continue;
-          if (matchedIndex === -1 || index < matchedIndex) {
-            matchedIndex = index;
-            matchedTerm = term;
-          }
-        }
-
-        if (matchedIndex === -1) {
-          fragment.appendChild(doc.createTextNode(text.slice(cursor)));
-          break;
-        }
-
-        if (matchedIndex > cursor) {
-          fragment.appendChild(
-            doc.createTextNode(text.slice(cursor, matchedIndex)),
-          );
-        }
-
-        const mark = doc.createElement("mark");
-        mark.className = "mask-highlight";
-        mark.textContent = matchedTerm;
-        fragment.appendChild(mark);
-
-        cursor = matchedIndex + matchedTerm.length;
-        changed = true;
-      }
-
-      if (changed) {
-        parent.replaceChild(fragment, textNode as ChildNode);
-      }
-    }
-
-    return root.innerHTML;
+    // 只處理 HTML 標籤之外的純文字，避免重新 parse HTML 造成段落結構被修正或遺失。
+    return String(html)
+      .split(/(<[^>]+>)/g)
+      .map((chunk) => {
+        if (!chunk || chunk.startsWith("<")) return chunk;
+        return chunk.replace(pattern, '<mark class="mask-highlight">$1</mark>');
+      })
+      .join("");
   };
 
   // 新增詞到「全部敏感詞」與「已選詞」兩份清單，並做去重。
