@@ -225,9 +225,7 @@
                       <circle cx="8.5" cy="8.5" r="1.5" />
                       <path d="M21 15l-5-5L5 21" />
                     </svg>
-                    <span>{{
-                      generateBtnText
-                    }}</span>
+                    <span>{{ generateBtnText }}</span>
                   </button>
                 </div>
               </div>
@@ -716,11 +714,12 @@ async function handleGenerate() {
 
   isGenerating.value = true;
   generateBtnText.value = "生成中...";
-  
+
   if (humorousTimeout) clearTimeout(humorousTimeout);
   humorousTimeout = setTimeout(() => {
     if (isGenerating.value) {
-      generateBtnText.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂畫圖中... 🎨💨";
+      generateBtnText.value =
+        "稍等片刻，目前系統用量較大，AI 正在瘋狂畫圖中... 🎨💨";
     }
   }, 15000);
 
