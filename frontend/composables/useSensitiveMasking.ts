@@ -33,18 +33,29 @@ export function useSensitiveMasking() {
   ): string => {
     if (!text || !terms.length) return String(text || "");
 
-    const sortedTerms = [...terms].sort((a, b) => b.length - a.length);
-    let result = String(text);
+    const sortedTerms = [...terms]
+      .map((term) => normalizeTerm(term))
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length);
 
-    for (const term of sortedTerms) {
-      if (!term) continue;
-      result = result.split(term).join("OOO");
-    }
+    if (!sortedTerms.length) return String(text);
 
-    return result;
+    const escapedTerms = sortedTerms.map((term) =>
+      term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    );
+    const pattern = new RegExp(`(${escapedTerms.join("|")})`, "g");
+
+    // 只替換 HTML 標籤之外的純文字，避免破壞結構
+    return String(text)
+      .split(/(<[^>]+>)/g)
+      .map((chunk) => {
+        if (!chunk || chunk.startsWith("<")) return chunk;
+        return chunk.replace(pattern, "OOO");
+      })
+      .join("");
   };
 
-  // 深度走訪物件/陣列，僅對字串節點套用敏感詞遮罩。
+  // 深度走訪物件/陣列，僅對字串與數字節點套用敏感詞遮罩。
   const maskObjectDeep = (value: unknown, terms: string[]): unknown => {
     if (Array.isArray(value)) {
       return value.map((item) => maskObjectDeep(item, terms));
@@ -59,7 +70,28 @@ export function useSensitiveMasking() {
     }
 
     if (typeof value === "string") {
+      // 處理 JSON 字串：如果字串實際上是 JSON（例如陣列表格），則解析後遞迴處理，避免直接替換導致 JSON 格式損壞
+      const trimmed = value.trim();
+      if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || 
+          (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          const maskedParsed = maskObjectDeep(parsed, terms);
+          return JSON.stringify(maskedParsed);
+        } catch (e) {
+          // 若不是合法的 JSON 字串，則 fallback 繼續作為普通字串處理
+        }
+      }
+
       return replaceSensitiveTermsInString(value, terms);
+    }
+
+    // 處理純數字：允許遮罩數字（例如預算金額、數量等）
+    if (typeof value === "number") {
+      const strVal = String(value);
+      const masked = replaceSensitiveTermsInString(strVal, terms);
+      // 如果數字被替換了（包含了 OOO），則回傳遮罩後的字串，否則回傳原本的數字型態
+      return masked !== strVal ? masked : value;
     }
 
     return value;
