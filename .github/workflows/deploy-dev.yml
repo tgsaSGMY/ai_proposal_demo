@@ -1,0 +1,49 @@
+name: Deploy to Dev VPS
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend
+          push: true
+          tags: tgsataiwan/ai_proposal_platform:dev
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend
+          push: true
+          tags: tgsataiwan/ai_proposal_frontend:dev
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into Dev VPS and Deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.DEV_VPS_IP }}
+          username: root
+          key: ${{ secrets.DEV_VPS_SSH_KEY }}
+          script: |
+            cd /opt/projects/ai-proposal-platform
+            git pull origin dev
+            docker compose -f docker-compose.beta.yml pull
+            docker compose -f docker-compose.beta.yml up -d
+            docker image prune -f
