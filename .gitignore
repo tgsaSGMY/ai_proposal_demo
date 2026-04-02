@@ -29,6 +29,7 @@ custom-sql.txt
 db_schema.txt
 STATUS.md
 to-do-list.txt
+test-server-setup.md
 
 # Virtual Environment
 .venv/
