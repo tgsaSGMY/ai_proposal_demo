@@ -41,14 +41,14 @@ jobs:
     steps:
       - name: SSH into Dev VPS and Deploy
         uses: appleboy/ssh-action@v1.0.3
+        env:
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         with:
           host: ${{ secrets.DEV_VPS_IP }}
           username: root
           key: ${{ secrets.DEV_VPS_SSH_KEY }}
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
-          env:
-            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           script: |
             cd /opt/projects/ai-proposal-platform
             git pull origin dev
