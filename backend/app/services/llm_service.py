@@ -34,8 +34,8 @@ class LLMService:
         self.initial_retry_delay = 1  # 秒
         self.request_semaphore = asyncio.Semaphore(200)  # 同时最多 20 个请求（允许更多并发）
         self._last_response_json = {}  # 用於儲存最後一次API呼叫的完整響應
-        self.GENERATION_TIMEOUT = 120  # 單個章節生成超時 120 秒
-        self.TOTAL_GENERATION_TIMEOUT = 600  # 整個計畫生成超時 10 分鐘
+        self.GENERATION_TIMEOUT = 300  # 單個章節生成超時 300 秒
+        self.TOTAL_GENERATION_TIMEOUT = 1800  # 整個計畫生成超時 30 分鐘
 
     # ========== 重試與容錯機制 ==========
     
@@ -529,7 +529,7 @@ class LLMService:
         
         try:
             last_response_json = {}
-            async with session.stream("POST", url, json=payload, headers=headers, timeout=300) as response:
+            async with session.stream("POST", url, json=payload, headers=headers, timeout=900) as response:
                 if response.status_code != 200:
                     error_text = await response.aread()
                     raise ValueError(f"OpenAI API error {response.status_code}: {error_text}")
@@ -598,7 +598,7 @@ class LLMService:
                         enable_grounding=enable_grounding,
                         reasoning_effort=reasoning_effort,
                     )
-                    response = await session.post(api_url, json=payload, headers=headers, timeout=300)
+                    response = await session.post(api_url, json=payload, headers=headers, timeout=900)
                     response.raise_for_status()
                     
                     # 根據 provider 解析響應

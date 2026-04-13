@@ -13,8 +13,15 @@ function getApiBaseUrl(): string {
   return `${config.public.apiBaseUrl}/api`;
 }
 
+function getPlatformHomeUrl(): string {
+  const config = useRuntimeConfig();
+  return (
+    config.public.platformHomeUrl || "https://portal.tgsaapp.com/"
+  ).trim();
+}
+
 // 強制登出流程：先清 Supabase，再呼叫後端外部登入登出，最後導向登入頁。
-async function hardLogoutAndRedirect(): Promise<void> {
+async function hardLogoutAndRedirect(redirectTo?: string): Promise<void> {
   try {
     await supabase.auth.signOut();
   } catch {
@@ -41,7 +48,7 @@ async function hardLogoutAndRedirect(): Promise<void> {
   }
 
   if (typeof window !== "undefined") {
-    window.location.href = "/login";
+    window.location.href = redirectTo || getPlatformHomeUrl() || "/login";
   }
 }
 
@@ -125,6 +132,6 @@ export async function authenticatedFetch(
 }
 
 // 對外提供的登出 API，統一走強制登出流程。
-export async function appLogout(): Promise<void> {
-  await hardLogoutAndRedirect();
+export async function appLogout(options?: { redirectTo?: string }): Promise<void> {
+  await hardLogoutAndRedirect(options?.redirectTo);
 }

@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  fastapi-backend:
+    image: tgsa83609327/ai_proposal_platform:dev
+    container_name: fastapi_server
+    restart: always
+    env_file:
+      - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - supabase_net
+      - npm-network
+
+  nuxt-frontend:
+    # Use the pre-built dev image from Docker Hub instead of building on the VPS
+    image: tgsa83609327/ai_proposal_frontend:dev
+    container_name: nuxt_client
+    restart: always
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - fastapi-backend
+    networks:
+      - default
+      - npm-network
+
+# Notice we completely removed the nginx-proxy service here 
+# because Nginx Proxy Manager (NPM) will handle all routing globally on the VPS.
+
+networks:
+  supabase_net:
+    external: true
+    name: supabase_default
+  npm-network:
+    external: true
