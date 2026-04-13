@@ -22,14 +22,14 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: tgsataiwan/ai_proposal_platform:dev
+          tags: tgsa83609327/ai_proposal_platform:dev
 
       - name: Build and push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: tgsataiwan/ai_proposal_frontend:dev
+          tags: tgsa83609327/ai_proposal_frontend:dev
           build-args: |
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
@@ -45,9 +45,14 @@ jobs:
           host: ${{ secrets.DEV_VPS_IP }}
           username: root
           key: ${{ secrets.DEV_VPS_SSH_KEY }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+          env:
+            DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+            DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           script: |
             cd /opt/projects/ai-proposal-platform
             git pull origin dev
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             docker compose -f docker-compose.beta.yml pull
             docker compose -f docker-compose.beta.yml up -d
             docker image prune -f

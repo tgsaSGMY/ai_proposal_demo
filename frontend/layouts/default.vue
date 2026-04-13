@@ -382,7 +382,7 @@
             class="w-full rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm transition hover:bg-rose-50"
             @click="handleLogout"
           >
-            登出
+            返回 TGSA 平台首頁
           </button>
         </div>
       </div>
@@ -454,6 +454,8 @@ let authSubscription = null;
 const config = useRuntimeConfig();
 // API 基础 URL
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
+const TGSA_PLATFORM_HOME_URL =
+  config.public.platformHomeUrl || "https://portal.tgsaapp.com/";
 
 // ===== 事件处理函数 =====
 // 处理侧边栏点击 (移动端关闭菜单)
@@ -512,16 +514,7 @@ async function fetchUserUsage(targetUserId) {
 // 处理用户登出：清除认证状态，清理本地存储，重定向到登录页面
 async function handleLogout() {
   try {
-    await appLogout();
-
-    // 清除所有相关的用户状态信息
-    isAuthenticated.value = false; // 标记为未认证
-    isInternalView.value = false; // 切回外部视图
-    currentUserId.value = null; // 清空用户 ID
-    userTotalCost.value = null; // 清空用户成本
-
-    // 重定向到登录页面
-    await router.push("/login");
+    await appLogout({ redirectTo: TGSA_PLATFORM_HOME_URL });
   } catch (error) {
     // 登出失败时打印错误信息
     console.error("Logout error:", error);

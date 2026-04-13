@@ -10,6 +10,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "",
+      platformHomeUrl:
+        process.env.NUXT_PUBLIC_PLATFORM_HOME_URL ||
+        "https://portal.tgsaapp.com/",
       supabaseUrl: process.env.SUPABASE_URL || "",
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
     },
