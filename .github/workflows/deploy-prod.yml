@@ -52,7 +52,7 @@ jobs:
           port: 22222
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
           script: |
-            cd /opt/projects/ai-proposal-platform
+            cd /var/www/backend
             git pull origin main
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
             docker compose -f docker-compose.yml pull
