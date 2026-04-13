@@ -49,6 +49,7 @@ jobs:
           host: ${{ secrets.LIVE_VPS_IP }}
           username: root
           key: ${{ secrets.LIVE_VPS_SSH_KEY }}
+          port: 22222
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
           script: |
             cd /opt/projects/ai-proposal-platform
