@@ -29,6 +29,7 @@
           <select
             :value="parseDataPath(node.dataPath)[levelIndex] || ''"
             class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            :class="isBindingBroken ? 'border-red-300 text-red-600 focus:border-red-500 focus:ring-red-200' : ''"
             @change="handleDataPathLevelChange(levelIndex, $event)"
           >
             <option value="">
@@ -43,12 +44,18 @@
             </option>
           </select>
         </div>
+        
+        <div v-if="isBindingBroken" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-start gap-1.5">
+          <span class="text-sm leading-none">⚠️</span>
+          <span>此欄位路徑 ({{ node.dataPath }}) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
+        </div>
       </div>
     </label>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import {
   buildDataPath,
   createWordSchemaPathHelpers,
@@ -88,7 +95,14 @@ const emit = defineEmits<{
 }>();
 
 // 產生 dataPath 各層候選欄位。
-const { getDataPathLevels } = createWordSchemaPathHelpers(() => props.sections);
+const { getDataPathLevels, isValidDataPath } = createWordSchemaPathHelpers(() => props.sections);
+
+// 判斷綁定路徑是否失效
+const isBindingBroken = computed(() => {
+  if (!props.node.sectionId) return false; // 沒綁定章節就不算失效
+  if (!props.node.dataPath) return false; // 綁定整個章節也不算失效
+  return !isValidDataPath(props.node.sectionId, props.node.dataPath);
+});
 
 // 切換資料章節時，重置 dataPath 以避免舊路徑殘留。
 function handleSectionChange(event: Event) {

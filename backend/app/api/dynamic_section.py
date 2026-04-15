@@ -272,6 +272,15 @@ async def delete_section(
 ):
 	# 刪除指定章節及其所有子欄位，執行級聯刪除操作
 	try:
+		# 執行手動級聯刪除：先刪除底下關聯的所有動態欄位
+		(
+			supabase_service.client
+			.from_("dynamic_fields")
+			.delete()
+			.eq("section_id", section_id)
+			.execute()
+		)
+
 		delete_resp = (
 			supabase_service.client
 			.from_("dynamic_sections")
