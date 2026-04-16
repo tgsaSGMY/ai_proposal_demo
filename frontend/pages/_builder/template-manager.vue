@@ -80,6 +80,7 @@
         :saving="wordEditorSaving"
         @close="closeWordEditorModal"
         @save="handleWordEditorSave"
+        @delete-version="handleWordEditorDeleteVersion"
       />
 
       <NameRecommendForm
@@ -807,6 +808,38 @@ async function handleWordEditorSave(config: WordExportTemplateConfig) {
   } catch (error: any) {
     console.error("Failed to save word export config", error);
     notifyError(error?.message || "儲存文檔設定失敗");
+  } finally {
+    wordEditorSaving.value = false;
+  }
+}
+
+// 刪除 Word 匯出設定歷史版本
+async function handleWordEditorDeleteVersion(versionId: string) {
+  const template = wordEditorTemplate.value;
+  if (!template || !template.word_export_config) return;
+
+  wordEditorSaving.value = true;
+  try {
+    const nextList = template.word_export_config.filter(v => v.id !== versionId);
+
+    await fetchJsonWithAuth(
+      `${TEMPLATE_MANAGER_API}/templates/${template.grant_id}/${template.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ word_export_config: nextList }),
+      },
+    );
+
+    await loadInitialData();
+    
+    // 更新本地狀態以即時反應 UI
+    if (wordEditorTemplate.value) {
+       wordEditorTemplate.value.word_export_config = nextList;
+    }
+    
+    success("歷史版本已刪除");
+  } catch (error: any) {
+    notifyError(error?.message || "刪除歷史版本失敗");
   } finally {
     wordEditorSaving.value = false;
   }

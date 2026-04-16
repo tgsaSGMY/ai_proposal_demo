@@ -60,13 +60,24 @@
                       {{ version.createdBy || "未記錄" }}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                    @click="applyVersion(version)"
-                  >
-                    套用
-                  </button>
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="button"
+                      class="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      @click="applyVersion(version)"
+                    >
+                      套用
+                    </button>
+                    <button
+                      v-if="versionHistory.length > 1 && version.id !== versionHistory[0].id"
+                      type="button"
+                      class="text-xs font-semibold text-red-500 hover:text-red-700"
+                      title="刪除此版本"
+                      @click="handleDeleteVersion(version.id)"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </li>
               <li v-if="!versionHistory.length" class="text-xs text-slate-400">
@@ -520,9 +531,10 @@ const props = defineProps({
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "save", payload: WordExportTemplateConfig): void;
+  (e: "delete-version", versionId: string): void;
 }>();
 
-// 通知工具：目前僅使用錯誤提示。
+// 處理通知與錯誤提示
 const { error: notifyError } = useNotifications();
 
 // 可選字體清單。
@@ -912,6 +924,13 @@ function generateNodeId(): string {
     return crypto.randomUUID();
   }
   return `node_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+// 刪除指定歷史版本
+function handleDeleteVersion(versionId: string) {
+  if (window.confirm("確定要刪除此歷史版本嗎？這將無法復原，且可能影響依賴此版本的舊計畫匯出格式。")) {
+    emit("delete-version", versionId);
+  }
 }
 
 /**
