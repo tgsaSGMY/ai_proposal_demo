@@ -45,9 +45,18 @@
           </select>
         </div>
         
-        <div v-if="isBindingBroken" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-start gap-1.5">
-          <span class="text-sm leading-none">⚠️</span>
-          <span>此欄位路徑 ({{ node.dataPath }}) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
+        <div v-if="isBindingBroken" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-center justify-between gap-1.5">
+          <div class="flex items-start gap-1.5">
+            <span class="text-sm leading-none">⚠️</span>
+            <span>此欄位路徑 ({{ node.dataPath }}) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
+          </div>
+          <button 
+            type="button" 
+            class="shrink-0 px-2 py-1 bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 rounded shadow-sm font-semibold transition-colors"
+            @click="clearInvalidPath"
+          >
+            清除無效路徑
+          </button>
         </div>
       </div>
     </label>
@@ -127,6 +136,13 @@ function handleDataPathLevelChange(levelIndex: number, event: Event) {
     }
 
     node.dataPath = buildDataPath(segments);
+  });
+}
+
+// 清除失效的路徑，讓 UI 恢復到只有第一層下拉選單的乾淨狀態
+function clearInvalidPath() {
+  emit("update", props.node.id, (node) => {
+    node.dataPath = ""; 
   });
 }
 </script>
