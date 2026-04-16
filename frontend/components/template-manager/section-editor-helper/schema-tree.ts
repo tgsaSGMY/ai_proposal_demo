@@ -236,6 +236,8 @@ function buildSchemaNode(node: SchemaNode): Record<string, any> {
 }
 
 // 驗證節點結構是否合法，回傳第一個錯誤訊息或 null。
+// 同時將 title 同步為 key，因為編輯器 UI 不提供 title 獨立編輯，
+// 避免使用者修改 key 後 title 仍殘留舊值導致下游顯示錯誤。
 export function validateSchemaNodes(nodes: SchemaNode[]): string | null {
   const queue: SchemaNode[] = [...nodes];
   while (queue.length) {
@@ -246,8 +248,12 @@ export function validateSchemaNodes(nodes: SchemaNode[]): string | null {
     if (!current.isArrayItem && !current.key.trim()) {
       return "章節結構中的欄位需要設定欄位代號";
     }
-    // 若未填標題則預設使用 key，避免後續輸出空標題。
-    if (!current.title.trim()) current.title = current.key.trim();
+    // 始終將 title 同步為 key，確保 key 變更後 title 不會殘留舊值。
+    // title 欄位在 SchemaNodeEditor 中不開放使用者獨立編輯，
+    // 因此直接以 key 為準即可避免 key/title 不一致的問題。
+    if (current.key.trim()) {
+      current.title = current.key.trim();
+    }
     if (current.type === "object") {
       current.children.forEach((child) => queue.push(child));
     } else if (current.type === "array" && current.items) {
