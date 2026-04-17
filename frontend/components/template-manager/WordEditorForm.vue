@@ -5,7 +5,7 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
   >
     <section
-      class="w-full max-w-8xl max-h-full overflow-y-auto rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
+      class="w-full max-w-8xl max-h-full overflow-y-auto overflow-x-hidden rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
     >
       <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -14,7 +14,7 @@
           >
             Word Export Editor
           </p>
-          <h2 class="text-2xl font-bold text-slate-900">
+          <h2 class="text-2xl font-bold text-slate-900 truncate" :title="`${template.name} · ${template.id}`">
             {{ template.name }} · {{ template.id }}
           </h2>
           <p class="text-sm text-slate-500">
@@ -32,7 +32,7 @@
       </header>
 
       <div class="grid gap-6 lg:grid-cols-[1fr,1fr]">
-        <div class="space-y-6 overflow-y-auto max-h-[calc(100vh-12rem)]">
+        <div class="space-y-6 overflow-y-auto max-h-[calc(100vh-12rem)] min-w-0">
           <aside
             class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
           >
@@ -228,12 +228,13 @@
                   v-for="chapter in groupedNodes"
                   :key="`tab-${chapter.id}`"
                   type="button"
-                  class="shrink-0 rounded-xl px-3 py-1 font-semibold"
+                  class="shrink-0 rounded-xl px-3 py-1 font-semibold max-w-[10rem] truncate"
                   :class="[
                     selectedChapterId === chapter.id
                       ? 'bg-rose-500 text-white'
                       : 'text-slate-600 hover:text-rose-500',
                   ]"
+                  :title="chapter.title || '未命名章節'"
                   @click="selectedChapterId = chapter.id"
                 >
                   {{ chapter.title || "未命名章節" }}
@@ -250,7 +251,7 @@
                   class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50"
                 >
                   <div class="flex items-center gap-3">
-                    <span class="text-sm font-semibold text-slate-700">{{
+                    <span class="text-sm font-semibold text-slate-700 truncate min-w-0" :title="chapter.title || '未命名章節'">{{
                       chapter.title || "未命名章節"
                     }}</span>
                     <span class="text-xs text-slate-500"
@@ -377,7 +378,7 @@
         </div>
 
         <aside
-          class="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col lg:sticky lg:top-6 max-h-[calc(100vh-12rem)]"
+          class="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col lg:sticky lg:top-6 max-h-[calc(100vh-12rem)] min-w-0"
         >
           <div class="flex items-center justify-between mb-3 flex-shrink-0">
             <h3 class="text-sm font-semibold text-slate-700">即時預覽</h3>

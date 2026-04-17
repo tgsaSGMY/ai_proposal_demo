@@ -24,11 +24,11 @@
         <div
           v-for="(levelOptions, levelIndex) in getDataPathLevels(node)"
           :key="`level-${levelIndex}`"
-          class="flex items-center"
+          class="flex items-center min-w-0"
         >
           <select
             :value="parseDataPath(node.dataPath)[levelIndex] || ''"
-            class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            class="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-2 text-sm"
             :class="isBindingBroken ? 'border-red-300 text-red-600 focus:border-red-500 focus:ring-red-200' : ''"
             @change="handleDataPathLevelChange(levelIndex, $event)"
           >
@@ -48,7 +48,7 @@
         <div v-if="isBindingBroken" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-center justify-between gap-1.5">
           <div class="flex items-start gap-1.5">
             <span class="text-sm leading-none">⚠️</span>
-            <span>此欄位路徑 ({{ node.dataPath }}) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
+            <span class="break-all">此欄位路徑 (<code class="font-mono">{{ node.dataPath }}</code>) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
           </div>
           <button 
             type="button" 

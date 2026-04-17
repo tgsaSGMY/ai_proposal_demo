@@ -96,7 +96,7 @@
         <select
           v-if="node.paragraphNumbering"
           :value="node.paragraphNumberStyle"
-          class="rounded-xl border border-slate-200 px-3 py-1 text-xs"
+          class="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-1 text-xs"
           @change="handleParagraphNumberStyleChange"
         >
           <option
@@ -242,7 +242,6 @@
     <div
       v-if="node.children?.length"
       class="space-y-3"
-      :style="{ marginLeft: '12px' }"
     >
       <RecursiveNodeEditor
         v-for="childNode in node.children"

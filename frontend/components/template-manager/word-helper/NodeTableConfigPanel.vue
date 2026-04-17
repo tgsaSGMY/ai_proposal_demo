@@ -39,7 +39,8 @@
             :placeholder="`列 ${colIndex + 1} 標題`"
             @input="handleColumnLabelChange(colIndex, $event)"
           />
-          <span class="text-xs whitespace-nowrap" :class="!isColumnValid(column.key) ? 'text-red-500 font-semibold' : 'text-slate-500'"
+          <span class="text-xs whitespace-nowrap truncate max-w-[120px] inline-block align-middle" :class="!isColumnValid(column.key) ? 'text-red-500 font-semibold' : 'text-slate-500'"
+            :title="column.key"
             >({{ column.key }})</span
           >
           <span v-if="!isColumnValid(column.key)" class="text-[10px] text-red-600 bg-red-100 px-1 rounded border border-red-200 whitespace-nowrap" title="此欄位已不存在於 Schema 中">⚠️ 失效</span>
@@ -81,7 +82,7 @@
       </p>
       <div class="flex flex-wrap gap-2">
         <div v-for="col in invalidColumns" :key="col.key" class="flex items-center gap-1 bg-white border border-red-200 rounded px-2 py-1 text-xs text-red-600 shadow-sm">
-          <span class="line-through">{{ col.label || col.key }}</span>
+          <span class="line-through truncate max-w-[150px] inline-block align-middle" :title="col.label || col.key">{{ col.label || col.key }}</span>
           <button type="button" class="ml-1 text-red-400 hover:text-red-700 font-bold" @click="removeColumn(col.key)" title="移除失效欄位">✕</button>
         </div>
       </div>
@@ -93,17 +94,17 @@
         <label
           v-for="option in getNodeColumnCandidates(node)"
           :key="option.key"
-          class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm min-w-0 overflow-hidden"
         >
           <input
             type="checkbox"
             :checked="
               node.table?.columns?.some((column) => column.key === option.key)
             "
-            class="h-4 w-4 rounded border-slate-300"
+            class="h-4 w-4 shrink-0 rounded border-slate-300"
             @change="handleColumnToggle(option, $event)"
           />
-          <span class="truncate">{{ option.label }} ({{ option.key }})</span>
+          <span class="truncate" :title="`${option.label} (${option.key})`">{{ option.label }} ({{ option.key }})</span>
         </label>
       </div>
       <p
