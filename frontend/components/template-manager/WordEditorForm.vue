@@ -53,8 +53,11 @@
               >
                 <div class="flex items-center justify-between gap-2">
                   <div>
-                    <p class="font-semibold text-slate-800">
+                    <p class="font-semibold text-slate-800 flex items-center gap-2">
                       {{ formatDate(version.createdAt) }}
+                      <span v-if="isVersionOutdated(version)" class="inline-flex items-center rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20" title="此版本的章節結構與當前資料庫不同">
+                        ⚠️ 結構已變更
+                      </span>
                     </p>
                     <p class="text-xs text-slate-500 truncate">
                       {{ version.createdBy || "未記錄" }}
@@ -208,7 +211,14 @@
                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   @click="addNode()"
                 >
-                  新增章節
+                  新增節點
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-blue-300 px-3 py-1 text-sm font-semibold text-blue-600 hover:bg-blue-50 ml-2"
+                  @click="syncMissingSections()"
+                >
+                  🔄 同步遺失的章節
                 </button>
               </div>
             </div>
@@ -589,6 +599,34 @@ const versionHistory = computed<WordExportConfigEntry[]>(() => {
   );
 });
 
+// 判斷某個歷史版本是否已「過期」(章節結構與當前資料庫不符)
+function isVersionOutdated(version: WordExportConfigEntry): boolean {
+  if (!version.config?.nodes) return false;
+
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+  const versionSectionIds = new Set<string>();
+
+  const scanNodes = (nodes: WordDocumentNode[]) => {
+    for (const node of nodes) {
+      if (node.sectionId) versionSectionIds.add(node.sectionId);
+      if (node.children && node.children.length > 0) scanNodes(node.children);
+    }
+  };
+  scanNodes(version.config.nodes);
+
+  // 1. 檢查是否有已刪除的章節 (Ghost nodes)
+  for (const id of versionSectionIds) {
+    if (!dbSectionIds.has(id)) return true;
+  }
+
+  // 2. 檢查是否有遺漏的新章節 (Missing nodes)
+  for (const id of dbSectionIds) {
+    if (!versionSectionIds.has(id)) return true;
+  }
+
+  return false;
+}
+
 // 章節分組模型：一個章節標記加上其內容節點。
 interface ChapterGroup {
   id: string;
@@ -950,7 +988,7 @@ function generateDefaultNodes(): WordDocumentNode[] {
       level: 1,
     });
 
-    // 遞迴處理 schema properties（從 level 2 開始）。
+    // 遞迴解析 schema properties，層級從 level 2 開始。
     const schemaProps = section.json_schema?.properties;
     if (schemaProps) {
       const childNodes = generateNodesFromSchema(
@@ -964,6 +1002,107 @@ function generateDefaultNodes(): WordDocumentNode[] {
   }
 
   return nodes;
+}
+
+// 同步與重整 (Smart Sync & Reorder)
+// 將現有節點分塊、依據資料庫章節順序重新排序、插入遺失的章節，並將已刪除的章節移至最下方
+function syncMissingSections() {
+  const currentNodes = formState.value.nodes || [];
+  if (currentNodes.length === 0) {
+    formState.value.nodes = generateDefaultNodes();
+    success("已產生預設節點結構！");
+    return;
+  }
+
+  // 1. 將現有節點切分成 Chapter Blocks
+  const blocks: WordDocumentNode[][] = [];
+  let currentBlock: WordDocumentNode[] = [];
+  for (const node of currentNodes) {
+    const isChapterMarker = node.type === "sectionTitle" || node.chapterMarker === true;
+    if (isChapterMarker && currentBlock.length > 0) {
+      blocks.push(currentBlock);
+      currentBlock = [];
+    }
+    currentBlock.push(node);
+  }
+  if (currentBlock.length > 0) blocks.push(currentBlock);
+
+  // 2. 分析每個 Block 的主要 sectionId
+  const blockMap = new Map<string, WordDocumentNode[][]>();
+  const unmappedBlocks: WordDocumentNode[][] = [];
+
+  for (const block of blocks) {
+    let primarySectionId: string | null = null;
+    
+    // 遞迴掃描找出第一個有效的 sectionId
+    const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
+      for (const node of nodes) {
+        if (node.sectionId) return node.sectionId;
+        if (node.children && node.children.length > 0) {
+          const childId = scanForSectionId(node.children);
+          if (childId) return childId;
+        }
+      }
+      return null;
+    };
+    
+    primarySectionId = scanForSectionId(block);
+
+    if (primarySectionId) {
+      if (!blockMap.has(primarySectionId)) blockMap.set(primarySectionId, []);
+      blockMap.get(primarySectionId)!.push(block);
+    } else {
+      unmappedBlocks.push(block);
+    }
+  }
+
+  // 3. 依據資料庫的章節順序，重新組裝節點樹
+  const newFlatNodes: WordDocumentNode[] = [];
+  let syncedCount = 0;
+
+  for (const section of props.sections) {
+    if (blockMap.has(section.id)) {
+      // 保留並插入現有區塊
+      const sectionBlocks = blockMap.get(section.id)!;
+      for (const b of sectionBlocks) {
+        newFlatNodes.push(...b);
+      }
+      blockMap.delete(section.id);
+    } else {
+      // 遺失的章節：動態產生並安插在正確位置
+      const newNodes: WordDocumentNode[] = [];
+      newNodes.push({
+        id: generateNodeId(),
+        label: section.name,
+        type: "sectionTitle",
+        sectionId: section.id,
+        level: 1,
+      });
+
+      const schemaProps = section.json_schema?.properties;
+      if (schemaProps) {
+        const childNodes = generateNodesFromSchema(section.id, schemaProps, "", 2);
+        newNodes.push(...childNodes);
+      }
+      newFlatNodes.push(...newNodes);
+      syncedCount++;
+    }
+  }
+
+  // 4. 將無綁定的純手動區塊加在活耀章節後方
+  for (const b of unmappedBlocks) {
+    newFlatNodes.push(...b);
+  }
+
+  // 5. 將已刪除(Orphan/Ghost)的章節區塊移至最下方
+  for (const [secId, orphanBlocks] of blockMap.entries()) {
+    for (const b of orphanBlocks) {
+      newFlatNodes.push(...b);
+    }
+  }
+
+  formState.value.nodes = newFlatNodes;
+  success(`同步完成！已依照最新結構排序，並補齊 ${syncedCount} 個遺失章節。`);
 }
 
 /**
