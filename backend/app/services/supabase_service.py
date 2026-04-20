@@ -470,7 +470,23 @@ class SupabaseService:
         )
 
     async def delete_section_record(self, section_id: str, template_id: str, grant_id: str) -> bool:
-        """刪除指定章節。"""
+        """刪除指定章節，並先清除相依的子記錄 (routing_rules, section_schema_versions, datasets)。"""
+        # Clean up child dependencies to prevent foreign key violations (500 errors)
+        try:
+            self.client.from_("routing_rules").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup routing_rules for section {section_id}: {e}")
+
+        try:
+            self.client.from_("section_schema_versions").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup section_schema_versions for section {section_id}: {e}")
+
+        try:
+            self.client.from_("datasets").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup datasets for section {section_id}: {e}")
+
         response = (
             self.client
             .from_("sections")

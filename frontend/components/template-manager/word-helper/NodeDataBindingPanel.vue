@@ -5,7 +5,8 @@
       資料章節
       <select
         :value="node.sectionId"
-        class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+        class="w-full rounded-xl border px-3 py-2 text-sm"
+        :class="isSectionOutdated ? 'border-red-300 text-red-600 bg-red-50 focus:border-red-500 focus:ring-red-200' : 'border-slate-200'"
         @change="handleSectionChange"
       >
         <option value="">無資料來源（純文字）</option>
@@ -16,7 +17,18 @@
         >
           {{ option.label }}
         </option>
+        <option v-if="isSectionOutdated" :value="node.sectionId" class="text-red-500">
+          ⚠️ 已刪除的章節 ({{ node.sectionId }})
+        </option>
       </select>
+      
+      <div v-if="isSectionOutdated" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-start gap-1.5">
+        <span class="text-sm leading-none mt-0.5">⚠️</span>
+        <span class="leading-relaxed">
+          <strong>Outdated Section (已刪除的章節)</strong><br />
+          The section bound to this node no longer exists. Historical data can still be exported if available, but rebinding is recommended for new projects.
+        </span>
+      </div>
     </label>
     <label class="space-y-1 text-sm text-slate-600">
       資料欄位
@@ -106,9 +118,16 @@ const emit = defineEmits<{
 // 產生 dataPath 各層候選欄位。
 const { getDataPathLevels, isValidDataPath } = createWordSchemaPathHelpers(() => props.sections);
 
+// 判斷章節是否已被刪除 (Outdated)
+const isSectionOutdated = computed(() => {
+  if (!props.node.sectionId) return false;
+  return !props.sections.some(s => s.id === props.node.sectionId);
+});
+
 // 判斷綁定路徑是否失效
 const isBindingBroken = computed(() => {
   if (!props.node.sectionId) return false; // 沒綁定章節就不算失效
+  if (isSectionOutdated.value) return false; // 如果章節已刪除，我們另外顯示章節失效警告，不顯示路徑失效
   if (!props.node.dataPath) return false; // 綁定整個章節也不算失效
   return !isValidDataPath(props.node.sectionId, props.node.dataPath);
 });
