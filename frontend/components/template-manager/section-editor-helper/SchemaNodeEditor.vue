@@ -24,8 +24,17 @@
             v-model="node.key"
             :disabled="disabled"
             class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-rose-400 focus:ring-rose-200 disabled:bg-slate-50"
-            placeholder="欄位代號"
+            placeholder="欄位名稱"
           />
+          <div v-if="node.key && node.key.includes('.')" class="w-full mt-1.5 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs">
+            <div class="flex items-start gap-1.5">
+              <span class="text-sm leading-none mt-0.5">⚠️</span>
+              <span class="leading-relaxed font-medium">
+                請勿在欄位名稱中使用點號「 <code class="font-bold">.</code> 」
+                <br/><span class="text-slate-500 font-normal">這會導致 Word 編輯器路徑解析失敗。請改用底線「 <code class="font-bold">_</code> 」(例如：<code>1_經濟效益</code>)。</span>
+              </span>
+            </div>
+          </div>
         </div>
         <select
           :value="node.type"

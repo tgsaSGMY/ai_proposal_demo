@@ -31,7 +31,7 @@
       </div>
     </label>
     <label class="space-y-1 text-sm text-slate-600">
-      資料欄位
+      綁定欄位
       <div class="space-y-2">
         <div
           v-for="(levelOptions, levelIndex) in getDataPathLevels(node)"
@@ -45,7 +45,7 @@
             @change="handleDataPathLevelChange(levelIndex, $event)"
           >
             <option value="">
-              {{ levelIndex === 0 ? "整個章節/物件" : "選擇子欄位..." }}
+              {{ levelIndex === 0 ? "未選擇" : "請選擇..." }}
             </option>
             <option
               v-for="option in levelOptions"
@@ -57,18 +57,36 @@
           </select>
         </div>
         
-        <div v-if="isBindingBroken" class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex items-center justify-between gap-1.5">
-          <div class="flex items-start gap-1.5">
-            <span class="text-sm leading-none">⚠️</span>
-            <span class="break-all">此欄位路徑 (<code class="font-mono">{{ node.dataPath }}</code>) 在當前章節 Schema 中已失效或被刪除。<br/>請重新綁定有效欄位，或清除此節點以避免匯出時顯示「無」。</span>
+        <div v-if="isBindingBroken" class="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-xs flex flex-col gap-2">
+          <div class="flex items-start gap-1.5 font-medium">
+            <span class="text-sm leading-none mt-0.5">⚠️</span>
+            <span class="break-all">此欄位路徑在當前章節 Schema 中已失效或結構不符：<code class="font-mono bg-red-100 px-1 rounded">{{ node.dataPath }}</code></span>
           </div>
-          <button 
-            type="button" 
-            class="shrink-0 px-2 py-1 bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 rounded shadow-sm font-semibold transition-colors"
-            @click="clearInvalidPath"
-          >
-            清除無效路徑
-          </button>
+          
+          <div class="ml-5 space-y-1.5 text-slate-700">
+            <p class="font-bold text-red-700">💡 排解建議 (Troubleshooting):</p>
+            <ul class="list-disc pl-4 space-y-1">
+              <li>
+                <strong>欄位名稱包含點 (<code>.</code>)：</strong> 若您的 Schema 欄位名稱包含點 (例如 <code>1.經濟效益</code>)，系統會誤判為巢狀路徑。請至「章節編輯器」將點改為底線 (例如 <code>1_經濟效益</code>)。
+              </li>
+              <li>
+                <strong>巢狀陣列問題：</strong> 若您試圖綁定包含多個項目的「陣列」(Array)，請改用 Word 編輯器的 <strong>「清單 (List)」</strong> 或 <strong>「自訂表格 (Custom Table)」</strong> 節點來綁定。
+              </li>
+              <li>
+                <strong>Schema 已更新：</strong> 若章節的結構被修改過，請點擊下方按鈕清除路徑並重新綁定。
+              </li>
+            </ul>
+          </div>
+
+          <div class="flex justify-end mt-1">
+            <button 
+              type="button" 
+              class="px-3 py-1.5 bg-red-100 hover:bg-red-200 border border-red-300 text-red-700 rounded shadow-sm font-semibold transition-colors"
+              @click="clearInvalidPath"
+            >
+              清除無效路徑
+            </button>
+          </div>
         </div>
       </div>
     </label>
