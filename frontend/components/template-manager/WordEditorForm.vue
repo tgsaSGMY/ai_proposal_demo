@@ -546,7 +546,7 @@ const emit = defineEmits<{
 }>();
 
 // 處理通知與錯誤提示
-const { error: notifyError } = useNotifications();
+const { error: notifyError, success } = useNotifications();
 
 // 可選字體清單。
 const FONT_OPTIONS = [
@@ -1128,6 +1128,7 @@ function generateNodesFromSchema(
       type: "subHeading",
       sectionId,
       level,
+      list: { numbering: false },
     });
 
     if (field.type === "array") {
@@ -1206,6 +1207,7 @@ function generateNodesFromSchema(
         sectionId,
         dataPath: path,
         level: level + 1,
+        paragraphNumbering: false,
       });
     }
   }
@@ -1464,7 +1466,7 @@ function renderNodePreview(
     </h2>`;
   } else if (node.type === "subHeading") {
     const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
-    const showNumbering = node.list?.numbering !== false; // 預設 true
+    const showNumbering = node.list?.numbering === true; // 必須明確啟用才會編號
     const prefix = showNumbering
       ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
       : "";
