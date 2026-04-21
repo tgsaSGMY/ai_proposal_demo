@@ -1467,6 +1467,17 @@ function renderNodePreview(
   } else if (node.type === "subHeading") {
     const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
     const showNumbering = node.list?.numbering === true; // 必須明確啟用才會編號
+
+    // 即使未啟用編號，遇到新的次標題邊界時仍需重置更深層的計數器。
+    // 否則同層級的下一組子節點會繼承上一組的編號（例如 [1,2] → [3,4] 而非 [1,2] → [1,2]）。
+    const nodeLevel = node.level || 2;
+    Object.keys(headingCounters).forEach((key) => {
+      const keyNum = Number(key);
+      if (keyNum > nodeLevel) {
+        delete headingCounters[keyNum];
+      }
+    });
+
     const prefix = showNumbering
       ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
       : "";
