@@ -768,7 +768,20 @@ function buildParagraphFromNode(
       }),
     );
   } else if (node.type === "subHeading") {
-    const showNumbering = node.list?.numbering !== false;
+    const showNumbering = node.list?.numbering === true;
+
+    // Reset counters at subHeading boundary, matching preview behavior.
+    // Non-numbered subHeadings reset own level + deeper (structural boundary).
+    // Numbered subHeadings reset only deeper levels (preserve own counter).
+    const nodeLevel = node.level || 2;
+    const resetThreshold = showNumbering ? nodeLevel : nodeLevel - 1;
+    Object.keys(headingCounters).forEach((key) => {
+      const keyNum = Number(key);
+      if (keyNum > resetThreshold) {
+        delete headingCounters[keyNum];
+      }
+    });
+
     const prefix = showNumbering
       ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
       : "";
@@ -1214,7 +1227,7 @@ function buildParagraphFromNode(
 
             if (adjustedChildNode.type === "subHeading" && node.list?.style) {
               // 特殊處理：list 中的 subHeading，根據列表樣式決定編號層級
-              const showNumbering = node.list?.numbering !== false;
+              const showNumbering = node.list?.numbering === true;
               const styleLevel = getImplicitLevelFromStyle(node.list.style);
               const prefix = showNumbering
                 ? formatHeadingPrefix(

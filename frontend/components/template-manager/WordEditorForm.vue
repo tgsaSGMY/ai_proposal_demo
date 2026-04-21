@@ -1027,28 +1027,38 @@ function syncMissingSections() {
   }
   if (currentBlock.length > 0) blocks.push(currentBlock);
 
-  // 2. 分析每個 Block 的主要 sectionId
-  const blockMap = new Map<string, WordDocumentNode[][]>();
+  // 2. 分析每個 Block 的主要 sectionId 並計算信心分數
+  // 使用 1-對-1 映射，避免同一個 Section 輸出多次。信心分數高者得標。
+  const blockMap = new Map<string, { block: WordDocumentNode[]; confidence: number }>();
   const unmappedBlocks: WordDocumentNode[][] = [];
 
   for (const block of blocks) {
     let primarySectionId: string | null = null;
+    let confidence = 0; // 3: ID 完全匹配, 2: 標題名稱匹配, 1: 內容掃描匹配
     const firstNode = block[0];
 
-    // 優先判定 1: 使用區塊首個節點(章節標題)本身的 sectionId
-    if (firstNode && (firstNode.type === "sectionTitle" || firstNode.chapterMarker) && firstNode.sectionId) {
+    // 優先判定 1 (High Confidence): 使用區塊首個節點(章節標題)本身的 sectionId
+    if (
+      firstNode &&
+      (firstNode.type === "sectionTitle" || firstNode.chapterMarker) &&
+      firstNode.sectionId
+    ) {
       primarySectionId = firstNode.sectionId;
+      confidence = 3;
     }
 
-    // 優先判定 2: 若標題無 sectionId (已知 bug)，利用名稱匹配當前資料庫章節
+    // 優先判定 2 (Medium Confidence): 若標題無 sectionId (已知 bug)，利用名稱匹配當前資料庫章節
     if (!primarySectionId && firstNode && firstNode.label) {
-      const matchedSection = props.sections.find((s) => s.name === firstNode.label);
+      const matchedSection = props.sections.find(
+        (s) => s.name === firstNode.label,
+      );
       if (matchedSection) {
         primarySectionId = matchedSection.id;
+        confidence = 2;
       }
     }
 
-    // 優先判定 3: 深層掃描內容節點 (略過標題節點以防誤判)
+    // 優先判定 3 (Low Confidence): 深層掃描內容節點 (略過標題節點以防誤判)
     if (!primarySectionId) {
       const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
         for (const node of nodes) {
@@ -1061,11 +1071,27 @@ function syncMissingSections() {
         return null;
       };
       primarySectionId = scanForSectionId(block.slice(1));
+      if (primarySectionId) {
+        confidence = 1;
+      }
     }
 
+    // 競爭機制：誰能取得這個 primarySectionId？
     if (primarySectionId) {
-      if (!blockMap.has(primarySectionId)) blockMap.set(primarySectionId, []);
-      blockMap.get(primarySectionId)!.push(block);
+      if (!blockMap.has(primarySectionId)) {
+        // 沒人搶，直接佔用
+        blockMap.set(primarySectionId, { block, confidence });
+      } else {
+        const existingClaim = blockMap.get(primarySectionId)!;
+        if (confidence > existingClaim.confidence) {
+          // 我的信心分數更高！搶走它，把舊的踢到孤兒區
+          unmappedBlocks.push(existingClaim.block);
+          blockMap.set(primarySectionId, { block, confidence });
+        } else {
+          // 我的信心分數不足，我才是認錯人的孤兒
+          unmappedBlocks.push(block);
+        }
+      }
     } else {
       unmappedBlocks.push(block);
     }
@@ -1078,13 +1104,13 @@ function syncMissingSections() {
 
   for (const section of props.sections) {
     if (blockMap.has(section.id)) {
-      // 保留並插入現有區塊
-      const sectionBlocks = blockMap.get(section.id)!;
-      for (const b of sectionBlocks) {
-        if (!consumedBlocks.has(b)) {
-          newFlatNodes.push(...b);
-          consumedBlocks.add(b);
-        }
+      // 保留並插入此章節唯一的正確區塊
+      const winningClaim = blockMap.get(section.id)!;
+      const b = winningClaim.block;
+      
+      if (!consumedBlocks.has(b)) {
+        newFlatNodes.push(...b);
+        consumedBlocks.add(b);
       }
       blockMap.delete(section.id);
     } else {
@@ -1117,12 +1143,11 @@ function syncMissingSections() {
   }
 
   // 5. 將已刪除(Orphan/Ghost)的章節區塊移至最下方
-  for (const [secId, orphanBlocks] of blockMap.entries()) {
-    for (const b of orphanBlocks) {
-      if (!consumedBlocks.has(b)) {
-        newFlatNodes.push(...b);
-        consumedBlocks.add(b);
-      }
+  for (const [secId, orphanClaim] of blockMap.entries()) {
+    const b = orphanClaim.block;
+    if (!consumedBlocks.has(b)) {
+      newFlatNodes.push(...b);
+      consumedBlocks.add(b);
     }
   }
 
@@ -1493,12 +1518,14 @@ function renderNodePreview(
     const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
     const showNumbering = node.list?.numbering === true; // 必須明確啟用才會編號
 
-    // 即使未啟用編號，遇到新的次標題邊界時仍需重置更深層的計數器。
-    // 否則同層級的下一組子節點會繼承上一組的編號（例如 [1,2] → [3,4] 而非 [1,2] → [1,2]）。
+    // 遇到次標題邊界時重置計數器，防止編號從上一組洩漏到下一組。
+    // 未啟用編號的次標題視為純結構分界線，重置「自身層級及更深層」的計數器（>=）。
+    // 已啟用編號的次標題僅重置「更深層」的計數器（>），保留自身層級的遞增序號。
     const nodeLevel = node.level || 2;
+    const resetThreshold = showNumbering ? nodeLevel : nodeLevel - 1;
     Object.keys(headingCounters).forEach((key) => {
       const keyNum = Number(key);
-      if (keyNum > nodeLevel) {
+      if (keyNum > resetThreshold) {
         delete headingCounters[keyNum];
       }
     });
