@@ -1047,18 +1047,8 @@ function syncMissingSections() {
       confidence = 3;
     }
 
-    // 優先判定 2 (Medium Confidence): 若標題無 sectionId (已知 bug)，利用名稱匹配當前資料庫章節
-    if (!primarySectionId && firstNode && firstNode.label) {
-      const matchedSection = props.sections.find(
-        (s) => s.name === firstNode.label,
-      );
-      if (matchedSection) {
-        primarySectionId = matchedSection.id;
-        confidence = 2;
-      }
-    }
-
-    // 優先判定 3 (Low Confidence): 深層掃描內容節點 (略過標題節點以防誤判)
+    // 優先判定 2 (Medium Confidence): 深層掃描內容節點的 sectionId (略過標題節點)
+    // sectionId 是穩定的資料庫 ID，即使章節名稱被修改也不會變，比名稱匹配更可靠。
     if (!primarySectionId) {
       const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
         for (const node of nodes) {
@@ -1072,6 +1062,17 @@ function syncMissingSections() {
       };
       primarySectionId = scanForSectionId(block.slice(1));
       if (primarySectionId) {
+        confidence = 2;
+      }
+    }
+
+    // 優先判定 3 (Low Confidence): 利用名稱匹配當前資料庫章節（最後手段，名稱可能已被修改）
+    if (!primarySectionId && firstNode && firstNode.label) {
+      const matchedSection = props.sections.find(
+        (s) => s.name === firstNode.label,
+      );
+      if (matchedSection) {
+        primarySectionId = matchedSection.id;
         confidence = 1;
       }
     }
