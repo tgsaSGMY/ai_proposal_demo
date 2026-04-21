@@ -1033,20 +1033,35 @@ function syncMissingSections() {
 
   for (const block of blocks) {
     let primarySectionId: string | null = null;
-    
-    // 遞迴掃描找出第一個有效的 sectionId
-    const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
-      for (const node of nodes) {
-        if (node.sectionId) return node.sectionId;
-        if (node.children && node.children.length > 0) {
-          const childId = scanForSectionId(node.children);
-          if (childId) return childId;
-        }
+    const firstNode = block[0];
+
+    // 優先判定 1: 使用區塊首個節點(章節標題)本身的 sectionId
+    if (firstNode && (firstNode.type === "sectionTitle" || firstNode.chapterMarker) && firstNode.sectionId) {
+      primarySectionId = firstNode.sectionId;
+    }
+
+    // 優先判定 2: 若標題無 sectionId (已知 bug)，利用名稱匹配當前資料庫章節
+    if (!primarySectionId && firstNode && firstNode.label) {
+      const matchedSection = props.sections.find((s) => s.name === firstNode.label);
+      if (matchedSection) {
+        primarySectionId = matchedSection.id;
       }
-      return null;
-    };
-    
-    primarySectionId = scanForSectionId(block);
+    }
+
+    // 優先判定 3: 深層掃描內容節點 (略過標題節點以防誤判)
+    if (!primarySectionId) {
+      const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
+        for (const node of nodes) {
+          if (node.sectionId) return node.sectionId;
+          if (node.children && node.children.length > 0) {
+            const childId = scanForSectionId(node.children);
+            if (childId) return childId;
+          }
+        }
+        return null;
+      };
+      primarySectionId = scanForSectionId(block.slice(1));
+    }
 
     if (primarySectionId) {
       if (!blockMap.has(primarySectionId)) blockMap.set(primarySectionId, []);
@@ -1058,6 +1073,7 @@ function syncMissingSections() {
 
   // 3. 依據資料庫的章節順序，重新組裝節點樹
   const newFlatNodes: WordDocumentNode[] = [];
+  const consumedBlocks = new Set<WordDocumentNode[]>(); // 用於防重複輸出的機制
   let syncedCount = 0;
 
   for (const section of props.sections) {
@@ -1065,7 +1081,10 @@ function syncMissingSections() {
       // 保留並插入現有區塊
       const sectionBlocks = blockMap.get(section.id)!;
       for (const b of sectionBlocks) {
-        newFlatNodes.push(...b);
+        if (!consumedBlocks.has(b)) {
+          newFlatNodes.push(...b);
+          consumedBlocks.add(b);
+        }
       }
       blockMap.delete(section.id);
     } else {
@@ -1091,13 +1110,19 @@ function syncMissingSections() {
 
   // 4. 將無綁定的純手動區塊加在活耀章節後方
   for (const b of unmappedBlocks) {
-    newFlatNodes.push(...b);
+    if (!consumedBlocks.has(b)) {
+      newFlatNodes.push(...b);
+      consumedBlocks.add(b);
+    }
   }
 
   // 5. 將已刪除(Orphan/Ghost)的章節區塊移至最下方
   for (const [secId, orphanBlocks] of blockMap.entries()) {
     for (const b of orphanBlocks) {
-      newFlatNodes.push(...b);
+      if (!consumedBlocks.has(b)) {
+        newFlatNodes.push(...b);
+        consumedBlocks.add(b);
+      }
     }
   }
 
