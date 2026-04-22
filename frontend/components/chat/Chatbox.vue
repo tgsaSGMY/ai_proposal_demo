@@ -299,7 +299,7 @@ watch(() => props.isGenerating, (newVal) => {
     if (humorousTimeout) clearTimeout(humorousTimeout);
     humorousTimeout = setTimeout(() => {
       if (props.isGenerating) {
-        generateBtnText.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂打字中... 🧙‍♂️💨";
+        generateBtnText.value = "稍等片刻，AI 正在瘋狂打字中... 🧙‍♂️💨";
       }
     }, 15000);
   } else {

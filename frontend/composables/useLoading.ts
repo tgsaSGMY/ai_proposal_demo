@@ -39,7 +39,7 @@ export const useLoading = () => {
     // 建立一個 15 秒後的定時器，如果仍處於 isLoading 狀態，便切換到幽默訊息
     humorousTimeoutId.value = setTimeout(() => {
       if (isLoading.value) {
-        loadingMessage.value = "稍等片刻，目前系統詠唱量較大，AI 正在瘋狂打字中... 🧙‍♂️💨";
+        loadingMessage.value = "稍等片刻，AI 正在瘋狂打字中... 🧙‍♂️💨";
       }
     }, 15000);
   };

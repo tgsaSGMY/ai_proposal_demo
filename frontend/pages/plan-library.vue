@@ -17,7 +17,7 @@
             <div class="space-y-2">
               <h1 class="text-3xl font-semibold text-gray-900">我的計畫庫</h1>
               <p class="text-sm text-gray-500 max-w-2xl">
-                集中檢視所有外部計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。
+                集中檢視所有外部計畫案的進度、審查狀態與更新紀錄，快速回顧重點並與客戶保持同步。點擊卡片上的配圖按鍵，讓 AI 幫你生成專業插圖，讓報告更加分！
               </p>
             </div>
             <NuxtLink
@@ -114,57 +114,75 @@
                   {{ project.description }}
                 </p>
               </div>
-              <div class="relative" @click.stop>
+              <div class="flex items-center gap-1" @click.stop>
+                <!-- AI 配圖生成按鈕 -->
                 <button
-                  class="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                  @click.stop="toggleMenu(project.id)"
-                  :aria-expanded="menuOpenId === project.id"
-                  aria-label="更多操作"
+                  class="rounded-full p-2 text-gray-400 transition hover:bg-rose-50 hover:text-rose-500"
+                  @click.stop="openGenerateImage(project)"
+                  aria-label="AI 配圖生成"
+                  title="AI 配圖生成"
                 >
-                  <!-- 專案卡片的「更多操作」按鈕（打開選單以編輯 / 刪除 / 生成圖片等） -->
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
-                    fill="currentColor"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
                     class="h-5 w-5"
                   >
                     <path
-                      d="M12 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 001.5-1.5V4.5a1.5 1.5 0 00-1.5-1.5H3.75a1.5 1.5 0 00-1.5 1.5v15a1.5 1.5 0 001.5 1.5zm14.25-14.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"
                     />
                   </svg>
                 </button>
-                <Transition
-                  enter-active-class="transition duration-150"
-                  enter-from-class="opacity-0 translate-y-1"
-                  enter-to-class="opacity-100 translate-y-0"
-                  leave-active-class="transition duration-150"
-                  leave-from-class="opacity-100 translate-y-0"
-                  leave-to-class="opacity-0 translate-y-1"
-                >
-                  <div
-                    v-if="menuOpenId === project.id"
-                    class="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-100 bg-white py-2 text-sm shadow-xl"
+                <!-- 更多操作選單 -->
+                <div class="relative">
+                  <button
+                    class="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                    @click.stop="toggleMenu(project.id)"
+                    :aria-expanded="menuOpenId === project.id"
+                    aria-label="更多操作"
                   >
-                    <button
-                      class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                      @click="openGenerateImage(project)"
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      class="h-5 w-5"
                     >
-                      <span>生成圖片</span>
-                    </button>
-                    <button
-                      class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                      @click="openEdit(project)"
+                      <path
+                        d="M12 7a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                      />
+                    </svg>
+                  </button>
+                  <Transition
+                    enter-active-class="transition duration-150"
+                    enter-from-class="opacity-0 translate-y-1"
+                    enter-to-class="opacity-100 translate-y-0"
+                    leave-active-class="transition duration-150"
+                    leave-from-class="opacity-100 translate-y-0"
+                    leave-to-class="opacity-0 translate-y-1"
+                  >
+                    <div
+                      v-if="menuOpenId === project.id"
+                      class="absolute right-0 mt-2 w-44 rounded-2xl border border-gray-100 bg-white py-2 text-sm shadow-xl"
                     >
-                      <span>編輯計畫案</span>
-                    </button>
-                    <button
-                      class="flex w-full items-center gap-2 px-4 py-2 text-rose-600 hover:bg-rose-50"
-                      @click="handleDelete(project)"
-                    >
-                      <span>刪除計畫案</span>
-                    </button>
-                  </div>
-                </Transition>
+                      <button
+                        class="flex w-full items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                        @click="openEdit(project)"
+                      >
+                        <span>編輯計畫案</span>
+                      </button>
+                      <button
+                        class="flex w-full items-center gap-2 px-4 py-2 text-rose-600 hover:bg-rose-50"
+                        @click="handleDelete(project)"
+                      >
+                        <span>刪除計畫案</span>
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
               </div>
             </div>
 
@@ -224,29 +242,28 @@
         <!-- 側欄統計與快捷資訊：例如本月生成次數、真人專家邀請等 -->
         <div class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div
-            class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm flex items-center gap-3 cursor-pointer"
+            class="rounded-2xl border border-rose-500 bg-rose-500 px-5 py-4 shadow-lg shadow-rose-200 flex items-center gap-3 cursor-pointer transition hover:bg-rose-600"
             @click="openSupportPanel"
           >
             <span
-              class="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-500"
+              class="flex-shrink-0 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white"
             >
               <Icon
                 name="tabler:headset"
                 width="24"
                 height="24"
-                style="color: #e40909"
               />
             </span>
 
             <div class="flex-1 flex items-center justify-between">
-              <p class="text-base font-semibold text-gray-700">
+              <p class="text-base font-semibold text-white">
                 客戶服務與專家諮詢
               </p>
               <Icon
                 name="tabler:arrow-narrow-right"
                 width="64"
                 height="64"
-                class="text-gray-400"
+                class="text-white/70"
               />
             </div>
           </div>

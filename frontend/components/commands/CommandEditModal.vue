@@ -75,7 +75,7 @@
                 v-model="form.description"
                 rows="4"
                 class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:border-rose-400 focus:bg-white"
-                placeholder="補充 AI 需要的背景、語氣或指令細節"
+                :placeholder="computedHint"
                 required
               ></textarea>
             </div>
@@ -123,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 
 interface CommandPayload {
   id?: string;
@@ -145,6 +145,21 @@ const form = reactive<CommandPayload>({
   title: "",
   description: "",
   isCompany: false,
+});
+
+// 依據卡片標題提供對應的佔位提示，讓使用者更容易理解該卡片的用途
+const HINT_MAP: Record<string, string> = {
+  "公司基本資料與資訊庫": "填寫公司名稱、成立年份、資本額、員工數、主要產品與服務等基本資訊",
+  "公司商業策略與機會": "描述公司的核心競爭優勢、市場定位、目標客群與未來發展方向",
+  "企業 ESG 規範": "說明公司在環境保護、社會責任與公司治理方面的政策與實踐成果",
+  "專用名詞庫": "列出產業專有名詞及其定義，確保 AI 生成內容使用正確的術語",
+  "工程師提問模組": "提供技術細節與規格說明，幫助 AI 準確描述產品的技術架構與創新點",
+};
+
+const computedHint = computed(() => {
+  const title = props.command?.title?.trim();
+  if (title && HINT_MAP[title]) return HINT_MAP[title];
+  return "補充 AI 需要的背景、語氣或指令細節";
 });
 
 // 監聽命令 Prop 變化，自動同步表單資料到本地狀態

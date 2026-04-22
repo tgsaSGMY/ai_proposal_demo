@@ -200,9 +200,42 @@
                       />
                     </svg>
                   </span>
-                  <span class="text-base font-medium">我的指令庫</span>
+                  <span class="text-base font-medium">我的背景資料</span>
                 </div>
               </NuxtLink>
+
+              <!-- 説明中心按鈕：打開教學影片彈窗 -->
+              <button
+                class="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-5 py-4 text-gray-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                @click="openHelpCenter"
+              >
+                <div class="flex items-center gap-3">
+                  <span
+                    class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      class="h-6 w-6"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z"
+                      />
+                    </svg>
+                  </span>
+                  <span class="text-base font-medium">説明中心</span>
+                </div>
+              </button>
             </div>
 
             <div v-else class="space-y-2">
@@ -391,6 +424,79 @@
     <main class="flex-1 overflow-y-auto min-h-screen">
       <slot />
     </main>
+
+    <!-- 説明中心彈窗：背景模糊 + YouTube 教學影片 -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showHelpCenter"
+          class="fixed inset-0 z-[100] flex items-center justify-center px-4 py-8"
+        >
+          <!-- 背景遮罩 -->
+          <div
+            class="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+            @click="showHelpCenter = false"
+          ></div>
+          <!-- 彈窗主體 -->
+          <div
+            class="relative w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl"
+          >
+            <!-- 標題列 -->
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <p
+                  class="text-xs font-semibold uppercase tracking-wide text-rose-400"
+                >
+                  教學指南
+                </p>
+                <h3 class="text-xl font-semibold text-gray-900">説明中心</h3>
+              </div>
+              <button
+                class="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                @click="showHelpCenter = false"
+                aria-label="關閉説明中心"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="h-5 w-5"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <!-- 影片播放器 -->
+            <div class="aspect-video w-full overflow-hidden rounded-2xl bg-gray-100">
+              <iframe
+                v-if="showHelpCenter"
+                :src="helpCenterVideos[0].embedUrl"
+                class="h-full w-full"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+              ></iframe>
+            </div>
+            <p class="mt-3 text-sm text-gray-500">
+              {{ helpCenterVideos[0].title }}
+            </p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 <script setup>
@@ -420,6 +526,23 @@ const isAuthenticated = ref(false);
 const isInternal = ref(false);
 // 用户的总消费成本
 const userTotalCost = ref(0);
+
+// ===== 説明中心 =====
+// 説明中心彈窗顯示狀態
+const showHelpCenter = ref(false);
+// 教學影片清單（未來可擴充多部影片）
+const helpCenterVideos = ref([
+  {
+    title: "系統操作教學影片",
+    embedUrl: "https://www.youtube.com/embed/489R0hTWn3Q",
+  },
+]);
+
+function openHelpCenter() {
+  showHelpCenter.value = true;
+  // 移動端上點擊後自動關閉側邊欄
+  handleNavClick();
+}
 
 // ===== 视图切换状态 =====
 // 计算属性或 Watcher 来决定显示哪种侧边栏

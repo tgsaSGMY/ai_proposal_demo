@@ -719,7 +719,7 @@ async function handleGenerate() {
   humorousTimeout = setTimeout(() => {
     if (isGenerating.value) {
       generateBtnText.value =
-        "稍等片刻，目前系統用量較大，AI 正在瘋狂畫圖中... 🎨💨";
+        "稍等片刻，AI 正在瘋狂畫圖中... 🎨💨";
     }
   }, 15000);
 
