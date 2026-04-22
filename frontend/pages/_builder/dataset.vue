@@ -271,7 +271,7 @@ onMounted(async () => {
       .channel("public:draft_plans")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "draft_plans" },
+        { event: "*", schema: "ai_proposal_platform", table: "draft_plans" },
         () => {
           fetchDrafts();
         },

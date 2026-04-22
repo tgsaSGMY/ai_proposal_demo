@@ -1347,7 +1347,7 @@ async function setupRealtimeSubscription(projectId) {
       "postgres_changes",
       {
         event: "*",
-        schema: "public",
+        schema: "ai_proposal_platform",
         table: "projects",
       },
       (payload) => {
