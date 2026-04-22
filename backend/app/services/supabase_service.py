@@ -1208,10 +1208,19 @@ class SupabaseService:
             response = self.client.rpc('match_datasets', params).execute()
             
             if response.data:
-                logger.info(f"Found {len(response.data)} similar datasets for section '{section_id}'.")
+                matched_ids = [ex.get('id') for ex in response.data]
+                matched_scores = [round(ex.get('similarity', 0), 3) for ex in response.data]
+                logger.info(
+                    f"[Few-Shot Retrieval] Found {len(response.data)} similar datasets "
+                    f"for section '{section_id}' (grant='{grant_id}', template='{template_id}'): "
+                    f"IDs={matched_ids}, similarities={matched_scores}"
+                )
                 return response.data
             else:
-                logger.info(f"No similar datasets found for section '{section_id}'.")
+                logger.info(
+                    f"[Few-Shot Retrieval] No similar datasets found "
+                    f"for section '{section_id}' (grant='{grant_id}', template='{template_id}', threshold={threshold})"
+                )
                 return []
         except Exception as e:
             logger.error(f"Error retrieving similar datasets via RPC: {e}")

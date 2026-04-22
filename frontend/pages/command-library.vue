@@ -15,10 +15,10 @@
         >
           <div class="space-y-2">
             <h1 class="text-3xl font-semibold text-gray-900">
-              模型參數與指令配置
+              公司背景資料與常用設定
             </h1>
             <p class="text-sm text-gray-500">
-              定義您的其他DNA、公司實績與邏輯偏好，讓AI成爲最懂你的專業顧問
+              在這裡補充公司資訊與回覆習慣，讓 AI 產出的內容更符合您的需求
             </p>
           </div>
           <div
