@@ -763,11 +763,14 @@ function moveChapter(chapterId: string, direction: "up" | "down") {
   allNodes.splice(insertIndex, 0, ...currentChapterNodes);
 }
 
-// 新增一個章節標記節點，作為章節分組起點。
+// 新增一個手動章節標記節點，作為章節分組起點。
+// 注意：手動章節不綁定任何資料庫章節（sectionId 刻意留空），
+// syncMissingSections() 會將其識別為「手動章節」並保留在 DB 章節之後。
 function addChapterMarker() {
   const newNode: WordDocumentNode = {
     id: generateNodeId(),
     type: "sectionTitle",
+    sectionId: undefined,
     label: "新章節",
     chapterMarker: true,
     chapterTitle: "新章節",
@@ -916,6 +919,29 @@ function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
   });
 }
 
+// 回補遺失的 sectionId：遍歷頂層節點，對 sectionTitle 類型但缺少 sectionId 的節點，
+// 嘗試透過 label 精確比對資料庫章節名稱來自動回填。靜默、冪等、不影響已有 sectionId 的節點。
+function backfillMissingSectionIds(nodes: WordDocumentNode[]) {
+  if (!nodes || !props.sections.length) return;
+
+  // 建立 name → id 的快速查找表（只保留第一個匹配，避免重名章節衝突）
+  const nameToId = new Map<string, string>();
+  for (const section of props.sections) {
+    if (!nameToId.has(section.name)) {
+      nameToId.set(section.name, section.id);
+    }
+  }
+
+  for (const node of nodes) {
+    if (node.type === "sectionTitle" && !node.sectionId && node.label) {
+      const matchedId = nameToId.get(node.label);
+      if (matchedId) {
+        node.sectionId = matchedId;
+      }
+    }
+  }
+}
+
 // 將版本資料灌入編輯表單，並在失敗時回退到預設配置。
 function hydrateForm(base?: WordExportTemplateConfig) {
   try {
@@ -935,6 +961,7 @@ function hydrateForm(base?: WordExportTemplateConfig) {
         : generateDefaultNodes();
 
     initializeNodeDefaults(nodes);
+    backfillMissingSectionIds(nodes);
 
     formState.value = {
       documentStyle,
@@ -1005,7 +1032,8 @@ function generateDefaultNodes(): WordDocumentNode[] {
 }
 
 // 同步與重整 (Smart Sync & Reorder)
-// 將現有節點分塊、依據資料庫章節順序重新排序、插入遺失的章節，並將已刪除的章節移至最下方
+// 僅使用章節標題節點自身的 sectionId / label 來判定區塊歸屬（不深掃子節點），
+// 依資料庫章節順序重新排列，插入新增章節，並將已刪除的章節移至最下方。
 function syncMissingSections() {
   const currentNodes = formState.value.nodes || [];
   if (currentNodes.length === 0) {
@@ -1014,12 +1042,14 @@ function syncMissingSections() {
     return;
   }
 
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+
   // 1. 將現有節點切分成 Chapter Blocks
   const blocks: WordDocumentNode[][] = [];
   let currentBlock: WordDocumentNode[] = [];
   for (const node of currentNodes) {
-    const isChapterMarker = node.type === "sectionTitle" || node.chapterMarker === true;
-    if (isChapterMarker && currentBlock.length > 0) {
+    const isChapterStart = node.type === "sectionTitle" || node.chapterMarker === true;
+    if (isChapterStart && currentBlock.length > 0) {
       blocks.push(currentBlock);
       currentBlock = [];
     }
@@ -1027,49 +1057,43 @@ function syncMissingSections() {
   }
   if (currentBlock.length > 0) blocks.push(currentBlock);
 
-  // 2. 分析每個 Block 的主要 sectionId 並計算信心分數
-  // 使用 1-對-1 映射，避免同一個 Section 輸出多次。信心分數高者得標。
-  const blockMap = new Map<string, { block: WordDocumentNode[]; confidence: number }>();
-  const unmappedBlocks: WordDocumentNode[][] = [];
+  // 2. 僅透過區塊首節點（章節標題）判定所屬 sectionId，不深掃子節點。
+  //    P1 (conf 2): 首節點為 sectionTitle 且帶有 sectionId 且該 ID 存在於資料庫。
+  //    P2 (conf 1): 首節點為 sectionTitle 且 label 精確比對到某個資料庫章節名稱。
+  //    否則視為「手動章節」(保留原位) 或「已刪除章節的殘留」(Ghost, 移到最底)。
+  const blockMap = new Map<string, { block: WordDocumentNode[]; confidence: number; originalIndex: number }>();
+  const manualBlocks: { block: WordDocumentNode[]; originalIndex: number }[] = [];
+  const ghostBlocks: WordDocumentNode[][] = [];
 
-  for (const block of blocks) {
-    let primarySectionId: string | null = null;
-    let confidence = 0; // 3: ID 完全匹配, 2: 標題名稱匹配, 1: 內容掃描匹配
+  // 已被 P1/P2 認領的 sectionId，避免同一 section 被多個區塊搶佔
+  const claimedByName = new Set<string>();
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
     const firstNode = block[0];
+    let primarySectionId: string | null = null;
+    let confidence = 0;
 
-    // 優先判定 1 (High Confidence): 使用區塊首個節點(章節標題)本身的 sectionId
+    // P1 (High Confidence): 首節點 sectionId 存在且在資料庫中
     if (
       firstNode &&
-      (firstNode.type === "sectionTitle" || firstNode.chapterMarker) &&
+      firstNode.type === "sectionTitle" &&
       firstNode.sectionId
     ) {
-      primarySectionId = firstNode.sectionId;
-      confidence = 3;
-    }
-
-    // 優先判定 2 (Medium Confidence): 深層掃描內容節點的 sectionId (略過標題節點)
-    // sectionId 是穩定的資料庫 ID，即使章節名稱被修改也不會變，比名稱匹配更可靠。
-    if (!primarySectionId) {
-      const scanForSectionId = (nodes: WordDocumentNode[]): string | null => {
-        for (const node of nodes) {
-          if (node.sectionId) return node.sectionId;
-          if (node.children && node.children.length > 0) {
-            const childId = scanForSectionId(node.children);
-            if (childId) return childId;
-          }
-        }
-        return null;
-      };
-      primarySectionId = scanForSectionId(block.slice(1));
-      if (primarySectionId) {
+      if (dbSectionIds.has(firstNode.sectionId)) {
+        primarySectionId = firstNode.sectionId;
         confidence = 2;
+      } else {
+        // sectionId 存在但資料庫已無此章節 → Ghost (已刪除章節殘留)
+        ghostBlocks.push(block);
+        continue;
       }
     }
 
-    // 優先判定 3 (Low Confidence): 利用名稱匹配當前資料庫章節（最後手段，名稱可能已被修改）
-    if (!primarySectionId && firstNode && firstNode.label) {
+    // P2 (Low Confidence): 名稱匹配（僅首節點為 sectionTitle 且尚未被 P1 認領）
+    if (!primarySectionId && firstNode && firstNode.type === "sectionTitle" && firstNode.label) {
       const matchedSection = props.sections.find(
-        (s) => s.name === firstNode.label,
+        (s) => s.name === firstNode.label && !claimedByName.has(s.id),
       );
       if (matchedSection) {
         primarySectionId = matchedSection.id;
@@ -1077,45 +1101,39 @@ function syncMissingSections() {
       }
     }
 
-    // 競爭機制：誰能取得這個 primarySectionId？
+    // 競爭解析：相同 sectionId 的多個區塊取信心分數較高者，平手取先出現者
     if (primarySectionId) {
-      if (!blockMap.has(primarySectionId)) {
-        // 沒人搶，直接佔用
-        blockMap.set(primarySectionId, { block, confidence });
+      claimedByName.add(primarySectionId);
+      const existingClaim = blockMap.get(primarySectionId);
+      if (!existingClaim) {
+        blockMap.set(primarySectionId, { block, confidence, originalIndex: i });
       } else {
-        const existingClaim = blockMap.get(primarySectionId)!;
         if (confidence > existingClaim.confidence) {
-          // 我的信心分數更高！搶走它，把舊的踢到孤兒區
-          unmappedBlocks.push(existingClaim.block);
-          blockMap.set(primarySectionId, { block, confidence });
+          // 新來者信心更高，舊的降級為手動章節
+          manualBlocks.push({ block: existingClaim.block, originalIndex: existingClaim.originalIndex });
+          blockMap.set(primarySectionId, { block, confidence, originalIndex: i });
         } else {
-          // 我的信心分數不足，我才是認錯人的孤兒
-          unmappedBlocks.push(block);
+          // 信心不足或平手（先到先得），降級為手動章節
+          manualBlocks.push({ block, originalIndex: i });
         }
       }
     } else {
-      unmappedBlocks.push(block);
+      // 無法判定歸屬 → 手動章節，保留在稍後的位置
+      manualBlocks.push({ block, originalIndex: i });
     }
   }
 
-  // 3. 依據資料庫的章節順序，重新組裝節點樹
+  // 3. 依資料庫章節順序重新組裝節點樹
   const newFlatNodes: WordDocumentNode[] = [];
-  const consumedBlocks = new Set<WordDocumentNode[]>(); // 用於防重複輸出的機制
   let syncedCount = 0;
 
   for (const section of props.sections) {
     if (blockMap.has(section.id)) {
-      // 保留並插入此章節唯一的正確區塊
-      const winningClaim = blockMap.get(section.id)!;
-      const b = winningClaim.block;
-      
-      if (!consumedBlocks.has(b)) {
-        newFlatNodes.push(...b);
-        consumedBlocks.add(b);
-      }
-      blockMap.delete(section.id);
+      // 現有區塊：原封不動保留（所有使用者自訂的子節點皆不會被觸及）
+      const claim = blockMap.get(section.id)!;
+      newFlatNodes.push(...claim.block);
     } else {
-      // 遺失的章節：動態產生並安插在正確位置
+      // 新增章節：從 schema 自動產生預設節點結構
       const newNodes: WordDocumentNode[] = [];
       newNodes.push({
         id: generateNodeId(),
@@ -1135,25 +1153,25 @@ function syncMissingSections() {
     }
   }
 
-  // 4. 將無綁定的純手動區塊加在活耀章節後方
-  for (const b of unmappedBlocks) {
-    if (!consumedBlocks.has(b)) {
-      newFlatNodes.push(...b);
-      consumedBlocks.add(b);
-    }
+  // 4. 手動章節：依原本文件中的出現順序附加在所有 DB 章節之後
+  manualBlocks.sort((a, b) => a.originalIndex - b.originalIndex);
+  for (const { block } of manualBlocks) {
+    newFlatNodes.push(...block);
   }
 
-  // 5. 將已刪除(Orphan/Ghost)的章節區塊移至最下方
-  for (const [secId, orphanClaim] of blockMap.entries()) {
-    const b = orphanClaim.block;
-    if (!consumedBlocks.has(b)) {
-      newFlatNodes.push(...b);
-      consumedBlocks.add(b);
-    }
+  // 5. 已刪除章節的殘留 (Ghost)：移至最下方供管理員手動處理
+  for (const block of ghostBlocks) {
+    newFlatNodes.push(...block);
   }
 
   formState.value.nodes = newFlatNodes;
-  success(`同步完成！已依照最新結構排序，並補齊 ${syncedCount} 個遺失章節。`);
+
+  const parts: string[] = [];
+  parts.push(`已依照最新結構排序`);
+  if (syncedCount > 0) parts.push(`補齊 ${syncedCount} 個新增章節`);
+  if (ghostBlocks.length > 0) parts.push(`${ghostBlocks.length} 個已刪除章節移至底部`);
+  if (manualBlocks.length > 0) parts.push(`${manualBlocks.length} 個手動章節保留於後方`);
+  success(`同步完成！${parts.join("，")}。`);
 }
 
 /**

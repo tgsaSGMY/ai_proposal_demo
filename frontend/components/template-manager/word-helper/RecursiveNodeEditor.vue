@@ -477,6 +477,12 @@ function handleTypeChange(event: Event) {
     } else {
       ensureCustomTableConfig(node);
     }
+    // 從 sectionTitle 改為其他型別時，清除 chapterMarker 避免殘留旗標
+    // 導致 syncMissingSections() 錯誤地將此節點視為章節起始點而切斷區塊。
+    if (node.type !== "sectionTitle") {
+      delete node.chapterMarker;
+      delete node.chapterTitle;
+    }
     if (!shouldShowSectionSelectors(node)) {
       node.sectionId = "";
       node.dataPath = "";
