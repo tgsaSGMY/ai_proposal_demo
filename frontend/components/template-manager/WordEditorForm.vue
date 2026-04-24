@@ -919,25 +919,36 @@ function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
   });
 }
 
-// 回補遺失的 sectionId：遍歷頂層節點，對 sectionTitle 類型但缺少 sectionId 的節點，
-// 嘗試透過 label 精確比對資料庫章節名稱來自動回填。靜默、冪等、不影響已有 sectionId 的節點。
+// 回補或修復 sectionTitle 節點的 sectionId：
+// 1. 若 sectionId 為空 → 透過 label 精確比對資料庫章節名稱來回填。
+// 2. 若 sectionId 已存在但指向資料庫中不存在的章節 (過時/重新命名) → 同樣嘗試 label 比對來修復。
+// 僅在 label 對應到「唯一一個」資料庫章節時才修復，避免重名章節造成誤判。
+// 靜默、冪等、僅影響 sectionTitle 頂層節點（不觸及子節點的 sectionId）。
 function backfillMissingSectionIds(nodes: WordDocumentNode[]) {
   if (!nodes || !props.sections.length) return;
 
-  // 建立 name → id 的快速查找表（只保留第一個匹配，避免重名章節衝突）
-  const nameToId = new Map<string, string>();
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+
+  // 建立 name → id[] 的查找表，用於偵測重名章節
+  const nameToIds = new Map<string, string[]>();
   for (const section of props.sections) {
-    if (!nameToId.has(section.name)) {
-      nameToId.set(section.name, section.id);
-    }
+    const list = nameToIds.get(section.name) ?? [];
+    list.push(section.id);
+    nameToIds.set(section.name, list);
   }
 
   for (const node of nodes) {
-    if (node.type === "sectionTitle" && !node.sectionId && node.label) {
-      const matchedId = nameToId.get(node.label);
-      if (matchedId) {
-        node.sectionId = matchedId;
-      }
+    if (node.type !== "sectionTitle" || !node.label) continue;
+
+    // 判斷 sectionId 是否缺失或過時
+    const isMissing = !node.sectionId;
+    const isStale = !!node.sectionId && !dbSectionIds.has(node.sectionId);
+    if (!isMissing && !isStale) continue;
+
+    // 嘗試透過 label 精確比對；僅在唯一匹配時修復，避免重名誤判
+    const candidates = nameToIds.get(node.label);
+    if (candidates && candidates.length === 1) {
+      node.sectionId = candidates[0];
     }
   }
 }
@@ -1073,6 +1084,7 @@ function syncMissingSections() {
     const firstNode = block[0];
     let primarySectionId: string | null = null;
     let confidence = 0;
+    let sectionIdIsStale = false;
 
     // P1 (High Confidence): 首節點 sectionId 存在且在資料庫中
     if (
@@ -1084,13 +1096,13 @@ function syncMissingSections() {
         primarySectionId = firstNode.sectionId;
         confidence = 2;
       } else {
-        // sectionId 存在但資料庫已無此章節 → Ghost (已刪除章節殘留)
-        ghostBlocks.push(block);
-        continue;
+        // sectionId 存在但資料庫已無此 ID → 標記為過時，但不立即歸類為 Ghost，
+        // 先讓 P2 (名稱匹配) 嘗試救援。可能只是章節被重新 ID 但 label 仍正確。
+        sectionIdIsStale = true;
       }
     }
 
-    // P2 (Low Confidence): 名稱匹配（僅首節點為 sectionTitle 且尚未被 P1 認領）
+    // P2 (Low Confidence): 名稱匹配（僅首節點為 sectionTitle 且 P1 尚未成功認領）
     if (!primarySectionId && firstNode && firstNode.type === "sectionTitle" && firstNode.label) {
       const matchedSection = props.sections.find(
         (s) => s.name === firstNode.label && !claimedByName.has(s.id),
@@ -1117,6 +1129,9 @@ function syncMissingSections() {
           manualBlocks.push({ block, originalIndex: i });
         }
       }
+    } else if (sectionIdIsStale) {
+      // P1 與 P2 皆無法匹配且 sectionId 指向不存在的章節 → 真正的 Ghost (已刪除章節殘留)
+      ghostBlocks.push(block);
     } else {
       // 無法判定歸屬 → 手動章節，保留在稍後的位置
       manualBlocks.push({ block, originalIndex: i });
