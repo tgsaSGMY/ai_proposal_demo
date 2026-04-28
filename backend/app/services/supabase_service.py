@@ -757,8 +757,16 @@ class SupabaseService:
             logger.error("Failed to fetch project %s: %s", project_id, error, exc_info=True)
             return None
 
-    async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant/template 顯示資訊。"""
+    async def get_projects_by_user(
+        self,
+        user_id: str,
+        cached_grants_config: Optional[List[GrantConfig]] = None,
+    ) -> List[Dict[str, Any]]:
+        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant/template 顯示資訊。
+
+        若呼叫端提供 cached_grants_config（建議從 app.state.all_grants_config 取得），
+        則跳過昂貴的 catalog 查詢；否則退回完整 DB 查詢以保持向後相容。
+        """
         response = (
             self.client.from_("projects")
             .select("*")
@@ -771,8 +779,12 @@ class SupabaseService:
         if not response.data:
             return []
         
-        # 獲取所有 grants 配置以查詢 grant name 和 template name
-        all_grants = await self.get_all_grants_config()
+        # 優先使用呼叫端傳入的快取配置；若未提供則退回直接從 Supabase 取得（向後相容）。
+        all_grants = (
+            cached_grants_config
+            if cached_grants_config is not None
+            else await self.get_all_grants_config()
+        )
         
         # 建立快速查詢表：{grant_id: grant_config}
         grants_lookup = {g.id: g for g in all_grants}
