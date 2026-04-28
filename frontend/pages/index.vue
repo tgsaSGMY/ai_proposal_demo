@@ -72,13 +72,13 @@
               </div>
 
               <h3
-                class="mt-1 text-xl font-semibold leading-tight text-[#111b3f]"
+                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
               >
                 {{ plan.mainTitle }}
               </h3>
               <p
                 v-if="plan.bracketedTitle"
-                class="mt-1 text-xl font-semibold leading-tight text-[#111b3f]"
+                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
               >
                 【{{ plan.bracketedTitle }}】
               </p>
