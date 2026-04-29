@@ -8,17 +8,17 @@
         >
           <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
           <span class="text-gray-300">></span>
-          <span class="text-gray-600">我的指令庫</span>
+          <span class="text-gray-600">我的背景資料</span>
         </div>
         <div
           class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
         >
           <div class="space-y-2">
             <h1 class="text-3xl font-semibold text-gray-900">
-              模型參數與指令配置
+              公司背景資料與常用設定
             </h1>
             <p class="text-sm text-gray-500">
-              定義您的其他DNA、公司實績與邏輯偏好，讓AI成爲最懂你的專業顧問
+              在這裡補充公司資訊與回覆習慣，讓 AI 產出的內容更符合您的需求
             </p>
           </div>
           <div
@@ -281,7 +281,7 @@ definePageMeta({
 
 // 本頁需驗證（登入）後才可存取與編輯指令
 useHead({
-  title: "我的指令庫 - TGSA 補助引擎",
+  title: "我的背景資料 - TGSA 補助引擎",
   meta: [
     // SEO 與分享資訊：說明該頁面的用途與關鍵字，改善搜尋結果顯示
     {
@@ -291,11 +291,11 @@ useHead({
     },
     {
       name: "keywords",
-      content: "指令庫, 模型參數, AI 配置, 企業 DNA, 提示詞管理",
+      content: "背景資料, 模型參數, AI 配置, 企業 DNA, 提示詞管理",
     },
     {
       property: "og:title",
-      content: "我的指令庫 - 模型參數與配置管理 - TGSA 補助引擎",
+      content: "我的背景資料 - 模型參數與配置管理 - TGSA 補助引擎",
     },
     {
       property: "og:description",

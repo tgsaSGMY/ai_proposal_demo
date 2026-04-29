@@ -43,5 +43,8 @@ export const supabase: SupabaseClient = createClient(
       persistSession: true, // 持久化会话信息
       detectSessionInUrl: true, // 检测 URL 中的会话信息（OAuth 回调）
     },
+    db: {
+      schema: "ai_proposal_platform", // 指定資料庫 schema（從 public 遷移至 ai_proposal_platform）
+    },
   },
 );

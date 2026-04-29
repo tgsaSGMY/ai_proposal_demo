@@ -3,6 +3,7 @@
 from io import BytesIO
 import asyncio
 import httpx
+import time
 from datetime import datetime, timezone
 from fastapi import (
     APIRouter,
@@ -32,7 +33,14 @@ from app.models import (
 from app.core.app_jwt import decode_app_access_token
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
-from .dependencies import get_llm_service, get_supabase_service, get_current_user_id, get_current_user_context
+from .dependencies import (
+    get_llm_service,
+    get_supabase_service,
+    get_current_user_id,
+    get_current_user_context,
+    AUTH_CONTEXT_CACHE,
+    AUTH_CONTEXT_CACHE_TTL_SECONDS,
+)
 from app.utils.extract_json import extract_json_block  
 from app.utils.throttling import apply_throttling_if_needed
 from typing import Dict, Any, Optional, List
@@ -1019,26 +1027,46 @@ async def websocket_chat_guidance(websocket: WebSocket):
         token = websocket.cookies.get("app_access_token", "")
     
     if token and supabase_service:
-        try:
-            user_response = supabase_service.client.auth.get_user(token)
-            if user_response.user:
-                canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
-                    auth_user_id=user_response.user.id,
-                    email=user_response.user.email,
-                )
-                user_id = canonical_user["id"]
-                role = canonical_user.get("role", "normal")
-        except Exception as e:
+        # 先檢查 AUTH_CONTEXT_CACHE（與 REST 端點共享同一份 token -> user_ctx 快取）。
+        # 命中時可省去呼叫 Supabase 與 DB 的成本，顯著降低 cold-start 時的握手延遲。
+        now = time.time()
+        cached_ctx_entry = AUTH_CONTEXT_CACHE.get(token)
+        if cached_ctx_entry and cached_ctx_entry.get("expires_at", 0) > now:
+            cached_ctx = cached_ctx_entry["user_ctx"]
+            user_id = cached_ctx.get("id", "")
+            role = cached_ctx.get("role", "normal")
+        else:
             try:
-                payload = decode_app_access_token(token)
-                canonical_user_id = payload.get("sub")
-                if canonical_user_id:
-                    user_row = await supabase_service.get_user_by_id(canonical_user_id)
-                    if user_row and user_row.get("id"):
-                        user_id = user_row["id"]
-                        role = user_row.get("role", "normal")
-            except Exception as decode_error:
-                logger.warning(f"Failed to extract user from WebSocket token: {e}; app token decode error: {decode_error}")
+                user_response = supabase_service.client.auth.get_user(token)
+                if user_response.user:
+                    canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
+                        auth_user_id=user_response.user.id,
+                        email=user_response.user.email,
+                    )
+                    user_id = canonical_user["id"]
+                    role = canonical_user.get("role", "normal")
+                    # 寫入快取，下次（包含 REST 端點）即可命中
+                    AUTH_CONTEXT_CACHE[token] = {
+                        "user_ctx": {
+                            "id": user_id,
+                            "email": canonical_user.get("email"),
+                            "role": role,
+                            "auth_user_id": user_response.user.id,
+                            "provider": "supabase",
+                        },
+                        "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
+                    }
+            except Exception as e:
+                try:
+                    payload = decode_app_access_token(token)
+                    canonical_user_id = payload.get("sub")
+                    if canonical_user_id:
+                        user_row = await supabase_service.get_user_by_id(canonical_user_id)
+                        if user_row and user_row.get("id"):
+                            user_id = user_row["id"]
+                            role = user_row.get("role", "normal")
+                except Exception as decode_error:
+                    logger.warning(f"Failed to extract user from WebSocket token: {e}; app token decode error: {decode_error}")
     
     llm_service = websocket.app.state.llm_service
     model_registry = getattr(websocket.app.state, "model_registry", {}) or {}

@@ -43,11 +43,16 @@
 ### 後端技術棧
 
 - FastAPI + Uvicorn
-- Supabase（PostgreSQL + Storage）
+- Supabase（PostgreSQL + Storage + Auth + Realtime）
 - SQLAlchemy
-- fastembed（向量嵌入）
-- OpenAI / Gemini API
-- PyJWT
+- fastembed（`BAAI/bge-small-en` 向量嵌入；用於 few-shot 範例檢索）
+- 多 LLM 供應商整合：
+    - OpenAI GPT-5 系列（`gpt-5`、`gpt-5-mini`、`gpt-5-nano`、`gpt-5.1-chat-latest`、`gpt-4.1-mini`、`gpt-4.1-nano`）
+    - Google Gemini（`gemini-3-pro-preview`、`gemini-3-flash-preview`、`gemini-2.5-pro`、`gemini-2.5-flash-lite`）
+    - Google Imagen（`imagen-4.0-generate-001`、`gemini-3-pro-image-preview`）— 圖片生成
+    - Ollama（本地模型，可選）
+- PyJWT（內部 app token）
+- 啟動時預載入 `app.state.all_grants_config` 快取（catalog cascade 已於 P0 優化中解決）
 
 ### 前端技術棧
 
@@ -55,13 +60,30 @@
 - Tailwind CSS
 - Supabase JS SDK
 - Nuxt Icon / Heroicons
+- `docx`（Word 文件生成）、`mammoth`（Word 解析）、`pdfjs-dist`（PDF 解析）
 
 ### 部署架構
 
 - Docker Compose 多容器部署
 - `fastapi-backend`：後端 API
 - `nuxt-frontend`：前端 SSR/SPA
-- `nginx-proxy`：反向代理與 TLS 入口
+- `nginx-proxy`：反向代理與 TLS 入口（生產環境）；Dev VPS 使用 Nginx Proxy Manager（NPM）
+- CI/CD：GitHub Actions 自動部署 dev / prod 分支
+- 部署設定檔：`docker-compose.yml`（生產）、`docker-compose.beta.yml`（Dev VPS / Beta）
+
+## 資料庫 Schema
+
+- **Schema 名稱：** `ai_proposal_platform`（Test / Dev VPS 已遷移；Live 待遷移自 `public`）
+- **資料表：** 共 18 個應用資料表
+    - 使用者類：`users`、`user_identities`、`whitelist`
+    - 專案類：`projects`、`commands`、`draft_plans`、`images`
+    - 配置類：`grants`、`plan_templates`、`sections`、`section_schema_versions`、`dynamic_sections`、`dynamic_fields`、`models`、`routing_rules`
+    - 資料 / 紀錄類：`datasets`、`usage_logs`、`execution_logs`
+- **複合主鍵設計：**
+    - `plan_templates`: `(id, grant_id)`
+    - `sections`: `(id, template_id, grant_id)`
+    - 章節 ID 為可複用的字串（如 `company_overview`），靠複合鍵保證唯一性
+- **遷移指南：** 參見 `database-backup-migrate-schema.md`
 
 ## 專案結構
 
@@ -69,10 +91,10 @@
 .
 ├── backend/                   # 後端服務專案根目錄
 │   ├── app/
-│   │   ├── api/               # API 路由
+│   │   ├── api/               # API 路由（14 個 router 模組）
 │   │   ├── core/              # 啟動生命週期與核心流程
 │   │   ├── services/          # LLM / Supabase 服務層
-│   │   ├── utils/             # 共用工具
+│   │   ├── utils/             # 共用工具（JSON 修復、節流、時間軸 PDF 等）
 │   │   ├── config.py          # 環境變數與常數
 │   │   ├── main.py            # FastAPI 入口
 │   │   └── models.py          # Pydantic 模型
@@ -80,13 +102,13 @@
 │   ├── Dockerfile
 │   └── README.md
 ├── frontend/                  # 前端服務專案根目錄
-│   ├── components/            # UI 元件（chat、manager、global）
-│   ├── composables/           # 業務邏輯 hooks
+│   ├── components/            # UI 元件（chat、word-editor、template-manager、global）
+│   ├── composables/           # 業務邏輯 hooks（auth、Word 編號、敏感資料遮罩）
 │   ├── layouts/               # 全域版型（頁面框架）
 │   ├── middleware/            # 認證與導向守衛
-│   ├── pages/                 # Nuxt 路由頁面
+│   ├── pages/                 # Nuxt 路由頁面（含 _builder/* 管理端）
 │   ├── plugins/               # Nuxt 插件（client/server 注入）
-│   ├── utils/                 # 前端工具函式
+│   ├── utils/                 # 前端工具函式（exportToWord、Supabase 客戶端等）
 │   ├── app.vue
 │   ├── nuxt.config.ts
 │   ├── package.json
@@ -95,31 +117,74 @@
 ├── nginx/                     # 反向代理設定與映像建置檔
 │   ├── nginx.conf             # Nginx 路由、SSL、proxy 規則
 │   └── Dockerfile
-├── docker-compose.yml
+├── stress-tests/              # 壓力測試與效能驗證
+│   ├── *.js / *.py            # k6（REST/WebSocket）+ Locust（AI Generation）測試腳本
+│   ├── reports/               # Phase 1 / 優化前後測試報告與基準資料
+│   ├── test-plans/            # 測試規劃、端點覆蓋表、優化路線圖
+│   ├── .env.testing           # 測試環境變數（不入版）
+│   └── README.md
+├── docker-compose.yml         # 生產部署設定
+├── docker-compose.beta.yml    # Dev VPS / Beta 部署設定
+├── docker-compose.dev.yml     # 本機開發設定
+├── STATUS.md                  # 專案開發狀態（最新更新）
+├── dev-vps.md                 # 開發 VPS 設定指南
+├── database-backup-migrate-schema.md  # 資料庫備份與 schema 遷移指南
+├── Stress-Test-Proposal.md    # 壓力測試提案
 └── README.md
 ```
 
 ## 前後端結構細化
 
-### Backend 模組重點
+### Backend 模組重點（14 個 Router 模組）
 
-- `app/api/generate.py`：生成、改寫、文件填寫、欄位分析
-- `app/api/projects.py`：專案 CRUD、時間軸、PDF
-- `app/api/template_manager.py`：Grant/Template/Section 管理
-- `app/api/datasets.py`：資料集與敏感詞建議
-- `app/api/dynamic_section.py`：動態章節欄位管理
-- `app/api/images.py`：圖片查詢、生成、刪除
-- `app/api/usage_log.py`：使用量分析
-- `app/api/external_auth.py`：外部 OAuth 流程
+#### 使用者端
+- `app/api/auth.py`：目前登入者資訊與輕量狀態檢查
+- `app/api/external_auth.py`：外部 OAuth（TGSA Provider）登入流程
+- `app/api/projects.py`：專案 CRUD、章節設定、時間軸、PDF
+- `app/api/generate.py`：生成、改寫、文件填寫、欄位分析、專案名稱推薦、互動聊天（WebSocket `/ws/chat_guidance`）
+- `app/api/draft_plan.py`：草稿計畫 CRUD 與批次合成生成
+- `app/api/commands.py`：使用者自訂背景資料（指令）
+- `app/api/images.py`：圖片查詢、生成、Prompt 強化、刪除
+- `app/api/section_recommender.py`：章節推薦
+
+#### 管理端
+- `app/api/template_manager.py`：Grant / Template / Section CRUD + Schema 版本管理 + Word 視覺化編輯器設定
+- `app/api/dynamic_section.py`：動態章節與欄位管理
+- `app/api/datasets.py`：資料集 CRUD + 敏感詞建議
+- `app/api/admin.py`：模型登錄（model registry）、路由規則、章節 prompt、使用統計
+- `app/api/config.py`：應用配置（grants/templates/sections 快取讀取、刷新）
+- `app/api/usage_log.py`：使用量分析與統計
 
 ### Frontend 模組重點
 
-- `pages/projects/*`：專案操作與編修流程
-- `pages/plan-library.vue`：計畫庫管理
-- `pages/command-library.vue`：指令庫管理
-- `components/chat/*`：互動生成區塊
+#### 使用者端頁面
+- `pages/index.vue`：首頁與計畫類型選擇
+- `pages/login.vue`：登入頁
+- `pages/projects/[id].vue`：專案 AI 工作區（互動聊天 / 生成 / 改寫）
+- `pages/plan-library.vue`：計畫庫
+- `pages/command-library.vue`：背景資料庫（自訂指令）
+- `pages/external-auth-callback.vue`：OAuth 回呼
+
+#### 管理端頁面（`role=internal` 才可存取）
+- `pages/_builder/template-manager.vue`：模板與章節管理 + Word 視覺化編輯器
+- `pages/_builder/section.vue`：章節編輯器
+- `pages/_builder/dataset.vue`：資料集（DPO / 訓練資料）管理
+- `pages/_builder/model.vue`：模型路由配置
+- `pages/_builder/management.vue`：管理面板總覽
+- `pages/_builder/usage-analytics.vue`：使用分析儀表板
+- `pages/_builder/login.vue`、`signup.vue`、`forgot-password.vue`、`reset-password.vue`：管理員身份相關頁面
+
+#### 共用元件與邏輯
+- `components/chat/*`：互動聊天區塊（streaming WebSocket 對話）
+- `components/word-editor/*`：Word 視覺化模板樹狀編輯器
 - `components/template-manager/*`：模板管理 UI
+- `components/global/*`：全域元件（Loading、通知等）
 - `composables/useAppAuth.ts`：登入會話與 token 流程
+- `composables/usePlanGenerator.ts`：計畫產生流程整合
+- `composables/useWordNumbering.ts`：Word 章節 / 子標題編號邏輯
+- `composables/useSensitiveMasking.ts`：敏感資料遮罩
+- `composables/useLoading.ts`、`useNotifications.ts`：全域 UX 工具
+- `utils/exportToWord.ts`：Word 文件匯出引擎
 - `middleware/auth.ts`：登入與內部角色檢查
 
 ## 快速開始
@@ -254,6 +319,31 @@ SUPABASE_ANON_KEY=<your-supabase-anon-key>
         -> Supabase 寫入（projects/datasets/logs） -> 前端回顯
 ```
 
+## 效能與測試
+
+平台已完成 **Phase 1 完整壓力測試**（4 個 tier，342,000 次請求，27 個獨立測試 run）並於 2026-04-28 部署 P0 後端優化。
+
+### 測試覆蓋
+| Tier | 測試範圍 | 結果 |
+|------|---------|------|
+| Tier 1 | Auth / 控制端點（auth/me、auth/status、commands） | ✅ 通過 |
+| Tier 2 | DB 讀取（projects/{id}、draft_plans、plan_templates） | ✅ 通過 |
+| Tier 3 | 診斷（config — 確認 catalog cascade 假設） | ✅ 通過 |
+| Tier 4 | AI Generation（Locust）+ WebSocket（k6 50/100/200 VU） | ✅ 通過 |
+| 優化後 | `/api/projects` + `/api/config` + WebSocket 重新測試 | ✅ 通過 |
+
+### P0 優化成果（已部署）
+- `/api/projects` p95（50 VU）：19,579 ms → **1,311 ms**（15× 加速）
+- `/api/config` p95（50 VU）：16,572 ms → **1,938 ms**（8.5× 加速）
+- WebSocket cold p95（100 VU）：2,864 ms → **513 ms**（5.6× 加速）
+- 快取端點 RPS 上限：3 RPS → **25-41 RPS**
+
+### 生產就緒狀態
+- **目標使用者規模：** 300 名使用者（2 個月內）
+- **狀態：** ✅ 生產就緒，現有 Dev VPS 硬體（2 vCPU / 4 GB RAM）對 300 人目標保有充裕餘裕
+- **詳細報告：** `stress-tests/reports/Phase1-production-readiness-summary.md`、`Post-Optimization-DBH-stress-test-report.md`
+- **未來優化路線圖：** `stress-tests/test-plans/optimization-roadmap.md`（含 P1/P2/P3 觸發條件）
+
 ## 部署與維運
 
 ### 服務入口
@@ -301,8 +391,26 @@ docker compose logs -f --tail=200 nginx-proxy
 
 ## 文件索引
 
-- 後端詳細文件：`backend/README.md`
-- 前端詳細文件：`frontend/README.md`
+### 模組文件
+- `backend/README.md` — 後端詳細文件
+- `frontend/README.md` — 前端詳細文件
+- `stress-tests/README.md` — 壓力測試與效能驗證指南
+
+### 專案狀態與規劃
+- `STATUS.md` — 專案開發狀態與最新進度（**最新狀態請以此檔為準**）
+- `Stress-Test-Proposal.md` — 壓力測試提案
+
+### 部署與運維
+- `dev-vps.md` — 開發 VPS 設定與部署指南
+- `database-backup-migrate-schema.md` — 資料庫備份與 Schema 遷移指南
+- `custom-sql.txt` — SQL 腳本歷史紀錄
+- `db_schema.txt` — 資料庫 schema 快照
+
+### 測試與優化報告
+- `stress-tests/reports/Phase1-production-readiness-summary.md` — Phase 1 整體測試彙整與生產就緒判定
+- `stress-tests/reports/Post-Optimization-DBH-stress-test-report.md` — P0 優化驗證報告（5-step 整合）
+- `stress-tests/test-plans/optimization-roadmap.md` — 優化路線圖（含 P1/P2/P3 觸發條件）
+- `stress-tests/test-plans/endpoint-coverage-plan.md` — 端點測試策略
 
 ## License
 
@@ -310,12 +418,26 @@ Internal use only.
 
 ## Version
 
-### v1.0.0
+### v1.1.0（2026 Q2，當前版本）
 
-初始版本包含：
+主要新增：
+
+- **Word 視覺化編輯器：** 樹狀模板節點編輯（sectionTitle、subHeading、paragraph、table、customTable、list、customText、imagePlaceholder），支援版本快照與「同步遺失章節」修復邏輯
+- **Schema 版本管理：** `section_schema_versions` 表追蹤章節 JSON Schema 演進，專案綁定特定版本
+- **混合身份驗證：** Supabase Auth + 外部 OAuth（TGSA Provider）整合
+- **使用量配額系統：** 依角色（normal / vip / internal）區分的每日 token 上限與 30 秒節流邏輯
+- **管理端工具：** 模板管理 / 模型路由 / 資料集 / 使用分析儀表板（`_builder/*`）
+- **互動式 AI 工作區：** WebSocket 即時對話引導（`/ws/chat_guidance`）
+- **批次合成資料生成：** 用於 fine-tuning / DPO 訓練資料準備
+- **資料庫 schema 遷移：** 從 `public` 遷移至 `ai_proposal_platform`（Test 已完成，Live 待遷移）
+- **Phase 1 壓力測試完成：** 4 個 tier 全覆蓋 + P0 後端優化已部署（catalog cascade cache + WebSocket auth cache）
+
+### v1.0.0（初始版本）
 
 - 計畫書生成
 - 數據集管理
 - 模型路由
 - 配置管理
 - 合成數據生成
+
+> 完整最新進度請參考 `STATUS.md`。

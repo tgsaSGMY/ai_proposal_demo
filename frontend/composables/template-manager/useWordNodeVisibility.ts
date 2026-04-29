@@ -11,5 +11,5 @@ export function shouldShowNodeLabel(node: WordDocumentNode): boolean {
 }
 
 export function shouldShowSectionSelectors(node: WordDocumentNode): boolean {
-  return !["sectionTitle", "subHeading", "customText"].includes(node.type);
+  return !["sectionTitle", "customText"].includes(node.type);
 }

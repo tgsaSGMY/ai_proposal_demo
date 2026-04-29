@@ -71,13 +71,27 @@
                 </div>
               </div>
 
-              <h3 class="mt-1 text-xl font-semibold text-[#111b3f]">
-                {{ plan.title }}
+              <h3
+                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
+              >
+                {{ plan.mainTitle }}
               </h3>
-              <p class="mt-3 text-sm font-semibold text-[#7d86ad]">
+              <p
+                v-if="plan.bracketedTitle"
+                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
+              >
+                【{{ plan.bracketedTitle }}】
+              </p>
+              <p
+                v-if="plan.subtitle"
+                class="mt-3 text-sm font-semibold text-[#7d86ad]"
+              >
                 {{ plan.subtitle }}
               </p>
-              <p class="mt-1 text-xs text-[#8f98be]">
+              <p
+                v-if="plan.description"
+                class="mt-1 text-xs text-[#8f98be]"
+              >
                 {{ plan.description }}
               </p>
               <p
@@ -340,6 +354,7 @@ import { useNotifications } from "~/composables/useNotifications";
 import { useCurrentUser } from "~/composables/useCurrentUser";
 import { useFileExtractor } from "~/composables/useFileExtractor";
 import { authenticatedFetch } from "~/composables/useAppAuth";
+import { splitTemplateName } from "~/utils/templateName";
 
 // ===== SEO 配置 =====
 // 设置页面标题和元数据，用于搜索引擎优化和社交媒体分享
@@ -386,6 +401,13 @@ definePageMeta({
 interface PlanTypeOption {
   id: string;
   title: string;
+  // Main title with any trailing 【...】 segment removed. Used for the primary
+  // heading row on the card. Falls back to the full title if no brackets.
+  mainTitle: string;
+  // Text inside the trailing 【...】 segment (without brackets). Empty string
+  // when the template name has no trailing bracketed segment, in which case
+  // the bracketed row is hidden via v-if on the card.
+  bracketedTitle: string;
   subtitle?: string;
   description?: string;
   grantId: string;
@@ -537,9 +559,19 @@ async function loadPlanTypes() {
         }
       }
 
+      // Split names like "地方型SBIR【在地產業補助】" into a main title and a
+      // bracketed sub-line so the card can render them on separate rows.
+      // Names without a trailing 【...】 segment fall through unchanged
+      // (mainTitle === template.name, bracketedTitle === "").
+      const { mainTitle, bracketedTitle } = splitTemplateName(template.name);
+
       return {
         id: template.id,
+        // Preserve the full original name on `title` for downstream consumers
+        // (project creation fallback, prefilled chat answers, Stage 2 heading).
         title: template.name,
+        mainTitle,
+        bracketedTitle,
         subtitle: template.subtitle || "",
         description: template.description || "",
         grantId: template.grant_id,

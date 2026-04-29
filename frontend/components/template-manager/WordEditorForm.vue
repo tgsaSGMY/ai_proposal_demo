@@ -5,7 +5,7 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6"
   >
     <section
-      class="w-full max-w-8xl max-h-full overflow-y-auto rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
+      class="w-full max-w-8xl max-h-full overflow-y-auto overflow-x-hidden rounded-2xl bg-white p-6 space-y-6 shadow-2xl"
     >
       <header class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -14,7 +14,7 @@
           >
             Word Export Editor
           </p>
-          <h2 class="text-2xl font-bold text-slate-900">
+          <h2 class="text-2xl font-bold text-slate-900 truncate" :title="`${template.name} · ${template.id}`">
             {{ template.name }} · {{ template.id }}
           </h2>
           <p class="text-sm text-slate-500">
@@ -32,7 +32,7 @@
       </header>
 
       <div class="grid gap-6 lg:grid-cols-[1fr,1fr]">
-        <div class="space-y-6 overflow-y-auto max-h-[calc(100vh-12rem)]">
+        <div class="space-y-6 overflow-y-auto max-h-[calc(100vh-12rem)] min-w-0">
           <aside
             class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
           >
@@ -53,20 +53,34 @@
               >
                 <div class="flex items-center justify-between gap-2">
                   <div>
-                    <p class="font-semibold text-slate-800">
+                    <p class="font-semibold text-slate-800 flex items-center gap-2">
                       {{ formatDate(version.createdAt) }}
+                      <span v-if="isVersionOutdated(version)" class="inline-flex items-center rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20" title="此版本的章節結構與當前資料庫不同">
+                        ⚠️ 結構已變更
+                      </span>
                     </p>
                     <p class="text-xs text-slate-500 truncate">
                       {{ version.createdBy || "未記錄" }}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                    @click="applyVersion(version)"
-                  >
-                    套用
-                  </button>
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="button"
+                      class="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      @click="applyVersion(version)"
+                    >
+                      套用
+                    </button>
+                    <button
+                      v-if="versionHistory.length > 1 && version.id !== versionHistory[0].id"
+                      type="button"
+                      class="text-xs font-semibold text-red-500 hover:text-red-700"
+                      title="刪除此版本"
+                      @click="handleDeleteVersion(version.id)"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </li>
               <li v-if="!versionHistory.length" class="text-xs text-slate-400">
@@ -197,7 +211,14 @@
                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   @click="addNode()"
                 >
-                  新增章節
+                  新增節點
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-blue-300 px-3 py-1 text-sm font-semibold text-blue-600 hover:bg-blue-50 ml-2"
+                  @click="syncMissingSections()"
+                >
+                  🔄 同步遺失的章節
                 </button>
               </div>
             </div>
@@ -217,12 +238,13 @@
                   v-for="chapter in groupedNodes"
                   :key="`tab-${chapter.id}`"
                   type="button"
-                  class="shrink-0 rounded-xl px-3 py-1 font-semibold"
+                  class="shrink-0 rounded-xl px-3 py-1 font-semibold max-w-[10rem] truncate"
                   :class="[
                     selectedChapterId === chapter.id
                       ? 'bg-rose-500 text-white'
                       : 'text-slate-600 hover:text-rose-500',
                   ]"
+                  :title="chapter.title || '未命名章節'"
                   @click="selectedChapterId = chapter.id"
                 >
                   {{ chapter.title || "未命名章節" }}
@@ -239,7 +261,7 @@
                   class="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50"
                 >
                   <div class="flex items-center gap-3">
-                    <span class="text-sm font-semibold text-slate-700">{{
+                    <span class="text-sm font-semibold text-slate-700 truncate min-w-0" :title="chapter.title || '未命名章節'">{{
                       chapter.title || "未命名章節"
                     }}</span>
                     <span class="text-xs text-slate-500"
@@ -366,7 +388,7 @@
         </div>
 
         <aside
-          class="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col lg:sticky lg:top-6 max-h-[calc(100vh-12rem)]"
+          class="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-col lg:sticky lg:top-6 max-h-[calc(100vh-12rem)] min-w-0"
         >
           <div class="flex items-center justify-between mb-3 flex-shrink-0">
             <h3 class="text-sm font-semibold text-slate-700">即時預覽</h3>
@@ -520,10 +542,11 @@ const props = defineProps({
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "save", payload: WordExportTemplateConfig): void;
+  (e: "delete-version", versionId: string): void;
 }>();
 
-// 通知工具：目前僅使用錯誤提示。
-const { error: notifyError } = useNotifications();
+// 處理通知與錯誤提示
+const { error: notifyError, success } = useNotifications();
 
 // 可選字體清單。
 const FONT_OPTIONS = [
@@ -575,6 +598,34 @@ const versionHistory = computed<WordExportConfigEntry[]>(() => {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 });
+
+// 判斷某個歷史版本是否已「過期」(章節結構與當前資料庫不符)
+function isVersionOutdated(version: WordExportConfigEntry): boolean {
+  if (!version.config?.nodes) return false;
+
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+  const versionSectionIds = new Set<string>();
+
+  const scanNodes = (nodes: WordDocumentNode[]) => {
+    for (const node of nodes) {
+      if (node.sectionId) versionSectionIds.add(node.sectionId);
+      if (node.children && node.children.length > 0) scanNodes(node.children);
+    }
+  };
+  scanNodes(version.config.nodes);
+
+  // 1. 檢查是否有已刪除的章節 (Ghost nodes)
+  for (const id of versionSectionIds) {
+    if (!dbSectionIds.has(id)) return true;
+  }
+
+  // 2. 檢查是否有遺漏的新章節 (Missing nodes)
+  for (const id of dbSectionIds) {
+    if (!versionSectionIds.has(id)) return true;
+  }
+
+  return false;
+}
 
 // 章節分組模型：一個章節標記加上其內容節點。
 interface ChapterGroup {
@@ -712,11 +763,14 @@ function moveChapter(chapterId: string, direction: "up" | "down") {
   allNodes.splice(insertIndex, 0, ...currentChapterNodes);
 }
 
-// 新增一個章節標記節點，作為章節分組起點。
+// 新增一個手動章節標記節點，作為章節分組起點。
+// 注意：手動章節不綁定任何資料庫章節（sectionId 刻意留空），
+// syncMissingSections() 會將其識別為「手動章節」並保留在 DB 章節之後。
 function addChapterMarker() {
   const newNode: WordDocumentNode = {
     id: generateNodeId(),
     type: "sectionTitle",
+    sectionId: undefined,
     label: "新章節",
     chapterMarker: true,
     chapterTitle: "新章節",
@@ -865,6 +919,40 @@ function initializeNodeDefaults(nodes?: WordDocumentNode[]) {
   });
 }
 
+// 回補或修復 sectionTitle 節點的 sectionId：
+// 1. 若 sectionId 為空 → 透過 label 精確比對資料庫章節名稱來回填。
+// 2. 若 sectionId 已存在但指向資料庫中不存在的章節 (過時/重新命名) → 同樣嘗試 label 比對來修復。
+// 僅在 label 對應到「唯一一個」資料庫章節時才修復，避免重名章節造成誤判。
+// 靜默、冪等、僅影響 sectionTitle 頂層節點（不觸及子節點的 sectionId）。
+function backfillMissingSectionIds(nodes: WordDocumentNode[]) {
+  if (!nodes || !props.sections.length) return;
+
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+
+  // 建立 name → id[] 的查找表，用於偵測重名章節
+  const nameToIds = new Map<string, string[]>();
+  for (const section of props.sections) {
+    const list = nameToIds.get(section.name) ?? [];
+    list.push(section.id);
+    nameToIds.set(section.name, list);
+  }
+
+  for (const node of nodes) {
+    if (node.type !== "sectionTitle" || !node.label) continue;
+
+    // 判斷 sectionId 是否缺失或過時
+    const isMissing = !node.sectionId;
+    const isStale = !!node.sectionId && !dbSectionIds.has(node.sectionId);
+    if (!isMissing && !isStale) continue;
+
+    // 嘗試透過 label 精確比對；僅在唯一匹配時修復，避免重名誤判
+    const candidates = nameToIds.get(node.label);
+    if (candidates && candidates.length === 1) {
+      node.sectionId = candidates[0];
+    }
+  }
+}
+
 // 將版本資料灌入編輯表單，並在失敗時回退到預設配置。
 function hydrateForm(base?: WordExportTemplateConfig) {
   try {
@@ -884,6 +972,7 @@ function hydrateForm(base?: WordExportTemplateConfig) {
         : generateDefaultNodes();
 
     initializeNodeDefaults(nodes);
+    backfillMissingSectionIds(nodes);
 
     formState.value = {
       documentStyle,
@@ -914,6 +1003,13 @@ function generateNodeId(): string {
   return `node_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+// 刪除指定歷史版本
+function handleDeleteVersion(versionId: string) {
+  if (window.confirm("確定要刪除此歷史版本嗎？這將無法復原，且可能影響依賴此版本的舊計畫匯出格式。")) {
+    emit("delete-version", versionId);
+  }
+}
+
 /**
  * 依章節 schema 產生預設節點樹（含章節標題、次標題、段落、清單、表格）。
  */
@@ -930,7 +1026,7 @@ function generateDefaultNodes(): WordDocumentNode[] {
       level: 1,
     });
 
-    // 遞迴處理 schema properties（從 level 2 開始）。
+    // 遞迴解析 schema properties，層級從 level 2 開始。
     const schemaProps = section.json_schema?.properties;
     if (schemaProps) {
       const childNodes = generateNodesFromSchema(
@@ -944,6 +1040,153 @@ function generateDefaultNodes(): WordDocumentNode[] {
   }
 
   return nodes;
+}
+
+// 同步與重整 (Smart Sync & Reorder)
+// 僅使用章節標題節點自身的 sectionId / label 來判定區塊歸屬（不深掃子節點），
+// 依資料庫章節順序重新排列，插入新增章節，並將已刪除的章節移至最下方。
+function syncMissingSections() {
+  const currentNodes = formState.value.nodes || [];
+  if (currentNodes.length === 0) {
+    formState.value.nodes = generateDefaultNodes();
+    success("已產生預設節點結構！");
+    return;
+  }
+
+  const dbSectionIds = new Set(props.sections.map((s) => s.id));
+
+  // 1. 將現有節點切分成 Chapter Blocks
+  const blocks: WordDocumentNode[][] = [];
+  let currentBlock: WordDocumentNode[] = [];
+  for (const node of currentNodes) {
+    const isChapterStart = node.type === "sectionTitle" || node.chapterMarker === true;
+    if (isChapterStart && currentBlock.length > 0) {
+      blocks.push(currentBlock);
+      currentBlock = [];
+    }
+    currentBlock.push(node);
+  }
+  if (currentBlock.length > 0) blocks.push(currentBlock);
+
+  // 2. 僅透過區塊首節點（章節標題）判定所屬 sectionId，不深掃子節點。
+  //    P1 (conf 2): 首節點為 sectionTitle 且帶有 sectionId 且該 ID 存在於資料庫。
+  //    P2 (conf 1): 首節點為 sectionTitle 且 label 精確比對到某個資料庫章節名稱。
+  //    否則視為「手動章節」(保留原位) 或「已刪除章節的殘留」(Ghost, 移到最底)。
+  const blockMap = new Map<string, { block: WordDocumentNode[]; confidence: number; originalIndex: number }>();
+  const manualBlocks: { block: WordDocumentNode[]; originalIndex: number }[] = [];
+  const ghostBlocks: WordDocumentNode[][] = [];
+
+  // 已被 P1/P2 認領的 sectionId，避免同一 section 被多個區塊搶佔
+  const claimedByName = new Set<string>();
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    const firstNode = block[0];
+    let primarySectionId: string | null = null;
+    let confidence = 0;
+    let sectionIdIsStale = false;
+
+    // P1 (High Confidence): 首節點 sectionId 存在且在資料庫中
+    if (
+      firstNode &&
+      firstNode.type === "sectionTitle" &&
+      firstNode.sectionId
+    ) {
+      if (dbSectionIds.has(firstNode.sectionId)) {
+        primarySectionId = firstNode.sectionId;
+        confidence = 2;
+      } else {
+        // sectionId 存在但資料庫已無此 ID → 標記為過時，但不立即歸類為 Ghost，
+        // 先讓 P2 (名稱匹配) 嘗試救援。可能只是章節被重新 ID 但 label 仍正確。
+        sectionIdIsStale = true;
+      }
+    }
+
+    // P2 (Low Confidence): 名稱匹配（僅首節點為 sectionTitle 且 P1 尚未成功認領）
+    if (!primarySectionId && firstNode && firstNode.type === "sectionTitle" && firstNode.label) {
+      const matchedSection = props.sections.find(
+        (s) => s.name === firstNode.label && !claimedByName.has(s.id),
+      );
+      if (matchedSection) {
+        primarySectionId = matchedSection.id;
+        confidence = 1;
+      }
+    }
+
+    // 競爭解析：相同 sectionId 的多個區塊取信心分數較高者，平手取先出現者
+    if (primarySectionId) {
+      claimedByName.add(primarySectionId);
+      const existingClaim = blockMap.get(primarySectionId);
+      if (!existingClaim) {
+        blockMap.set(primarySectionId, { block, confidence, originalIndex: i });
+      } else {
+        if (confidence > existingClaim.confidence) {
+          // 新來者信心更高，舊的降級為手動章節
+          manualBlocks.push({ block: existingClaim.block, originalIndex: existingClaim.originalIndex });
+          blockMap.set(primarySectionId, { block, confidence, originalIndex: i });
+        } else {
+          // 信心不足或平手（先到先得），降級為手動章節
+          manualBlocks.push({ block, originalIndex: i });
+        }
+      }
+    } else if (sectionIdIsStale) {
+      // P1 與 P2 皆無法匹配且 sectionId 指向不存在的章節 → 真正的 Ghost (已刪除章節殘留)
+      ghostBlocks.push(block);
+    } else {
+      // 無法判定歸屬 → 手動章節，保留在稍後的位置
+      manualBlocks.push({ block, originalIndex: i });
+    }
+  }
+
+  // 3. 依資料庫章節順序重新組裝節點樹
+  const newFlatNodes: WordDocumentNode[] = [];
+  let syncedCount = 0;
+
+  for (const section of props.sections) {
+    if (blockMap.has(section.id)) {
+      // 現有區塊：原封不動保留（所有使用者自訂的子節點皆不會被觸及）
+      const claim = blockMap.get(section.id)!;
+      newFlatNodes.push(...claim.block);
+    } else {
+      // 新增章節：從 schema 自動產生預設節點結構
+      const newNodes: WordDocumentNode[] = [];
+      newNodes.push({
+        id: generateNodeId(),
+        label: section.name,
+        type: "sectionTitle",
+        sectionId: section.id,
+        level: 1,
+      });
+
+      const schemaProps = section.json_schema?.properties;
+      if (schemaProps) {
+        const childNodes = generateNodesFromSchema(section.id, schemaProps, "", 2);
+        newNodes.push(...childNodes);
+      }
+      newFlatNodes.push(...newNodes);
+      syncedCount++;
+    }
+  }
+
+  // 4. 手動章節：依原本文件中的出現順序附加在所有 DB 章節之後
+  manualBlocks.sort((a, b) => a.originalIndex - b.originalIndex);
+  for (const { block } of manualBlocks) {
+    newFlatNodes.push(...block);
+  }
+
+  // 5. 已刪除章節的殘留 (Ghost)：移至最下方供管理員手動處理
+  for (const block of ghostBlocks) {
+    newFlatNodes.push(...block);
+  }
+
+  formState.value.nodes = newFlatNodes;
+
+  const parts: string[] = [];
+  parts.push(`已依照最新結構排序`);
+  if (syncedCount > 0) parts.push(`補齊 ${syncedCount} 個新增章節`);
+  if (ghostBlocks.length > 0) parts.push(`${ghostBlocks.length} 個已刪除章節移至底部`);
+  if (manualBlocks.length > 0) parts.push(`${manualBlocks.length} 個手動章節保留於後方`);
+  success(`同步完成！${parts.join("，")}。`);
 }
 
 /**
@@ -969,6 +1212,7 @@ function generateNodesFromSchema(
       type: "subHeading",
       sectionId,
       level,
+      list: { numbering: false },
     });
 
     if (field.type === "array") {
@@ -1047,6 +1291,7 @@ function generateNodesFromSchema(
         sectionId,
         dataPath: path,
         level: level + 1,
+        paragraphNumbering: false,
       });
     }
   }
@@ -1305,7 +1550,20 @@ function renderNodePreview(
     </h2>`;
   } else if (node.type === "subHeading") {
     const fontSize = (formState.value.documentStyle.subHeadingSizePt || 14) / 2;
-    const showNumbering = node.list?.numbering !== false; // 預設 true
+    const showNumbering = node.list?.numbering === true; // 必須明確啟用才會編號
+
+    // 遇到次標題邊界時重置計數器，防止編號從上一組洩漏到下一組。
+    // 未啟用編號的次標題視為純結構分界線，重置「自身層級及更深層」的計數器（>=）。
+    // 已啟用編號的次標題僅重置「更深層」的計數器（>），保留自身層級的遞增序號。
+    const nodeLevel = node.level || 2;
+    const resetThreshold = showNumbering ? nodeLevel : nodeLevel - 1;
+    Object.keys(headingCounters).forEach((key) => {
+      const keyNum = Number(key);
+      if (keyNum > resetThreshold) {
+        delete headingCounters[keyNum];
+      }
+    });
+
     const prefix = showNumbering
       ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
       : "";

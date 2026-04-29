@@ -5,6 +5,7 @@ import json
 from typing import List, Dict, Any, Optional, Union
 from fastapi import Request
 from supabase import create_client, Client
+from supabase.client import ClientOptions
 from sqlalchemy import create_engine, text 
 from sqlalchemy.sql.elements import TextClause
 from sqlalchemy.orm import sessionmaker
@@ -27,7 +28,11 @@ class SupabaseService:
         if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
             raise ValueError("Supabase URL or Key not set in environment variables.")
         
-        self.client: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        self.client: Client = create_client(
+            SUPABASE_URL,
+            SUPABASE_SERVICE_KEY,
+            options=ClientOptions(schema="ai_proposal_platform"),
+        )
         self.bucket_name = SUPABASE_BUCKET_NAME
         self.engine = create_engine(DATABASE_URL)
         self.Session = sessionmaker(bind=self.engine)
@@ -470,7 +475,23 @@ class SupabaseService:
         )
 
     async def delete_section_record(self, section_id: str, template_id: str, grant_id: str) -> bool:
-        """刪除指定章節。"""
+        """刪除指定章節，並先清除相依的子記錄 (routing_rules, section_schema_versions, datasets)。"""
+        # Clean up child dependencies to prevent foreign key violations (500 errors)
+        try:
+            self.client.from_("routing_rules").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup routing_rules for section {section_id}: {e}")
+
+        try:
+            self.client.from_("section_schema_versions").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup section_schema_versions for section {section_id}: {e}")
+
+        try:
+            self.client.from_("datasets").delete().eq("section_id", section_id).eq("template_id", template_id).eq("grant_id", grant_id).execute()
+        except Exception as e:
+            print(f"Warning: Failed to cleanup datasets for section {section_id}: {e}")
+
         response = (
             self.client
             .from_("sections")
@@ -736,8 +757,16 @@ class SupabaseService:
             logger.error("Failed to fetch project %s: %s", project_id, error, exc_info=True)
             return None
 
-    async def get_projects_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant/template 顯示資訊。"""
+    async def get_projects_by_user(
+        self,
+        user_id: str,
+        cached_grants_config: Optional[List[GrantConfig]] = None,
+    ) -> List[Dict[str, Any]]:
+        """取得指定使用者的所有專案（排除已刪除的），依更新時間排序。補充 grant/template 顯示資訊。
+
+        若呼叫端提供 cached_grants_config（建議從 app.state.all_grants_config 取得），
+        則跳過昂貴的 catalog 查詢；否則退回完整 DB 查詢以保持向後相容。
+        """
         response = (
             self.client.from_("projects")
             .select("*")
@@ -750,8 +779,12 @@ class SupabaseService:
         if not response.data:
             return []
         
-        # 獲取所有 grants 配置以查詢 grant name 和 template name
-        all_grants = await self.get_all_grants_config()
+        # 優先使用呼叫端傳入的快取配置；若未提供則退回直接從 Supabase 取得（向後相容）。
+        all_grants = (
+            cached_grants_config
+            if cached_grants_config is not None
+            else await self.get_all_grants_config()
+        )
         
         # 建立快速查詢表：{grant_id: grant_config}
         grants_lookup = {g.id: g for g in all_grants}
@@ -1192,10 +1225,19 @@ class SupabaseService:
             response = self.client.rpc('match_datasets', params).execute()
             
             if response.data:
-                logger.info(f"Found {len(response.data)} similar datasets for section '{section_id}'.")
+                matched_ids = [ex.get('id') for ex in response.data]
+                matched_scores = [round(ex.get('similarity', 0), 3) for ex in response.data]
+                logger.info(
+                    f"[Few-Shot Retrieval] Found {len(response.data)} similar datasets "
+                    f"for section '{section_id}' (grant='{grant_id}', template='{template_id}'): "
+                    f"IDs={matched_ids}, similarities={matched_scores}"
+                )
                 return response.data
             else:
-                logger.info(f"No similar datasets found for section '{section_id}'.")
+                logger.info(
+                    f"[Few-Shot Retrieval] No similar datasets found "
+                    f"for section '{section_id}' (grant='{grant_id}', template='{template_id}', threshold={threshold})"
+                )
                 return []
         except Exception as e:
             logger.error(f"Error retrieving similar datasets via RPC: {e}")

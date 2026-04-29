@@ -24,7 +24,7 @@
             v-if="showProgressHint"
             class="text-gray-300 text-xs sm:text-sm mt-2"
           >
-            💡 此操作可能需要 2-3 分鐘，請耐心等待...
+            💡 此操作可能需要 3-5 分鐘，請耐心等待...
           </p>
         </div>
       </div>

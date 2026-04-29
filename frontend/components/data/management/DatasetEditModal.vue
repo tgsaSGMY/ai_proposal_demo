@@ -18,14 +18,14 @@
           <h2
             class="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2"
           >
-            <span>👁️ 檢視數據點</span>
+            <span>📝 編輯數據點</span>
             <span
               class="px-2 py-0.5 rounded-md bg-gray-100 text-xs text-gray-500 font-mono"
               >#{{ dataset.id }}</span
             >
           </h2>
           <p class="text-xs text-gray-400 mt-1">
-            此模式下僅允許修改數據來源分類
+            可修改數據來源分類、用戶輸入 (Prompt) 及輸出內容
           </p>
         </div>
         <button
@@ -152,14 +152,33 @@
           <div
             class="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 min-h-0"
           >
-            <div class="px-6 py-3 bg-gray-50 border-b border-gray-100">
+            <div class="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <span
                 class="text-xs font-bold text-indigo-600 uppercase tracking-wider"
                 >用戶輸入 (Prompt)</span
               >
+              <button
+                type="button"
+                @click="isEditingPrompt = !isEditingPrompt"
+                class="px-2 py-1 text-xs font-medium rounded-md transition"
+                :class="isEditingPrompt
+                  ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+              >
+                {{ isEditingPrompt ? '完成編輯' : '編輯' }}
+              </button>
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-white">
+              <!-- Editing mode: textarea -->
+              <textarea
+                v-if="isEditingPrompt"
+                v-model="editableData.prompt"
+                class="w-full h-full min-h-[200px] text-sm text-gray-700 leading-relaxed font-sans border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                placeholder="輸入用戶 Prompt..."
+              ></textarea>
+              <!-- Read mode: plain text -->
               <div
+                v-else
                 class="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed font-sans"
               >
                 {{ editableData.prompt || "無輸入內容" }}
@@ -167,17 +186,40 @@
             </div>
           </div>
 
-          <!-- Right: User Output (Rendered HTML) -->
+          <!-- Right: User Output (Preview / Edit tabs) -->
           <div class="flex-1 flex flex-col min-h-0">
             <div
               class="px-6 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-3"
             >
-              <span
-                class="text-xs font-bold text-emerald-600 uppercase tracking-wider"
-              >
-                輸出結果 (Preview)
-              </span>
+              <!-- Tab buttons -->
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  @click="isEditingContent = false"
+                  class="px-3 py-1.5 text-xs font-semibold rounded-md transition"
+                  :class="!isEditingContent
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                >
+                  預覽
+                </button>
+                <button
+                  type="button"
+                  @click="isEditingContent = true"
+                  :disabled="!sectionConfig"
+                  class="px-3 py-1.5 text-xs font-semibold rounded-md transition"
+                  :class="[
+                    isEditingContent
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    !sectionConfig ? 'opacity-50 cursor-not-allowed' : ''
+                  ]"
+                >
+                  編輯內容
+                </button>
+              </div>
               <button
+                v-if="!isEditingContent"
                 type="button"
                 @click="enterMaskMode"
                 class="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition"
@@ -186,35 +228,66 @@
               </button>
             </div>
             <div class="flex-1 overflow-y-auto p-6 bg-white relative">
-              <!-- 渲染內容 -->
-              <div
-                v-if="renderedHtml"
-                class="prose prose-sm prose-slate max-w-none"
-              >
-                <div v-html="renderedHtml"></div>
-              </div>
-
-              <!-- 錯誤或空狀態提示 -->
-              <div
-                v-else
-                class="flex h-full flex-col items-center justify-center text-gray-400"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-10 w-10 mb-2 opacity-50"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              <!-- Edit mode: JsonSchemaForm -->
+              <template v-if="isEditingContent">
+                <!-- Schema found: show form editor -->
+                <div v-if="sectionConfig && sectionConfig.json_schema">
+                  <div class="mb-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-xs text-blue-700">
+                      正在編輯章節: <strong>{{ sectionConfig.name }}</strong>
+                      — 修改後可切換至「預覽」查看效果
+                    </p>
+                  </div>
+                  <JsonSchemaForm
+                    :schema="sectionConfig.json_schema"
+                    :modelValue="editableData.final_answer_obj"
+                    @update:modelValue="editableData.final_answer_obj = $event"
                   />
-                </svg>
-                <p class="text-sm">無法預覽內容 (缺少 Schema 或數據)</p>
-              </div>
+                </div>
+                <!-- Schema not found: warning -->
+                <div
+                  v-else
+                  class="flex h-full flex-col items-center justify-center text-amber-600"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <p class="text-sm font-medium">無法載入章節 Schema</p>
+                  <p class="text-xs text-amber-500 mt-1">請確認該章節是否仍然存在於模板配置中</p>
+                </div>
+              </template>
+
+              <!-- Preview mode: rendered HTML -->
+              <template v-else>
+                <div
+                  v-if="renderedHtml"
+                  class="prose prose-sm prose-slate max-w-none"
+                >
+                  <div v-html="renderedHtml"></div>
+                </div>
+
+                <!-- 錯誤或空狀態提示 -->
+                <div
+                  v-else
+                  class="flex h-full flex-col items-center justify-center text-gray-400"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-10 w-10 mb-2 opacity-50"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p class="text-sm">無法預覽內容 (缺少 Schema 或數據)</p>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -410,7 +483,8 @@
 import { watch, reactive, computed, ref } from "vue";
 import { useSensitiveMasking } from "~/composables/useSensitiveMasking";
 import { authenticatedFetch } from "~/composables/useAppAuth";
-import { renderPlanToHtml } from "~/utils/exportToWord"; // 確保這個路徑正確
+import { renderPlanToHtml } from "~/utils/exportToWord";
+import JsonSchemaForm from "~/components/data/model/JsonSchemaForm.vue";
 
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
@@ -430,10 +504,12 @@ const editableData = reactive({
   id: null,
   prompt: "",
   source_type: "synthetic_data",
-  final_answer_obj: {}, // 這是唯讀的，用於渲染
+  final_answer_obj: {},
 });
 
 const isMaskMode = ref(false);
+const isEditingPrompt = ref(false);
+const isEditingContent = ref(false);
 const isSuggestingTerms = ref(false);
 const newSensitiveTerm = ref("");
 const sensitiveTerms = ref([]);
@@ -449,12 +525,17 @@ const {
   toggleSelectionInList,
 } = useSensitiveMasking();
 
-function resetMaskEditorState() {
+function resetEditorState() {
   isMaskMode.value = false;
+  isEditingPrompt.value = false;
+  isEditingContent.value = false;
   newSensitiveTerm.value = "";
   sensitiveTerms.value = [];
   selectedTerms.value = [];
 }
+
+// Resolve the section's json_schema from allConfigs for JsonSchemaForm
+const sectionConfig = computed(() => getSectionConfigForDataset());
 
 function getSectionConfigForDataset() {
   if (!props.dataset || !props.allConfigs) return null;
@@ -499,11 +580,10 @@ watch(
       editableData.id = newVal.id;
       editableData.prompt = newVal.prompt || "";
       editableData.source_type = newVal.source_type || "synthetic_data";
-      // 深拷貝以防萬一，雖然我們不編輯它
       editableData.final_answer_obj = newVal.final_answer
         ? JSON.parse(JSON.stringify(newVal.final_answer))
         : {};
-      resetMaskEditorState();
+      resetEditorState();
     }
   },
   { immediate: true, deep: true },
@@ -606,13 +686,11 @@ function applyMaskToCurrentData() {
 }
 
 function handleSave() {
-  // 只回傳可能被修改的 source_type，以及必要的 id
-  // prompt 和 final_answer 保持原樣回傳，或者後端不更新它們
   emit("save", {
     id: editableData.id,
-    prompt: editableData.prompt, // 雖不編輯但保持數據完整性
-    final_answer: editableData.final_answer_obj, // 雖不編輯但保持數據完整性
-    source_type: editableData.source_type, // 這是主要修改的欄位
+    prompt: editableData.prompt,
+    final_answer: editableData.final_answer_obj,
+    source_type: editableData.source_type,
   });
 }
 

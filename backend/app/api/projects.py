@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -167,11 +167,16 @@ async def _build_timeline_response(
 
 @router.get("", response_model=List[Dict[str, Any]], summary="取得使用者的所有專案")
 async def list_projects(
+    request: Request,
     user_id: str = Depends(get_current_user_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
-    # 取得當前使用者的所有專案列表
-    return await supabase_service.get_projects_by_user(user_id)
+    # 取得當前使用者的所有專案列表（從 app.state 取得已快取的 grants 配置以避免重複的 catalog 查詢）
+    cached_grants = getattr(request.app.state, "all_grants_config", None)
+    return await supabase_service.get_projects_by_user(
+        user_id,
+        cached_grants_config=cached_grants,
+    )
 
 
 @router.get("/{project_id}", response_model=Dict[str, Any], summary="取得單一專案")

@@ -35,12 +35,15 @@
             :value="column.label"
             type="text"
             class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            :class="!isColumnValid(column.key) ? 'border-red-300 bg-red-50 text-red-700' : ''"
             :placeholder="`列 ${colIndex + 1} 標題`"
             @input="handleColumnLabelChange(colIndex, $event)"
           />
-          <span class="text-xs text-slate-500 whitespace-nowrap"
+          <span class="text-xs whitespace-nowrap truncate max-w-[120px] inline-block align-middle" :class="!isColumnValid(column.key) ? 'text-red-500 font-semibold' : 'text-slate-500'"
+            :title="column.key"
             >({{ column.key }})</span
           >
+          <span v-if="!isColumnValid(column.key)" class="text-[10px] text-red-600 bg-red-100 px-1 rounded border border-red-200 whitespace-nowrap" title="此欄位已不存在於 Schema 中">⚠️ 失效</span>
           <div class="flex items-center gap-1">
             <button
               type="button"
@@ -60,7 +63,27 @@
             >
               ↓
             </button>
+            <button
+              type="button"
+              class="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600 hover:bg-red-100"
+              @click="removeColumn(column.key)"
+              title="刪除列"
+            >
+              ✕
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="invalidColumns.length > 0 && !node.table?.customHeaders" class="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+      <p class="text-xs font-bold text-red-600 mb-2 flex items-center gap-1">
+        <span>⚠️</span> 發現失效欄位 (已從 Schema 中移除)
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <div v-for="col in invalidColumns" :key="col.key" class="flex items-center gap-1 bg-white border border-red-200 rounded px-2 py-1 text-xs text-red-600 shadow-sm">
+          <span class="line-through truncate max-w-[150px] inline-block align-middle" :title="col.label || col.key">{{ col.label || col.key }}</span>
+          <button type="button" class="ml-1 text-red-400 hover:text-red-700 font-bold" @click="removeColumn(col.key)" title="移除失效欄位">✕</button>
         </div>
       </div>
     </div>
@@ -71,17 +94,17 @@
         <label
           v-for="option in getNodeColumnCandidates(node)"
           :key="option.key"
-          class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+          class="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm min-w-0 overflow-hidden"
         >
           <input
             type="checkbox"
             :checked="
               node.table?.columns?.some((column) => column.key === option.key)
             "
-            class="h-4 w-4 rounded border-slate-300"
+            class="h-4 w-4 shrink-0 rounded border-slate-300"
             @change="handleColumnToggle(option, $event)"
           />
-          <span class="truncate">{{ option.label }} ({{ option.key }})</span>
+          <span class="truncate" :title="`${option.label} (${option.key})`">{{ option.label }} ({{ option.key }})</span>
         </label>
       </div>
       <p
@@ -95,6 +118,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { createWordSchemaPathHelpers } from "~/composables/template-manager/useWordSchemaPath";
 import type { WordDocumentNode, WordTableColumn } from "~/types/wordExport";
 
@@ -138,6 +162,19 @@ function getNodeColumnCandidates(node: WordDocumentNode) {
   if (!node.sectionId) return [];
   return getColumnCandidates(node.sectionId, node.dataPath);
 }
+
+const validColumnKeys = computed(() => {
+  return getNodeColumnCandidates(props.node).map(c => c.key);
+});
+
+function isColumnValid(key: string) {
+  return validColumnKeys.value.includes(key);
+}
+
+const invalidColumns = computed(() => {
+  if (!props.node.table?.columns) return [];
+  return props.node.table.columns.filter(col => !isColumnValid(col.key));
+});
 
 // 確保節點具有 table 與 columns 結構。
 function ensureTableConfig(node: WordDocumentNode) {
@@ -188,6 +225,14 @@ function moveTableColumn(columnIndex: number, direction: "up" | "down") {
     if (!current || !target) return;
     columns[columnIndex] = target;
     columns[newIndex] = current;
+  });
+}
+
+// 移除單個欄位（不論是自定義標題還是一般勾選）
+function removeColumn(keyToRemove: string) {
+  emit("update", props.node.id, (node) => {
+    const table = ensureTableConfig(node);
+    table.columns = table.columns.filter((col) => col.key !== keyToRemove);
   });
 }
 

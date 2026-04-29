@@ -268,10 +268,10 @@ onMounted(async () => {
     await fetchAllConfigs(); // Fetch configs for Batch modal
     await fetchDrafts();
     realtimeChannel = supabase
-      .channel("public:draft_plans")
+      .channel("ai_proposal_platform:draft_plans")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "draft_plans" },
+        { event: "*", schema: "ai_proposal_platform", table: "draft_plans" },
         () => {
           fetchDrafts();
         },

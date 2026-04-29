@@ -18,15 +18,22 @@ router = APIRouter(
 
 @router.get("/config", response_model=List[GrantConfig])
 async def get_all_configs(
+    request: Request,
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     """
-    直接從 Supabase 讀取 Grant、Template、Section 的最新配置，避免使用 app state 快取。
+    從 app.state 已快取的 Grant/Template/Section 配置回傳。
+    template_manager 會在管理員修改時自動刷新此快取，因此快取與 DB 內容保持同步。
+    若快取尚未建立（極少見的啟動競態），則退回直接從 Supabase 取得以保持服務韌性。
     """
     try:
+        cached = getattr(request.app.state, "all_grants_config", None)
+        if cached:
+            return cached
+        # 退路：app.state 快取尚未填充時直接從 Supabase 取得（防禦性程式碼）
         return await supabase_service.get_all_grants_config()
     except Exception as e:
-        logger.error(f"Failed to retrieve configurations from Supabase: {e}", exc_info=True)
+        logger.error(f"Failed to retrieve configurations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching configurations.")
 
 @router.get("/datasets-lifecycle", response_model=List[Dict[str, Any]])

@@ -11,7 +11,12 @@
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
         <label class="flex-1 space-y-1 text-sm text-slate-600">
-          <span class="text-xs font-semibold text-slate-500"> 節點類型 </span>
+          <span class="text-xs font-semibold text-slate-500">
+            節點類型
+            <span v-if="isSectionOutdated" class="ml-2 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10">
+              ⚠️ 遺失章節資料
+            </span>
+          </span>
           <select
             :value="node.type"
             class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
@@ -96,7 +101,7 @@
         <select
           v-if="node.paragraphNumbering"
           :value="node.paragraphNumberStyle"
-          class="rounded-xl border border-slate-200 px-3 py-1 text-xs"
+          class="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 py-1 text-xs"
           @change="handleParagraphNumberStyleChange"
         >
           <option
@@ -242,7 +247,6 @@
     <div
       v-if="node.children?.length"
       class="space-y-3"
-      :style="{ marginLeft: '12px' }"
     >
       <RecursiveNodeEditor
         v-for="childNode in node.children"
@@ -270,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { onMounted, watch, computed } from "vue";
 import type { PropType } from "vue";
 import {
   createCustomTableNodeHelpers,
@@ -347,14 +351,19 @@ const props = defineProps({
 
 // 對外事件：更新節點、刪除節點、新增子節點。
 const emit = defineEmits<{
-  (
-    e: "update",
-    nodeId: string,
-    updater: (node: WordDocumentNode) => void,
-  ): void;
+  (e: "update", nodeId: string, updater: (n: WordDocumentNode) => void): void;
   (e: "remove", nodeId: string): void;
-  (e: "add-child", nodeId: string): void;
+  (
+    e: "add-child",
+    parentId: string,
+    factory: (parentId: string, sectionId?: string) => WordDocumentNode,
+  ): void;
 }>();
+
+const isSectionOutdated = computed(() => {
+  if (!props.node.sectionId) return false;
+  return !props.sections.some(s => s.id === props.node.sectionId);
+});
 
 // 路徑工具：取得當前節點可用欄位候選。
 const { getColumnCandidates } = createWordSchemaPathHelpers(
@@ -467,6 +476,12 @@ function handleTypeChange(event: Event) {
       delete node.customTable;
     } else {
       ensureCustomTableConfig(node);
+    }
+    // 從 sectionTitle 改為其他型別時，清除 chapterMarker 避免殘留旗標
+    // 導致 syncMissingSections() 錯誤地將此節點視為章節起始點而切斷區塊。
+    if (node.type !== "sectionTitle") {
+      delete node.chapterMarker;
+      delete node.chapterTitle;
     }
     if (!shouldShowSectionSelectors(node)) {
       node.sectionId = "";

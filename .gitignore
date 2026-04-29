@@ -31,6 +31,9 @@ STATUS.md
 to-do-list.txt
 test-server-setup.md
 Stress-Test-Proposal.md
+database-backup-migrate-schema.md
+stress-tests/
+docs/
 
 # Virtual Environment
 .venv/
@@ -43,4 +46,4 @@ __pycache__/
 
 # Other common ignores
 .vscode/
-stress-tests/
+

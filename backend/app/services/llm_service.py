@@ -358,11 +358,14 @@ class LLMService:
             limit=3
         )
         if not exemplars:
+            logger.info(f"[Few-Shot] Section '{section_details.id}': no exemplars retrieved, skipping few-shot injection")
             return ""
         
+        exemplar_ids = [ex.get('id') for ex in exemplars]
+        logger.info(f"[Few-Shot] Section '{section_details.id}': formatting {len(exemplars)} exemplars (IDs={exemplar_ids}) for prompt injection")
+
         formatted_examples = []
         for ex in exemplars:
-            prompt = ex.get('prompt', '')
             answer = json.dumps(ex.get('final_answer', {}), ensure_ascii=False)
             formatted_examples.append(f"{answer}")
         
@@ -378,7 +381,9 @@ class LLMService:
 
 【結構參考範例】
 """
-        return few_shot_warning + "\n\n---\n\n".join(formatted_examples) + "\n\n【現在根據上述格式，為當前用戶生成新的、原創的內容】\n\n"
+        result = few_shot_warning + "\n\n---\n\n".join(formatted_examples) + "\n\n【現在根據上述格式，為當前用戶生成新的、原創的內容】\n\n"
+        logger.info(f"[Few-Shot] Section '{section_details.id}': few-shot string built ({len(result):,} chars)")
+        return result
 
     def _build_api_request(
         self, 
@@ -970,14 +975,19 @@ class LLMService:
         enable_grounding = section_grounding_enabled and model_to_use.get("provider") in {"openai", "gemini"}
 
         few_shot_str = ""
-        if not disable_few_shot:
+        if disable_few_shot:
+            logger.info(f"[Few-Shot] Section '{section_details.id}': disabled (revision mode)")
+        else:
             few_shot_str = await self._format_few_shot_examples(
                 user_input, section_details, supabase_service
             )
 
         user_content_parts = []
         if few_shot_str:
+            logger.info(f"[Few-Shot] Section '{section_details.id}': injecting few-shot examples into prompt")
             user_content_parts.append(few_shot_str.strip())
+        elif not disable_few_shot:
+            logger.info(f"[Few-Shot] Section '{section_details.id}': no examples available, proceeding without few-shot")
         user_content_parts.append(f"用户需求: {user_input}")
         if section_context:
             user_content_parts.append(

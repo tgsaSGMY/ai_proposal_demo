@@ -140,6 +140,38 @@ export function createWordSchemaPathHelpers(
     return candidates;
   }
 
+  function isValidDataPath(
+    sectionId: string,
+    path?: string,
+  ): boolean {
+    const base = getSectionSchema(sectionId);
+    if (!base) return false;
+    if (!path) return true; // empty path means the whole section
+
+    const pathParts = path.split(".");
+    let current: Record<string, SchemaField> = base;
+
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+      const schema = current[part];
+      if (!schema) return false;
+
+      // If this is the last part, we found it, so it's valid
+      if (i === pathParts.length - 1) return true;
+
+      // Otherwise, we need to dig deeper
+      if (schema.type === "object" && schema.properties) {
+        current = schema.properties;
+      } else if (schema.type === "array" && schema.items?.properties) {
+        current = schema.items.properties;
+      } else {
+        return false; // Can't dig deeper
+      }
+    }
+
+    return true;
+  }
+
   return {
     getSectionSchema,
     getPropertySchema,
@@ -148,5 +180,6 @@ export function createWordSchemaPathHelpers(
     getDataPathLevels,
     canNestDeeper,
     getColumnCandidates,
+    isValidDataPath,
   };
 }

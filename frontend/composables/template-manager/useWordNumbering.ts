@@ -56,7 +56,10 @@ export function formatHeadingPrefix(
   style?: WordListStyle,
 ): string {
   const rawLevel = level || 2;
-  const effectiveLevel = style ? getImplicitLevelFromStyle(style) : rawLevel;
+
+  // 始終使用節點的實際結構層級來追蹤計數器。
+  // style 僅決定格式 (中文、阿拉伯數字、括號)，不會覆蓋計數器桶。
+  const effectiveLevel = rawLevel;
 
   state[effectiveLevel] = (state[effectiveLevel] ?? 0) + 1;
 
@@ -69,6 +72,7 @@ export function formatHeadingPrefix(
 
   const count = state[effectiveLevel];
 
+  // 使用 style 決定格式，若無 style 則依層級預設格式
   if (style) {
     switch (style) {
       case "chineseNumber":
@@ -117,9 +121,7 @@ export function getListBulletLabel(
 }
 
 export function resolveParagraphEffectiveLevel(node: WordDocumentNode): number {
-  if (node.paragraphNumberStyle) {
-    return getImplicitLevelFromStyle(node.paragraphNumberStyle);
-  }
+  // 始終使用節點的實際層級，不再讓 style 覆蓋層級
   return node.level ?? 3;
 }
 
