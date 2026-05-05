@@ -50,15 +50,20 @@ THROTTLING_VIP_PROJECTS = 5
 THROTTLING_NORMAL_IMAGES = 5
 THROTTLING_VIP_IMAGES = 16
 
-# External OAuth provider settings
+# External OAuth provider & Mother Platform settings
 EXTERNAL_OAUTH_ENABLED = True
 EXTERNAL_OAUTH_PROVIDER = os.getenv("EXTERNAL_OAUTH_PROVIDER", "tgsa_oauth")
 EXTERNAL_OAUTH_CLIENT_ID = os.getenv("EXTERNAL_OAUTH_CLIENT_ID", "")
 EXTERNAL_OAUTH_CLIENT_SECRET = os.getenv("EXTERNAL_OAUTH_CLIENT_SECRET", "")
-EXTERNAL_OAUTH_AUTHORIZE_URL = os.getenv("EXTERNAL_OAUTH_AUTHORIZE_URL", "")
-EXTERNAL_OAUTH_TOKEN_URL = os.getenv("EXTERNAL_OAUTH_TOKEN_URL", "")
-EXTERNAL_OAUTH_USERINFO_URL = os.getenv("EXTERNAL_OAUTH_USERINFO_URL", "")
 EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL = os.getenv("EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL", "http://localhost:3000/external-auth-callback")
+
+# 基底 URL 統一設定
+MOTHER_PLATFORM_BASE_URL = os.getenv("MOTHER_PLATFORM_BASE_URL", "https://portal.tgsaapp.com").rstrip("/")
+
+# OAuth 與 API URLs 皆從 MOTHER_PLATFORM_BASE_URL 衍生，保持 config 簡潔
+EXTERNAL_OAUTH_AUTHORIZE_URL = f"{MOTHER_PLATFORM_BASE_URL}/oauth/authorize"
+EXTERNAL_OAUTH_TOKEN_URL = f"{MOTHER_PLATFORM_BASE_URL}/oauth/token"
+EXTERNAL_OAUTH_USERINFO_URL = f"{MOTHER_PLATFORM_BASE_URL}/api/user"
 
 # ----------------------------------------------------------------------------
 # Mother Platform Engine Usage Reporting (Outbound)
@@ -70,8 +75,6 @@ EXTERNAL_OAUTH_FRONTEND_CALLBACK_URL = os.getenv("EXTERNAL_OAUTH_FRONTEND_CALLBA
 # 看到的數字，不會影響我們的任何核心流程。
 ENGINE_USAGE_ENABLED = os.getenv("ENGINE_USAGE_ENABLED", "true").lower() in {"1", "true", "yes"}
 
-# 母平台基底 URL；登入用的 EXTERNAL_OAUTH_TOKEN_URL/AUTHORIZE_URL 已存在。
-MOTHER_PLATFORM_BASE_URL = os.getenv("MOTHER_PLATFORM_BASE_URL", "https://portal.tgsaapp.com").rstrip("/")
 ENGINE_USAGE_REPORT_URL = f"{MOTHER_PLATFORM_BASE_URL}/api/engine-usage/report"
 ENGINE_USAGE_STATUS_URL = f"{MOTHER_PLATFORM_BASE_URL}/api/engine-usage/status"
 

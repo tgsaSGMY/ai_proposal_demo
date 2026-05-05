@@ -16,9 +16,6 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
 from app.config import (
     ENGINE_USAGE_TOKEN_REFRESH_LEEWAY_SECONDS,
@@ -28,6 +25,7 @@ from app.config import (
     EXTERNAL_OAUTH_TOKEN_URL,
 )
 from app.services.supabase_service import SupabaseService
+from app.utils.http_client import post_form
 
 logger = logging.getLogger(__name__)
 
@@ -60,22 +58,6 @@ def _is_expiring_soon(expires_at_iso: str) -> bool:
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
     return ts <= (_now_utc() + timedelta(seconds=ENGINE_USAGE_TOKEN_REFRESH_LEEWAY_SECONDS))
-
-
-def _post_form(url: str, payload: Dict[str, Any], timeout: int = 15) -> Dict[str, Any]:
-    body = urlencode(payload).encode("utf-8")
-    req = Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    with urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -222,16 +204,10 @@ async def _refresh_with_mother(refresh_token: str) -> Optional[Dict[str, Any]]:
     }
 
     def _do_post():
-        return _post_form(EXTERNAL_OAUTH_TOKEN_URL, payload)
+        return post_form(EXTERNAL_OAUTH_TOKEN_URL, payload)
 
     try:
         return await asyncio.to_thread(_do_post)
-    except HTTPError as exc:
-        logger.warning("Mother token refresh HTTP %s: %s", exc.code, exc.reason)
-        return None
-    except URLError as exc:
-        logger.warning("Mother token refresh URL error: %s", exc.reason)
-        return None
     except Exception as exc:
         logger.warning("Mother token refresh unexpected error: %s", exc)
         return None

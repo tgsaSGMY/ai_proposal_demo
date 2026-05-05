@@ -26,8 +26,6 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from app.config import (
     ENGINE_USAGE_BLOCK_CACHE_TTL_SECONDS,
@@ -43,6 +41,7 @@ from app.config import (
 from app.services import mother_token_storage
 from app.services.provider_model_mapper import map_to_mother_provider_model
 from app.services.supabase_service import SupabaseService
+from app.utils.http_client import post_json, get_json_with_bearer
 
 logger = logging.getLogger(__name__)
 
@@ -192,66 +191,6 @@ async def _mark_reported(
 
 
 # ---------------------------------------------------------------------------
-# HTTP call to mother
-# ---------------------------------------------------------------------------
-
-
-def _post_json(
-    url: str,
-    body: Dict[str, Any],
-    bearer_token: str,
-    timeout: int,
-) -> Tuple[int, Dict[str, Any]]:
-    """同步呼叫；外層用 asyncio.to_thread 包住。"""
-    data = json.dumps(body).encode("utf-8")
-    headers = {
-        "Authorization": f"Bearer {bearer_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    req = Request(url, data=data, headers=headers, method="POST")
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8") or "{}"
-            return resp.status, json.loads(raw)
-    except HTTPError as exc:
-        raw = ""
-        try:
-            raw = exc.read().decode("utf-8")
-        except Exception:
-            pass
-        try:
-            payload = json.loads(raw) if raw else {}
-        except Exception:
-            payload = {"error": raw}
-        return exc.code, payload
-
-
-def _get_json(url: str, bearer_token: str, timeout: int) -> Tuple[int, Dict[str, Any]]:
-    headers = {
-        "Authorization": f"Bearer {bearer_token}",
-        "Accept": "application/json",
-    }
-    req = Request(url, headers=headers, method="GET")
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8") or "{}"
-            return resp.status, json.loads(raw)
-    except HTTPError as exc:
-        raw = ""
-        try:
-            raw = exc.read().decode("utf-8")
-        except Exception:
-            pass
-        try:
-            payload = json.loads(raw) if raw else {}
-        except Exception:
-            payload = {"error": raw}
-        return exc.code, payload
-
-
-# ---------------------------------------------------------------------------
 # Main report path
 # ---------------------------------------------------------------------------
 
@@ -355,15 +294,13 @@ async def report_for_usage_log_id(
         return
 
     def _do_post():
-        return _post_json(
+        return post_json(
             ENGINE_USAGE_REPORT_URL, body, access_token,
             timeout=ENGINE_USAGE_TIMEOUT_SECONDS,
         )
 
     try:
         status_code, resp_body = await asyncio.to_thread(_do_post)
-    except URLError as exc:
-        status_code, resp_body = -1, {"error": f"url_error: {exc.reason}"}
     except Exception as exc:
         status_code, resp_body = -1, {"error": f"unexpected: {exc}"}
 
@@ -477,7 +414,7 @@ async def refresh_user_block_state(
         return None
 
     def _do():
-        return _get_json(ENGINE_USAGE_STATUS_URL, token, ENGINE_USAGE_TIMEOUT_SECONDS)
+        return get_json_with_bearer(ENGINE_USAGE_STATUS_URL, token, ENGINE_USAGE_TIMEOUT_SECONDS)
 
     try:
         status_code, body = await asyncio.to_thread(_do)
