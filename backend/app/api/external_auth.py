@@ -23,6 +23,7 @@ from app.config import (
     EXTERNAL_OAUTH_USERINFO_URL,
 )
 from app.core.app_jwt import create_app_access_token
+from app.services import mother_token_storage
 from app.services.supabase_service import SupabaseService
 
 router = APIRouter(prefix="/api/external-auth", tags=["ExternalAuth"])
@@ -225,6 +226,20 @@ async def external_oauth_callback(
         email=profile.get("email"),
         role=profile.get("role"),
     )
+
+    # 持久化母平台 access/refresh token 給 engine_usage_reporter 使用。
+    # 失敗只記 log，不擋登入流程（mirror mode：母平台斷線不影響使用者登入）。
+    try:
+        await mother_token_storage.store_token(
+            supabase_service=supabase_service,
+            user_id=canonical_user["id"],
+            access_token=access_token,
+            refresh_token=token_payload.get("refresh_token"),
+            expires_in=token_payload.get("expires_in"),
+            scope=token_payload.get("scope"),
+        )
+    except Exception:
+        logger.exception("Failed to persist mother OAuth token; engine usage reporting may skip this user")
 
     app_token = create_app_access_token(
         subject=canonical_user["id"],

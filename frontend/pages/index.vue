@@ -25,22 +25,44 @@
             </p>
           </div>
 
-          <div class="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div class="mt-8 grid auto-rows-fr gap-5 p-1 md:grid-cols-2 xl:grid-cols-3">
             <button
               v-for="plan in planTypes"
               :key="plan.id"
-              class="flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition"
+              class="relative flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:outline-none"
               :disabled="isPlanLocked(plan)"
               :class="[
                 isPlanLocked(plan)
                   ? 'cursor-not-allowed border-amber-200 bg-amber-50 opacity-80'
                   : isPlanSelected(plan)
-                    ? 'border-2 border-rose-400 shadow-lg shadow-rose-100'
+                    ? 'ring-2 ring-rose-400 ring-offset-2'
                     : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]',
               ]"
               @click="handlePlanClick(plan)"
             >
-              <div class="flex items-start justify-between gap-3">
+              <!-- 鎖定狀態指示圖示：右上角小型鎖頭，比文字更快被識別 -->
+              <span
+                v-if="isPlanLocked(plan)"
+                class="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+                aria-hidden="true"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="2"
+                  stroke="currentColor"
+                  class="h-4 w-4"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+                  />
+                </svg>
+              </span>
+
+              <div class="flex items-start justify-between gap-3 text-left">
                 <span
                   class="inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
                   :style="{ backgroundColor: plan.iconBg }"
@@ -71,35 +93,37 @@
                 </div>
               </div>
 
-              <h3
-                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
-              >
-                {{ plan.mainTitle }}
-              </h3>
-              <p
-                v-if="plan.bracketedTitle"
-                class="mt-2 text-xl font-semibold leading-tight text-[#111b3f]"
-              >
-                【{{ plan.bracketedTitle }}】
-              </p>
-              <p
-                v-if="plan.subtitle"
-                class="mt-3 text-sm font-semibold text-[#7d86ad]"
-              >
-                {{ plan.subtitle }}
-              </p>
-              <p
-                v-if="plan.description"
-                class="mt-1 text-xs text-[#8f98be]"
-              >
-                {{ plan.description }}
-              </p>
-              <p
-                v-if="isPlanLocked(plan)"
-                class="mt-2 text-xs font-semibold text-amber-700"
-              >
-                升級付費會員，立即開通此計畫
-              </p>
+              <div class="mt-2 flex-1">
+                <h3
+                  class="text-xl font-bold leading-tight text-slate-900"
+                >
+                  {{ plan.mainTitle }}
+                </h3>
+                <p
+                  v-if="plan.bracketedTitle"
+                  class="mt-2 text-xl font-bold leading-tight text-slate-900"
+                >
+                  【{{ plan.bracketedTitle }}】
+                </p>
+                <p
+                  v-if="plan.subtitle"
+                  class="mt-3 text-base font-semibold text-slate-700"
+                >
+                  {{ plan.subtitle }}
+                </p>
+                <p
+                  v-if="plan.description"
+                  class="mt-1 text-xs leading-relaxed text-slate-400"
+                >
+                  {{ plan.description }}
+                </p>
+                <p
+                  v-if="isPlanLocked(plan)"
+                  class="mt-2 text-xs font-semibold text-amber-700"
+                >
+                  升級付費會員，立即開通此計畫
+                </p>
+              </div>
             </button>
           </div>
 

@@ -38,7 +38,7 @@
               <p
                 class="text-xs font-semibold uppercase tracking-wide text-gray-400"
               >
-                全部指令
+                全部資料
               </p>
               <p class="text-2xl font-semibold text-gray-900">
                 {{ stats.total }}
@@ -48,45 +48,18 @@
         </div>
       </header>
 
-      <!-- 標籤篩選區：切換查看所有 / 系統 / 企業指令 -->
-      <section
-        class="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm"
-      >
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="tab in tabs"
-            :key="tab.value"
-            class="rounded-2xl px-4 py-2 text-sm font-semibold transition"
-            :class="
-              tab.value === activeTab
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
-            "
-            @click="setTab(tab.value)"
-          >
-            {{ tab.label }} ({{ tab.count }})
-          </button>
-        </div>
-      </section>
-
-      <!-- 搜尋與新增區：可搜尋指令或建立新指令 -->
-      <div
-        class="flex flex-col gap-3 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
-      >
-        <div class="relative w-full md:max-w-md">
-          <input
-            v-model="searchTerm"
-            type="text"
-            class="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 pl-10 text-sm text-gray-700 outline-none focus:border-indigo-400 focus:bg-white"
-            placeholder="搜尋指令標題..."
-          />
+      <!-- 搜尋區：可搜尋背景資料（單一輸入框，無外層卡片） -->
+      <div class="relative w-full md:max-w-2xl">
+        <span
+          class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
-            stroke-width="1.5"
+            stroke-width="2"
             stroke="currentColor"
-            class="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+            class="h-5 w-5"
           >
             <path
               stroke-linecap="round"
@@ -94,28 +67,49 @@
               d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 105.25 5.25a7.5 7.5 0 0011.4 11.4z"
             />
           </svg>
-        </div>
-        <button
-          class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
-          @click="handleCreateCommand"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            class="h-4 w-4"
+        </span>
+        <input
+          v-model="searchTerm"
+          type="text"
+          aria-label="搜尋背景資料"
+          class="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 pl-11 pr-11 text-sm text-gray-700 shadow-sm outline-none transition placeholder:text-gray-400 hover:border-gray-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+          placeholder="搜尋背景資料..."
+        />
+          <button
+            v-if="searchTerm"
+            type="button"
+            aria-label="清除搜尋"
+            class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+            @click="searchTerm = ''"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M12 6v12m6-6H6"
-            />
-          </svg>
-          新增指令
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              class="h-4 w-4"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+      <!-- 💡 提示：使用前需開啟下方卡片的「啟用」開關，AI 才會自動代入背景資料 -->
+      <div
+        class="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"
+        role="note"
+      >
+        <span class="text-sm leading-none">💡</span>
+        <p class="flex-1 leading-relaxed">
+          提示：請確認已開啟下方資料卡的【啟用】開關。只有處於啟用狀態的內容，AI 才會在撰寫計劃書時自動代入您的企業背景資料。
+        </p>
       </div>
+
       <p
         v-if="isLoadingCommands"
         class="text-xs font-semibold uppercase tracking-wide text-gray-400"
@@ -134,12 +128,12 @@
               <span
                 class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
                 :class="
-                  command.isCompany
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-sky-50 text-sky-600'
+                  isSystemDefault(command)
+                    ? 'bg-sky-50 text-sky-600'
+                    : 'bg-emerald-50 text-emerald-600'
                 "
               >
-                {{ command.isCompany ? "企業 DNA" : "系統預設" }}
+                {{ isSystemDefault(command) ? "系統預設" : "自定義" }}
               </span>
               <h3 class="text-lg font-semibold text-gray-900">
                 {{ command.title }}
@@ -246,11 +240,9 @@
               />
             </svg>
           </span>
-          <span class="text-base font-semibold text-gray-600"
-            >新增自訂指令</span
-          >
-          <span class="mt-1 text-sm text-gray-400">
-            建立新的策略說明，馬上指向企業規範
+          <span class="text-base font-semibold text-gray-600">新增</span>
+          <span class="mt-3 text-sm text-gray-400">
+            新增背景資料，讓計畫書更符合您的企業需求。
           </span>
         </button>
       </section>
@@ -328,20 +320,24 @@ interface SupabaseCommandRow {
   is_company: boolean;
 }
 
-type CommandTab = "all" | "system" | "company";
-
 // 預設指令：若使用者尚未建立任何指令，系統會 seed 一組預設項目供快速開始
 const DEFAULT_COMMANDS = [
   { title: "公司基本資料與資訊庫", isCompany: true },
   { title: "公司商業策略與機會", isCompany: true },
   { title: "企業 ESG 規範", isCompany: false },
   { title: "專用名詞庫", isCompany: false },
-  { title: "工程師提問模組", isCompany: true },
 ] as const;
+
+const DEFAULT_TITLES = new Set(
+  DEFAULT_COMMANDS.map((item) => item.title)
+);
+
+function isSystemDefault(command: CommandItem): boolean {
+  return DEFAULT_TITLES.has(command.title);
+}
 
 // 資料與 UI 狀態變數
 const commands = ref<CommandItem[]>([]); // 指令列表
-const activeTab = ref<CommandTab>("all"); // 目前分頁（all, system, company）
 const searchTerm = ref(""); // 搜尋關鍵字
 const menuOpenId = ref<string | null>(null); // 打開的卡片操作選單 id
 const isEditModalOpen = ref(false); // 編輯 modal 顯示狀態
@@ -349,7 +345,6 @@ const editingCommand = ref<{
   id?: string;
   title: string;
   description: string;
-  isCompany: boolean;
 } | null>(null); // 正在編輯的指令
 const pendingEnableCommandId = ref<string | null>(null); // 由啟用流程觸發編輯時，儲存後需自動啟用的指令 id
 const { confirm } = useConfirm();
@@ -387,26 +382,6 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-const tabCounts = computed(() => ({
-  all: commands.value.length,
-  system: commands.value.filter((item) => !item.isCompany).length,
-  company: commands.value.filter((item) => item.isCompany).length,
-}));
-
-const tabs = computed(() => [
-  { label: "所有指令", value: "all" as CommandTab, count: tabCounts.value.all },
-  {
-    label: "系統規則邏輯",
-    value: "system" as CommandTab,
-    count: tabCounts.value.system,
-  },
-  {
-    label: "企業專屬 DNA",
-    value: "company" as CommandTab,
-    count: tabCounts.value.company,
-  },
-]);
-
 const stats = computed(() => ({
   active: commands.value.filter((item) => item.isOpen).length,
   total: commands.value.length,
@@ -414,24 +389,10 @@ const stats = computed(() => ({
 
 const filteredCommands = computed(() => {
   return commands.value.filter((command) => {
-    const matchesTab =
-      activeTab.value === "all" ||
-      (activeTab.value === "system" && !command.isCompany) ||
-      (activeTab.value === "company" && command.isCompany);
     const keyword = searchTerm.value.trim().toLowerCase();
-    const matchesKeyword =
-      !keyword || command.title.toLowerCase().includes(keyword);
-    return matchesTab && matchesKeyword;
+    return !keyword || command.title.toLowerCase().includes(keyword);
   });
 });
-
-/**
- * 切換指令分頁篩選
- * @param value - 分頁類型 ('all' - 所有指令, 'system' - 系統規則, 'company' - 企業專屬)
- */
-function setTab(value: CommandTab) {
-  activeTab.value = value;
-}
 
 /**
  * 切換指定指令卡片的操作選單開關狀態
@@ -453,7 +414,6 @@ function openEdit(
     id: command.id,
     title: command.title,
     description: command.description,
-    isCompany: command.isCompany,
   };
   pendingEnableCommandId.value = options?.enableAfterSave ? command.id : null;
   isEditModalOpen.value = true;
@@ -475,13 +435,12 @@ function closeEditModal() {
  * - 檢查標題與描述不可為空
  * - 呼叫 Supabase 執行 INSERT（新增）或 UPDATE（更新）
  * - 成功後重新載入指令列表並關閉 modal
- * @param payload - 指令數據物件，包含 id（編輯時）、title、description、isCompany
+ * @param payload - 指令數據物件，包含 id（編輯時）、title、description
  */
 async function handleSave(payload: {
   id?: string;
   title: string;
   description: string;
-  isCompany: boolean;
 }) {
   if (!userId.value) {
     notifyWarning("請先登入後再儲存指令");
@@ -491,7 +450,6 @@ async function handleSave(payload: {
   const normalized = {
     title: payload.title.trim(),
     description: payload.description.trim(),
-    is_company: payload.isCompany,
   };
 
   if (!normalized.title || !normalized.description) {
@@ -563,7 +521,7 @@ async function handleDelete(command: CommandItem) {
 /**
  * 建立新指令：初始化編輯表單並打開 modal
  * - 清空編輯表單的所有欄位
- * - 設定預設值（企業 DNA 類型為 false）
+ * - 初始化空白表單
  * - 打開編輯 modal
  */
 function handleCreateCommand() {
@@ -571,7 +529,6 @@ function handleCreateCommand() {
   editingCommand.value = {
     title: "",
     description: "",
-    isCompany: false,
   };
   isEditModalOpen.value = true;
 }

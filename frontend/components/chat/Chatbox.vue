@@ -99,6 +99,39 @@
         </div>
 
         <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
+          <Transition
+            enter-active-class="transition duration-200"
+            enter-from-class="opacity-0 -translate-y-1"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-150"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <div
+              v-if="showGenerationHint"
+              class="mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"
+              role="note"
+            >
+              <span class="text-sm leading-none">💡</span>
+              <p class="flex-1 leading-relaxed">
+                提醒：若對特定題目的回答未達預期，請輸入 【該題目標題】 並加上 【請重新回答】，系統將重新提供作答內容。
+              </p>
+              <button
+                type="button"
+                class="ml-2 rounded-full p-1 text-amber-500 transition hover:bg-amber-100 hover:text-amber-700"
+                aria-label="關閉提醒"
+                @click="showGenerationHint = false"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     class="h-4 w-4">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </Transition>
+
           <div class="relative">
             <textarea
               ref="composerRef"
@@ -364,6 +397,7 @@ const editFieldQuestionId = ref(null);
 const isRecommendModalOpen = ref(false);
 const recommendOptions = ref([]);
 const isFetchingRecommend = ref(false);
+const showGenerationHint = ref(false);
 const lastCandidateSnapshot = ref("{}");
 const lastFinalSnapshot = ref("{}");
 const isCandidateSelectorVisible = ref(false);
@@ -978,6 +1012,8 @@ async function requestGeneration() {
       return;
     }
   }
+
+  showGenerationHint.value = true;
 
   // Fetch recommendations and show modal instead of directly generating
   isFetchingRecommend.value = true;

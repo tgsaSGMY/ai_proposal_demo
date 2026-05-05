@@ -3,10 +3,7 @@
     <header
       class="md:hidden bg-white text-gray-900 flex items-center justify-between px-4 py-3 border-b border-gray-200 sticky top-0 z-40"
     >
-      <div class="font-semibold text-lg">
-        TGSA補助引擎
-        <span class="text-xs text-gray-400 align-top">PRO ENTERPRISE</span>
-      </div>
+      <img src="/AI補助引擎_Logo_留邊.png" alt="AI 補助引擎" class="h-8 w-auto pointer-events-none select-none" />
       <button @click="showSidebar = !showSidebar" class="focus:outline-none">
         <svg
           v-if="!showSidebar"
@@ -45,7 +42,8 @@
       :class="[
         showSidebar ? 'block' : 'hidden',
         'md:block',
-        'w-full md:w-72 lg:w-80 flex-shrink-0 bg-white border-r border-gray-100 shadow-sm',
+        'w-full flex-shrink-0 bg-white border-r border-gray-100 shadow-sm transition-[width] duration-200',
+        isSidebarCollapsed ? 'md:w-20' : 'md:w-72 lg:w-80',
         showSidebar
           ? 'fixed top-0 left-0 h-full z-50 overflow-y-auto md:static md:h-screen'
           : 'md:sticky md:top-0 md:h-screen md:overflow-y-auto md:z-30',
@@ -56,10 +54,7 @@
         v-if="showSidebar"
         class="md:hidden sticky top-0 bg-white z-50 flex items-center justify-between px-4 py-3 border-b border-gray-200"
       >
-        <div class="font-semibold text-lg">
-          TGSA補助引擎
-          <span class="text-xs text-gray-400 align-top">PRO ENTERPRISE</span>
-        </div>
+        <img src="/AI補助引擎_Logo_留邊.png" alt="AI 補助引擎" class="h-8 w-auto pointer-events-none select-none" />
         <button @click="showSidebar = false" class="focus:outline-none">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -78,28 +73,59 @@
         </button>
       </div>
 
-      <div class="flex h-full flex-col p-5 md:p-6">
-        <div class="flex items-center gap-3 px-2">
-          <div class="h-11 w-11 rounded-2xl overflow-hidden">
+      <div
+        class="flex h-full flex-col p-5"
+        :class="isSidebarCollapsed ? 'md:p-3' : 'md:p-6'"
+      >
+        <!--
+          側邊欄頂端：品牌 logo + 收合切換按鈕
+          - 展開模式：logo 與切換按鈕並排（logo 左，按鈕右）
+          - 收合模式：logo 置中，下方顯示切換按鈕（icon-only rail）
+          切換按鈕僅在 md+ 顯示，移動端使用既有的 showSidebar 開關。
+        -->
+        <div
+          class="flex items-center px-2"
+          :class="isSidebarCollapsed ? 'md:flex-col md:gap-2 md:px-0' : 'gap-2 justify-between'"
+        >
+          <div
+            class="flex flex-col min-w-0"
+            :class="isSidebarCollapsed ? 'md:items-center md:w-full' : 'items-start'"
+          >
             <img
-              src="/logo.png"
-              alt="TGSA 補助引擎"
-              class="h-full w-full object-cover"
+              :src="
+                isSidebarCollapsed
+                  ? '/AI補助引擎.png'
+                  : '/AI補助引擎_Logo_留邊.png'
+              "
+              alt="AI 補助引擎"
+              class="pointer-events-none select-none max-w-full"
+              :class="isSidebarCollapsed ? 'h-7 w-auto' : 'h-14 w-auto'"
             />
+            <p
+              v-if="isInternal && !isSidebarCollapsed"
+              class="mt-2 text-[11px] uppercase tracking-wide text-gray-400"
+            >
+              内部人員版本
+            </p>
           </div>
 
-          <div>
-            <p class="text-lg font-semibold text-gray-900">TGSA補助引擎</p>
-            <p
-              v-if="isInternal"
-              class="text-xs uppercase tracking-wide text-gray-400"
-            >
-              PRO ENTERPRISE (内部人員版本)
-            </p>
-            <p v-else class="text-xs uppercase tracking-wide text-gray-400">
-              PRO ENTERPRISE
-            </p>
-          </div>
+          <!-- 收合 / 展開切換按鈕（僅桌面端顯示） -->
+          <button
+            type="button"
+            class="hidden md:inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white text-gray-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+            :title="isSidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
+            :aria-label="isSidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
+            @click="toggleSidebarCollapsed"
+          >
+            <Icon
+              :name="
+                isSidebarCollapsed
+                  ? 'tabler:layout-sidebar-left-expand'
+                  : 'tabler:layout-sidebar-left-collapse'
+              "
+              class="h-4 w-4"
+            />
+          </button>
         </div>
 
         <nav class="mt-8 flex-1" aria-label="主選單">
@@ -107,15 +133,22 @@
             <div v-if="!isInternalView" class="space-y-3">
               <NuxtLink
                 to="/"
-                class="flex items-center justify-between rounded-2xl px-5 py-4 transition hover:-translate-y-0.5 hover:shadow-md"
-                :class="
+                class="flex items-center rounded-2xl py-4 transition hover:-translate-y-0.5 hover:shadow-md"
+                :class="[
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'justify-between px-5',
                   route.path === '/'
                     ? 'border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200'
-                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-                "
+                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600',
+                ]"
+                title="新計畫案啓動"
                 @click="handleNavClick"
               >
-                <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center"
+                  :class="isSidebarCollapsed ? '' : 'gap-3'"
+                >
                   <span
                     class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-rose-300 bg-white text-rose-500"
                   >
@@ -134,21 +167,32 @@
                       />
                     </svg>
                   </span>
-                  <span class="text-base font-semibold">新計畫案啓動</span>
+                  <span
+                    v-if="!isSidebarCollapsed"
+                    class="text-base font-semibold"
+                    >新計畫案啓動</span
+                  >
                 </div>
               </NuxtLink>
 
               <NuxtLink
                 to="/plan-library"
-                class="flex items-center justify-between rounded-2xl px-5 py-4 transition"
-                :class="
+                class="flex items-center rounded-2xl py-4 transition"
+                :class="[
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'justify-between px-5',
                   route.path.startsWith('/plan-library')
                     ? 'border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200'
-                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-                "
+                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600',
+                ]"
+                title="我的計畫庫"
                 @click.native="handleNavClick"
               >
-                <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center"
+                  :class="isSidebarCollapsed ? '' : 'gap-3'"
+                >
                   <span
                     class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400"
                   >
@@ -167,21 +211,32 @@
                       />
                     </svg>
                   </span>
-                  <span class="text-base font-medium">我的計畫庫</span>
+                  <span
+                    v-if="!isSidebarCollapsed"
+                    class="text-base font-medium"
+                    >我的計畫庫</span
+                  >
                 </div>
               </NuxtLink>
 
               <NuxtLink
                 to="/command-library"
-                class="flex items-center justify-between rounded-2xl px-5 py-4 transition"
-                :class="
+                class="flex items-center rounded-2xl py-4 transition"
+                :class="[
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'justify-between px-5',
                   route.path.startsWith('/command-library')
                     ? 'border border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200'
-                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600'
-                "
+                    : 'border border-gray-100 bg-white text-gray-500 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600',
+                ]"
+                title="我的背景資料"
                 @click.native="handleNavClick"
               >
-                <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center"
+                  :class="isSidebarCollapsed ? '' : 'gap-3'"
+                >
                   <span
                     class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400"
                   >
@@ -200,16 +255,29 @@
                       />
                     </svg>
                   </span>
-                  <span class="text-base font-medium">我的背景資料</span>
+                  <span
+                    v-if="!isSidebarCollapsed"
+                    class="text-base font-medium"
+                    >我的背景資料</span
+                  >
                 </div>
               </NuxtLink>
 
               <!-- 説明中心按鈕：打開教學影片彈窗 -->
               <button
-                class="flex w-full items-center justify-between rounded-2xl border border-gray-100 bg-white px-5 py-4 text-gray-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                class="flex w-full items-center rounded-2xl border border-gray-100 bg-white py-4 text-gray-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'justify-between px-5'
+                "
+                title="説明中心"
                 @click="openHelpCenter"
               >
-                <div class="flex items-center gap-3">
+                <div
+                  class="flex items-center"
+                  :class="isSidebarCollapsed ? '' : 'gap-3'"
+                >
                   <span
                     class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-400"
                   >
@@ -233,24 +301,37 @@
                       />
                     </svg>
                   </span>
-                  <span class="text-base font-medium">説明中心</span>
+                  <span
+                    v-if="!isSidebarCollapsed"
+                    class="text-base font-medium"
+                    >説明中心</span
+                  >
                 </div>
               </button>
             </div>
 
             <div v-else class="space-y-2">
-              <p class="text-xs uppercase tracking-wide text-gray-400 px-1">
+              <p
+                v-if="!isSidebarCollapsed"
+                class="text-xs uppercase tracking-wide text-gray-400 px-1"
+              >
                 內部作業
               </p>
               <NuxtLink
                 to="/_builder/template-manager"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="主題與模板管理"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -258,17 +339,23 @@
                     d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4z"
                   />
                 </svg>
-                <span>主題與模板管理</span>
+                <span v-if="!isSidebarCollapsed">主題與模板管理</span>
               </NuxtLink>
               <NuxtLink
                 to="/_builder/model"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="模型配置"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -276,17 +363,23 @@
                     d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"
                   />
                 </svg>
-                <span>模型配置</span>
+                <span v-if="!isSidebarCollapsed">模型配置</span>
               </NuxtLink>
               <NuxtLink
                 to="/_builder/section"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="動態欄位配置"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -294,18 +387,24 @@
                     d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.3A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z"
                   />
                 </svg>
-                <span>動態欄位配置</span>
+                <span v-if="!isSidebarCollapsed">動態欄位配置</span>
               </NuxtLink>
 
               <NuxtLink
                 to="/_builder/dataset"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="模擬數據生成"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -313,18 +412,24 @@
                     d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
                   />
                 </svg>
-                <span>模擬數據生成</span>
+                <span v-if="!isSidebarCollapsed">模擬數據生成</span>
               </NuxtLink>
 
               <NuxtLink
                 to="/_builder/management"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="數據庫更新"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -332,18 +437,24 @@
                     d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
                   />
                 </svg>
-                <span>數據庫更新</span>
+                <span v-if="!isSidebarCollapsed">數據庫更新</span>
               </NuxtLink>
 
               <NuxtLink
                 to="/_builder/usage-analytics"
-                class="flex items-center gap-3 rounded-xl px-4 py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                class="flex items-center rounded-xl py-3 text-gray-600 transition hover:bg-gray-900 hover:text-white"
+                :class="
+                  isSidebarCollapsed
+                    ? 'justify-center px-2'
+                    : 'gap-3 px-4'
+                "
                 active-class="bg-gray-900 text-white shadow-md"
+                title="用量分析"
                 @click.native="handleNavClick"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
+                  class="h-5 w-5 flex-shrink-0"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -352,7 +463,7 @@
                   />
                 </svg>
 
-                <span>用量分析</span>
+                <span v-if="!isSidebarCollapsed">用量分析</span>
               </NuxtLink>
             </div>
           </template>
@@ -360,13 +471,19 @@
           <div v-else class="space-y-3">
             <NuxtLink
               to="/login"
-              class="flex items-center gap-3 rounded-2xl px-5 py-3 transition border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+              class="flex items-center rounded-2xl py-3 transition border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+              :class="
+                isSidebarCollapsed
+                  ? 'justify-center px-2'
+                  : 'gap-3 px-5'
+              "
               active-class="border border-rose-300 bg-rose-100 text-rose-700 shadow-md"
+              title="登入"
               @click.native="handleNavClick"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                class="h-5 w-5"
+                class="h-5 w-5 flex-shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke-width="1.8"
@@ -378,14 +495,15 @@
                   d="M15.75 9V5.25m0 0h-3.75m3.75 0L10.5 10.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span class="font-medium">登入</span>
+              <span v-if="!isSidebarCollapsed" class="font-medium">登入</span>
             </NuxtLink>
           </div>
         </nav>
 
         <div v-if="isAuthenticated" class="mt-6 space-y-3">
+          <!-- 使用者帳號卡：收合模式下隱藏（icon-only rail 上沒有意義） -->
           <div
-            v-if="userEmail"
+            v-if="userEmail && !isSidebarCollapsed"
             class="px-4 py-3 rounded-2xl bg-gray-100 border border-gray-200"
           >
             <p class="text-xs text-gray-500 uppercase tracking-wide">
@@ -396,26 +514,61 @@
             </p>
           </div>
 
+          <!-- 切換到內部管理視圖：收合時顯示為 icon-only 方塊按鈕 -->
           <button
             v-if="!isInternalView && isInternal"
-            class="w-full rounded-2xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            class="rounded-2xl bg-gray-900 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            :class="
+              isSidebarCollapsed
+                ? 'flex h-10 w-full items-center justify-center'
+                : 'w-full px-4 py-3'
+            "
+            title="進入調整參數界面"
             @click="switchToInternalView"
           >
-            進入調整參數界面
+            <Icon
+              v-if="isSidebarCollapsed"
+              name="tabler:settings-cog"
+              class="h-5 w-5"
+            />
+            <span v-else>進入調整參數界面</span>
           </button>
           <button
             v-else-if="isInternalView && isInternal"
-            class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:-translate-y-0.5 hover:border-gray-300"
+            class="rounded-2xl border border-gray-200 text-sm font-semibold text-gray-700 transition hover:-translate-y-0.5 hover:border-gray-300"
+            :class="
+              isSidebarCollapsed
+                ? 'flex h-10 w-full items-center justify-center'
+                : 'w-full px-4 py-3'
+            "
+            title="返回計畫填寫界面"
             @click="switchToExternalView"
           >
-            返回計畫填寫界面
+            <Icon
+              v-if="isSidebarCollapsed"
+              name="tabler:arrow-left"
+              class="h-5 w-5"
+            />
+            <span v-else>返回計畫填寫界面</span>
           </button>
 
+          <!-- 登出：收合時顯示登出 icon -->
           <button
-            class="w-full rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-semibold text-rose-600 shadow-sm transition hover:bg-rose-50"
+            class="rounded-2xl border border-rose-100 bg-white text-sm font-semibold text-rose-600 shadow-sm transition hover:bg-rose-50"
+            :class="
+              isSidebarCollapsed
+                ? 'flex h-10 w-full items-center justify-center'
+                : 'w-full px-4 py-3'
+            "
+            title="返回 TGSA 平台首頁"
             @click="handleLogout"
           >
-            返回 TGSA 平台首頁
+            <Icon
+              v-if="isSidebarCollapsed"
+              name="tabler:logout"
+              class="h-5 w-5"
+            />
+            <span v-else>返回 TGSA 平台首頁</span>
           </button>
         </div>
       </div>
@@ -520,6 +673,15 @@ const route = useRoute();
 // ===== UI 状态管理 =====
 // 移动设备上侧边栏的显示/隐藏状态
 const showSidebar = ref(false);
+// 桌面端：侧边栏是否处于收合（icon-only）状态。仅在 md+ 生效，移动端无影响。
+// 状态会持久化到 localStorage（key: tgsa.sidebarCollapsed），重新整理後仍保留。
+const isSidebarCollapsed = ref(false);
+const SIDEBAR_COLLAPSED_KEY = "tgsa.sidebarCollapsed";
+
+function toggleSidebarCollapsed() {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+}
+
 // 用户是否已认证
 const isAuthenticated = ref(false);
 // 权限：是否为内部人员
@@ -563,6 +725,17 @@ watch(
   },
   { immediate: true },
 );
+
+// ===== 侧边栏收合状态持久化 =====
+// 任何收合/展开操作都会同步写入 localStorage，使下次进入时保持上次的偏好。
+watch(isSidebarCollapsed, (collapsed) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch (err) {
+    console.warn("Failed to persist sidebar collapse state", err);
+  }
+});
 
 // ===== 用户信息管理 =====
 // 获取当前用户 ID 和刷新函数
@@ -648,6 +821,19 @@ async function handleLogout() {
 // 组件挂载时的初始化逻辑
 // 在这里获取用户会话、检查权限、设置认证监听器
 onMounted(async () => {
+  // 从 localStorage 读取 sidebar 收合状态（仅在 client 端执行，避免 SSR 不一致）
+  if (typeof window !== "undefined") {
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored === "1") {
+        isSidebarCollapsed.value = true;
+      }
+    } catch (err) {
+      // localStorage 在隐私模式下可能抛错，忽略即可
+      console.warn("Failed to read sidebar collapse state", err);
+    }
+  }
+
   // 刷新用户信息缓存
   refreshUser();
 
