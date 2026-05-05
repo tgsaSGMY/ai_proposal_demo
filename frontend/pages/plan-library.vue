@@ -335,13 +335,15 @@
           <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6">
             <section class="space-y-3">
               <h3 class="text-lg font-semibold text-gray-900">價格服務方案</h3>
-              <button
-                class="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-gray-300 px-4 py-2 text-sm font-semibold text-white shadow"
-                disabled
+              <a
+                href="https://portal.tgsaapp.com/subscriptions/plan-selection"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
               >
                 取得專案報價
                 <Icon name="tabler:arrow-up-right" width="18" height="18" />
-              </button>
+              </a>
             </section>
 
             <section class="space-y-3">
