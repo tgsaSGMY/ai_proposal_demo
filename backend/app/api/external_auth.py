@@ -23,7 +23,9 @@ from app.config import (
     EXTERNAL_OAUTH_USERINFO_URL,
 )
 from app.core.app_jwt import create_app_access_token
+from app.services import mother_token_storage
 from app.services.supabase_service import SupabaseService
+from app.utils.http_client import post_form, get_json_with_bearer
 
 router = APIRouter(prefix="/api/external-auth", tags=["ExternalAuth"])
 logger = logging.getLogger(__name__)
@@ -79,32 +81,6 @@ def _is_secure_request(request: FastAPIRequest) -> bool:
     frontend_callback = (_frontend_callback_url() or "").lower()
     callback_requires_https = frontend_callback.startswith("https://")
     return request.url.scheme == "https" or proto == "https" or callback_requires_https
-
-
-def _json_post_form(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    # 以 x-www-form-urlencoded 送出 POST，並解析 JSON 回應。
-    body = urlencode(payload).encode("utf-8")
-    req = Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with urlopen(req, timeout=15) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw)
-
-
-def _json_get_with_bearer(url: str, token: str) -> Dict[str, Any]:
-    # 以 Bearer token 送出 GET，並解析 JSON 回應。
-    req = Request(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        method="GET",
-    )
-    with urlopen(req, timeout=15) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw)
 
 
 def _resolve_role_from_plan(profile_data: Dict[str, Any]) -> str:
@@ -198,7 +174,7 @@ async def external_oauth_callback(
     if not expected_state or not state or not hmac.compare_digest(expected_state, state):
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
-    token_payload = _json_post_form(
+    token_payload = post_form(
         EXTERNAL_OAUTH_TOKEN_URL,
         {
             "grant_type": "authorization_code",
@@ -216,7 +192,9 @@ async def external_oauth_callback(
     if not EXTERNAL_OAUTH_USERINFO_URL:
         raise HTTPException(status_code=500, detail="EXTERNAL_OAUTH_USERINFO_URL is missing in config.")
 
-    user_info = _json_get_with_bearer(EXTERNAL_OAUTH_USERINFO_URL, access_token)
+    status_code, user_info = get_json_with_bearer(EXTERNAL_OAUTH_USERINFO_URL, access_token)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail="Failed to fetch userinfo")
     profile = _derive_profile(user_info)
 
     canonical_user = await supabase_service.resolve_or_create_user_by_external_identity(
@@ -225,6 +203,20 @@ async def external_oauth_callback(
         email=profile.get("email"),
         role=profile.get("role"),
     )
+
+    # 持久化母平台 access/refresh token 給 engine_usage_reporter 使用。
+    # 失敗只記 log，不擋登入流程（mirror mode：母平台斷線不影響使用者登入）。
+    try:
+        await mother_token_storage.store_token(
+            supabase_service=supabase_service,
+            user_id=canonical_user["id"],
+            access_token=access_token,
+            refresh_token=token_payload.get("refresh_token"),
+            expires_in=token_payload.get("expires_in"),
+            scope=token_payload.get("scope"),
+        )
+    except Exception:
+        logger.exception("Failed to persist mother OAuth token; engine usage reporting may skip this user")
 
     app_token = create_app_access_token(
         subject=canonical_user["id"],

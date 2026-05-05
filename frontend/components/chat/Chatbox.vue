@@ -99,6 +99,20 @@
         </div>
 
         <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
+          <!--
+            常駐提示：說明可透過輸入「題目標題 + 請重新回答」讓 AI 重新作答。
+            採柔和淡色設計 (soft box) 不刺眼，適合長時間並存於輸入框上方。
+          -->
+          <div
+            class="mb-3 flex items-start gap-2 rounded-xl bg-amber-50/50 px-3 py-2 text-xs text-amber-700/80"
+            role="note"
+          >
+            <span class="text-sm leading-none opacity-80">💡</span>
+            <p class="flex-1 leading-relaxed">
+              提醒：若對特定題目的回答未達預期，請輸入 【該題目標題】 並加上 【請重新回答】，系統將重新提供作答內容。
+            </p>
+          </div>
+
           <div class="relative">
             <textarea
               ref="composerRef"

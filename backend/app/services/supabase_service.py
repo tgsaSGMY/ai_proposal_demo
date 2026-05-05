@@ -1148,6 +1148,7 @@ class SupabaseService:
             "model_type": model_type,
             "input_token": input_token,
             "output_token":  output_token,
+            "image_token": image_token,
             "cost": cost,
         }
         
@@ -1156,8 +1157,21 @@ class SupabaseService:
         if action:
             new_log["action"] = action
         
-        self.client.from_("usage_logs").insert(new_log).execute()
+        insert_resp = self.client.from_("usage_logs").insert(new_log).execute()
         logger.info("Logged usage for user %s: $%s for %s model.", canonical_user_id or 'NULL', cost, model_type)
+
+        # Fire-and-forget 給母平台 /api/engine-usage/report 回報。
+        # 注意：避免在模組頂部 import engine_usage_reporter，因為它會 import 這個檔案。
+        try:
+            inserted_rows = getattr(insert_resp, "data", None) or []
+            if inserted_rows:
+                inserted_id = inserted_rows[0].get("id")
+                if inserted_id is not None:
+                    from app.services import engine_usage_reporter
+                    engine_usage_reporter.schedule_report_for_usage_log_id(self, int(inserted_id))
+        except Exception as exc:
+            # 母平台回報失敗絕不能影響原本流程；只記 log。
+            logger.warning("Engine usage report scheduling failed: %s", exc)
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """

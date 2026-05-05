@@ -43,6 +43,7 @@ from .dependencies import (
 )
 from app.utils.extract_json import extract_json_block  
 from app.utils.throttling import apply_throttling_if_needed
+from app.core.engine_usage_gate import enforce_mother_quota_or_429
 from typing import Dict, Any, Optional, List
 from app.config import OPENAI_API_KEY, QUOTA_NORMAL_DAILY_TOKENS
 
@@ -283,7 +284,11 @@ async def generate_plan(
             status_code=403,
             detail=f"您已達到每日 AI 生成額度 ({QUOTA_NORMAL_DAILY_TOKENS} tokens)。請明天再試或聯繫管理員升級方案。"
         )
-    
+
+    # 母平台配額 gate (Mirror mode)：若母平台之前回報 is_blocked=true 直接擋下。
+    # ENGINE_USAGE_ENFORCE_BLOCK=false 時這行不做事。
+    enforce_mother_quota_or_429(user_id)
+
     # 2. 檢查專案是否唯讀 (Normal 且 project_id 存在時)
     if role == "normal" and request_data.project_id:
         is_latest = await supabase_service.is_latest_project(user_id, request_data.project_id)

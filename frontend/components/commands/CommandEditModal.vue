@@ -25,7 +25,7 @@
               <p
                 class="text-xs font-semibold uppercase tracking-wide text-rose-400"
               >
-                編輯模型指令
+                編輯背景資料
               </p>
               <h3 class="text-xl font-semibold text-gray-900">
                 {{ command?.title || "新指令" }}
@@ -80,26 +80,6 @@
               ></textarea>
             </div>
 
-            <div
-              class="flex items-center justify-between rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3"
-            >
-              <div>
-                <p class="text-sm font-semibold text-gray-800">企業專屬 DNA</p>
-                <p class="text-xs text-gray-500">切換後會標記為企業自訂指令</p>
-              </div>
-              <button
-                type="button"
-                class="relative inline-flex h-7 w-12 items-center rounded-full transition"
-                :class="form.isCompany ? 'bg-emerald-500' : 'bg-gray-300'"
-                @click="form.isCompany = !form.isCompany"
-              >
-                <span
-                  class="inline-block h-5 w-5 transform rounded-full bg-white transition"
-                  :class="form.isCompany ? 'translate-x-5' : 'translate-x-1'"
-                ></span>
-              </button>
-            </div>
-
             <div class="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -129,7 +109,6 @@ interface CommandPayload {
   id?: string;
   title: string;
   description: string;
-  isCompany: boolean;
 }
 
 interface Props {
@@ -144,7 +123,6 @@ const form = reactive<CommandPayload>({
   id: undefined,
   title: "",
   description: "",
-  isCompany: false,
 });
 
 // 依據卡片標題提供對應的佔位提示，讓使用者更容易理解該卡片的用途
@@ -169,7 +147,6 @@ watch(
     form.id = value?.id;
     form.title = value?.title || "";
     form.description = value?.description || "";
-    form.isCompany = value?.isCompany ?? false;
   },
   { immediate: true },
 );
@@ -180,7 +157,7 @@ function handleClose() {
   emit("close");
 }
 
-// 驗證表單並發送保存事件，包含完整的命令資料（id、標題、描述、公司標籤）
+// 驗證表單並發送保存事件，包含完整的命令資料（id、標題、描述）
 function handleSave() {
   if (!form.title.trim() || !form.description.trim()) return;
   emit("save", { ...form });

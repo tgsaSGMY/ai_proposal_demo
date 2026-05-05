@@ -4,6 +4,7 @@ import logging
 from fastapi import FastAPI
 from app.services.supabase_service import SupabaseService
 from app.services.llm_service import LLMService
+from app.config import ENGINE_USAGE_ENABLED
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,20 @@ async def startup_event_handler(app: FastAPI):
         # --- 3. 預加載配置數據到內存 ---
         logger.info("Pre-loading configurations from Supabase...")
         await reload_configurations(app)
-        
+
+        # --- 4. 啟動 engine usage 重送背景 task ---
+        if ENGINE_USAGE_ENABLED:
+            try:
+                from app.services.engine_usage_reporter import retry_loop
+                app.state.engine_usage_retry_task = asyncio.create_task(
+                    retry_loop(app.state.supabase_service)
+                )
+                logger.info("Engine usage retry loop scheduled.")
+            except Exception:
+                logger.exception("Failed to schedule engine usage retry loop")
+        else:
+            logger.info("ENGINE_USAGE_ENABLED=false; skipping retry loop.")
+
     except Exception as e:
         logger.critical(f"A critical error occurred during application startup: {e}", exc_info=True)
         raise RuntimeError("Failed to initialize application state during startup.") from e
@@ -77,4 +91,11 @@ async def startup_event_handler(app: FastAPI):
 
 async def shutdown_event_handler(app: FastAPI):
     """關閉任何需要清理的資源，例如數據庫連接池、後台任務等。 """
+    task = getattr(app.state, "engine_usage_retry_task", None)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
     logger.info("Application shutdown process completed.")
