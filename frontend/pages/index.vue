@@ -27,7 +27,7 @@
 
           <div class="mt-8 grid auto-rows-fr gap-5 p-1 md:grid-cols-2 xl:grid-cols-3">
             <button
-              v-for="plan in planTypes"
+              v-for="plan in planTypes.slice(0, 1)"
               :key="plan.id"
               class="relative flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:outline-none"
               :disabled="isPlanLocked(plan)"
@@ -535,7 +535,12 @@ onMounted(async () => {
   await refreshUser();
   await loadCurrentUserRole();
   await fetchProjectsCount();
-  await loadPlanTypes();
+  await Promise.all([loadPlanTypes(), fetchAllConfigs()]);
+  const firstPlan = planTypes.value[0];
+  if (firstPlan && !isPlanLocked(firstPlan)) {
+    selectedPlanType.value = firstPlan;
+    handlePlanTypeConfirm();
+  }
 });
 
 async function fetchProjectsCount() {
@@ -613,8 +618,13 @@ async function loadPlanTypes() {
   }
 }
 
-const { allConfigs, selectedGrantId, selectedTemplateId, onSelectionChange } =
-  usePlanGenerator();
+const {
+  allConfigs,
+  selectedGrantId,
+  selectedTemplateId,
+  onSelectionChange,
+  fetchAllConfigs,
+} = usePlanGenerator();
 
 const currentStage = ref(1);
 const selectedPlanType = ref<PlanTypeOption | null>(null);

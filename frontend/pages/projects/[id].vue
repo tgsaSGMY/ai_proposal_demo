@@ -7,8 +7,8 @@
             <p
               class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
             >
-              <NuxtLink to="/plan-library" class="hover:text-gray-600"
-                >我的計畫庫</NuxtLink
+              <NuxtLink to="/" class="hover:text-gray-600"
+                >首頁</NuxtLink
               >
               <span class="text-gray-300">></span>
               <span class="text-gray-600 truncate">{{
@@ -131,10 +131,10 @@
               重新嘗試
             </button>
             <NuxtLink
-              to="/plan-library"
+              to="/"
               class="rounded-2xl border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-600 hover:border-rose-200 hover:text-rose-500"
             >
-              返回計畫庫
+              返回首頁
             </NuxtLink>
           </div>
         </section>

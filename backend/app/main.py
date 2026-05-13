@@ -7,17 +7,9 @@ import logging
 from app.api import (
     generate,
     datasets,
-    admin,
     auth,
-    commands,
     config as api_config,
-    draft_plan,
     projects,
-    images,
-    dynamic_section,
-    section_recommender,
-    template_manager,
-    usage_log,
     external_auth,
 )
 from app.core.lifecycle import startup_event_handler, shutdown_event_handler
@@ -54,17 +46,9 @@ async def on_shutdown():
 # 包含所有路由器
 app.include_router(generate.router)
 app.include_router(datasets.router)
-app.include_router(admin.router)
 app.include_router(auth.router)
-app.include_router(commands.router)
 app.include_router(api_config.router)
-app.include_router(draft_plan.router)
 app.include_router(projects.router)
-app.include_router(images.router)
-app.include_router(dynamic_section.router)
-app.include_router(section_recommender.router)
-app.include_router(template_manager.router)
-app.include_router(usage_log.router)
 app.include_router(external_auth.router)
 
 @app.get("/", tags=["Root"])
