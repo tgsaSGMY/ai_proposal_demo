@@ -23,14 +23,14 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: tgsa83609327/ai_proposal_platform:latest
+          tags: tgsa83609327/ai_proposal_demo:latest
 
       - name: Build and push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: tgsa83609327/ai_proposal_frontend:latest
+          tags: tgsa83609327/ai_proposal_demo_frontend:latest
           build-args: |
             SUPABASE_URL=${{ secrets.LIVE_SUPABASE_URL }}
             SUPABASE_ANON_KEY=${{ secrets.LIVE_SUPABASE_ANON_KEY }}

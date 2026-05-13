@@ -2,12 +2,12 @@ version: "3.8"
 
 services:
   fastapi-backend:
-    image: tgsa83609327/ai_proposal_platform:latest
+    image: tgsa83609327/ai_proposal_demo:latest
     # 如果你想直接從 Dockerfile 建立映像，可以使用 build 指令，並指定上下文和 Dockerfile 路徑
     # build:
     #   context: ./backend
     #   dockerfile: Dockerfile
-    container_name: fastapi_server
+    container_name: fastapi_demo_server
     restart: always
     env_file:
       - ./backend/.env
@@ -18,8 +18,8 @@ services:
       - supabase_net
 
   nuxt-frontend:
-    image: tgsa83609327/ai_proposal_frontend:latest
-    container_name: nuxt_client
+    image: tgsa83609327/ai_proposal_demo_frontend:latest
+    container_name: nuxt_demo_client
     restart: always
     env_file:
       - ./frontend/.env
@@ -32,7 +32,7 @@ services:
     # build:
     #   context: ./nginx
     #   dockerfile: Dockerfile
-    container_name: nginx_proxy
+    container_name: nginx_demo_proxy
     restart: always
     ports:
       - "80:80"

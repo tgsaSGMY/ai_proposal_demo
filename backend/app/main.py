@@ -35,7 +35,7 @@ app = FastAPI(
 # 添加中間件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://ai-proposal-platform-v1-0.pages.dev","https://ai-proposal-platform.smtt.workers.dev","https://ai-dev.172.233.79.222.nip.io"],
+    allow_origins=["http://localhost:3000", "https://ai-proposal-platform-v1-0.pages.dev","https://ai-proposal-platform.smtt.workers.dev","https://ai-dev.172.233.79.222.nip.io","https://demo-dev.172.233.79.222.nip.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

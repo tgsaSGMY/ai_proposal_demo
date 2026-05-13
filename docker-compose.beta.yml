@@ -2,8 +2,8 @@ version: "3.8"
 
 services:
   fastapi-backend:
-    image: tgsa83609327/ai_proposal_platform:dev
-    container_name: fastapi_server
+    image: tgsa83609327/ai_proposal_demo:dev
+    container_name: fastapi_demo_server
     restart: always
     env_file:
       - ./backend/.env
@@ -16,8 +16,8 @@ services:
 
   nuxt-frontend:
     # Use the pre-built dev image from Docker Hub instead of building on the VPS
-    image: tgsa83609327/ai_proposal_frontend:dev
-    container_name: nuxt_client
+    image: tgsa83609327/ai_proposal_demo_frontend:dev
+    container_name: nuxt_demo_client
     restart: always
     env_file:
       - ./frontend/.env
