@@ -1,1100 +1,446 @@
 <template>
   <ClientOnly>
-    <div class="min-h-screen bg-gray-50 px-4 py-6 md:px-8">
-      <div class="mx-auto max-w-6xl space-y-6">
-        <p
-          class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400"
-        >
-          <NuxtLink to="/" class="hover:text-gray-600">首頁</NuxtLink>
-          <span class="text-gray-300">></span>
-          <span class="text-gray-600">TGSA 補助引擎</span>
-        </p>
-        <!-- Stage 1: 選擇計畫類型 -->
-        <section
-          v-if="currentStage === 1"
-          class="rounded-[32px] px-6 py-8 lg:px-10"
-        >
-          <div class="text-center">
-            <p
-              class="text-3xl font-semibold uppercase tracking-[0.35em] text-rose-500"
-            >
-              請選擇目標補助計畫
-            </p>
-            <p class="mt-2 text-sm text-[#5f6c96]">
-              針對您的需求，挑選適合的AI計畫模型
-            </p>
-          </div>
+    <div class="min-h-screen bg-gray-50 flex flex-col">
+      <!-- Header -->
+      <header class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <img
+            src="/AI補助引擎_Logo_留邊.png"
+            alt="AI 補助引擎"
+            class="h-10 w-auto pointer-events-none select-none"
+          />
+          <span class="hidden sm:inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">
+            試用版 · 免註冊體驗
+          </span>
+        </div>
+        <div v-if="grantName" class="text-sm text-gray-500">
+          目前體驗：<span class="font-semibold text-gray-800">{{ grantName }}</span>
+        </div>
+      </header>
 
-          <div class="mt-8 grid auto-rows-fr gap-5 p-1 md:grid-cols-2 xl:grid-cols-3">
-            <button
-              v-for="plan in planTypes.slice(0, 1)"
-              :key="plan.id"
-              class="relative flex h-full flex-col rounded-xl border border-[#eef0f7] bg-white p-6 text-left shadow-sm transition focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 focus-visible:outline-none"
-              :disabled="isPlanLocked(plan)"
-              :class="[
-                isPlanLocked(plan)
-                  ? 'cursor-not-allowed border-amber-200 bg-amber-50 opacity-80'
-                  : isPlanSelected(plan)
-                    ? 'ring-2 ring-rose-400 ring-offset-2'
-                    : 'hover:-translate-y-0.5 hover:border-[#d7e0ff]',
-              ]"
-              @click="handlePlanClick(plan)"
-            >
-              <!-- 鎖定狀態指示圖示：右上角小型鎖頭，比文字更快被識別 -->
-              <span
-                v-if="isPlanLocked(plan)"
-                class="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700"
-                aria-hidden="true"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke-width="2"
-                  stroke="currentColor"
-                  class="h-4 w-4"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-                  />
-                </svg>
-              </span>
+      <!-- Loading -->
+      <div v-if="isInitializing" class="flex-1 flex items-center justify-center text-gray-500">
+        <div class="text-center">
+          <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-rose-200 border-t-rose-500"></div>
+          <p class="mt-3 text-sm">正在準備您的計畫書工作區…</p>
+        </div>
+      </div>
 
-              <div class="flex items-start justify-between gap-3 text-left">
-                <span
-                  class="inline-flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
-                  :style="{ backgroundColor: plan.iconBg }"
-                >
-                  <img
-                    :src="plan.image"
-                    alt=""
-                    class="max-h-full max-w-full object-contain p-2"
-                  />
-                </span>
-
-                <div
-                  v-if="plan.subsidyAmount || plan.submissionDeadline"
-                  class="ml-auto w-full max-w-[220px] min-w-[150px] space-y-1 rounded-lg bg-gray-100 px-3 py-2"
-                >
-                  <p
-                    v-if="plan.subsidyAmount"
-                    class="text-xs text-gray-700 font-semibold"
-                  >
-                    最高補助額：{{ plan.subsidyAmount }}
-                  </p>
-                  <p
-                    v-if="plan.submissionDeadline"
-                    class="text-xs text-gray-700 font-semibold"
-                  >
-                    送件時間：{{ plan.submissionDeadline }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="mt-2 flex-1">
-                <h3
-                  class="text-xl font-bold leading-tight text-slate-900"
-                >
-                  {{ plan.mainTitle }}
-                </h3>
-                <p
-                  v-if="plan.bracketedTitle"
-                  class="mt-2 text-xl font-bold leading-tight text-slate-900"
-                >
-                  【{{ plan.bracketedTitle }}】
-                </p>
-                <p
-                  v-if="plan.subtitle"
-                  class="mt-3 text-base font-semibold text-slate-700"
-                >
-                  {{ plan.subtitle }}
-                </p>
-                <p
-                  v-if="plan.description"
-                  class="mt-1 text-xs leading-relaxed text-slate-400"
-                >
-                  {{ plan.description }}
-                </p>
-                <p
-                  v-if="isPlanLocked(plan)"
-                  class="mt-2 text-xs font-semibold text-amber-700"
-                >
-                  升級付費會員，立即開通此計畫
-                </p>
-              </div>
-            </button>
-          </div>
-
-          <section
-            class="mt-8 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm"
-            aria-label="免責聲明"
+      <!-- Setup error -->
+      <div v-else-if="setupError" class="flex-1 flex items-center justify-center px-6">
+        <div class="max-w-md text-center">
+          <p class="text-base text-rose-600 font-semibold">無法載入體驗</p>
+          <p class="mt-2 text-sm text-gray-600">{{ setupError }}</p>
+          <button
+            class="mt-4 rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600"
+            @click="initialize"
           >
-            <p class="text-sm font-black tracking-wide text-amber-900">
-              免責聲明
-            </p>
-            <p
-              class="mt-2 text-sm font-semibold leading-relaxed text-amber-800"
-            >
-              引擎產生計畫內容僅供參考。請根據公司實際研發進行計畫調整。
-            </p>
-          </section>
+            重試
+          </button>
+        </div>
+      </div>
 
-          <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <button
-              class="rounded-2xl border border-[#d9def5] px-6 py-2 text-sm font-semibold text-[#6974a8] transition hover:border-[#c5cced]"
-              type="button"
-              @click="router.push('/')"
-            >
-              取消
-            </button>
-            <button
-              class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
-              type="button"
-              :disabled="!canConfirmPlanType"
-              :class="{ 'opacity-60 cursor-not-allowed': !canConfirmPlanType }"
-              @click="handlePlanTypeConfirm"
-            >
-              下一步
-            </button>
-          </div>
-        </section>
-
-        <!-- Stage 2: 填寫簡報資訊 -->
-        <section
-          v-else-if="currentStage === 2"
-          class="rounded-3xl bg-white p-6 shadow-lg lg:p-8"
+      <!-- Chat workspace -->
+      <main v-else class="flex-1 flex flex-col overflow-hidden">
+        <div
+          ref="messagesContainer"
+          class="flex-1 overflow-y-auto px-4 sm:px-6 py-6"
         >
-          <header class="flex flex-wrap items-start justify-between gap-4">
-            <div class="space-y-2">
-              <h2 class="text-2xl font-semibold text-slate-900">
-                為 {{ selectedPlanType?.title || "選定計畫" }} 建立專屬計畫
-              </h2>
-              <p class="text-sm text-slate-500">
-                這些資訊會作為進入 Chatbox 前的基礎情境，AI 會優先引用這些內容。
-              </p>
-            </div>
-            <button
-              class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-500"
-              type="button"
-              @click="backToStage(1)"
-            >
-              重新選擇類型
-            </button>
-          </header>
-          <div class="mt-6 space-y-4">
-            <label class="block space-y-2">
-              <span class="text-sm font-semibold text-slate-700"
-                >計畫名稱 <span class="text-red-500">*</span></span
-              >
-              <input
-                v-model="planName"
-                type="text"
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
-                placeholder="例：2025 智慧服務輸出 SIIR 計畫"
-              />
-            </label>
-            <label class="block space-y-2">
-              <span class="text-sm font-semibold text-slate-700"
-                >計畫摘要 <span class="text-red-500">*</span></span
-              >
-              <textarea
-                v-model="planSummary"
-                rows="4"
-                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-rose-400 focus:bg-white"
-                placeholder="用 2-3 句描述計畫目標、受惠對象與成果。"
-              ></textarea>
-            </label>
-            <label class="block space-y-2">
-              <span class="text-sm font-semibold text-slate-700"
-                >專屬背景資料</span
-              >
-            </label>
+          <div class="mx-auto max-w-3xl space-y-4">
             <div
-              class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+              v-for="(message, idx) in visibleMessages"
+              :key="idx"
+              class="flex"
+              :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
             >
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p class="text-xs text-slate-500">
-                    支援 Word (.docx) 與 PDF 檔案，系統會將文字內容轉為摘要供 AI
-                    優先引用。
-                  </p>
-                </div>
-                <button
-                  v-if="backgroundFiles.length"
-                  type="button"
-                  class="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
-                  @click="clearBackgroundAttachments"
-                >
-                  清空附件
-                </button>
-              </div>
               <div
-                class="rounded-2xl border-2 border-dashed border-slate-300 bg-white/80 p-6 text-center transition"
+                class="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap"
                 :class="
-                  isDraggingBackground
-                    ? 'border-rose-400 bg-white shadow-inner'
-                    : 'hover:border-rose-300'
+                  message.role === 'user'
+                    ? 'bg-rose-500 text-white rounded-br-sm'
+                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
                 "
-                @dragover.prevent="isDraggingBackground = true"
-                @dragleave.prevent="isDraggingBackground = false"
-                @drop.prevent="handleBackgroundDrop"
               >
-                <div
-                  class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500"
-                >
-                  <Icon name="ph:paperclip-light" class="h-6 w-6" />
-                </div>
-                <p class="mt-3 text-sm font-semibold text-slate-800">
-                  {{
-                    isProcessingBackground
-                      ? "正在解析附件..."
-                      : "拖曳 Word / PDF 檔案到此處"
-                  }}
-                </p>
-                <p class="mt-1 text-xs text-slate-500">
-                  或
-                  <button
-                    type="button"
-                    class="font-semibold text-rose-500 underline decoration-rose-200 decoration-2 underline-offset-4"
-                    @click="triggerBackgroundUpload"
-                    :disabled="isProcessingBackground"
-                  >
-                    點此選擇檔案
-                  </button>
-                </p>
-                <p
-                  class="mt-1 text-[11px] uppercase tracking-[0.3em] text-slate-400"
-                >
-                  目前已加入 {{ backgroundFiles.length }} 份附件
-                </p>
+                {{ stripHiddenBlock(message.content) }}
+                <span
+                  v-if="message.isStreaming"
+                  class="ml-1 inline-block h-2 w-2 animate-pulse rounded-full bg-rose-400 align-middle"
+                ></span>
               </div>
-              <input
-                ref="backgroundFileInputRef"
-                type="file"
-                accept=".docx,.pdf"
-                class="hidden"
-                multiple
-                @change="handleBackgroundFileChange"
-              />
-              <ul v-if="backgroundFiles.length" class="space-y-3">
-                <li
-                  v-for="file in backgroundFiles"
-                  :key="file.id"
-                  class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div class="flex items-start gap-3">
-                    <span
-                      class="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-semibold"
-                      :class="
-                        file.type === 'word'
-                          ? 'bg-rose-50 text-rose-500'
-                          : 'bg-slate-100 text-slate-600'
-                      "
-                    >
-                      {{ file.type === "word" ? "DOC" : "PDF" }}
-                    </span>
-                    <div>
-                      <p class="text-sm font-semibold text-slate-800">
-                        {{ file.name }}
-                      </p>
-                      <p class="mt-1 text-xs text-slate-500 sm:max-w-md">
-                        {{ file.snippet || "未偵測到可用文字內容" }}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    class="self-start rounded-full border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-500 hover:border-rose-200 hover:text-rose-500"
-                    @click="removeBackgroundAttachment(file.id)"
-                  >
-                    移除
-                  </button>
-                </li>
-              </ul>
             </div>
           </div>
+        </div>
 
-          <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <div class="space-y-1">
-              <p class="text-sm text-slate-400">
-                將以 {{ resolvedTemplateName || "預設模板" }} 啟動 Chatbox。
-              </p>
-              <p v-if="isSlotFull && currentUserRole === 'normal'" class="text-xs font-semibold text-rose-500">
-                ⚠️ 您已達到 1 個專案的上限，請先刪除既有專案再建立新專案。
-              </p>
-            </div>
-            <div class="flex gap-3">
+        <!-- Counter + composer -->
+        <div class="border-t border-gray-200 bg-white px-4 sm:px-6 py-4">
+          <div class="mx-auto max-w-3xl">
+            <p class="mb-2 text-xs text-gray-500">
+              已使用 <span class="font-semibold text-gray-800">{{ interactionCount }}</span> / {{ interactionLimit }} 次互動
+              <span v-if="!limitReached" class="text-gray-400">— 試用結束後可註冊以繼續完整體驗</span>
+            </p>
+            <form class="flex items-end gap-2" @submit.prevent="sendMessage">
+              <textarea
+                v-model="userInput"
+                rows="2"
+                placeholder="輸入您的回覆…"
+                class="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                :disabled="limitReached || isStreaming"
+                @keydown.enter.exact.prevent="sendMessage"
+              ></textarea>
               <button
-                class="rounded-2xl border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-500"
-                type="button"
-                @click="backToStage(1)"
+                type="submit"
+                class="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                :disabled="!canSend"
               >
-                上一步
+                送出
               </button>
-              <button
-                class="rounded-2xl bg-rose-500 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-rose-200 transition hover:-translate-y-0.5 hover:bg-rose-600"
-                type="button"
-                :disabled="
-                  !canEnterChat || isProcessingBackground || isCreatingProject || isSlotFull
-                "
-                :class="{
-                  'opacity-60 cursor-not-allowed':
-                    !canEnterChat ||
-                    isProcessingBackground ||
-                    isCreatingProject ||
-                    isSlotFull,
-                }"
-                @click="enterChatStage"
-              >
-                {{
-                  isSlotFull
-                    ? "額度已滿"
-                    : isProcessingBackground
-                      ? "解析附件中..."
-                      : isCreatingProject
-                        ? "建立工作區..."
-                        : "進入工作區"
-                }}
-              </button>
-            </div>
+            </form>
           </div>
-        </section>
+        </div>
+      </main>
+
+      <!-- Register prompt modal -->
+      <div
+        v-if="showRegisterModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      >
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <h2 class="text-lg font-bold text-gray-900">
+            喜歡這次的體驗嗎？
+          </h2>
+          <p class="mt-3 text-sm text-gray-600 leading-relaxed">
+            您已完成 {{ interactionLimit }} 次試用互動。
+            註冊免費帳號即可繼續完成這份計畫書，並使用完整的版本管理與 Word 匯出功能。
+          </p>
+          <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              @click="showRegisterModal = false"
+            >
+              再看看
+            </button>
+            <a
+              :href="registerHref"
+              class="rounded-lg bg-rose-500 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-rose-600"
+            >
+              立即註冊繼續使用
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </ClientOnly>
 </template>
 
 <script setup lang="ts">
-// ===== 导入 =====
-// 导入 Vue 核心库和路由
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-
-// 导入自定义组合式函数
-import { usePlanGenerator } from "~/composables/usePlanGenerator";
-import { useNotifications } from "~/composables/useNotifications";
-import { useCurrentUser } from "~/composables/useCurrentUser";
-import { useFileExtractor } from "~/composables/useFileExtractor";
-import { authenticatedFetch } from "~/composables/useAppAuth";
-import { splitTemplateName } from "~/utils/templateName";
-
-// ===== SEO 配置 =====
-// 设置页面标题和元数据，用于搜索引擎优化和社交媒体分享
-useHead({
-  title: "TGSA 補助引擎 - TGSA 補助引擎",
-  meta: [
-    {
-      name: "description",
-      content:
-        "AI 驅動的計畫書生成工具，支援 SIIR、IMDP、CITD 等多種補助計畫類型，一鍵生成專業計畫書草稿。",
-    },
-    {
-      name: "keywords",
-      content: "計畫書生成, AI 計畫, 政府補助, SIIR, IMDP, CITD, 智能寫作",
-    },
-    {
-      property: "og:title",
-      content: "TGSA 補助引擎 - TGSA 補助引擎",
-    },
-    {
-      property: "og:description",
-      content:
-        "AI 驅動的計畫書生成工具，支援多種補助計畫類型，一鍵生成專業計畫書草稿。",
-    },
-    { property: "og:type", content: "website" },
-    { name: "robots", content: "index, follow" },
-  ],
-});
-import {
-  callAutoFillApi,
-  buildSectionSchema,
-  processAutoFillResults,
-} from "~/utils/wordImport";
-import {
-  buildDynamicSections,
-  createEmptyDynamicValues,
-  makeCompositeKey,
-} from "~/utils/dynamicSchema";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 
 definePageMeta({
-  middleware: "auth",
+  layout: false,
+  ssr: false,
 });
 
-interface PlanTypeOption {
-  id: string;
-  title: string;
-  // Main title with any trailing 【...】 segment removed. Used for the primary
-  // heading row on the card. Falls back to the full title if no brackets.
-  mainTitle: string;
-  // Text inside the trailing 【...】 segment (without brackets). Empty string
-  // when the template name has no trailing bracketed segment, in which case
-  // the bracketed row is hidden via v-if on the card.
-  bracketedTitle: string;
-  subtitle?: string;
-  description?: string;
-  grantId: string;
-  templateHint?: string;
-  templateId?: string;
-  submissionDeadline?: string;
-  subsidyAmount?: string;
-  requiresPaidPlan?: boolean;
-  iconBg: string;
-  image: string;
-}
-
-type UserPlanRole = "internal" | "vip" | "normal";
-
-interface ModeOption {
-  id: "interactive";
-  title: string;
-  description: string;
-  badge: string;
-}
-
-interface BackgroundAttachment {
-  id: string;
-  name: string;
-  type: "word" | "pdf";
-  content: string;
-  snippet: string;
-  size: number;
-}
-
-interface AttachmentAutofillResult {
-  dynamicFields: Record<string, string>;
-  mainIdea: string;
-}
-
-interface PlanTemplate {
-  id: string;
-  grant_id: string;
-  name: string;
-  subtitle?: string | null;
-  description?: string | null;
-  logo_storage_path?: string;
-  iconBg?: string;
-  isOpen: boolean;
-  requires_paid_plan?: boolean | null;
-  submission_deadline?: string | null;
-  subsidy_amount?: string | null;
-}
-
-const planTypes = ref<PlanTypeOption[]>([]);
-const currentUserRole = ref<UserPlanRole>("normal");
-const activeProjectsCount = ref(0);
-
-const isSlotFull = computed(() => {
-  if (currentUserRole.value === "normal") {
-    return activeProjectsCount.value >= 1;
-  }
-  return activeProjectsCount.value >= 50; // VIP Limit
-});
-
-const modeOptions: ModeOption[] = [
-  {
-    id: "interactive",
-    title: "互動模式",
-    description:
-      "保留更多對話節點，逐步確認每一段輸出，適合需要邊寫邊調整的專案。",
-    badge: "聊天導向",
-  },
-];
-
-const router = useRouter();
-const {
-  success,
-  error: notifyError,
-  warning: notifyWarning,
-} = useNotifications();
-const { userId: currentUserId, refreshUser } = useCurrentUser();
-
-function normalizeUserRole(role: unknown): UserPlanRole {
-  if (role === "internal") return "internal";
-  if (role === "vip") return "vip";
-  return "normal";
-}
-
-async function loadCurrentUserRole() {
-  try {
-    const response = await authenticatedFetch(`${API_BASE_URL}/auth/me`);
-    if (!response.ok) {
-      currentUserRole.value = "normal";
-      return;
-    }
-    const me = await response.json();
-    currentUserRole.value = normalizeUserRole(me?.role);
-  } catch (error) {
-    console.error("Failed to load user role", error);
-    currentUserRole.value = "normal";
-  }
-}
-
-onMounted(async () => {
-  await refreshUser();
-  await loadCurrentUserRole();
-  await fetchProjectsCount();
-  await Promise.all([loadPlanTypes(), fetchAllConfigs()]);
-  const firstPlan = planTypes.value[0];
-  if (firstPlan && !isPlanLocked(firstPlan)) {
-    selectedPlanType.value = firstPlan;
-    handlePlanTypeConfirm();
-  }
-});
-
-async function fetchProjectsCount() {
-  try {
-    const response = await authenticatedFetch(`${API_BASE_URL}/projects`);
-    if (response.ok) {
-      const projects = await response.json();
-      activeProjectsCount.value = projects.length;
-    }
-  } catch (error) {
-    console.error("Failed to fetch projects count", error);
-  }
-}
 const config = useRuntimeConfig();
-const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
-const SUPABASE_BUCKET_URL = config.public.supabaseUrl;
+const apiBaseUrl = `${config.public.apiBaseUrl}/api`;
 
-// 从数据库加载計畫类型
-async function loadPlanTypes() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/plan_templates`, {
-      method: "GET",
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  isStreaming?: boolean;
+}
+
+interface Question {
+  id: string;
+  label: string;
+  prompt: string;
+}
+
+const isInitializing = ref(true);
+const setupError = ref<string | null>(null);
+
+const sessionId = ref<string | null>(null);
+const grantId = ref<string | null>(null);
+const templateId = ref<string | null>(null);
+const grantName = ref("");
+const templateName = ref("");
+const allQuestions = ref<Question[]>([]);
+
+const messages = ref<ChatMessage[]>([]);
+const userInput = ref("");
+const isStreaming = ref(false);
+
+const interactionCount = ref(0);
+const interactionLimit = ref(10);
+const limitReached = ref(false);
+const showRegisterModal = ref(false);
+const registerUrl = ref<string | null>(null);
+
+const messagesContainer = ref<HTMLDivElement | null>(null);
+let ws: WebSocket | null = null;
+
+const visibleMessages = computed(() =>
+  messages.value.filter((m) => m.role !== "system"),
+);
+
+const canSend = computed(
+  () => !limitReached.value && !isStreaming.value && userInput.value.trim().length > 0,
+);
+
+// The AI sometimes appends a `【回復結束】【隱藏回復欄位+答案】...【隱藏回復結束】`
+// machine-readable block. Hide it from the chat bubble.
+function stripHiddenBlock(content: string): string {
+  return content.replace(/【回復結束】【隱藏回復欄位\+答案】[\s\S]*?【隱藏回復結束】/g, "").trim();
+}
+
+const registerHref = computed(() => {
+  if (!registerUrl.value) return "#";
+  const url = new URL(registerUrl.value);
+  if (sessionId.value) {
+    url.searchParams.set("ref", sessionId.value);
+  }
+  return url.toString();
+});
+
+// Flatten the catalog's sections[].json_schema into a list of questions the
+// chat-guidance backend expects. Each property in a section's schema becomes
+// one question with a `sectionId::propertyKey` id.
+function deriveQuestions(sections: any[]): Question[] {
+  const result: Question[] = [];
+  for (const section of sections || []) {
+    const schema = section?.json_schema;
+    const props = schema?.properties;
+    if (!props || typeof props !== "object") continue;
+    for (const [key, raw] of Object.entries(props)) {
+      const def = (raw || {}) as { title?: string; description?: string };
+      const label = def.title || key;
+      result.push({
+        id: `${section.id}::${key}`,
+        label: `${section.name}｜${label}`,
+        prompt: def.description || label,
+      });
+    }
+  }
+  return result;
+}
+
+async function loadCatalogAndSession() {
+  const [configResp, demoResp] = await Promise.all([
+    fetch(`${apiBaseUrl}/config`, { credentials: "include" }),
+    fetch(`${apiBaseUrl}/demo`, { credentials: "include" }),
+  ]);
+
+  if (!configResp.ok) {
+    throw new Error(`/api/config returned ${configResp.status}`);
+  }
+  if (!demoResp.ok) {
+    throw new Error(`/api/demo returned ${demoResp.status}`);
+  }
+
+  const catalog = (await configResp.json()) as any[];
+  const demo = (await demoResp.json()) as Record<string, any>;
+
+  sessionId.value = demo.session_id;
+
+  // Pick whichever grant/template the demo row already references; otherwise
+  // default to the first one in the catalog.
+  let chosenGrant = catalog.find((g) => g.id === demo.grant_id);
+  let chosenTemplate = chosenGrant?.templates?.find(
+    (t: any) => t.id === demo.template_id,
+  );
+  if (!chosenGrant || !chosenTemplate) {
+    chosenGrant = catalog[0];
+    chosenTemplate = chosenGrant?.templates?.[0];
+  }
+
+  if (!chosenGrant || !chosenTemplate) {
+    throw new Error("No grant templates available — apply demo_migration.sql and seed the catalog.");
+  }
+
+  grantId.value = chosenGrant.id;
+  templateId.value = chosenTemplate.id;
+  grantName.value = chosenGrant.name || "";
+  templateName.value = chosenTemplate.name || "";
+  allQuestions.value = deriveQuestions(chosenTemplate.sections);
+
+  // If the demo row doesn't yet remember which template the visitor is on,
+  // pin it so the WS reconnect can short-circuit.
+  if (demo.grant_id !== grantId.value || demo.template_id !== templateId.value) {
+    await fetch(`${apiBaseUrl}/demo`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ grant_id: grantId.value, template_id: templateId.value }),
     });
+  }
 
-    if (!response.ok) {
-      console.error("Failed to fetch plan templates");
+  // Re-hydrate prior conversation if any.
+  if (Array.isArray(demo.conversation_history)) {
+    messages.value = demo.conversation_history.map((entry: any) => ({
+      role: entry.role,
+      content: entry.content || "",
+    }));
+  }
+}
+
+function buildWebsocketUrl(): string {
+  const rawApiBase = config.public.apiBaseUrl || "";
+  let wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  let wsHost = window.location.host;
+  let wsPathPrefix = "";
+
+  if (rawApiBase.startsWith("http://") || rawApiBase.startsWith("https://")) {
+    const parsed = new URL(rawApiBase);
+    wsProtocol = parsed.protocol === "https:" ? "wss" : "ws";
+    wsHost = parsed.host;
+    wsPathPrefix = parsed.pathname.replace(/\/+$/, "");
+  } else if (rawApiBase) {
+    wsPathPrefix = (rawApiBase.startsWith("/") ? rawApiBase : `/${rawApiBase}`).replace(
+      /\/+$/,
+      "",
+    );
+  }
+
+  const path = `${wsPathPrefix}/api/ws/chat_guidance`.replace(/\/{2,}/g, "/");
+  return `${wsProtocol}://${wsHost}${path}`;
+}
+
+function openWebSocket() {
+  if (ws && ws.readyState !== WebSocket.CLOSED) {
+    ws.close();
+  }
+  ws = new WebSocket(buildWebsocketUrl());
+
+  ws.onopen = () => {
+    const payload = {
+      grant_id: grantId.value,
+      template_id: templateId.value,
+      grant_name: grantName.value,
+      template_name: templateName.value,
+      project_title: templateName.value,
+      project_summary: "",
+      all_questions: allQuestions.value,
+      current_answers: {},
+      current_answers_meta: {},
+      history: messages.value.map((m) => ({ role: m.role, content: m.content })),
+    };
+    ws?.send(JSON.stringify(payload));
+  };
+
+  ws.onmessage = (event) => {
+    let msg: any;
+    try {
+      msg = JSON.parse(event.data);
+    } catch {
       return;
     }
+    handleServerEvent(msg);
+  };
 
-    const templates: PlanTemplate[] = await response.json();
+  ws.onerror = () => {
+    isStreaming.value = false;
+  };
 
-    // 过滤只显示 isOpen 为 true 的模板
-    const openTemplates = templates.filter((t) => t.isOpen === true);
-
-    planTypes.value = openTemplates.map((template) => {
-      // 根据 logo_storage_path 生成 public URL 或 signed URL
-      let logoUrl = "logo.png";
-      if (template.logo_storage_path) {
-        // 如果是完整的存储路径（http开头），直接使用
-        if (template.logo_storage_path.startsWith("http")) {
-          logoUrl = template.logo_storage_path;
-        } else {
-          // 尝试用 public URL 格式（如果路径在 public 区域）
-          logoUrl = `${SUPABASE_BUCKET_URL}/storage/v1/object/${template.logo_storage_path}`;
-        }
-      }
-
-      // Split names like "地方型SBIR【在地產業補助】" into a main title and a
-      // bracketed sub-line so the card can render them on separate rows.
-      // Names without a trailing 【...】 segment fall through unchanged
-      // (mainTitle === template.name, bracketedTitle === "").
-      const { mainTitle, bracketedTitle } = splitTemplateName(template.name);
-
-      return {
-        id: template.id,
-        // Preserve the full original name on `title` for downstream consumers
-        // (project creation fallback, prefilled chat answers, Stage 2 heading).
-        title: template.name,
-        mainTitle,
-        bracketedTitle,
-        subtitle: template.subtitle || "",
-        description: template.description || "",
-        grantId: template.grant_id,
-        templateId: template.id,
-        submissionDeadline: template.submission_deadline || "",
-        subsidyAmount: template.subsidy_amount || "",
-        requiresPaidPlan: Boolean(template.requires_paid_plan),
-        iconBg: template.iconBg || "#F8FAFC",
-        image: logoUrl,
-      };
-    });
-  } catch (error) {
-    console.error("Failed to load plan types:", error);
-    notifyError("無法載入補助計畫列表，請稍後再試");
-  }
-}
-
-const {
-  allConfigs,
-  selectedGrantId,
-  selectedTemplateId,
-  onSelectionChange,
-  fetchAllConfigs,
-} = usePlanGenerator();
-
-const currentStage = ref(1);
-const selectedPlanType = ref<PlanTypeOption | null>(null);
-const selectedMode = ref<ModeOption["id"] | null>("interactive");
-const planName = ref("計畫草稿");
-const planSummary = ref("");
-const planBackground = ref("");
-const backgroundFiles = ref<BackgroundAttachment[]>([]);
-const isDraggingBackground = ref(false);
-const isProcessingBackground = ref(false);
-const backgroundFileInputRef = ref<HTMLInputElement | null>(null);
-const isCreatingProject = ref(false);
-
-// Double-click tracking for plan buttons: two clicks within this threshold
-const lastClickedPlanKey = ref<string>("");
-const lastClickTime = ref<number>(0);
-const DOUBLE_CLICK_THRESHOLD = 600; // ms
-
-function handlePlanClick(plan: PlanTypeOption) {
-  if (isPlanLocked(plan)) {
-    notifyWarning("升級付費會員，立即開通此計畫");
-    return;
-  }
-
-  const planKey = getPlanKey(plan);
-  const now = Date.now();
-  if (
-    planKey &&
-    lastClickedPlanKey.value === planKey &&
-    now - lastClickTime.value <= DOUBLE_CLICK_THRESHOLD
-  ) {
-    // treat as double-click: ensure selected and advance
-    selectedPlanType.value = plan;
-    // reset tracking
-    lastClickedPlanKey.value = "";
-    lastClickTime.value = 0;
-    // proceed to next step
-    handlePlanTypeConfirm();
-    return;
-  }
-
-  // single click: select and record timestamp
-  selectedPlanType.value = plan;
-  lastClickedPlanKey.value = planKey;
-  lastClickTime.value = now;
-  // clear tracking after threshold to avoid stale state
-  setTimeout(() => {
-    if (
-      lastClickedPlanKey.value === planKey &&
-      Date.now() - lastClickTime.value >= DOUBLE_CLICK_THRESHOLD
-    ) {
-      lastClickedPlanKey.value = "";
-      lastClickTime.value = 0;
-    }
-  }, DOUBLE_CLICK_THRESHOLD + 50);
-}
-
-const { extractTextFromFile } = useFileExtractor();
-
-async function getUserIdOrNotify() {
-  const userId = currentUserId.value || (await refreshUser());
-  if (!userId) {
-    notifyError("無法取得使用者資訊，請重新登入後再試。");
-  }
-  return userId;
-}
-
-const configsLoaded = computed(() => allConfigs.value.length > 0);
-const canConfirmPlanType = computed(
-  () =>
-    Boolean(selectedPlanType.value) &&
-    configsLoaded.value &&
-    canAccessPlan(selectedPlanType.value),
-);
-
-const resolvedTemplateName = computed(() => {
-  if (!selectedTemplateId.value) return "";
-  const grant = allConfigs.value.find((g) => g.id === selectedGrantId.value);
-  return (
-    grant?.templates.find((tpl) => tpl.id === selectedTemplateId.value)?.name ||
-    ""
-  );
-});
-
-const canEnterChat = computed(() =>
-  Boolean(
-    !isSlotFull.value &&
-    selectedMode.value &&
-    planName.value.trim() &&
-    planSummary.value.trim() &&
-    selectedPlanType.value &&
-    selectedGrantId.value &&
-    selectedTemplateId.value,
-  ),
-);
-
-const modeLabel = computed(() => {
-  const target = modeOptions.find((mode) => mode.id === selectedMode.value);
-  return target?.title || "";
-});
-
-const backgroundSummary = computed(() => {
-  const entries: string[] = [];
-  const manualNotes = planBackground.value.trim();
-  if (manualNotes) {
-    entries.push(`背景摘要\n${manualNotes}`);
-  }
-  backgroundFiles.value.forEach((file) => {
-    const content = file.content.trim();
-    entries.push(`[附件] ${file.name}\n${content || "（無可解析的文字內容）"}`);
-  });
-  return entries;
-});
-
-const combinedBackgroundNotes = computed(() =>
-  backgroundSummary.value.join("\n\n").trim(),
-);
-
-const prefilledChatAnswers = computed(() => {
-  const answers: Record<string, string> = {};
-  if (planName.value.trim()) answers["plan_name"] = planName.value.trim();
-  if (planSummary.value.trim()) {
-    answers["main-idea"] = planSummary.value.trim();
-    answers["plan_summary"] = planSummary.value.trim();
-  }
-  if (combinedBackgroundNotes.value) {
-    answers["background_notes"] = combinedBackgroundNotes.value;
-  }
-  if (selectedPlanType.value) {
-    answers["plan_type"] = selectedPlanType.value.title;
-  }
-  if (selectedMode.value) {
-    answers["work_mode"] = modeLabel.value;
-  }
-  return answers;
-});
-
-async function runAttachmentAutofill(
-  userId: string,
-): Promise<AttachmentAutofillResult | null> {
-  if (!backgroundFiles.value.length) {
-    return null;
-  }
-
-  const entries: string[] = [];
-  const summary = planSummary.value.trim();
-  if (summary) {
-    entries.push(`【計畫摘要】\n${summary}`);
-  }
-
-  backgroundFiles.value.forEach((file) => {
-    const body = (file.content || "").trim();
-    if (body) {
-      entries.push(`【${file.name}】\n${body}`);
-    }
-  });
-
-  const combinedText = entries.join("\n\n---\n\n").trim();
-  if (!combinedText) {
-    return null;
-  }
-
-  const baseValues = createEmptyDynamicValues();
-  const sectionsView = buildDynamicSections(baseValues, {
-    templateId: selectedTemplateId.value,
-    templateGrantId: selectedGrantId.value,
-  });
-  const sectionsPayload = sectionsView.map((section) => ({
-    section_id: section.sectionId,
-    section_name: section.sectionName,
-    json_schema: buildSectionSchema(section),
-  }));
-
-  const filledContent = await callAutoFillApi(
-    {
-      document_text: combinedText,
-      sections: sectionsPayload,
-      user_id: userId,
-    },
-    API_BASE_URL,
-  );
-
-  const accumulator = { ...baseValues };
-  processAutoFillResults(
-    filledContent,
-    sectionsView,
-    (sectionId, propertyKey, value) => {
-      const normalized = (value || "").trim();
-      if (!normalized) {
-        return;
-      }
-      const key = makeCompositeKey(sectionId, propertyKey);
-      accumulator[key] = normalized;
-    },
-    () => {},
-  );
-
-  const dynamicFields = Object.fromEntries(
-    Object.entries(accumulator).filter(([, value]) =>
-      Boolean(value && value.trim()),
-    ),
-  ) as Record<string, string>;
-
-  const mainIdea =
-    filledContent?.main_idea?.content?.project_name_and_summary?.trim() || "";
-
-  if (!Object.keys(dynamicFields).length && !mainIdea) {
-    return null;
-  }
-
-  return {
-    dynamicFields,
-    mainIdea,
+  ws.onclose = () => {
+    isStreaming.value = false;
   };
 }
 
-function triggerBackgroundUpload() {
-  if (isProcessingBackground.value) {
-    notifyWarning("附件解析中，請稍候片刻再試");
-    return;
-  }
-  const input = backgroundFileInputRef.value;
-  if (input) {
-    input.value = "";
-    input.click();
-  }
-}
-
-function handleBackgroundFileChange(event: Event) {
-  const input = event.target as HTMLInputElement | null;
-  const files = input?.files ? Array.from(input.files) : [];
-  if (input) {
-    input.value = "";
-  }
-  if (files.length) {
-    processBackgroundFiles(files);
-  }
-}
-
-function handleBackgroundDrop(event: DragEvent) {
-  isDraggingBackground.value = false;
-  const droppedFiles = event.dataTransfer?.files;
-  if (!droppedFiles || !droppedFiles.length) return;
-  processBackgroundFiles(Array.from(droppedFiles));
-}
-
-async function processBackgroundFiles(files: File[]) {
-  if (isProcessingBackground.value) {
-    notifyWarning("附件解析中，請稍候片刻再試");
-    return;
-  }
-  const classified = files
-    .map((file) => ({ file, type: detectBackgroundType(file) }))
-    .filter((item): item is { file: File; type: "word" | "pdf" } =>
-      Boolean(item.type),
-    );
-  if (!classified.length) {
-    notifyWarning("僅支援 Word (.docx) 與 PDF 檔案");
-    return;
-  }
-  if (classified.length < files.length) {
-    notifyWarning("部分檔案格式不支援，僅匯入 Word/PDF");
-  }
-  isProcessingBackground.value = true;
-  try {
-    for (const item of classified) {
-      await importBackgroundFile(item.file, item.type);
-    }
-  } finally {
-    isProcessingBackground.value = false;
-  }
-}
-
-function detectBackgroundType(file: File): "word" | "pdf" | null {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".docx")) return "word";
-  if (name.endsWith(".pdf")) return "pdf";
-  const mime = (file.type || "").toLowerCase();
-  if (mime.includes("word")) return "word";
-  if (mime.includes("pdf")) return "pdf";
-  return null;
-}
-
-async function importBackgroundFile(file: File, type: "word" | "pdf") {
-  try {
-    const rawText = await extractTextFromFile(file);
-    const normalized = normalizeBackgroundText(rawText);
-    const snippet = normalized
-      ? `${normalized.slice(0, 200)}${normalized.length > 200 ? "..." : ""}`
-      : "未偵測到可用文字內容";
-    backgroundFiles.value = [
-      ...backgroundFiles.value,
-      {
-        id: createAttachmentId(),
-        name: file.name,
-        type,
-        content: normalized,
-        snippet,
-        size: file.size,
-      },
-    ];
-    success(`已匯入 ${file.name}`);
-  } catch (error: any) {
-    console.error("failed to import background file", error);
-    notifyError(`解析 ${file.name} 失敗：${error?.message || "請稍後再試"}`);
-  }
-}
-
-function normalizeBackgroundText(value: string) {
-  return (value || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function createAttachmentId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function removeBackgroundAttachment(id: string) {
-  backgroundFiles.value = backgroundFiles.value.filter(
-    (file) => file.id !== id,
-  );
-}
-
-function clearBackgroundAttachments() {
-  backgroundFiles.value = [];
-}
-
-function buildSelectionKey(
-  grantId?: string | null,
-  templateId?: string | null,
-): string {
-  return `${grantId ?? ""}::${templateId ?? ""}`;
-}
-
-function getPlanKey(plan: PlanTypeOption | null): string {
-  if (!plan) return "";
-  const templateId = plan.templateId || plan.id;
-  return buildSelectionKey(plan.grantId, templateId);
-}
-
-function isPlanLocked(plan: PlanTypeOption | null): boolean {
-  if (!plan?.requiresPaidPlan) return false;
-  return currentUserRole.value === "normal";
-}
-
-function canAccessPlan(plan: PlanTypeOption | null): boolean {
-  return !isPlanLocked(plan);
-}
-
-function isPlanSelected(plan: PlanTypeOption): boolean {
-  const planKey = getPlanKey(plan);
-  if (!planKey) return false;
-
-  const localSelectionKey = getPlanKey(selectedPlanType.value);
-  if (localSelectionKey && localSelectionKey === planKey) {
-    return true;
-  }
-
-  const generatorSelectionKey = buildSelectionKey(
-    selectedGrantId.value,
-    selectedTemplateId.value,
-  );
-  return Boolean(generatorSelectionKey && generatorSelectionKey === planKey);
-}
-
-function resolvePlanConfig(plan: PlanTypeOption | null) {
-  if (!plan || !allConfigs.value.length) return null;
-
-  // 直接按 grantId 查找对应的 grant
-  const grant = allConfigs.value.find((item) => item.id === plan.grantId);
-  if (!grant) return null;
-
-  // 直接按 templateId 查找对应的 template
-  const template = grant.templates.find((tpl) => tpl.id === plan.templateId);
-  if (!template) return null;
-
-  return {
-    grantId: grant.id,
-    templateId: template.id,
-  };
-}
-
-function handlePlanTypeConfirm() {
-  if (!selectedPlanType.value) {
-    notifyWarning("請先選擇計畫類型");
-    return;
-  }
-  if (isPlanLocked(selectedPlanType.value)) {
-    notifyWarning("升級付費會員，立即開通此計畫");
-    return;
-  }
-  const configSelection = resolvePlanConfig(selectedPlanType.value);
-  if (!configSelection) {
-    notifyError("後臺更新導致無法取得計畫配置，請刷新頁面或稍後再試");
-    return;
-  }
-  onSelectionChange(configSelection);
-  // planName.value = selectedPlanType.value.title;
-  currentStage.value = 2;
-}
-
-function backToStage(stage: number) {
-  currentStage.value = stage;
-}
-
-async function enterChatStage() {
-  if (!canEnterChat.value || isProcessingBackground.value) {
-    notifyWarning("請先完成模式與背景資訊填寫");
-    return;
-  }
-  const userId = await getUserIdOrNotify();
-  if (!userId || isCreatingProject.value) {
-    return;
-  }
-
-  isCreatingProject.value = true;
-  let storedAnswerPayload: Record<string, any> | null = null;
-  try {
-    if (backgroundFiles.value.length) {
-      try {
-        const autofillResult = await runAttachmentAutofill(userId);
-        if (autofillResult) {
-          //直接存入stored answer
-          storedAnswerPayload = {
-            chat_answers: autofillResult.dynamicFields,
-          };
-        }
-      } catch (autofillError) {
-        console.error("Failed to auto-fill dynamic sections", autofillError);
-        notifyWarning(
-          "附件解析完成，但自動填寫欄位失敗，將以空白欄位建立工作區。",
-        );
+function handleServerEvent(msg: any) {
+  switch (msg.event) {
+    case "ready":
+      interactionCount.value = msg.interaction_count ?? 0;
+      interactionLimit.value = msg.interaction_limit ?? interactionLimit.value;
+      if (interactionCount.value >= interactionLimit.value) {
+        limitReached.value = true;
+        showRegisterModal.value = true;
       }
+      break;
+    case "chunk_start":
+      isStreaming.value = true;
+      messages.value.push({ role: "assistant", content: "", isStreaming: true });
+      scrollToBottom();
+      break;
+    case "chunk": {
+      const last = messages.value[messages.value.length - 1];
+      if (last && last.role === "assistant" && last.isStreaming) {
+        last.content += msg.data || "";
+        scrollToBottom();
+      }
+      break;
     }
-
-    const response = await authenticatedFetch(`${API_BASE_URL}/projects`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        mode: selectedMode.value || "interactive",
-        title:
-          planName.value.trim() ||
-          selectedPlanType.value?.title ||
-          "未命名計畫案",
-        description: planSummary.value.trim() || "尚未填寫摘要",
-        saved_plan: [],
-        conversation_history: [],
-        stored_answer: storedAnswerPayload || {},
-        grant_id: selectedGrantId.value || null,
-        template_id: selectedTemplateId.value || null,
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(detail || "建立計畫失敗");
+    case "done": {
+      const last = messages.value[messages.value.length - 1];
+      if (last && last.isStreaming) last.isStreaming = false;
+      isStreaming.value = false;
+      break;
     }
-
-    const record = await response.json();
-    success("已建立計畫並準備前往工作區");
-    router.push(`/projects/${record.id}`);
-  } catch (error: any) {
-    console.error("Failed to create project", error);
-    notifyError(error?.message || "建立計畫失敗，請稍後再試");
-  } finally {
-    isCreatingProject.value = false;
+    case "cancelled":
+      isStreaming.value = false;
+      break;
+    case "limit_reached":
+      interactionCount.value = msg.interaction_count ?? interactionCount.value;
+      interactionLimit.value = msg.interaction_limit ?? interactionLimit.value;
+      registerUrl.value = msg.register_url || null;
+      limitReached.value = true;
+      showRegisterModal.value = true;
+      break;
+    case "error":
+      console.error("Server error:", msg.message);
+      isStreaming.value = false;
+      break;
   }
 }
+
+function scrollToBottom() {
+  void nextTick(() => {
+    const el = messagesContainer.value;
+    if (el) el.scrollTop = el.scrollHeight;
+  });
+}
+
+function sendMessage() {
+  const text = userInput.value.trim();
+  if (!text || !canSend.value || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+  messages.value.push({ role: "user", content: text });
+  scrollToBottom();
+  ws.send(
+    JSON.stringify({
+      user_message: text,
+      current_answers: {},
+      current_answers_meta: {},
+    }),
+  );
+  userInput.value = "";
+
+  // Optimistically bump the counter; the server will correct via `limit_reached`.
+  interactionCount.value += 1;
+  if (interactionCount.value >= interactionLimit.value) {
+    limitReached.value = true;
+  }
+}
+
+async function initialize() {
+  setupError.value = null;
+  isInitializing.value = true;
+  try {
+    await loadCatalogAndSession();
+    openWebSocket();
+  } catch (err: any) {
+    console.error(err);
+    setupError.value = err?.message || "Unknown error";
+  } finally {
+    isInitializing.value = false;
+  }
+}
+
+onMounted(() => {
+  void initialize();
+});
+
+onBeforeUnmount(() => {
+  if (ws && ws.readyState !== WebSocket.CLOSED) {
+    ws.close();
+  }
+});
 </script>

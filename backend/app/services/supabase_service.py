@@ -1157,21 +1157,8 @@ class SupabaseService:
         if action:
             new_log["action"] = action
         
-        insert_resp = self.client.from_("usage_logs").insert(new_log).execute()
+        self.client.from_("usage_logs").insert(new_log).execute()
         logger.info("Logged usage for user %s: $%s for %s model.", canonical_user_id or 'NULL', cost, model_type)
-
-        # Fire-and-forget 給母平台 /api/engine-usage/report 回報。
-        # 注意：避免在模組頂部 import engine_usage_reporter，因為它會 import 這個檔案。
-        try:
-            inserted_rows = getattr(insert_resp, "data", None) or []
-            if inserted_rows:
-                inserted_id = inserted_rows[0].get("id")
-                if inserted_id is not None:
-                    from app.services import engine_usage_reporter
-                    engine_usage_reporter.schedule_report_for_usage_log_id(self, int(inserted_id))
-        except Exception as exc:
-            # 母平台回報失敗絕不能影響原本流程；只記 log。
-            logger.warning("Engine usage report scheduling failed: %s", exc)
 
     async def upsert_routing_rule(self, rule: RoutingRule) -> Dict[str, Any]:
         """
@@ -1784,9 +1771,123 @@ class SupabaseService:
                 .order("created_at", desc=True)
                 .execute()
             )
-            
+
             return response.data if response.data else []
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch images for project {project_id}: {e}", exc_info=True)
             return []
+
+    # ------------------------------------------------------------------
+    # Demo-session CRUD — every demo visitor maps to one row in
+    # ai_proposal_platform.demo, keyed by the cookie-issued session UUID.
+    # ------------------------------------------------------------------
+
+    async def get_demo_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch the demo row for this visitor, or None if it doesn't exist yet."""
+        try:
+            response = (
+                self.client.from_("demo")
+                .select("*")
+                .eq("session_id", session_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.error("Failed to fetch demo session %s: %s", session_id, exc, exc_info=True)
+            return None
+
+    async def ensure_demo_session(
+        self,
+        session_id: str,
+        grant_id: Optional[str] = None,
+        template_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the existing demo row or upsert a blank one. If grant/template
+        are supplied and the row already exists with NULLs, fill them in."""
+        existing = await self.get_demo_session(session_id)
+        if existing:
+            # Lazy-populate grant/template if the row was created before the
+            # visitor picked a template.
+            patch: Dict[str, Any] = {}
+            if grant_id and not existing.get("grant_id"):
+                patch["grant_id"] = grant_id
+            if template_id and not existing.get("template_id"):
+                patch["template_id"] = template_id
+            if patch:
+                return await self.update_demo_session(session_id, patch) or existing
+            return existing
+
+        payload: Dict[str, Any] = {"session_id": session_id}
+        if grant_id:
+            payload["grant_id"] = grant_id
+        if template_id:
+            payload["template_id"] = template_id
+        try:
+            response = self.client.from_("demo").insert(payload).execute()
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.error("Failed to create demo session %s: %s", session_id, exc, exc_info=True)
+            return None
+
+    async def update_demo_session(
+        self, session_id: str, data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Patch the demo row with non-null fields from `data`."""
+        clean = {k: v for k, v in data.items() if v is not None}
+        if not clean:
+            return await self.get_demo_session(session_id)
+        try:
+            response = (
+                self.client.from_("demo")
+                .update(clean)
+                .eq("session_id", session_id)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.error("Failed to update demo session %s: %s", session_id, exc, exc_info=True)
+            return None
+
+    async def increment_demo_interaction(self, session_id: str) -> int:
+        """Atomically bump interaction_count on the demo row and return the new value.
+
+        Uses raw SQL with RETURNING because the supabase-py builder doesn't
+        expose UPDATE…SET col=col+1 directly.
+        """
+        try:
+            with self.get_db_session() as session:
+                result = session.execute(
+                    text(
+                        """
+                        UPDATE ai_proposal_platform.demo
+                        SET interaction_count = interaction_count + 1
+                        WHERE session_id = :sid
+                        RETURNING interaction_count
+                        """
+                    ),
+                    {"sid": session_id},
+                )
+                row = result.fetchone()
+                session.commit()
+                return int(row[0]) if row else 0
+        except Exception as exc:
+            logger.error(
+                "Failed to increment interaction_count for demo session %s: %s",
+                session_id,
+                exc,
+                exc_info=True,
+            )
+            return 0
+
+    async def delete_demo_session(self, session_id: str) -> bool:
+        try:
+            self.client.from_("demo").delete().eq("session_id", session_id).execute()
+            return True
+        except Exception as exc:
+            logger.error("Failed to delete demo session %s: %s", session_id, exc, exc_info=True)
+            return False

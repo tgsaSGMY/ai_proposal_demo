@@ -1,179 +1,58 @@
-# 用途：集中管理 API 層的依賴注入、登入身份解析與內部人員權限驗證。
+# Dependency injection for the demo backend.
+# No authentication — every visitor is identified by an opaque demo session
+# cookie (UUID, 30-day lifetime). The cookie is minted server-side on first
+# request and used as the scoping key everywhere user_id was used in the
+# parent platform.
 
-from fastapi import Request, Depends, HTTPException, Header, status
-from app.services.supabase_service import SupabaseService
+from __future__ import annotations
+
+import uuid
+from typing import Optional
+
+from fastapi import Request, Response
+
 from app.services.llm_service import LLMService
-from typing import Optional, Dict, Any
-import time
+from app.services.supabase_service import SupabaseService
 
-from app.core.app_jwt import decode_app_access_token
-from app.config import EXTERNAL_OAUTH_PROVIDER
+DEMO_SESSION_COOKIE_NAME = "demo_session_id"
+DEMO_SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60  # 30 days, matches demo.expires_at
 
-# 短期快取：避免同一 token 在短時間內重複查詢 Supabase。
-AUTH_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
-AUTH_CONTEXT_CACHE_TTL_SECONDS = 20
-APP_TOKEN_COOKIE_NAME = "app_access_token"
 
 def get_supabase_service(request: Request) -> SupabaseService:
-    # 從應用狀態中獲取 Supabase Service 實例
     return request.app.state.supabase_service
 
+
 def get_llm_service(request: Request) -> LLMService:
-    # 從應用狀態中獲取 LLM Service 實例
     return request.app.state.llm_service
 
-async def get_current_user_id(
-    request: Request,
-    authorization: Optional[str] = Header(None),
-    supabase_service: SupabaseService = Depends(get_supabase_service)
-) -> str:
+
+def _coerce_uuid(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+async def get_demo_session_id(request: Request, response: Response) -> str:
     """
-    從 Authorization Header 或 Cookie 解析 token，驗證後回傳 canonical user_id。
+    Return the visitor's demo session ID, minting and setting the cookie on
+    first request. The returned value is the scoping key for every read/write
+    against ai_proposal_platform.demo.
     """
-    user_ctx = await _resolve_user_context_from_auth(
-        request=request,
-        authorization=authorization,
-        supabase_service=supabase_service,
+    existing = _coerce_uuid(request.cookies.get(DEMO_SESSION_COOKIE_NAME))
+    if existing:
+        return existing
+
+    new_id = str(uuid.uuid4())
+    response.set_cookie(
+        key=DEMO_SESSION_COOKIE_NAME,
+        value=new_id,
+        max_age=DEMO_SESSION_COOKIE_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=False,  # flip to True once the demo is served over HTTPS only
+        path="/",
     )
-    return user_ctx["id"]
-
-
-async def get_current_user_context(
-    request: Request,
-    authorization: Optional[str] = Header(None),
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-) -> Dict[str, Any]:
-    """
-    解析並回傳 canonical user context（含 id/email/role/provider）。
-    """
-    return await _resolve_user_context_from_auth(
-        request=request,
-        authorization=authorization,
-        supabase_service=supabase_service,
-    )
-
-
-async def _resolve_user_context_from_auth(
-    *,
-    request: Request,
-    authorization: Optional[str],
-    supabase_service: SupabaseService,
-) -> Dict[str, Any]:
-    # 優先從 Authorization 取 Bearer token。
-    header_token: Optional[str] = None
-    if authorization and authorization.startswith("Bearer "):
-        candidate = authorization.split(" ")[1].strip()
-        if candidate and candidate.lower() not in {"null", "undefined"}:
-            header_token = candidate
-
-    # 同時支援從 Cookie 讀取 app access token。
-    cookie_token = request.cookies.get(APP_TOKEN_COOKIE_NAME)
-
-    candidate_tokens = [token for token in [header_token, cookie_token] if token]
-
-    # Header 與 Cookie 都沒有 token 時，直接拒絕。
-    if not candidate_tokens:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication token in Authorization header or app_access_token cookie"
-        )
-
-    last_error: Optional[Exception] = None
-    for token in candidate_tokens:
-        now = time.time()
-        cached = AUTH_CONTEXT_CACHE.get(token)
-        # 命中快取且未過期時直接回傳，降低外部查詢成本。
-        if cached and cached.get("expires_at", 0) > now:
-            return cached["user_ctx"]
-
-        try:
-            auth_user = None
-            try:
-                # 優先當作 Supabase token 驗證。
-                user_response = supabase_service.client.auth.get_user(token)
-                auth_user = user_response.user
-            except Exception:
-                auth_user = None
-
-            if auth_user:
-                # 將 Supabase 身份映射/建立為本系統 canonical user。
-                canonical_user = await supabase_service.resolve_or_create_user_by_supabase_identity(
-                    auth_user_id=auth_user.id,
-                    email=auth_user.email,
-                )
-                user_ctx = {
-                    "id": canonical_user["id"],
-                    "email": canonical_user.get("email"),
-                    "role": canonical_user.get("role", "normal"),
-                    "auth_user_id": auth_user.id,
-                    "provider": "supabase",
-                }
-            else:
-                # 若非 Supabase token，改走應用層 JWT 驗證。
-                payload = decode_app_access_token(token)
-                canonical_user_id = payload.get("sub")
-                if not canonical_user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid app token subject",
-                    )
-                user_row = await supabase_service.get_user_by_id(canonical_user_id)
-                if not user_row:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="User not found for app token",
-                    )
-                user_ctx = {
-                    "id": user_row["id"],
-                    "email": user_row.get("email") or payload.get("email"),
-                    "role": user_row.get("role", payload.get("role", "normal")),
-                    "auth_user_id": None,
-                    "provider": payload.get("provider", EXTERNAL_OAUTH_PROVIDER),
-                }
-
-            # 寫入短期快取，減少同 token 重複驗證成本。
-            AUTH_CONTEXT_CACHE[token] = {
-                "user_ctx": user_ctx,
-                "expires_at": now + AUTH_CONTEXT_CACHE_TTL_SECONDS,
-            }
-            return user_ctx
-        except Exception as exc:
-            # 記錄最後一次錯誤，若所有候選 token 都失敗再統一拋出 401。
-            last_error = exc
-            continue
-
-    # 所有候選 token 都驗證失敗時統一回應未授權。
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired authentication token",
-    ) from last_error
-
-async def verify_internal_user(
-    request: Request,
-    authorization: Optional[str] = Header(None),
-    supabase_service: SupabaseService = Depends(get_supabase_service)
-):
-    """
-    驗證内部人員權限的 Dependency:
-    Dependency:
-    1. 解析 Authorization Token 驗證是否登入
-    2. 解析 canonical user 並檢查 users.role 是否為 'internal'
-    3. 如果通過，回傳 user 物件；不通過則拋出 403 錯誤
-    """
-    
-    user_ctx = await get_current_user_context(
-        request=request,
-        authorization=authorization,
-        supabase_service=supabase_service,
-    )
-
-    is_internal = user_ctx.get("role") == "internal"
-    if not is_internal:
-        # 403 Forbidden: 伺服器理解請求但拒絕執行 (權限不足)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission Denied: This action is restricted to internal staff."
-        )
-
-    # 驗證通過，回傳 canonical user context
-    return user_ctx
+    return new_id
