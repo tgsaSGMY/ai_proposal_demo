@@ -251,6 +251,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
     async def save_state_to_db():
         try:
             previous_answers = stored_answer_state.get("chat_answers") or {}
+            previous_snapshot = json.dumps(previous_answers, ensure_ascii=False, sort_keys=True)
+            current_snapshot = json.dumps(current_answers, ensure_ascii=False, sort_keys=True)
+            answers_changed = previous_snapshot != current_snapshot
+
             stored_answer_state["chat_answers"] = current_answers.copy()
             stored_answer_state["chat_answers_meta"] = {
                 key: (value.copy() if isinstance(value, dict) else value)
@@ -263,7 +267,37 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     "stored_answer": stored_answer_state,
                 },
             )
-            _ = previous_answers  # retained for future diff/event hook if needed
+
+            # Buffer a timeline event whenever answers diff — the parent
+            # platform's AI Timeline view will replay these on claim.
+            if answers_changed:
+                field_changes: List[Dict[str, Any]] = []
+                all_field_ids = set(previous_answers.keys()) | set(current_answers.keys())
+                for field_id in sorted(all_field_ids):
+                    old_val = previous_answers.get(field_id, "")
+                    new_val = current_answers.get(field_id, "")
+                    if old_val == new_val:
+                        continue
+                    field_label = next(
+                        (q.get("label", field_id) for q in all_questions if q.get("id") == field_id),
+                        field_id,
+                    )
+                    field_changes.append({
+                        "field_id": field_id,
+                        "field_label": field_label,
+                        "old_value": old_val,
+                        "new_value": new_val,
+                        "change": f"{field_label}：《{old_val}》→《{new_val}》",
+                    })
+                await supabase_service.append_demo_execution_event(
+                    session_id,
+                    "stored_answer_updated",
+                    {
+                        "answers_count": len(current_answers),
+                        "field_changes": field_changes,
+                        "changes_summary": " | ".join(c["change"] for c in field_changes),
+                    },
+                )
         except Exception as exc:
             logger.error("DB save error for demo session %s: %s", session_id, exc)
 
@@ -405,6 +439,13 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     paused_flag,
                 )
                 if first_reply:
+                    # Buffer token usage from the opening turn (drained on claim).
+                    await supabase_service.append_demo_usage_log(
+                        session_id,
+                        model_info,
+                        getattr(llm_service, "_last_response_json", {}) or {},
+                        action="生成對話",
+                    )
                     conversation_history_records.append(build_history_entry("assistant", first_reply))
                     await save_state_to_db()
 
@@ -473,6 +514,14 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     if paused_flag.get("value"):
                         paused_flag["value"] = False
                         continue
+
+                    # Buffer token usage for this turn (drained on claim).
+                    await supabase_service.append_demo_usage_log(
+                        session_id,
+                        model_info,
+                        getattr(llm_service, "_last_response_json", {}) or {},
+                        action="生成對話",
+                    )
 
                     conversation_history_records.append(user_entry)
                     if ai_reply:

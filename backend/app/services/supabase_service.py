@@ -1891,3 +1891,124 @@ class SupabaseService:
         except Exception as exc:
             logger.error("Failed to delete demo session %s: %s", session_id, exc, exc_info=True)
             return False
+
+    # ------------------------------------------------------------------
+    # Audit-data buffering — token usage + execution events.
+    #
+    # The demo never writes directly to ai_proposal_platform.usage_logs /
+    # execution_logs because both tables FK to users(id) / projects(id) and
+    # the demo has neither until the visitor registers. Instead we append
+    # each event to a JSONB array on the demo row. When the parent platform
+    # claims the row it drains these arrays into the real audit tables with
+    # the new user_id / project_id.
+    # ------------------------------------------------------------------
+
+    async def append_demo_usage_log(
+        self,
+        session_id: str,
+        model_info: Dict[str, Any],
+        response_json: Dict[str, Any],
+        action: Optional[str] = None,
+    ) -> None:
+        """Extract tokens from the LLM response and buffer one usage entry."""
+        if not response_json:
+            return
+
+        provider = (model_info or {}).get("provider", "").lower()
+        input_token = 0
+        output_token = 0
+        image_token = 0
+        try:
+            if provider == "openai":
+                usage = response_json.get("usage", {}) or {}
+                input_token = usage.get("input_tokens") or usage.get("prompt_tokens", 0) or 0
+                output_token = usage.get("output_tokens") or usage.get("completion_tokens", 0) or 0
+            elif provider == "gemini":
+                usage = response_json.get("usageMetadata", {}) or {}
+                input_token = usage.get("promptTokenCount", 0) or 0
+                output_token = (
+                    (usage.get("candidatesTokenCount", 0) or 0)
+                    + (usage.get("thoughtsTokenCount", 0) or 0)
+                )
+                image_token = usage.get("imageTokenCount", 0) or 0
+            else:
+                usage = response_json.get("usage", {}) or {}
+                input_token = usage.get("input_tokens", usage.get("prompt_tokens", 0)) or 0
+                output_token = usage.get("output_tokens", usage.get("completion_tokens", 0)) or 0
+        except Exception as exc:
+            logger.warning("Failed to extract token counts for demo %s: %s", session_id, exc)
+            return
+
+        if input_token == 0 and output_token == 0 and image_token == 0:
+            return
+
+        model_type = (model_info or {}).get("type", "internal")
+        cost = 0.0
+        cost_info = (model_info or {}).get("cost_info") or {}
+        if model_type == "external" and cost_info:
+            input_cpm = cost_info.get("input", 0) or 0
+            output_cpm = cost_info.get("output", 0) or 0
+            non_image_output = max(output_token - image_token, 0)
+            cost = (input_token / 1_000_000) * input_cpm + (non_image_output / 1_000_000) * output_cpm
+            if image_token:
+                # Gemini image-output pricing: 120 USD per 1M image tokens.
+                cost += (image_token / 1_000_000) * 120.0
+
+        entry = {
+            "logged_at": datetime.now(timezone.utc).isoformat(),
+            "model_id": (model_info or {}).get("id", ""),
+            "model_type": model_type,
+            "input_token": int(input_token),
+            "output_token": int(output_token),
+            "image_token": int(image_token),
+            "cost": float(cost),
+            "action": action,
+        }
+
+        try:
+            with self.get_db_session() as session:
+                session.execute(
+                    text(
+                        """
+                        UPDATE ai_proposal_platform.demo
+                        SET pending_usage_logs =
+                            COALESCE(pending_usage_logs, '[]'::jsonb) || :entry::jsonb
+                        WHERE session_id = :sid
+                        """
+                    ),
+                    {"sid": session_id, "entry": json.dumps([entry])},
+                )
+                session.commit()
+        except Exception as exc:
+            logger.warning("Failed to append demo usage log for %s: %s", session_id, exc)
+
+    async def append_demo_execution_event(
+        self,
+        session_id: str,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Buffer one execution-timeline event on the demo row."""
+        entry = {
+            "logged_at": datetime.now(timezone.utc).isoformat(),
+            "event_type": event_type,
+            "payload": payload or {},
+        }
+        try:
+            with self.get_db_session() as session:
+                session.execute(
+                    text(
+                        """
+                        UPDATE ai_proposal_platform.demo
+                        SET pending_execution_events =
+                            COALESCE(pending_execution_events, '[]'::jsonb) || :entry::jsonb
+                        WHERE session_id = :sid
+                        """
+                    ),
+                    {"sid": session_id, "entry": json.dumps([entry])},
+                )
+                session.commit()
+        except Exception as exc:
+            logger.warning(
+                "Failed to append demo execution event for %s: %s", session_id, exc
+            )

@@ -58,6 +58,8 @@ This creates `ai_proposal_platform.demo` — the single table that holds every v
 | `stored_answer`        | JSONB       | same shape as parent `projects.stored_answer`                |
 | `saved_plan`           | JSONB       |                                                              |
 | `interaction_count`    | INTEGER     | enforces `DEMO_INTERACTION_LIMIT` (default 10)               |
+| `pending_usage_logs`   | JSONB       | buffered token/cost records; parent drains into `usage_logs` on claim |
+| `pending_execution_events` | JSONB   | buffered timeline events; parent drains into `execution_logs` on claim |
 | `claimed_by`           | UUID FK     | nullable; parent platform sets this on register handoff      |
 | `claimed_at`           | TIMESTAMPTZ |                                                              |
 

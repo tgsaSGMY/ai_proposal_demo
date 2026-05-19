@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS ai_proposal_platform.demo (
     -- Demo-only: track the 10-interaction limit before prompting registration.
     interaction_count    INTEGER      NOT NULL DEFAULT 0,
 
+    -- Buffered audit data. The demo backend appends one entry per LLM call
+    -- and per substantive event into these arrays; on claim, the parent
+    -- platform drains them into ai_proposal_platform.usage_logs and
+    -- ai_proposal_platform.execution_logs with the new user_id / project_id.
+    -- Shape per entry: see SupabaseService.append_demo_usage_log /
+    -- append_demo_execution_event in backend/app/services/supabase_service.py.
+    pending_usage_logs       JSONB    NOT NULL DEFAULT '[]'::jsonb,
+    pending_execution_events JSONB    NOT NULL DEFAULT '[]'::jsonb,
+
     -- Claim handoff: the parent platform's register endpoint sets these when
     -- migrating a demo session into a registered user account.
     -- FK is nullable; rows live unclaimed until (and unless) the visitor registers.
@@ -36,11 +45,15 @@ CREATE TABLE IF NOT EXISTS ai_proposal_platform.demo (
 );
 
 -- Idempotent ALTER for re-runs: if the table already exists from a prior
--- apply of this migration, make sure the title/mode columns are present.
+-- apply of this migration, make sure the newer columns are present.
 ALTER TABLE ai_proposal_platform.demo
     ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'AI 計畫書草稿';
 ALTER TABLE ai_proposal_platform.demo
     ADD COLUMN IF NOT EXISTS mode  TEXT NOT NULL DEFAULT 'interactive';
+ALTER TABLE ai_proposal_platform.demo
+    ADD COLUMN IF NOT EXISTS pending_usage_logs JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE ai_proposal_platform.demo
+    ADD COLUMN IF NOT EXISTS pending_execution_events JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Partial index for the cleanup cron (only scans unclaimed rows past expiry).
 CREATE INDEX IF NOT EXISTS demo_expires_at_idx
