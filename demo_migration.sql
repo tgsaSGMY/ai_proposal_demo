@@ -25,8 +25,22 @@ CREATE TABLE IF NOT EXISTS ai_proposal_platform.demo (
     stored_answer        JSONB        NOT NULL DEFAULT '{}'::jsonb,
     saved_plan           JSONB,
 
-    -- Demo-only: track the 10-interaction limit before prompting registration.
+    -- Demo-only counters and flags that gate the registration prompt.
+    --   interaction_count  — chat turns vs DEMO_INTERACTION_LIMIT
+    --   total_tokens_used  — running sum across LLM calls, vs the token cap
+    --   has_generated_docx — set once a finalize/.docx flow runs (one-shot)
     interaction_count    INTEGER      NOT NULL DEFAULT 0,
+    total_tokens_used    INTEGER      NOT NULL DEFAULT 0,
+    has_generated_docx   BOOLEAN      NOT NULL DEFAULT FALSE,
+
+    -- Lifecycle state machine. Independent of claimed_by so the demo backend
+    -- can mark a row 'generated' (docx produced, no more finalize allowed)
+    -- before — or without — the parent platform ever claims it.
+    --   'active'    — visitor still mid-flow
+    --   'generated' — .docx has been produced
+    --   'claimed'   — parent set claimed_by/claimed_at on register handoff
+    status               TEXT         NOT NULL DEFAULT 'active'
+                                      CHECK (status IN ('active', 'generated', 'claimed')),
 
     -- Buffered audit data. The demo backend appends one entry per LLM call
     -- and per substantive event into these arrays; on claim, the parent
@@ -54,6 +68,20 @@ ALTER TABLE ai_proposal_platform.demo
     ADD COLUMN IF NOT EXISTS pending_usage_logs JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE ai_proposal_platform.demo
     ADD COLUMN IF NOT EXISTS pending_execution_events JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE ai_proposal_platform.demo
+    ADD COLUMN IF NOT EXISTS total_tokens_used INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE ai_proposal_platform.demo
+    ADD COLUMN IF NOT EXISTS has_generated_docx BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE ai_proposal_platform.demo
+    ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+
+-- Re-create the status CHECK on every run so the allowed set stays in sync
+-- with the CREATE TABLE definition when this migration is amended.
+ALTER TABLE ai_proposal_platform.demo
+    DROP CONSTRAINT IF EXISTS demo_status_check;
+ALTER TABLE ai_proposal_platform.demo
+    ADD CONSTRAINT demo_status_check
+    CHECK (status IN ('active', 'generated', 'claimed'));
 
 -- Row Level Security: lock the table down so only the backend (which uses
 -- the service_role key) can touch demo rows. The frontend's anon key is
@@ -124,3 +152,60 @@ SELECT cron.schedule(
 -- statement from any external cron / scheduled task once a day instead.
 --   DELETE FROM ai_proposal_platform.demo
 --    WHERE claimed_by IS NULL AND expires_at < NOW();
+
+-- ---------------------------------------------------------------------------
+-- demo_ip_limits — IP-based rate-limit counters for /api/demo/init.
+--
+-- One row per (ip_address, window_start, window_type) with a running
+-- session_count. The backend's rate limiter reads this on session creation
+-- and rejects with 429 if the per-hour or per-day cap is breached. Hour and
+-- day windows are stored side by side so a single IP has at most two live
+-- rows at any moment.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_proposal_platform.demo_ip_limits (
+    ip_address    INET         NOT NULL,
+    window_start  TIMESTAMPTZ  NOT NULL,
+    window_type   TEXT         NOT NULL,
+    session_count INTEGER      NOT NULL DEFAULT 0,
+    PRIMARY KEY (ip_address, window_start, window_type),
+    CONSTRAINT demo_ip_limits_window_type_check
+        CHECK (window_type IN ('hour', 'day'))
+);
+
+-- Service-role only — same threat model as the demo table itself.
+ALTER TABLE ai_proposal_platform.demo_ip_limits ENABLE ROW LEVEL SECURITY;
+
+-- Powers the cleanup cron below; the read path already hits the PK.
+CREATE INDEX IF NOT EXISTS demo_ip_limits_window_start_idx
+    ON ai_proposal_platform.demo_ip_limits (window_start);
+
+-- ---------------------------------------------------------------------------
+-- Auto-cleanup of stale rate-limit windows.
+--
+-- Windows older than 48h are out of scope for hourly and daily enforcement
+-- and would otherwise accumulate without bound as new IPs hit the endpoint.
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+    existing_jobid BIGINT;
+BEGIN
+    SELECT jobid INTO existing_jobid
+    FROM cron.job
+    WHERE jobname = 'demo_ip_limits_cleanup';
+    IF existing_jobid IS NOT NULL THEN
+        PERFORM cron.unschedule(existing_jobid);
+    END IF;
+END$$;
+
+-- Run daily at 03:20 UTC (5 min after demo_cleanup_expired).
+SELECT cron.schedule(
+    'demo_ip_limits_cleanup',
+    '20 3 * * *',
+    $$DELETE FROM ai_proposal_platform.demo_ip_limits
+       WHERE window_start < NOW() - INTERVAL '2 days'$$
+);
+
+-- Fallback if pg_cron is unavailable:
+--   DELETE FROM ai_proposal_platform.demo_ip_limits
+--    WHERE window_start < NOW() - INTERVAL '2 days';
