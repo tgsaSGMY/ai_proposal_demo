@@ -27,12 +27,27 @@ DEFAULT_MODEL_ID = "gpt-5-mini"
 
 # --- Demo-specific knobs --------------------------------------------------
 # Hard cap on chat turns before the frontend is told to prompt registration.
-DEMO_INTERACTION_LIMIT = int(os.getenv("DEMO_INTERACTION_LIMIT", "10"))
+DEMO_INTERACTION_LIMIT = int(os.getenv("DEMO_INTERACTION_LIMIT", "15"))
+
+# Token cap per session (100K default) — backend accumulates after each LLM call.
+DEMO_MAX_TOKENS_PER_SESSION = int(os.getenv("DEMO_MAX_TOKENS_PER_SESSION", "100000"))
+
+# Max .docx report generations per session (default 1).
+DEMO_MAX_GENERATIONS_PER_SESSION = int(os.getenv("DEMO_MAX_GENERATIONS_PER_SESSION", "1"))
+
+# Session expiry in days (default 30).
+DEMO_SESSION_EXPIRY_DAYS = int(os.getenv("DEMO_SESSION_EXPIRY_DAYS", "30"))
 
 # Where the visitor is redirected when they hit the cap — points at the
 # parent platform's register page. Include `?ref=<session_id>` server-side
 # when emitting the redirect so the parent can claim the demo row.
 DEMO_REGISTER_REDIRECT_URL = os.getenv(
     "DEMO_REGISTER_REDIRECT_URL",
-    "https://portal.tgsaapp.com/register",
+    "https://aiproposal.tgsa.com.tw/register",
 )
+
+# Full platform URL (used for CORS and signup redirects).
+FULL_PLATFORM_URL = os.getenv("FULL_PLATFORM_URL", "https://aiproposal.tgsa.com.tw")
+
+# Demo subdomain (used for CORS allowlist).
+DEMO_FRONTEND_URL = os.getenv("DEMO_FRONTEND_URL", "https://demo-aiproposal.tgsa.com.tw")
