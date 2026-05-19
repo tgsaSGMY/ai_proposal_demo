@@ -55,6 +55,14 @@ ALTER TABLE ai_proposal_platform.demo
 ALTER TABLE ai_proposal_platform.demo
     ADD COLUMN IF NOT EXISTS pending_execution_events JSONB NOT NULL DEFAULT '[]'::jsonb;
 
+-- Row Level Security: lock the table down so only the backend (which uses
+-- the service_role key) can touch demo rows. The frontend's anon key is
+-- exposed in the JS bundle, and without RLS anyone with that key could
+-- read every visitor's conversation_history / stored_answer via PostgREST.
+-- RLS with no policies blocks anon/authenticated entirely; service_role
+-- bypasses RLS by design, so the backend continues working unchanged.
+ALTER TABLE ai_proposal_platform.demo ENABLE ROW LEVEL SECURITY;
+
 -- Partial index for the cleanup cron (only scans unclaimed rows past expiry).
 CREATE INDEX IF NOT EXISTS demo_expires_at_idx
     ON ai_proposal_platform.demo (expires_at)
