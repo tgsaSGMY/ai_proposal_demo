@@ -9,10 +9,12 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import Request, Response
+from fastapi import Depends, HTTPException, Request, Response
 
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
+from app.utils.demo_rate_limiter import DemoRateLimiter
+from app.utils.ip_extractor import get_client_ip
 
 DEMO_SESSION_COOKIE_NAME = "demo_session_id"
 DEMO_SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60  # 30 days, matches demo.expires_at
@@ -35,15 +37,32 @@ def _coerce_uuid(value: Optional[str]) -> Optional[str]:
         return None
 
 
-async def get_demo_session_id(request: Request, response: Response) -> str:
+async def get_demo_session_id(
+    request: Request,
+    response: Response,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> str:
     """
     Return the visitor's demo session ID, minting and setting the cookie on
     first request. The returned value is the scoping key for every read/write
     against ai_proposal_platform.demo.
+
+    On the mint branch only, enforce a per-IP rate limit so a single source
+    can't burn through arbitrary numbers of fresh sessions.
     """
     existing = _coerce_uuid(request.cookies.get(DEMO_SESSION_COOKIE_NAME))
     if existing:
         return existing
+
+    ip = get_client_ip(request)
+    if ip:
+        result = await DemoRateLimiter(supabase_service).check_and_increment(ip)
+        if not result.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={"code": result.reason, "retry_after": result.retry_after},
+                headers={"Retry-After": str(result.retry_after)},
+            )
 
     new_id = str(uuid.uuid4())
     response.set_cookie(

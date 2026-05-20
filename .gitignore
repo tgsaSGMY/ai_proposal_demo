@@ -47,3 +47,4 @@ __pycache__/
 # Other common ignores
 .vscode/
 
+CLAUDE.md

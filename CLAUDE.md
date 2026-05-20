@@ -58,10 +58,15 @@ This creates `ai_proposal_platform.demo` — the single table that holds every v
 | `stored_answer`        | JSONB       | same shape as parent `projects.stored_answer`                |
 | `saved_plan`           | JSONB       |                                                              |
 | `interaction_count`    | INTEGER     | enforces `DEMO_INTERACTION_LIMIT` (default 10)               |
+| `total_tokens_used`    | INTEGER     | running LLM token total; column exists ahead of the unbuilt token cap |
+| `has_generated_docx`   | BOOLEAN     | one-shot flag for the unbuilt .docx finalize flow            |
+| `status`               | TEXT        | CHECK ∈ `('active','generated','claimed')`; independent of `claimed_by` so the demo can mark `generated` without a claim |
 | `pending_usage_logs`   | JSONB       | buffered token/cost records; parent drains into `usage_logs` on claim |
 | `pending_execution_events` | JSONB   | buffered timeline events; parent drains into `execution_logs` on claim |
 | `claimed_by`           | UUID FK     | nullable; parent platform sets this on register handoff      |
 | `claimed_at`           | TIMESTAMPTZ |                                                              |
+
+A second table `ai_proposal_platform.demo_ip_limits` (PK `(ip_address, window_start, window_type)`, CHECK on `window_type ∈ ('hour','day')`) is provisioned for the planned IP rate limiter. **No code reads or writes it yet** — the table is in place ahead of any Phase 3 rate-limiting work. Cleanup is by `demo_ip_limits_cleanup` pg_cron at 03:20 UTC daily, dropping windows older than 48h.
 
 The catalog tables (`grants`, `plan_templates`, `sections`, `models`, `routing_rules`) are **shared with the parent platform** — the demo only reads from them.
 
@@ -76,6 +81,7 @@ The catalog tables (`grants`, `plan_templates`, `sections`, `models`, `routing_r
 
 **SupabaseService surface in `app/services/supabase_service.py`:**
 - `get_demo_session(session_id)`, `ensure_demo_session(session_id, grant_id, template_id)`, `update_demo_session(session_id, data)`, `increment_demo_interaction(session_id)` (raw SQL with RETURNING), `delete_demo_session(session_id)` — the demo's working set.
+- `append_demo_usage_log(session_id, entry)` and `append_demo_execution_event(session_id, entry)` — append to the `pending_usage_logs` / `pending_execution_events` JSONB buffers; the parent drains them on claim.
 - Catalog readers (`get_all_grants_config`, `get_all_models`, `get_all_routing_rules`, `get_all_datasets`) still feed the startup cache in `app/core/lifecycle.py`.
 - The file still contains user-scoped methods inherited from the parent (`get_projects_by_user`, `log_usage`, `check_project_slot_availability`, etc.). They are **dead code** — no router calls them. Their lazy `from app.config import …` imports of removed constants are safe because the imports only execute if the method is called.
 
@@ -116,3 +122,4 @@ The frontend was a Nuxt 3 app with full auth (Supabase + external OAuth) and a m
 - Cleanup runs via **pg_cron** (`cron.schedule('demo_cleanup_expired', '15 3 * * *', ...)`) installed by `demo_migration.sql`. Daily at 03:15 UTC it deletes unclaimed rows past `expires_at` via the partial index `demo_expires_at_idx`. Claimed rows (with `claimed_by` set by the parent platform's register handoff) are preserved indefinitely as an audit trail — delete them manually when desired. If your Supabase project doesn't have `pg_cron`, the migration prints a fallback DELETE statement to run from any external scheduler.
 - The "claim demo session" / migration endpoint lives on the **parent platform**, not here. This repo only produces demo rows; the parent reads them when a visitor registers.
 - Asian-language docs at the root (`API文件.md`, `技術架構文.md`) describe the parent platform's architecture and are mostly stale for this fork.
+- `next-implementation.md` at the repo root is an older spec that has **diverged significantly from what shipped** — header-based sessions, a separate `/demo/chat` route, IP rate limiting, `.docx` finalize, upsell modals, and a `migrate_demo_to_project()` RPC are all described there but none shipped. Treat it as historical reference, not a checklist; this CLAUDE.md is authoritative.
