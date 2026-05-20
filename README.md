@@ -211,7 +211,7 @@ docker compose logs -f --tail=200 fastapi-backend nuxt-frontend nginx-proxy
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 2. 前端

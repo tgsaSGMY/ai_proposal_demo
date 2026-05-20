@@ -163,12 +163,11 @@ const qaItems = computed(() => {
   Object.entries(answers).forEach(([key, value]) => {
     const answer = String(value || "").trim();
     if (answer) {
-      // 提取label：如果有两个"::"，只保留第二个"::"之前的所有文字
+      // 提取label：保留第一個"::"之前的所有文字（通常為章節名稱）
       let label = key;
-      const doubleColonCount = (key.match(/::/g) || []).length;
-      if (doubleColonCount >= 2) {
-        const lastDoubleColonIndex = key.lastIndexOf("::");
-        label = key.substring(0, lastDoubleColonIndex);
+      const firstDoubleColonIndex = key.indexOf("::");
+      if (firstDoubleColonIndex !== -1) {
+        label = key.substring(0, firstDoubleColonIndex);
       }
 
       const meta = metaMap[key] || {};

@@ -25,15 +25,10 @@ logs
 
 # Developer-specific files
 *.log
-custom-sql.txt
-db_schema.txt
 STATUS.md
-to-do-list.txt
-test-server-setup.md
-Stress-Test-Proposal.md
-database-backup-migrate-schema.md
 stress-tests/
 docs/
+CLAUDE.md
 
 # Virtual Environment
 .venv/
