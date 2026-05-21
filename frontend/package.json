@@ -7,7 +7,12 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:backend": "cd ../backend && pytest",
+    "test:all": "npm run test:backend && npm test",
+    "verify:demo": "pwsh -File ../scripts/verify-demo.ps1"
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
@@ -26,6 +31,10 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
-    "@types/node": "^24.7.0"
+    "@types/node": "^24.7.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^25.0.1",
+    "vitest": "^3.0.0"
   }
 }
