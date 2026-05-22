@@ -1972,7 +1972,7 @@ class SupabaseService:
                         """
                         UPDATE ai_proposal_platform.demo
                         SET pending_usage_logs =
-                            COALESCE(pending_usage_logs, '[]'::jsonb) || :entry::jsonb
+                            COALESCE(pending_usage_logs, '[]'::jsonb) || CAST(:entry AS jsonb)
                         WHERE session_id = :sid
                         """
                     ),
@@ -2001,7 +2001,7 @@ class SupabaseService:
                         """
                         UPDATE ai_proposal_platform.demo
                         SET pending_execution_events =
-                            COALESCE(pending_execution_events, '[]'::jsonb) || :entry::jsonb
+                            COALESCE(pending_execution_events, '[]'::jsonb) || CAST(:entry AS jsonb)
                         WHERE session_id = :sid
                         """
                     ),
