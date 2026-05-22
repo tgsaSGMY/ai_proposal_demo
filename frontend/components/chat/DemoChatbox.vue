@@ -531,7 +531,8 @@ async function streamAIGuidanceMessage(question) {
   }
 
   const wsPath = `${wsPathPrefix}/api/ws/chat_guidance`.replace(/\/{2,}/g, "/").replace(/^\/?/, "/");
-  const wsUrl = `${wsProtocol}://${wsHost}${wsPath}`;
+  const sessionQuery = props.sessionId ? `?session_id=${encodeURIComponent(props.sessionId)}` : "";
+  const wsUrl = `${wsProtocol}://${wsHost}${wsPath}${sessionQuery}`;
 
   if (question.id === "init") {
     if (window.chatWebSocket && window.chatWebSocket.readyState !== WebSocket.CLOSED && window.chatWebSocket.readyState !== WebSocket.CLOSING) {
