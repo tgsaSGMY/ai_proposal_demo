@@ -441,3 +441,47 @@ Internal use only.
 - 合成數據生成
 
 > 完整最新進度請參考 `STATUS.md`。
+
+## Demo → Parent Platform Claim Contract (Phase 9)
+
+When a demo visitor clicks the upsell CTA, the demo redirects them to:
+
+```
+https://aiproposal.tgsa.com.tw/api/external-auth/redirect?ref=<demo_session_id>
+```
+
+The parent platform (`ai_proposal_platform` repo) handles `?ref` as follows:
+
+1. `/api/external-auth/redirect` validates `ref` is a UUID, sets an HttpOnly
+   `pending_demo_claim=<ref>` cookie (SameSite=Lax, max-age=900s), and
+   continues the existing OAuth flow to portal.tgsaapp.com.
+2. `/api/external-auth/callback` reads the cookie after auth succeeds and
+   calls `claim_demo_session(ref, user_id)`, which atomically:
+   - Locks the `ai_proposal_platform.demo` row.
+   - Inserts a `projects` row owned by the new user, populated from
+     `saved_plan`, `stored_answer`, `conversation_history`, `grant_id`,
+     `template_id` on the demo row.
+   - Marks the demo row `status='claimed'` with `claimed_by_user_id`,
+     `claimed_project_id`, `claimed_at`.
+3. On success, the user lands on `https://aiproposal.tgsa.com.tw/projects/<new_id>`.
+4. On failure (not_found, already_claimed_by_other), the user lands on the
+   default post-login destination with no error surfaced.
+
+### Schema additions (run once against shared Supabase)
+
+See `database-migrations/001_demo_claim_columns.sql`. Adds `status`,
+`claimed_by_user_id`, `claimed_project_id`, `claimed_at` columns + a
+partial index on `session_id WHERE status='active'`.
+
+### Field mapping (demo → projects)
+
+| demo column | projects column |
+|---|---|
+| `grant_id` | `grant_id` |
+| `template_id` | `template_id` |
+| `saved_plan` | `saved_plan` |
+| `stored_answer` | `stored_answer` |
+| `conversation_history` | `conversation_history` |
+| `stored_answer->>'plan_name'` (fallback `"從 Demo 匯入的計畫書"`) | `title` |
+| n/a (literal `'互動'`) | `mode` |
+| `claimed_by_user_id` (set on demo row) | `user_id` (on new projects row) |

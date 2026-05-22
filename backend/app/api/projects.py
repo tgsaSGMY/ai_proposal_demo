@@ -56,7 +56,7 @@ async def reset_demo_session(
     session_id: str = Depends(get_demo_session_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, str]:
-    """Wipe the row so a fresh demo starts. The cookie stays — the next
-    chat request will lazily re-create a blank session row."""
+    """Wipe the row so a fresh demo starts. The deleted row is gone, so the
+    next GET will see a missing row and mint a new session ID (cookie rotated)."""
     await supabase_service.delete_demo_session(session_id)
     return {"status": "reset", "session_id": session_id}

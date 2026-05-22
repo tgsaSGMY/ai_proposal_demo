@@ -44,15 +44,22 @@ async def get_demo_session_id(
 ) -> str:
     """
     Return the visitor's demo session ID, minting and setting the cookie on
-    first request. The returned value is the scoping key for every read/write
-    against ai_proposal_platform.demo.
+    first request or when the existing cookie maps to a row that's been
+    claimed or expired. The returned value is the scoping key for every
+    read/write against ai_proposal_platform.demo.
 
     On the mint branch only, enforce a per-IP rate limit so a single source
-    can't burn through arbitrary numbers of fresh sessions.
+    can't burn through arbitrary numbers of fresh sessions. A returning
+    visitor whose row was claimed is treated as a fresh mint and counts
+    against the IP limit.
     """
     existing = _coerce_uuid(request.cookies.get(DEMO_SESSION_COOKIE_NAME))
     if existing:
-        return existing
+        # Only reuse the cookie if it still maps to an active row.
+        # get_demo_session filters status='active' as of Task 4, so a None
+        # response here means the row was claimed, expired, or never existed.
+        if await supabase_service.get_demo_session(existing):
+            return existing
 
     ip = get_client_ip(request)
     if ip:

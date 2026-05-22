@@ -94,7 +94,7 @@ const interactionLimit = ref(15);
 const limitReached = ref(false);
 const hasGeneratedDocx = ref(false);
 const showRegisterModal = ref(false);
-const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/register");
+const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/api/external-auth/redirect");
 
 function deriveQuestions(sections: any[]): Question[] {
   const result: Question[] = [];
