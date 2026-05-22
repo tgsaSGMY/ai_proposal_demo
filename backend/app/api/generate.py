@@ -531,6 +531,10 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     if hidden_answers:
                         clean_filled = normalize_filled_fields(hidden_answers, all_questions)
                         current_answers.update(clean_filled)
+                        await websocket.send_json({
+                            "event": "filled",
+                            "data": clean_filled,
+                        })
                         for field_id in clean_filled.keys():
                             touch_meta_field(current_answer_meta, field_id)
 
