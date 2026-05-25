@@ -73,20 +73,6 @@
             </div>
 
             <div
-              v-if="isGenerating"
-              class="flex flex-col items-center justify-center pt-6"
-            >
-              <div class="flex gap-1">
-                <span
-                  v-for="n in 3"
-                  :key="n"
-                  class="h-2.5 w-2.5 animate-bounce rounded-full bg-[#ffb4a8]"
-                  :style="{ animationDelay: `${(n - 1) * 0.15}s` }"
-                ></span>
-              </div>
-              <p class="mt-2 text-xs text-slate-400">AI 正在推演整體架構...</p>
-            </div>
-            <div
               v-if="isFetchingNextQuestion && !isGenerationComplete"
               class="flex items-center justify-center gap-2 pt-4 text-xs text-slate-400"
             >

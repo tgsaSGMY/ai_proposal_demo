@@ -28,6 +28,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3001",
         "https://demo-dev.172.233.79.222.nip.io",
     ],
     allow_credentials=True,

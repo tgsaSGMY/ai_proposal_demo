@@ -18,10 +18,23 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from app.api.dependencies import DEMO_SESSION_COOKIE_NAME, _coerce_uuid
-from app.config import DEMO_INTERACTION_LIMIT, DEMO_REGISTER_REDIRECT_URL
+from app.api.dependencies import (
+    DEMO_SESSION_COOKIE_NAME,
+    _coerce_uuid,
+    get_demo_session_id,
+    get_llm_service,
+    get_supabase_service,
+)
+from app.config import (
+    DEMO_INTERACTION_LIMIT,
+    DEMO_MAX_TOKENS_PER_SESSION,
+    DEMO_REGISTER_REDIRECT_URL,
+)
+from app.models import GenerateRequest, PlanRevisionRequest, SectionGenerateResponse
+from app.services.llm_service import LLMService
+from app.services.supabase_service import SupabaseService
 
 logger = logging.getLogger(__name__)
 
@@ -494,12 +507,17 @@ async def websocket_chat_guidance(websocket: WebSocket):
                 if not user_msg:
                     continue
 
-                # Demo cap: refuse new turns once the visitor has hit the limit.
-                if interaction_count >= DEMO_INTERACTION_LIMIT:
+                # Demo caps: refuse new turns once either the prompt count
+                # or the cumulative token usage has hit its limit.
+                token_total = await supabase_service.get_demo_token_usage(session_id)
+                if interaction_count >= DEMO_INTERACTION_LIMIT or token_total >= DEMO_MAX_TOKENS_PER_SESSION:
                     await websocket.send_json({
                         "event": "limit_reached",
+                        "reason": "prompts" if interaction_count >= DEMO_INTERACTION_LIMIT else "tokens",
                         "interaction_count": interaction_count,
                         "interaction_limit": DEMO_INTERACTION_LIMIT,
+                        "token_usage": token_total,
+                        "token_limit": DEMO_MAX_TOKENS_PER_SESSION,
                         "register_url": DEMO_REGISTER_REDIRECT_URL,
                         "session_id": session_id,
                     })
@@ -541,11 +559,15 @@ async def websocket_chat_guidance(websocket: WebSocket):
                     interaction_count = await supabase_service.increment_demo_interaction(session_id)
                     await save_state_to_db()
 
-                    if interaction_count >= DEMO_INTERACTION_LIMIT:
+                    token_total = await supabase_service.get_demo_token_usage(session_id)
+                    if interaction_count >= DEMO_INTERACTION_LIMIT or token_total >= DEMO_MAX_TOKENS_PER_SESSION:
                         await websocket.send_json({
                             "event": "limit_reached",
+                            "reason": "prompts" if interaction_count >= DEMO_INTERACTION_LIMIT else "tokens",
                             "interaction_count": interaction_count,
                             "interaction_limit": DEMO_INTERACTION_LIMIT,
+                            "token_usage": token_total,
+                            "token_limit": DEMO_MAX_TOKENS_PER_SESSION,
                             "register_url": DEMO_REGISTER_REDIRECT_URL,
                             "session_id": session_id,
                         })
@@ -560,3 +582,556 @@ async def websocket_chat_guidance(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
+
+
+@router.post("/recommend_project_names", summary="根據已填寫的欄位推薦五個專案名稱")
+async def recommend_project_names(
+    payload: Dict[str, Any],
+    request: Request,
+    session_id: str = Depends(get_demo_session_id),
+    llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """Demo port of the platform's recommend_project_names.
+
+    Same prompt/model strategy as the platform, but scoped by the demo
+    session cookie instead of an authenticated user, and without per-user
+    cost logging (token usage is captured via append_demo_usage_log).
+    """
+    model_registry = getattr(request.app.state, "model_registry", {}) or {}
+    # Try in preference order; skip any that aren't registered. The first three
+    # are cheap/fast models well-suited to short JSON output. If all of those
+    # are rate-limited we fall back to whatever else is external.
+    preferred_ids = [
+        "gemini-3-flash-preview",
+        "gpt-4.1-mini",
+        "gpt-5.1-chat-latest",
+        "gpt-4o-mini",
+    ]
+    seen: set = set()
+    candidate_models: List[Dict[str, Any]] = []
+    for mid in preferred_ids:
+        m = model_registry.get(mid)
+        if m and mid not in seen:
+            candidate_models.append(m)
+            seen.add(mid)
+    # Final safety net: any other external models registered.
+    for mid, m in model_registry.items():
+        if mid in seen:
+            continue
+        if isinstance(m, dict) and m.get("type") == "external":
+            candidate_models.append(m)
+            seen.add(mid)
+    if not candidate_models:
+        raise HTTPException(status_code=500, detail="Model not configured for recommendation.")
+    logger.info(
+        "Recommend names candidate models: %s",
+        [c.get("id") for c in candidate_models],
+    )
+
+    current_answers = payload.get("current_answers", {}) or {}
+    project_title = payload.get("project_title", "") or ""
+    grant_name = payload.get("grant_name", "") or ""
+    template_name = payload.get("template_name", "") or ""
+    grant_id = payload.get("grant_id", "") or ""
+    template_id = payload.get("template_id", "") or ""
+
+    name_config: Optional[Dict[str, Any]] = None
+    if grant_id and template_id:
+        try:
+            template_record = await supabase_service.get_template_by_id(template_id, grant_id)
+            if template_record:
+                raw_config = template_record.get("name_recommend_config")
+                if isinstance(raw_config, dict):
+                    name_config = raw_config
+        except Exception as exc:
+            logger.warning(
+                "Failed to load name recommend config for %s/%s: %s",
+                grant_id,
+                template_id,
+                exc,
+            )
+
+    custom_traits = ""
+    custom_examples: List[str] = []
+    if name_config:
+        traits_value = name_config.get("traits")
+        if isinstance(traits_value, str):
+            custom_traits = traits_value.strip()
+
+        raw_examples = name_config.get("examples")
+        if isinstance(raw_examples, list):
+            for example in raw_examples:
+                if not isinstance(example, str):
+                    continue
+                trimmed = example.strip()
+                if trimmed and trimmed not in custom_examples:
+                    custom_examples.append(trimmed)
+                if len(custom_examples) >= 5:
+                    break
+
+    filled_items = []
+    for k, v in current_answers.items():
+        if v and str(v).strip():
+            filled_items.append(f"- {k}: {str(v)[:120]}")
+    filled_text = "\n".join(filled_items) or "（無已填寫欄位）"
+
+    few_shot_text = (
+        "\n".join([f"  - {ex}" for ex in custom_examples])
+        if custom_examples
+        else "  - （尚未提供範例）"
+    )
+
+    custom_trait_block = (
+        f"\n6. **模板自訂特性**：{custom_traits}" if custom_traits else ""
+    )
+
+    system_prompt = f"""你是一位資深的政府補助計畫命名專家，擁有豐富的計畫書撰寫經驗。
+你的任務是根據專案的核心內容、補助計畫類型和已填寫的欄位信息，生成專業、具有吸引力的計畫名稱。
+
+## 命名原則：
+1. **清晰傳達**：名稱需在一讀之間說明核心價值或成果
+2. **突出創新**：凸顯技術創新、服務升級或市場拓展等亮點
+3. **符合計畫特性**：依補助主題與模板特性挑選關鍵語彙，避免偏離既定範疇
+4. **避免重複**：不照搬或過度相似現有計畫名稱
+5. **使用繁體中文**：專業用語準確，避免生僻字{custom_trait_block}"""
+
+    trait_section = (
+        f"\n**模板命名特性說明**：\n{custom_traits}\n" if custom_traits else ""
+    )
+
+    user_prompt = f"""## 補助計畫背景
+
+**補助主題**：{grant_name}
+**計畫模板**：{template_name}
+{trait_section}
+
+
+## 目前專案信息
+
+**專案目前名稱**：{project_title if project_title else "（未命名）"}
+
+**已填寫欄位摘要**：
+{filled_text}
+
+## 參考範例（同補助主題已核准計畫）
+{few_shot_text}
+
+## 任務要求
+
+根據上述背景信息和參考範例的命名風格，為本專案生成最多 5 個創新、專業的計畫名稱建議。
+名稱應該：
+- 突出本專案的核心特色與創新點
+- 符合範例命名慣例與風格
+- 避免與參考範例過於相似
+
+## 輸出格式
+
+請以純 JSON 回傳，格式如下：
+{{"names": ["名稱一", "名稱二", "名稱三", "名稱四", "名稱五"]}}
+
+**注意**：每個名稱應為完整的計畫名稱，不要只是片段關鍵字。
+"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    response: Optional[str] = None
+    response_json: Optional[Dict[str, Any]] = None
+    used_model: Optional[Dict[str, Any]] = None
+    last_error: Optional[Dict[str, Any]] = None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            for candidate in candidate_models:
+                response, error, response_json = await llm_service.call_external_api(
+                    client, candidate, messages, is_json_output=True
+                )
+                if not error:
+                    used_model = candidate
+                    break
+                last_error = error
+                err_text = str(error.get("error", "")).lower() if isinstance(error, dict) else str(error).lower()
+                # Only fall through to the next candidate on rate-limit; bail on
+                # other errors so we don't mask real configuration problems.
+                if "rate limit" not in err_text and "429" not in err_text:
+                    break
+                logger.warning(
+                    "Recommend names: %s rate-limited, falling back to next candidate",
+                    candidate.get("id"),
+                )
+
+        if used_model is None or response is None:
+            logger.error("Recommend names failed across all candidates: %s", last_error)
+            raise HTTPException(status_code=502, detail="Recommendation service error")
+
+        try:
+            data = json.loads(response)
+            names = data.get("names") or []
+            cleaned: List[str] = []
+            for n in names:
+                if not n:
+                    continue
+                s = str(n).strip()
+                if s and s not in cleaned:
+                    cleaned.append(s)
+                if len(cleaned) >= 5:
+                    break
+
+            if response_json and used_model.get("type") == "external":
+                try:
+                    await supabase_service.append_demo_usage_log(
+                        session_id,
+                        used_model,
+                        response_json,
+                        action="推薦計畫名稱",
+                    )
+                except Exception:
+                    logger.warning("Failed to log demo usage for recommend_project_names", exc_info=True)
+
+            return {"names": cleaned}
+        except HTTPException:
+            raise
+        except Exception as ex:
+            logger.error("Failed to parse recommendation response: %s", ex)
+            raise HTTPException(status_code=500, detail="Failed to parse recommendation response")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in recommend_project_names: %s", e)
+        raise HTTPException(status_code=500, detail="Recommendation service error")
+
+
+@router.post("/generate_plan", summary="生成完整計畫書，多候選版本")
+async def generate_plan(
+    request_data: GenerateRequest,
+    request: Request,
+    session_id: str = Depends(get_demo_session_id),
+    llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """Demo port of the platform's generate_plan.
+
+    Removes per-user quota / throttling / project-tracking — visitors are
+    capped by the chat interaction limit upstream. Each template section
+    receives `num_candidates` parallel generations.
+    """
+    app_state = request.app.state
+    all_grants_config = getattr(app_state, "all_grants_config", []) or []
+
+    template_config = None
+    for grant in all_grants_config:
+        if grant.id == request_data.grant:
+            for template in grant.templates:
+                if template.id == request_data.template:
+                    template_config = template
+                    break
+            break
+
+    if not template_config:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Template {request_data.template} not found in Grant {request_data.grant}.",
+        )
+
+    sections = template_config.sections
+    if not sections:
+        raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+
+    num_candidates = request_data.num_candidates
+    final_user_input = request_data.user_input or ""
+
+    # The demo's shared Gemini key is heavily rate-limited. If the caller
+    # didn't pin a model, pick the first non-Gemini external model registered
+    # so per-section generations don't all collide on the Gemini quota.
+    selected_model = request_data.selected_model
+    if not selected_model:
+        model_registry = getattr(app_state, "model_registry", {}) or {}
+        non_gemini_preference = [
+            "gpt-4.1-mini",
+            "gpt-5.1-chat-latest",
+            "gpt-4o-mini",
+        ]
+        for mid in non_gemini_preference:
+            if mid in model_registry:
+                selected_model = mid
+                break
+        if not selected_model:
+            # Final fallback: any external model that isn't Gemini.
+            for mid, m in model_registry.items():
+                if isinstance(m, dict) and m.get("type") == "external" and "gemini" not in mid.lower():
+                    selected_model = mid
+                    break
+        logger.info("generate_plan default selected_model resolved to %s", selected_model)
+
+    async with httpx.AsyncClient() as client:
+        tasks = [
+            llm_service.generate_section_content(
+                http_session=client,
+                grant_id=request_data.grant,
+                template_id=request_data.template,
+                section_id=s.id,
+                user_input=final_user_input,
+                app_state=app_state,
+                user_id=session_id,
+                supabase_service=supabase_service,
+                is_external=request_data.is_external,
+                selected_model=selected_model,
+                project_id=None,
+                section_details_override=s,
+            )
+            for s in sections
+            for _ in range(num_candidates)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    plan_content: Dict[str, List[Dict[str, Any]]] = {}
+    section_success_stats: Dict[str, Dict[str, int]] = {}
+
+    for res in results:
+        if isinstance(res, Exception):
+            logger.error("Section task raised exception: %s", res, exc_info=False)
+            continue
+        if isinstance(res, SectionGenerateResponse):
+            section_id = res.section_id
+            if section_id not in section_success_stats:
+                section_success_stats[section_id] = {"success": 0, "failed": 0}
+                plan_content[section_id] = []
+            if res.error:
+                section_success_stats[section_id]["failed"] += 1
+                logger.warning("Candidate for section %s failed: %s", section_id, res.error)
+            else:
+                section_success_stats[section_id]["success"] += 1
+                plan_content[section_id].append(res.dict())
+
+    failed_sections = [
+        sid for sid, stats in section_success_stats.items() if stats["success"] == 0
+    ]
+    if failed_sections:
+        logger.error("⚠️  %d sections failed completely: %s", len(failed_sections), failed_sections)
+
+    return plan_content
+
+
+def _extract_chat_answers_from_stored(stored_answer: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not stored_answer or not isinstance(stored_answer, dict):
+        return {}
+    for key in ("chat_answers", "chatAnswers"):
+        value = stored_answer.get(key)
+        if isinstance(value, dict):
+            return value.copy()
+    return {}
+
+
+def _format_revision_answers(stored_answer: Optional[Dict[str, Any]]) -> str:
+    merged = _extract_chat_answers_from_stored(stored_answer or {})
+    if not merged:
+        return "（目前尚無額外問答摘要）"
+    lines = []
+    for key in sorted(merged.keys()):
+        value = merged[key]
+        if value is None:
+            continue
+        if isinstance(value, (dict, list)):
+            text = json.dumps(value, ensure_ascii=False)
+        else:
+            text = str(value)
+        text = text.strip()
+        if not text:
+            continue
+        if len(text) > 600:
+            text = text[:600] + "..."
+        lines.append(f"- {key}: {text}")
+    return "\n".join(lines) if lines else "（目前尚無額外問答摘要）"
+
+
+def _format_user_input_summary(stored_answer: Optional[Dict[str, Any]]) -> str:
+    if not stored_answer or not isinstance(stored_answer, dict):
+        return ""
+    user_input = stored_answer.get("user_input") or stored_answer.get("userInput")
+    if not isinstance(user_input, dict):
+        return ""
+    parts: List[str] = []
+    main_idea = user_input.get("main_idea") or user_input.get("mainIdea")
+    if main_idea:
+        parts.append(f"【核心構想】\n{main_idea}")
+    dynamic_fields = user_input.get("dynamic_fields") or user_input.get("dynamicFields")
+    if isinstance(dynamic_fields, dict):
+        field_lines = []
+        for key, value in dynamic_fields.items():
+            if value is None:
+                continue
+            if isinstance(value, (dict, list)):
+                text = json.dumps(value, ensure_ascii=False)
+            else:
+                text = str(value)
+            text = text.strip()
+            if not text:
+                continue
+            field_lines.append(f"- {key}: {text}")
+        if field_lines:
+            parts.append("【動態欄位摘要】\n" + "\n".join(field_lines))
+    return "\n\n".join(parts)
+
+
+def _build_section_revision_context(section, version_map: Dict[str, Any]) -> str:
+    existing_entry = None
+    if version_map and isinstance(version_map, dict):
+        existing_entry = version_map.get(section.id)
+
+    if existing_entry is None:
+        return (
+            f"此章節（{section.name}）目前沒有內容。請根據問答摘要與 JSON Schema 補齊完整內容，"
+            "同時維持原有語氣與結構邏輯。"
+        )
+
+    content_candidate = existing_entry
+    if isinstance(existing_entry, dict):
+        if existing_entry.get("content") is not None:
+            content_candidate = existing_entry.get("content")
+        elif existing_entry.get("raw_json_content") is not None:
+            content_candidate = existing_entry.get("raw_json_content")
+
+    if isinstance(content_candidate, str):
+        formatted_content = content_candidate
+    else:
+        try:
+            formatted_content = json.dumps(content_candidate, ensure_ascii=False, indent=2)
+        except Exception:
+            formatted_content = str(content_candidate)
+
+    return (
+        f"以下為【{section.name}】章節的既有內容，請在此基礎上進行微調：\n{formatted_content}\n"
+        "請保留核心脈絡與欄位排列，只針對語句、缺漏與佐證進行補強，必要時可新增具體數據或示例。"
+    )
+
+
+@router.post("/revise_plan_version", summary="基於既有版本重新優化計畫書，多候選版本")
+async def revise_plan_version(
+    request_data: PlanRevisionRequest,
+    request: Request,
+    session_id: str = Depends(get_demo_session_id),
+    llm_service: LLMService = Depends(get_llm_service),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    """Demo port of the platform's revise_plan_version.
+
+    Removes auth/quota/throttling/project tracking. Builds the same revision
+    prompt as the platform and reuses generate_section_content per section.
+    """
+    if not request_data.current_version or not isinstance(request_data.current_version, dict):
+        raise HTTPException(status_code=400, detail="current_version is required for revision.")
+
+    app_state = request.app.state
+    all_grants_config = getattr(app_state, "all_grants_config", []) or []
+
+    template_config = None
+    for grant in all_grants_config:
+        if grant.id == request_data.grant:
+            for template in grant.templates:
+                if template.id == request_data.template:
+                    template_config = template
+                    break
+            break
+
+    if not template_config:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Template {request_data.template} not found in Grant {request_data.grant}.",
+        )
+
+    sections = template_config.sections
+    if not sections:
+        raise HTTPException(status_code=400, detail="No sections found in the selected template.")
+
+    answers_summary = _format_revision_answers(request_data.stored_answer)
+    user_input_summary = _format_user_input_summary(request_data.stored_answer)
+    project_title = request_data.project_title or "未提供"
+    project_summary = request_data.project_summary or "尚未提供摘要"
+
+    base_prompt = (
+        "你是一位資深的計畫書編輯，任務是基於現有版本進行「版本更新」。請遵循：\n"
+        "- 維持章節 JSON Schema 結構與欄位順序，保留 80~90% 原始內容骨架。\n"
+        "- 對語句不順、細節不足或缺乏佐證的段落進行精煉、補強與具體化。\n"
+        "- 若需補充無法確定的資訊，請以 OOO 作為暫時佔位符。\n"
+        "- 問答摘要可能已經更新了，請根據問答摘要補齊內容，但仍需與整體脈絡一致。\n"
+        "- 完成後輸出純 JSON，不要添加說明文字。\n\n"
+        f"計畫名稱：{project_title}\n"
+        f"計畫摘要：{project_summary}\n\n"
+        f"【使用者問答摘要】\n{answers_summary}\n"
+    )
+    if user_input_summary:
+        base_prompt += f"\n\n【使用者輸入摘要】\n{user_input_summary}"
+
+    # Apply the same Gemini-bypass default as /generate_plan so revision
+    # doesn't all collide on the rate-limited key.
+    selected_model = request_data.selected_model
+    if not selected_model:
+        model_registry = getattr(app_state, "model_registry", {}) or {}
+        for mid in ("gpt-4.1-mini", "gpt-5.1-chat-latest", "gpt-4o-mini"):
+            if mid in model_registry:
+                selected_model = mid
+                break
+        if not selected_model:
+            for mid, m in model_registry.items():
+                if isinstance(m, dict) and m.get("type") == "external" and "gemini" not in mid.lower():
+                    selected_model = mid
+                    break
+        logger.info("revise_plan_version default selected_model resolved to %s", selected_model)
+
+    version_map = request_data.current_version
+    num_candidates = request_data.num_candidates
+
+    async with httpx.AsyncClient() as client:
+        tasks = []
+        for section in sections:
+            section_context = _build_section_revision_context(section, version_map)
+            for _ in range(num_candidates):
+                tasks.append(
+                    llm_service.generate_section_content(
+                        http_session=client,
+                        grant_id=request_data.grant,
+                        template_id=request_data.template,
+                        section_id=section.id,
+                        user_input=base_prompt,
+                        app_state=app_state,
+                        user_id=session_id,
+                        supabase_service=supabase_service,
+                        is_external=request_data.is_external,
+                        selected_model=selected_model,
+                        project_id=None,
+                        section_context=section_context,
+                        disable_few_shot=True,
+                        section_details_override=section,
+                    )
+                )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    plan_content: Dict[str, List[Dict[str, Any]]] = {}
+    section_success_stats: Dict[str, Dict[str, int]] = {}
+
+    for res in results:
+        if isinstance(res, Exception):
+            logger.error("Revision task raised exception: %s", res, exc_info=False)
+            continue
+        if isinstance(res, SectionGenerateResponse):
+            section_id = res.section_id
+            if section_id not in section_success_stats:
+                section_success_stats[section_id] = {"success": 0, "failed": 0}
+                plan_content[section_id] = []
+            if res.error:
+                section_success_stats[section_id]["failed"] += 1
+                logger.warning("Revision candidate for section %s failed: %s", section_id, res.error)
+            else:
+                section_success_stats[section_id]["success"] += 1
+                plan_content[section_id].append(res.dict())
+
+    failed_sections = [
+        sid for sid, stats in section_success_stats.items() if stats["success"] == 0
+    ]
+    if failed_sections:
+        logger.error("⚠️  %d sections failed completely during revision: %s", len(failed_sections), failed_sections)
+
+    return plan_content

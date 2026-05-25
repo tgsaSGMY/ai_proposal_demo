@@ -69,20 +69,20 @@ class DemoRateLimiter:
         counts = {window_type: int(count) for window_type, count in rows}
         now = datetime.now(timezone.utc)
 
-        if counts.get("hour", 0) > DEMO_IP_HOURLY_LIMIT:
-            next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-            return RateLimitResult(
-                allowed=False,
-                reason="DEMO_HOURLY_LIMIT_EXCEEDED",
-                retry_after=max(1, int((next_hour - now).total_seconds())),
-            )
+        # if counts.get("hour", 0) > DEMO_IP_HOURLY_LIMIT:
+        #     next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        #     return RateLimitResult(
+        #         allowed=False,
+        #         reason="DEMO_HOURLY_LIMIT_EXCEEDED",
+        #         retry_after=max(1, int((next_hour - now).total_seconds())),
+        #     )
 
-        if counts.get("day", 0) > DEMO_IP_DAILY_LIMIT:
-            next_day = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            return RateLimitResult(
-                allowed=False,
-                reason="DEMO_DAILY_LIMIT_EXCEEDED",
-                retry_after=max(1, int((next_day - now).total_seconds())),
-            )
+        # if counts.get("day", 0) > DEMO_IP_DAILY_LIMIT:
+        #     next_day = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        #     return RateLimitResult(
+        #         allowed=False,
+        #         reason="DEMO_DAILY_LIMIT_EXCEEDED",
+        #         retry_after=max(1, int((next_day - now).total_seconds())),
+        #     )
 
         return RateLimitResult(allowed=True)

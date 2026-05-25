@@ -1982,6 +1982,47 @@ class SupabaseService:
         except Exception as exc:
             logger.warning("Failed to append demo usage log for %s: %s", session_id, exc)
 
+    async def get_demo_token_usage(self, session_id: str) -> int:
+        """Return the cumulative input+output token count for this demo row.
+
+        Tokens are stored as jsonb entries in `pending_usage_logs` (one per
+        LLM call). We just sum the input + output across all entries; image
+        tokens are excluded because they don't map onto the same per-token
+        meter visitors care about.
+        """
+        try:
+            with self.get_db_session() as session:
+                row = session.execute(
+                    text(
+                        """
+                        SELECT pending_usage_logs
+                        FROM ai_proposal_platform.demo
+                        WHERE session_id = :sid
+                        LIMIT 1
+                        """
+                    ),
+                    {"sid": session_id},
+                ).fetchone()
+        except Exception as exc:
+            logger.warning("Failed to read demo usage logs for %s: %s", session_id, exc)
+            return 0
+
+        if not row:
+            return 0
+        entries = row[0] or []
+        if not isinstance(entries, list):
+            return 0
+        total = 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                total += int(entry.get("input_token") or 0)
+                total += int(entry.get("output_token") or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
     async def append_demo_execution_event(
         self,
         session_id: str,
