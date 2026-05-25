@@ -52,7 +52,7 @@ DEMO_SESSION_EXPIRY_DAYS = int(os.getenv("DEMO_SESSION_EXPIRY_DAYS", "30"))
 # when emitting the redirect so the parent can claim the demo row.
 DEMO_REGISTER_REDIRECT_URL = os.getenv(
     "DEMO_REGISTER_REDIRECT_URL",
-    "https://aiproposal.tgsa.com.tw/register",
+    "https://aiproposal.tgsa.com.tw/api/external-auth/redirect",
 )
 
 # Full platform URL (used for CORS and signup redirects).

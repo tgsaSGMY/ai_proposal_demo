@@ -63,7 +63,10 @@ class FakeDemoStore:
         return row
 
     async def get(self, session_id: str) -> Optional[Dict[str, Any]]:
-        return self.rows.get(session_id)
+        row = self.rows.get(session_id)
+        if row is None or row.get("status") != "active":
+            return None
+        return row
 
     async def update(self, session_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if session_id not in self.rows:

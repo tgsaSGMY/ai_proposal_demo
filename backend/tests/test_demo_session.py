@@ -90,7 +90,7 @@ def test_put_with_empty_body_is_a_noop(client):
     assert response.json().get("grant_id") is None
 
 
-def test_delete_clears_row_but_keeps_cookie(client, demo_store):
+def test_delete_clears_row_and_next_get_mints_fresh(client, demo_store):
     mint = client.get("/api/demo")
     session_id = mint.json()["session_id"]
     assert session_id in demo_store.rows
@@ -100,10 +100,13 @@ def test_delete_clears_row_but_keeps_cookie(client, demo_store):
     assert response.json() == {"status": "reset", "session_id": session_id}
     assert session_id not in demo_store.rows
 
-    # Cookie still works — next GET lazily re-creates a blank row.
+    # After DELETE the row is gone; get_demo_session_id treats the stale cookie
+    # as a miss and mints a fresh session (same behaviour as a claimed row).
     next_get = client.get("/api/demo")
-    assert next_get.json()["session_id"] == session_id
-    assert session_id in demo_store.rows
+    new_session_id = next_get.json()["session_id"]
+    assert _is_uuid(new_session_id)
+    assert new_session_id != session_id
+    assert new_session_id in demo_store.rows
 
 
 def test_rate_limit_returns_429_with_retry_after(client, rate_limit_rows):
@@ -133,3 +136,32 @@ def test_rate_limit_skipped_when_cookie_already_present(client, rate_limit_rows)
 
     response = client.get("/api/demo")
     assert response.status_code == 200
+
+
+def test_get_skips_claimed_row_and_mints_fresh(client, demo_store):
+    """A returning visitor whose row was claimed should mint a fresh session
+    instead of reusing the dead row. The claimed row stays in the store as
+    analytics; the new row uses a new UUID."""
+    first = client.get("/api/demo")
+    first_session_id = first.json()["session_id"]
+    assert demo_store.rows[first_session_id]["status"] == "active"
+
+    # Simulate the parent platform claiming the row.
+    demo_store.rows[first_session_id]["status"] = "claimed"
+
+    # Second GET: TestClient's cookie jar still has the cookie from the first
+    # GET, so the backend sees a stale demo_session_id pointing at a now-
+    # claimed row. get_demo_session_id should mint a fresh session.
+    response = client.get("/api/demo")
+
+    new_session_id = response.json()["session_id"]
+    assert _is_uuid(new_session_id)
+    assert new_session_id != first_session_id
+    # Set-Cookie header on the response should rotate the cookie value.
+    set_cookie = response.headers.get("set-cookie", "").lower()
+    assert f"demo_session_id={new_session_id.lower()}" in set_cookie
+
+    # The claimed row is preserved.
+    assert demo_store.rows[first_session_id]["status"] == "claimed"
+    # The new row exists and is active.
+    assert demo_store.rows[new_session_id]["status"] == "active"

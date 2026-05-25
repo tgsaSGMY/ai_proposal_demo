@@ -1784,12 +1784,18 @@ class SupabaseService:
     # ------------------------------------------------------------------
 
     async def get_demo_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Fetch the demo row for this visitor, or None if it doesn't exist yet."""
+        """Fetch the *active* demo row for this visitor, or None.
+
+        Filters `status='active'` so claimed/expired rows look absent to the
+        cookie-lookup path. Claimed rows are preserved on disk for analytics
+        and to make claim idempotency work in the parent platform.
+        """
         try:
             response = (
                 self.client.from_("demo")
                 .select("*")
                 .eq("session_id", session_id)
+                .eq("status", "active")
                 .limit(1)
                 .execute()
             )
