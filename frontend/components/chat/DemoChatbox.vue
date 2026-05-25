@@ -22,11 +22,6 @@
               </p>
             </div>
           </div>
-          <div v-if="interactionLimit > 0" class="flex items-center gap-2 text-xs text-slate-500">
-            <span class="rounded-full bg-rose-50 px-3 py-1 text-rose-600 font-semibold border border-rose-100">
-              {{ interactionCount }} / {{ interactionLimit }} 次互動
-            </span>
-          </div>
         </header>
 
         <!-- Chat area -->
@@ -52,13 +47,6 @@
               </div>
             </div>
 
-            <!-- Streaming indicator -->
-            <div v-if="isStreaming" class="flex flex-col items-center justify-center pt-6">
-              <div class="flex gap-1">
-                <span v-for="n in 3" :key="n" class="h-2.5 w-2.5 animate-bounce rounded-full bg-[#ffb4a8]" :style="{ animationDelay: `${(n - 1) * 0.15}s` }"></span>
-              </div>
-              <p class="mt-2 text-xs text-slate-400">AI 正在推演整體架構...</p>
-            </div>
             <div v-if="isFetchingNextQuestion && !isGenerationComplete" class="flex items-center justify-center gap-2 pt-4 text-xs text-slate-400">
               <span class="h-2.5 w-2.5 animate-ping rounded-full bg-[#ffb4a8]"></span>
               AI 正在構思下一個提問...
@@ -78,7 +66,7 @@
 
           <!-- Read-only notice when limit reached -->
           <div v-if="limitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
-            Demo limit reached, <button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">sign up for FREE</button> to continue the session.
+            體驗已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
           </div>
 
           <div class="relative">
@@ -153,10 +141,11 @@
     <div class="h-full w-full max-w-xs flex-shrink-0">
       <ChatSidebar
         :messages="messages"
-        :versions="[]"
+        :versions="props.savedPlanVersions"
         :question-answers="questionAnswers"
         :question-answer-meta="questionAnswerMeta"
         @editQuestion="handleEditQuestion"
+        @selectVersion="handleVersionSelect"
       />
     </div>
 
@@ -169,18 +158,37 @@
       @confirm="handleEditConfirm"
     />
 
-    <!-- Floating signup CTA -->
-    <a
-      v-if="showFloatingCta"
-      :href="registerHref"
-      target="_blank"
-      class="absolute bottom-6 right-6 z-30 hidden md:inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:shadow-xl transition hover:-translate-y-0.5"
-    >
-      <span>註冊免費帳號</span>
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-      </svg>
-    </a>
+    <!-- Recommend project name modal -->
+    <RecommendNameModal
+      v-model:is-open="isRecommendModalOpen"
+      :original-name="props.projectTitle"
+      :suggestions="recommendOptions"
+      :loading="isFetchingRecommend"
+      @confirm="handleRecommendConfirm"
+    />
+
+    <!-- Generated plan candidate picker -->
+    <PlanCandidateSelector
+      :visible="isCandidateSelectorVisible"
+      :candidate-plan="props.candidatePlan"
+      :sections="props.sections"
+      @confirm="handleCandidateConfirm"
+      @close="isCandidateSelectorVisible = false"
+    />
+
+    <!-- Version detail modal -->
+    <PlanVersionModal
+      :visible="isVersionModalVisible"
+      :version="selectedVersion"
+      :plan-sections="props.sections"
+      :loading="false"
+      :timeline-loading="false"
+      :is-internal="false"
+      @close="isVersionModalVisible = false"
+      @export="handleVersionExport"
+      @updateVersion="handleVersionUpdateRequest"
+    />
+
   </div>
 </template>
 
@@ -188,6 +196,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ChatSidebar from "~/components/chat/ChatSidebar.vue";
 import EditFieldModal from "~/components/chat/helper/EditFieldModal.vue";
+import RecommendNameModal from "~/components/chat/helper/RecommendNameModal.vue";
+import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
+import PlanVersionModal from "~/components/chat/helper/PlanVersionModal.vue";
+import { exportPlanToWord } from "~/utils/exportToWord";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
 
@@ -208,6 +220,12 @@ const props = defineProps({
   conversationHistory: { type: Array, default: () => [] },
   storedAnswers: { type: Object, default: () => ({}) },
   registerUrl: { type: String, default: "" },
+  projectTitle: { type: String, default: "" },
+  projectSummary: { type: String, default: "" },
+  sections: { type: Array, default: () => [] },
+  candidatePlan: { type: Object, default: () => ({}) },
+  finalPlan: { type: Object, default: () => ({}) },
+  savedPlanVersions: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -215,6 +233,10 @@ const emit = defineEmits([
   "questionAnswersUpdated",
   "aiResponseComplete",
   "requestGeneration",
+  "generatePlan",
+  "updateProjectTitle",
+  "finalizeCandidates",
+  "requestVersionUpdate",
   "register",
 ]);
 
@@ -239,6 +261,13 @@ const isStreaming = ref(false);
 const isFetchingNextQuestion = ref(false);
 const isGenerationComplete = ref(false);
 const pausedFlag = ref(false);
+const isRecommendModalOpen = ref(false);
+const isFetchingRecommend = ref(false);
+const recommendOptions = ref([]);
+const isCandidateSelectorVisible = ref(false);
+const lastCandidateSnapshot = ref("");
+const isVersionModalVisible = ref(false);
+const selectedVersion = ref(null);
 const textareaMinHeight = 64;
 const textareaMaxHeight = 184;
 
@@ -259,17 +288,6 @@ const allQuestionsAnswered = computed(() =>
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
 const activeTemplateName = computed(() => props.templateName || "");
 
-const showFloatingCta = computed(() =>
-  !props.limitReached && props.interactionCount >= 5 && props.registerUrl
-);
-
-const registerHref = computed(() => {
-  if (!props.registerUrl) return "#";
-  const url = new URL(props.registerUrl);
-  if (props.sessionId) url.searchParams.set("ref", props.sessionId);
-  return url.toString();
-});
-
 const canSendMessage = computed(() =>
   Boolean(
     !isReadOnly.value &&
@@ -288,7 +306,7 @@ const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
 const composerPlaceholder = computed(() => {
   if (isReadOnly.value) {
-    return "Demo limit reached, sign up for FREE to continue the session.";
+    return "體驗次數已達上限，免費註冊即可繼續使用。";
   }
   if (!props.grantId || !props.templateId) {
     return "請先完成第一階段的設定";
@@ -461,6 +479,16 @@ function handlePause() {
 
 async function handleRequestGeneration() {
   if (!canRequestPlan.value) return;
+  if (props.hasGeneratedDocx) {
+    emit("requestGeneration", {
+      grantId: props.grantId,
+      templateId: props.templateId,
+      questionAnswers: { ...questionAnswers.value },
+      grantName: props.grantName,
+      templateName: props.templateName,
+    });
+    return;
+  }
   if (hasMissingAnswers.value) {
     const confirmed = await confirm({
       title: "尚有問題未回答",
@@ -471,13 +499,98 @@ async function handleRequestGeneration() {
     });
     if (!confirmed) return;
   }
-  emit("requestGeneration", {
+
+  isFetchingRecommend.value = true;
+  isRecommendModalOpen.value = true;
+  recommendOptions.value = [];
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/recommend_project_names`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_answers: questionAnswers.value,
+        project_title: props.projectTitle || "",
+        grant_name: props.grantName || "",
+        template_name: props.templateName || "",
+        grant_id: props.grantId || "",
+        template_id: props.templateId || "",
+      }),
+    });
+    const data = await resp.json().catch(() => null);
+    recommendOptions.value = resp.ok && data?.names ? data.names : [];
+  } catch (e) {
+    console.error("Failed to fetch recommendations", e);
+    recommendOptions.value = [];
+  } finally {
+    isFetchingRecommend.value = false;
+  }
+}
+
+async function handleRecommendConfirm(selectedName) {
+  if (!selectedName) return;
+
+  emit("updateProjectTitle", selectedName);
+
+  const joinedText = Object.entries(questionAnswers.value)
+    .map(([key, value]) => {
+      const text = value?.reply ?? value;
+      return `【${key}】\n${text}`;
+    })
+    .join("\n\n");
+
+  const finalUserInput =
+    "計畫名稱: " +
+    selectedName +
+    "\n\n計畫摘要: " +
+    (props.projectSummary || "") +
+    "\n\n" +
+    joinedText;
+
+  emit("generatePlan", {
     grantId: props.grantId,
     templateId: props.templateId,
-    questionAnswers: { ...questionAnswers.value },
-    grantName: props.grantName,
-    templateName: props.templateName,
+    prompt: finalUserInput,
   });
+}
+
+function handleCandidateConfirm(payload) {
+  emit("finalizeCandidates", payload);
+  isCandidateSelectorVisible.value = false;
+}
+
+function handleVersionSelect(version) {
+  selectedVersion.value = version;
+  isVersionModalVisible.value = true;
+}
+
+async function handleVersionExport(version) {
+  const versionData = version?.data;
+  if (!versionData || Object.keys(versionData).length === 0) {
+    notifyError("該版本沒有可匯出的內容");
+    return;
+  }
+  try {
+    await exportPlanToWord(
+      props.sections,
+      versionData,
+      props.grantId,
+      props.templateId,
+      props.projectTitle || version?.title || "計畫草稿",
+      version?.timestamp,
+      undefined,
+    );
+  } catch (err) {
+    console.error("Failed to export plan", err);
+    notifyError("匯出失敗，請稍後再試");
+  }
+}
+
+function handleVersionUpdateRequest(version) {
+  if (!version) return;
+  emit("requestVersionUpdate", { version });
+  isVersionModalVisible.value = false;
 }
 
 function handleEditQuestion(payload) {
@@ -689,6 +802,20 @@ watch(
   questionAnswers,
   (newAnswers) => {
     emit("questionAnswersUpdated", newAnswers);
+  },
+  { deep: true }
+);
+
+watch(
+  () => props.candidatePlan,
+  (val) => {
+    const snapshot = JSON.stringify(val || {});
+    if (!snapshot || snapshot === "{}" || snapshot === lastCandidateSnapshot.value) {
+      return;
+    }
+    lastCandidateSnapshot.value = snapshot;
+    isCandidateSelectorVisible.value = true;
+    scrollToBottom();
   },
   { deep: true }
 );

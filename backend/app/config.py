@@ -26,10 +26,19 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
 DEFAULT_MODEL_ID = "gpt-5-mini"
 
 # --- Demo-specific knobs --------------------------------------------------
-# Hard cap on chat turns before the frontend is told to prompt registration.
-DEMO_INTERACTION_LIMIT = int(os.getenv("DEMO_INTERACTION_LIMIT", "15"))
+# Hard cap on chat turns (a.k.a. user prompts) per session before the
+# frontend is told to prompt registration. DEMO_MAX_PROMPTS_PER_SESSION is
+# the canonical name; DEMO_INTERACTION_LIMIT is kept as a legacy alias so
+# older .env files still work.
+DEMO_INTERACTION_LIMIT = int(
+    os.getenv("DEMO_MAX_PROMPTS_PER_SESSION")
+    or os.getenv("DEMO_INTERACTION_LIMIT")
+    or "15"
+)
 
-# Token cap per session (100K default) — backend accumulates after each LLM call.
+# Token cap per session — backend sums pending_usage_logs after each LLM
+# call and trips limit_reached once the cumulative input+output tokens
+# exceed this value.
 DEMO_MAX_TOKENS_PER_SESSION = int(os.getenv("DEMO_MAX_TOKENS_PER_SESSION", "100000"))
 
 # Max .docx report generations per session (default 1).

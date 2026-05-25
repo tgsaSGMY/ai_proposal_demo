@@ -36,10 +36,20 @@
         :conversation-history="conversationHistory"
         :stored-answers="storedAnswers"
         :register-url="registerUrl"
+        :project-title="projectTitle"
+        :project-summary="projectSummary"
+        :sections="sections"
+        :candidate-plan="candidatePlan"
+        :final-plan="finalPlanContent"
+        :saved-plan-versions="savedPlanVersions"
         @messages-updated="handleMessagesUpdated"
         @question-answers-updated="handleAnswersUpdated"
         @ai-response-complete="handleAiResponseComplete"
         @request-generation="handleRequestGeneration"
+        @generate-plan="handleGeneratePlan"
+        @update-project-title="handleUpdateProjectTitle"
+        @finalize-candidates="handleFinalizeCandidates"
+        @request-version-update="handleVersionRevision"
         @register="handleRegister"
       />
     </div>
@@ -59,9 +69,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 import DemoChatbox from "~/components/chat/DemoChatbox.vue";
 import DemoRegisterModal from "~/components/chat/helper/DemoRegisterModal.vue";
+import { useLoading } from "~/composables/useLoading";
+import { useNotifications } from "~/composables/useNotifications";
+
+const { show: showLoading, hide: hideLoading } = useLoading();
+const { success, error: notifyError } = useNotifications();
 
 // SSR disabled for this page (window, WebSocket)
 definePageMeta({
@@ -94,7 +109,17 @@ const interactionLimit = ref(15);
 const limitReached = ref(false);
 const hasGeneratedDocx = ref(false);
 const showRegisterModal = ref(false);
+<<<<<<< Updated upstream
+const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/register");
+=======
 const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/api/external-auth/redirect");
+const projectTitle = ref("計畫草稿");
+const projectSummary = ref("");
+const sections = ref<any[]>([]);
+const candidatePlan = ref<Record<string, any>>({});
+const finalPlanContent = ref<Record<string, any>>({});
+const savedPlanVersions = ref<any[]>([]);
+>>>>>>> Stashed changes
 
 function deriveQuestions(sections: any[]): Question[] {
   const result: Question[] = [];
@@ -172,6 +197,18 @@ async function loadCatalogAndSession() {
   grantName.value = chosenGrant.name || "";
   templateName.value = chosenTemplate.name || "";
   allQuestions.value = deriveQuestions(chosenTemplate.sections);
+  sections.value = Array.isArray(chosenTemplate.sections) ? chosenTemplate.sections : [];
+
+  const savedPlan = demo.saved_plan;
+  if (Array.isArray(savedPlan)) {
+    savedPlanVersions.value = savedPlan;
+    const latest = savedPlan[savedPlan.length - 1];
+    if (latest && typeof latest === "object" && latest.data) {
+      finalPlanContent.value = latest.data as Record<string, any>;
+    }
+  } else if (savedPlan && typeof savedPlan === "object") {
+    finalPlanContent.value = savedPlan as Record<string, any>;
+  }
 
   if (demo.grant_id !== grantId.value || demo.template_id !== templateId.value) {
     await fetch(`${apiBaseUrl}/demo`, {
@@ -235,38 +272,182 @@ async function refreshStatus() {
 
 function handleRegister() {
   limitReached.value = true;
-  showRegisterModal.value = true;
   // Also try to refresh status to get accurate counts from backend
   refreshStatus().catch(() => {});
 }
 
-async function handleRequestGeneration(payload: any) {
-  // If a report has already been generated, try to re-download it.
-  if (hasGeneratedDocx.value) {
-    try {
-      const resp = await fetch(`${apiBaseUrl}/demo/finalize`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${grantName.value || "plan"}_draft.docx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        return;
-      }
-    } catch {
-      // fall through to register modal
-    }
+watch(limitReached, (reached) => {
+  if (reached) showRegisterModal.value = true;
+}, { immediate: true });
+
+async function handleRequestGeneration(_payload: any) {
+  // Only used for the "re-download already generated report" path. The
+  // standard 輸出完整推演 click now opens the RecommendNameModal inside
+  // DemoChatbox and emits `generate-plan` after the user picks a name.
+  if (!hasGeneratedDocx.value) return;
+  try {
+    const resp = await fetch(`${apiBaseUrl}/demo/finalize`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${grantName.value || "plan"}_draft.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Failed to re-download report", err);
   }
-  // Backend generation pipeline is being built by colleague.
-  // Show the register modal as a soft notice until endpoints are ready.
-  showRegisterModal.value = true;
+}
+
+function handleUpdateProjectTitle(name: string) {
+  if (name) {
+    projectTitle.value = name;
+    success("已更新專案名稱");
+  }
+}
+
+function transformPlanCandidates(rawData: Record<string, any>) {
+  const processed: Record<string, any> = {};
+  if (!rawData || typeof rawData !== "object") return processed;
+  Object.entries(rawData).forEach(([sectionId, candidates]) => {
+    if (!Array.isArray(candidates)) return;
+    processed[sectionId] = (candidates as any[]).map((candidate: any) => ({
+      content:
+        candidate?.raw_json_content ?? candidate?.content ?? candidate ?? null,
+      error: candidate?.error || null,
+    }));
+  });
+  return processed;
+}
+
+async function handleGeneratePlan(payload: {
+  grantId: string;
+  templateId: string;
+  prompt: string;
+}) {
+  if (!payload?.prompt || !payload.grantId || !payload.templateId) return;
+  finalPlanContent.value = {};
+  candidatePlan.value = {};
+  showLoading("正在生成計畫書...", true);
+  try {
+    const resp = await fetch(`${apiBaseUrl}/generate_plan`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant: payload.grantId,
+        template: payload.templateId,
+        user_input: payload.prompt,
+        num_candidates: 2,
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`伺服器錯誤 (${resp.status}): ${text}`);
+    }
+    const rawData = await resp.json();
+    candidatePlan.value = transformPlanCandidates(rawData);
+    success("計畫書草稿已生成！");
+    await refreshStatus().catch(() => {});
+  } catch (err: any) {
+    console.error("生成計畫書失敗", err);
+    notifyError(`生成失敗: ${err?.message || "未知錯誤"}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleVersionRevision(payload: { version: any }) {
+  if (!payload?.version?.data) {
+    notifyError("找不到這個版本的內容，無法更新。");
+    return;
+  }
+  if (!grantId.value || !templateId.value) {
+    notifyError("請先完成基本設定後再進行版本更新。");
+    return;
+  }
+
+  showLoading("正在優化計畫版本...", true);
+  finalPlanContent.value = {};
+  candidatePlan.value = {};
+
+  try {
+    const resp = await fetch(`${apiBaseUrl}/revise_plan_version`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant: grantId.value,
+        template: templateId.value,
+        current_version: payload.version.data,
+        stored_answer: { chat_answers: storedAnswers.value },
+        project_title: projectTitle.value || "",
+        project_summary: projectSummary.value || "",
+        num_candidates: 2,
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`伺服器錯誤 (${resp.status}): ${text}`);
+    }
+    const rawData = await resp.json();
+    candidatePlan.value = transformPlanCandidates(rawData);
+    success("新版候選內容已生成！");
+  } catch (err: any) {
+    console.error("版本更新失敗", err);
+    notifyError(`版本更新失敗: ${err?.message || "未知錯誤"}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function handleFinalizeCandidates(payload: {
+  selected: Record<string, any>;
+  rejected?: Record<string, any>;
+}) {
+  const selected = payload?.selected || {};
+  const newPlanContent: Record<string, { content?: string; error?: string }> = {};
+  Object.entries(selected).forEach(([sectionId, candidate]) => {
+    if (candidate && (candidate as any).content) {
+      newPlanContent[sectionId] = { content: (candidate as any).content };
+    } else {
+      newPlanContent[sectionId] = {
+        error: (candidate as any)?.error || "No content",
+      };
+    }
+  });
+  finalPlanContent.value = newPlanContent;
+  candidatePlan.value = {};
+
+  const versionNumber = savedPlanVersions.value.length + 1;
+  const newVersion = {
+    id: `version-${Date.now()}`,
+    number: versionNumber,
+    title: `版本 ${versionNumber}`,
+    timestamp: new Date().toISOString(),
+    data: newPlanContent,
+  };
+  const updatedVersions = [...savedPlanVersions.value, newVersion];
+  savedPlanVersions.value = updatedVersions;
+
+  try {
+    await fetch(`${apiBaseUrl}/demo`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ saved_plan: updatedVersions }),
+    });
+    success("已選擇方案並填充到結果中！");
+  } catch (err) {
+    console.error("Failed to persist selected plan to demo session", err);
+    notifyError("儲存計畫失敗，請稍後再試");
+  }
 }
 
 onMounted(() => {
