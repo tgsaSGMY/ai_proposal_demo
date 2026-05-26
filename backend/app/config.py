@@ -26,6 +26,13 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
 DEFAULT_MODEL_ID = "gpt-5-mini"
 
 # --- Demo-specific knobs --------------------------------------------------
+
+# Hard-coded grant/template IDs that the demo will load.
+# When both are set (non-empty), the demo ALWAYS uses this exact pair
+# and never falls back to the first item in the catalog.
+DEMO_GRANT_ID = os.getenv("DEMO_GRANT_ID", "").strip()
+DEMO_TEMPLATE_ID = os.getenv("DEMO_TEMPLATE_ID", "").strip()
+
 # Hard cap on chat turns (a.k.a. user prompts) per session before the
 # frontend is told to prompt registration. DEMO_MAX_PROMPTS_PER_SESSION is
 # the canonical name; DEMO_INTERACTION_LIMIT is kept as a legacy alias so

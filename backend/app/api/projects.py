@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_demo_session_id, get_supabase_service
 from app.services.supabase_service import SupabaseService
+from app.config import (
+    DEMO_GRANT_ID,
+    DEMO_TEMPLATE_ID,
+    DEMO_INTERACTION_LIMIT,
+    DEMO_REGISTER_REDIRECT_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,3 +66,27 @@ async def reset_demo_session(
     next GET will see a missing row and mint a new session ID (cookie rotated)."""
     await supabase_service.delete_demo_session(session_id)
     return {"status": "reset", "session_id": session_id}
+
+
+@router.get("/status", summary="Get demo status and configured template")
+async def get_demo_status(
+    session_id: str = Depends(get_demo_session_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """Return the currently configured demo template IDs and the visitor's
+    session usage counters. The frontend uses the returned grant_id / template_id
+    to select the exact template from the catalog — no fallback is allowed."""
+    session = await supabase_service.get_demo_session(session_id)
+    interaction_count = session.get("interaction_count", 0) if session else 0
+    limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
+    has_generated_docx = session.get("has_generated_docx", False) if session else False
+
+    return {
+        "grant_id": DEMO_GRANT_ID or None,
+        "template_id": DEMO_TEMPLATE_ID or None,
+        "interaction_limit": DEMO_INTERACTION_LIMIT,
+        "interaction_count": interaction_count,
+        "limit_reached": limit_reached,
+        "has_generated_docx": has_generated_docx,
+        "register_url": DEMO_REGISTER_REDIRECT_URL,
+    }

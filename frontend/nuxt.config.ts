@@ -15,6 +15,8 @@ export default defineNuxtConfig({
         "https://portal.tgsaapp.com/",
       supabaseUrl: process.env.SUPABASE_URL || "",
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+      demoGrantId: process.env.NUXT_PUBLIC_DEMO_GRANT_ID || "",
+      demoTemplateId: process.env.NUXT_PUBLIC_DEMO_TEMPLATE_ID || "",
     },
   },
   routeRules: {

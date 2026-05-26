@@ -108,18 +108,14 @@ const interactionCount = ref(0);
 const interactionLimit = ref(15);
 const limitReached = ref(false);
 const hasGeneratedDocx = ref(false);
-const showRegisterModal = ref(false);
-<<<<<<< Updated upstream
-const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/register");
-=======
-const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/api/external-auth/redirect");
-const projectTitle = ref("計畫草稿");
-const projectSummary = ref("");
-const sections = ref<any[]>([]);
-const candidatePlan = ref<Record<string, any>>({});
-const finalPlanContent = ref<Record<string, any>>({});
-const savedPlanVersions = ref<any[]>([]);
->>>>>>> Stashed changes
+  const showRegisterModal = ref(false);
+  const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/api/external-auth/redirect");
+  const projectTitle = ref("計畫草稿");
+  const projectSummary = ref("");
+  const sections = ref<any[]>([]);
+  const candidatePlan = ref<Record<string, any>>({});
+  const finalPlanContent = ref<Record<string, any>>({});
+  const savedPlanVersions = ref<any[]>([]);
 
 function deriveQuestions(sections: any[]): Question[] {
   const result: Question[] = [];
@@ -181,11 +177,36 @@ async function loadCatalogAndSession() {
     hasGeneratedDocx.value = demo.has_generated_docx ?? false;
   }
 
-  let chosenGrant = catalog.find((g) => g.id === demo.grant_id);
-  let chosenTemplate = chosenGrant?.templates?.find((t: any) => t.id === demo.template_id);
-  if (!chosenGrant || !chosenTemplate) {
-    chosenGrant = catalog[0];
-    chosenTemplate = chosenGrant?.templates?.[0];
+  // Template selection strategy:
+  // 1. If NUXT_PUBLIC_DEMO_GRANT_ID and NUXT_PUBLIC_DEMO_TEMPLATE_ID are set
+  //    in the frontend .env, ALWAYS use those values — no fallback.
+  // 2. If they are not set yet (empty), fall back to the old behavior
+  //    (session value, then first in catalog) so the demo keeps working
+  //    until the operator populates the environment variables.
+  const configuredGrantId = config.public.demoGrantId as string;
+  const configuredTemplateId = config.public.demoTemplateId as string;
+
+  let chosenGrant: any;
+  let chosenTemplate: any;
+
+  if (configuredGrantId && configuredTemplateId) {
+    // STRICT MODE: env-configured IDs always win. No fallback.
+    chosenGrant = catalog.find((g) => g.id === configuredGrantId);
+    chosenTemplate = chosenGrant?.templates?.find((t: any) => t.id === configuredTemplateId);
+    if (!chosenGrant || !chosenTemplate) {
+      throw new Error(
+        `No template found for grant_id="${configuredGrantId}" template_id="${configuredTemplateId}"`
+      );
+    }
+  } else {
+    // BACKWARD-COMPATIBLE MODE: env vars not set yet — use session or first-in-catalog.
+    // TODO: Remove this branch once DEMO_GRANT_ID / DEMO_TEMPLATE_ID are configured in .env
+    chosenGrant = catalog.find((g) => g.id === demo.grant_id);
+    chosenTemplate = chosenGrant?.templates?.find((t: any) => t.id === demo.template_id);
+    if (!chosenGrant || !chosenTemplate) {
+      chosenGrant = catalog[0];
+      chosenTemplate = chosenGrant?.templates?.[0];
+    }
   }
 
   if (!chosenGrant || !chosenTemplate) {
