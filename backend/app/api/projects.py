@@ -26,6 +26,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/demo", tags=["Demo"])
 
 
+async def _force_session_template(
+    session_id: str,
+    supabase_service: SupabaseService,
+    session_row: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """When DEMO_GRANT_ID / DEMO_TEMPLATE_ID are configured, overwrite the
+    session row so it always matches the .env values. Returns the updated row.
+    """
+    if not DEMO_GRANT_ID or not DEMO_TEMPLATE_ID:
+        return session_row
+    if not session_row:
+        return session_row
+    if (
+        session_row.get("grant_id") == DEMO_GRANT_ID
+        and session_row.get("template_id") == DEMO_TEMPLATE_ID
+    ):
+        return session_row
+    return await supabase_service.update_demo_session(
+        session_id,
+        {"grant_id": DEMO_GRANT_ID, "template_id": DEMO_TEMPLATE_ID},
+    )
+
+
 class DemoSessionUpdate(BaseModel):
     grant_id: Optional[str] = Field(default=None, max_length=255)
     template_id: Optional[str] = Field(default=None, max_length=255)
@@ -40,8 +63,11 @@ async def get_demo_session(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
     """Return the visitor's row from `ai_proposal_platform.demo`. Creates an
-    empty row on first request so the frontend always sees a session object."""
+    empty row on first request so the frontend always sees a session object.
+    If DEMO_GRANT_ID / DEMO_TEMPLATE_ID are configured, the session row is
+    patched to match them so old sessions migrate automatically."""
     row = await supabase_service.ensure_demo_session(session_id)
+    row = await _force_session_template(session_id, supabase_service, row)
     return row or {"session_id": session_id}
 
 
@@ -75,8 +101,11 @@ async def get_demo_status(
 ) -> Dict[str, Any]:
     """Return the currently configured demo template IDs and the visitor's
     session usage counters. The frontend uses the returned grant_id / template_id
-    to select the exact template from the catalog — no fallback is allowed."""
+    to select the exact template from the catalog — no fallback is allowed.
+    If DEMO_GRANT_ID / DEMO_TEMPLATE_ID are configured, the session row is
+    patched to match them so old sessions migrate automatically."""
     session = await supabase_service.get_demo_session(session_id)
+    session = await _force_session_template(session_id, supabase_service, session)
     interaction_count = session.get("interaction_count", 0) if session else 0
     limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
     has_generated_docx = session.get("has_generated_docx", False) if session else False
