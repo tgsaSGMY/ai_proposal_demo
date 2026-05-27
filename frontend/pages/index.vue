@@ -252,13 +252,10 @@ async function loadCatalogAndSession() {
 
   if (dynamicFields.length > 0) {
     allQuestions.value = buildQuestionsFromDynamicFields(dynamicFields);
-    // Build a compatible sections array for DemoChatbox / sidebar
-    sections.value = dynamicFields.map((ds: any) => ({
-      id: ds.section_key,
-      name: ds.title,
-      json_schema: null,
-      order: ds.order,
-    }));
+    // KEEP static sections for plan generation / candidate selector compatibility.
+    // The backend generate_plan returns candidates keyed by static section.id
+    // (e.g. "company_overview"), so the sections prop must use those same IDs.
+    sections.value = Array.isArray(chosenTemplate.sections) ? chosenTemplate.sections : [];
   } else {
     // FALLBACK: template has no dynamic fields — use static json_schema
     allQuestions.value = deriveQuestions(chosenTemplate.sections);
