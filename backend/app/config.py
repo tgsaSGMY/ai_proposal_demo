@@ -40,7 +40,7 @@ DEMO_TEMPLATE_ID = os.getenv("DEMO_TEMPLATE_ID", "").strip()
 DEMO_INTERACTION_LIMIT = int(
     os.getenv("DEMO_MAX_PROMPTS_PER_SESSION")
     or os.getenv("DEMO_INTERACTION_LIMIT")
-    or "15"
+    or "20"
 )
 
 # Token cap per session — backend sums pending_usage_logs after each LLM

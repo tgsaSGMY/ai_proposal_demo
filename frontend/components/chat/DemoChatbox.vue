@@ -64,9 +64,15 @@
             </p>
           </div>
 
-          <!-- Read-only notice when limit reached -->
-          <div v-if="limitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
-            體驗已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          <!-- Soft-limit notices (no numbers shown) -->
+          <div v-if="chatLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            體驗次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          </div>
+          <div v-else-if="generationLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            報告生成次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          </div>
+          <div v-else-if="downloadLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            下載次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
           </div>
 
           <div class="relative">
@@ -117,7 +123,7 @@
               <button
                 type="button"
                 class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canRequestPlan || isStreaming"
+                :disabled="!canRequestPlan || isStreaming || (props.hasGeneratedDocx && props.downloadLimitReached)"
                 @click="handleRequestGeneration"
               >
                 {{ isStreaming ? '推演中...' : (props.hasGeneratedDocx ? '下載已生成報告' : '輸出完整推演') }}
@@ -214,8 +220,10 @@ const props = defineProps({
   allQuestions: { type: Array, default: () => [] },
   sessionId: { type: String, default: "" },
   interactionCount: { type: Number, default: 0 },
-  interactionLimit: { type: Number, default: 15 },
-  limitReached: { type: Boolean, default: false },
+  interactionLimit: { type: Number, default: 20 },
+  chatLimitReached: { type: Boolean, default: false },
+  generationLimitReached: { type: Boolean, default: false },
+  downloadLimitReached: { type: Boolean, default: false },
   hasGeneratedDocx: { type: Boolean, default: false },
   conversationHistory: { type: Array, default: () => [] },
   storedAnswers: { type: Object, default: () => ({}) },
@@ -272,7 +280,7 @@ const textareaMinHeight = 64;
 const textareaMaxHeight = 184;
 
 // -- Computed --
-const isReadOnly = computed(() => props.limitReached);
+const isReadOnly = computed(() => props.chatLimitReached);
 
 const totalQuestions = computed(() => props.allQuestions.length);
 const answeredCount = computed(() =>
@@ -290,7 +298,7 @@ const activeTemplateName = computed(() => props.templateName || "");
 
 const canSendMessage = computed(() =>
   Boolean(
-    !isReadOnly.value &&
+    !props.chatLimitReached &&
     props.grantId &&
     props.templateId &&
     !isGenerationComplete.value &&
@@ -299,14 +307,21 @@ const canSendMessage = computed(() =>
 );
 
 const canRequestPlan = computed(() =>
-  Boolean((!isReadOnly.value || props.hasGeneratedDocx) && props.grantId && props.templateId)
+  Boolean(
+    props.grantId &&
+    props.templateId &&
+    (!props.generationLimitReached || props.hasGeneratedDocx)
+  )
 );
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
 const composerPlaceholder = computed(() => {
-  if (isReadOnly.value) {
+  if (props.chatLimitReached) {
     return "體驗次數已達上限，免費註冊即可繼續使用。";
+  }
+  if (props.generationLimitReached && !props.hasGeneratedDocx) {
+    return "報告生成次數已達上限，免費註冊即可繼續使用。";
   }
   if (!props.grantId || !props.templateId) {
     return "請先完成第一階段的設定";

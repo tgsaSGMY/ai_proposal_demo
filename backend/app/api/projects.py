@@ -18,6 +18,7 @@ from app.config import (
     DEMO_GRANT_ID,
     DEMO_TEMPLATE_ID,
     DEMO_INTERACTION_LIMIT,
+    DEMO_MAX_GENERATIONS_PER_SESSION,
     DEMO_REGISTER_REDIRECT_URL,
 )
 
@@ -55,6 +56,8 @@ class DemoSessionUpdate(BaseModel):
     saved_plan: Optional[Any] = None
     stored_answer: Optional[Dict[str, Any]] = None
     conversation_history: Optional[Any] = None
+    has_generated_docx: Optional[bool] = None
+    download_count: Optional[int] = None
 
 
 @router.get("", summary="Get the current visitor's demo session")
@@ -107,16 +110,25 @@ async def get_demo_status(
     session = await supabase_service.get_demo_session(session_id)
     session = await _force_session_template(session_id, supabase_service, session)
     interaction_count = session.get("interaction_count", 0) if session else 0
-    limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
+    chat_limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
     has_generated_docx = session.get("has_generated_docx", False) if session else False
+    generation_limit_reached = has_generated_docx
+    download_count = session.get("download_count", 0) if session else 0
+    download_limit_reached = download_count >= 1  # hard-coded 1 download per session
+    all_limits_reached = chat_limit_reached and generation_limit_reached and download_limit_reached
 
     return {
         "grant_id": DEMO_GRANT_ID or None,
         "template_id": DEMO_TEMPLATE_ID or None,
         "interaction_limit": DEMO_INTERACTION_LIMIT,
         "interaction_count": interaction_count,
-        "limit_reached": limit_reached,
+        "limit_reached": chat_limit_reached,
+        "chat_limit_reached": chat_limit_reached,
+        "generation_limit_reached": generation_limit_reached,
+        "download_limit_reached": download_limit_reached,
+        "all_limits_reached": all_limits_reached,
         "has_generated_docx": has_generated_docx,
+        "download_count": download_count,
         "register_url": DEMO_REGISTER_REDIRECT_URL,
     }
 

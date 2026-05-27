@@ -31,7 +31,9 @@
         :session-id="sessionId"
         :interaction-count="interactionCount"
         :interaction-limit="interactionLimit"
-        :limit-reached="limitReached"
+        :chat-limit-reached="chatLimitReached"
+        :generation-limit-reached="generationLimitReached"
+        :download-limit-reached="downloadLimitReached"
         :has-generated-docx="hasGeneratedDocx"
         :conversation-history="conversationHistory"
         :stored-answers="storedAnswers"
@@ -105,8 +107,10 @@ const conversationHistory = ref<any[]>([]);
 const storedAnswers = ref<Record<string, string>>({});
 
 const interactionCount = ref(0);
-const interactionLimit = ref(15);
-const limitReached = ref(false);
+const interactionLimit = ref(20);
+const chatLimitReached = ref(false);
+const generationLimitReached = ref(false);
+const downloadLimitReached = ref(false);
 const hasGeneratedDocx = ref(false);
   const showRegisterModal = ref(false);
   const registerUrl = ref(config.public.platformHomeUrl || "https://aiproposal.tgsa.com.tw/api/external-auth/redirect");
@@ -175,19 +179,21 @@ async function loadCatalogAndSession() {
       const status = await statusResp.json();
       interactionCount.value = status.interaction_count ?? demo.interaction_count ?? 0;
       interactionLimit.value = status.interaction_limit ?? 15;
-      limitReached.value = status.limit_reached ?? (interactionCount.value >= interactionLimit.value);
+      chatLimitReached.value = status.chat_limit_reached ?? (interactionCount.value >= interactionLimit.value);
+      generationLimitReached.value = status.generation_limit_reached ?? false;
+      downloadLimitReached.value = status.download_limit_reached ?? false;
       hasGeneratedDocx.value = status.has_generated_docx ?? demo.has_generated_docx ?? false;
       if (status.register_url) registerUrl.value = status.register_url;
     } else {
       interactionCount.value = demo.interaction_count ?? 0;
-      interactionLimit.value = 15;
-      limitReached.value = interactionCount.value >= interactionLimit.value;
+      interactionLimit.value = 20;
+      chatLimitReached.value = interactionCount.value >= interactionLimit.value;
       hasGeneratedDocx.value = demo.has_generated_docx ?? false;
     }
   } catch {
     interactionCount.value = demo.interaction_count ?? 0;
-    interactionLimit.value = 15;
-    limitReached.value = interactionCount.value >= interactionLimit.value;
+    interactionLimit.value = 20;
+    chatLimitReached.value = interactionCount.value >= interactionLimit.value;
     hasGeneratedDocx.value = demo.has_generated_docx ?? false;
   }
 
@@ -326,7 +332,9 @@ async function refreshStatus() {
     const status = await resp.json();
     interactionCount.value = status.interaction_count ?? interactionCount.value;
     interactionLimit.value = status.interaction_limit ?? interactionLimit.value;
-    limitReached.value = status.limit_reached ?? (interactionCount.value >= interactionLimit.value);
+    chatLimitReached.value = status.chat_limit_reached ?? (interactionCount.value >= interactionLimit.value);
+    generationLimitReached.value = status.generation_limit_reached ?? false;
+    downloadLimitReached.value = status.download_limit_reached ?? false;
     hasGeneratedDocx.value = status.has_generated_docx ?? hasGeneratedDocx.value;
   } catch {
     // ignore
@@ -334,12 +342,14 @@ async function refreshStatus() {
 }
 
 function handleRegister() {
-  limitReached.value = true;
+  chatLimitReached.value = true;
+  generationLimitReached.value = true;
+  downloadLimitReached.value = true;
   // Also try to refresh status to get accurate counts from backend
   refreshStatus().catch(() => {});
 }
 
-watch(limitReached, (reached) => {
+watch(chatLimitReached, (reached) => {
   if (reached) showRegisterModal.value = true;
 }, { immediate: true });
 
@@ -349,6 +359,16 @@ async function handleRequestGeneration(_payload: any) {
   // DemoChatbox and emits `generate-plan` after the user picks a name.
   if (!hasGeneratedDocx.value) return;
   try {
+    // Increment download count on the backend first
+    const putResp = await fetch(`${apiBaseUrl}/demo`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ download_count: 1 }),
+    });
+    if (!putResp.ok) return;
+    downloadLimitReached.value = true;
+
     const resp = await fetch(`${apiBaseUrl}/demo/finalize`, {
       method: "POST",
       credentials: "include",
@@ -504,8 +524,10 @@ async function handleFinalizeCandidates(payload: {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ saved_plan: updatedVersions }),
+      body: JSON.stringify({ saved_plan: updatedVersions, has_generated_docx: true }),
     });
+    hasGeneratedDocx.value = true;
+    generationLimitReached.value = true;
     success("已選擇方案並填充到結果中！");
   } catch (err) {
     console.error("Failed to persist selected plan to demo session", err);
