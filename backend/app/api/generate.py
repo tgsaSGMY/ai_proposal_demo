@@ -1105,6 +1105,7 @@ async def revise_plan_version(
                         section_context=section_context,
                         disable_few_shot=True,
                         section_details_override=section,
+                        action="修訂企劃書章節",
                     )
                 )
         results = await asyncio.gather(*tasks, return_exceptions=True)

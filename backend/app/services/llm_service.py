@@ -85,13 +85,41 @@ class LLMService:
         
         return None, last_error
 
+    async def _buffer_demo_usage(
+        self,
+        supabase_service: "SupabaseService",
+        demo_session_id: str,
+        model_info: Dict[str, Any],
+        response_json: Optional[Dict[str, Any]],
+        action: str,
+    ) -> None:
+        """Append one usage entry to demo.pending_usage_logs.
+
+        Every external LLM call (initial, retry, JSON repair) must go
+        through here so the demo's DEMO_MAX_TOKENS_PER_SESSION cap
+        reflects total token spend, not just the successful attempt.
+        """
+        if not response_json:
+            return
+        if (model_info or {}).get("type") != "external":
+            return
+        try:
+            await supabase_service.append_demo_usage_log(
+                demo_session_id, model_info, response_json, action=action
+            )
+        except Exception as e:
+            logger.warning("Failed to buffer demo usage: %s", e)
+
     async def _attempt_json_repair(
         self,
         raw_text: str,
         session: httpx.AsyncClient,
         model_info: Dict,
         section_id: str,
-        max_attempts: int = 2
+        supabase_service: "SupabaseService",
+        demo_session_id: str,
+        action: str,
+        max_attempts: int = 2,
     ) -> Tuple[Optional[Dict], Optional[str]]:
         """嘗試修復格式不正確的 JSON
         
@@ -145,10 +173,18 @@ class LLMService:
             
             try:
                 logger.info(f"Attempting to repair JSON for section {section_id} using LLM...")
-                repaired_text, error, _ = await self.call_external_api(
+                repaired_text, error, repair_resp_json = await self.call_external_api(
                     session, model_info, messages, is_json_output=True
                 )
-                
+
+                # Repair calls bill real tokens too; buffer them so the
+                # demo's 100K cap reflects total spend, not just the
+                # initial attempt.
+                await self._buffer_demo_usage(
+                    supabase_service, demo_session_id, model_info,
+                    repair_resp_json, f"{action}(JSON修復)"
+                )
+
                 if error:
                     logger.warning(f"JSON repair failed: {error.get('error')}")
                     return None, f"JSON repair attempt failed: {error.get('error')}"
@@ -928,6 +964,7 @@ class LLMService:
         section_context: Optional[str] = None,
         disable_few_shot: bool = False,
         section_details_override: Optional[SectionConfig] = None,
+        action: str = "生成企劃書章節",
     ) -> SectionGenerateResponse:
         # 主要的內容生成流程，支持多模型路由、Grounding、Few-Shot
         # 1. --- 获取配置 ---
@@ -1042,20 +1079,32 @@ class LLMService:
                 is_json_output=True,
                 response_hook=response_hook,
             )
-            
+
+            # Buffer this attempt's usage immediately — failed retries
+            # still bill real tokens and must count toward the demo cap.
+            await self._buffer_demo_usage(
+                supabase_service, user_id, model_to_use, resp_json, action
+            )
+
             if llm_error:
                 raise ValueError(f"LLM API call failed: {llm_error.get('error', 'Unknown error')}")
-            
+
             # 嘗試直接解析 JSON
             parsed_json, parse_error = extract_json_block(raw_output, section_id)
-            
+
             if parse_error:
                 # 首先嘗試使用 LLM 修復 JSON
                 logger.warning(f"Initial JSON parsing failed for {section_id}, attempting repair...")
                 parsed_json, repair_error = await self._attempt_json_repair(
-                    raw_output, http_session, model_to_use, section_id
+                    raw_output,
+                    http_session,
+                    model_to_use,
+                    section_id,
+                    supabase_service=supabase_service,
+                    demo_session_id=user_id,
+                    action=action,
                 )
-                
+
                 if repair_error:
                     raise ValueError(f"JSON parsing and repair failed: {repair_error}")
             
@@ -1084,19 +1133,8 @@ class LLMService:
             )
         
         if result:
-            final_content_json, response_json = result
-        
-        # Log cost usage with response JSON that contains token counts
-        if response_json and model_to_use.get('type') == 'external':
-            try:
-                await supabase_service.log_cost_usage(
-                    user_id, model_to_use, response_json, 
-                    project_id=project_id, 
-                    action="生成企劃書章節"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to log cost usage: {e}")
-                  
+            final_content_json, _response_json = result
+
         # 4. --- 返回结果 ---
         if error_message:
             return SectionGenerateResponse(section_id=section_id, error=error_message)
