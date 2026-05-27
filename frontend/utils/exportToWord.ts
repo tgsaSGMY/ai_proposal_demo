@@ -68,6 +68,19 @@ function renderSectionContent(
 
       if (value === null || value === "") continue;
 
+      // Strip title prefix from string values to avoid duplication
+      // e.g. "公司名稱：昇和智慧科技有限公司" → "昇和智慧科技有限公司"
+      let displayValue = value;
+      if (typeof value === "string") {
+        const prefixes = [`${title}：`, `${title}:`, `${title} `];
+        for (const prefix of prefixes) {
+          if (displayValue.startsWith(prefix)) {
+            displayValue = displayValue.slice(prefix.length).trim();
+            break;
+          }
+        }
+      }
+
       if (Array.isArray(value)) {
         if (value.length > 0) {
           renderer.addArrayTitle(title);
@@ -149,9 +162,9 @@ function renderSectionContent(
           key.toLowerCase().includes("paragraph") ||
           key.toLowerCase().includes("description")
         ) {
-          renderer.addParagraph(String(value));
+          renderer.addParagraph(String(displayValue));
         } else {
-          renderer.addKeyValue(title, String(value));
+          renderer.addKeyValue(title, String(displayValue));
         }
       }
     }

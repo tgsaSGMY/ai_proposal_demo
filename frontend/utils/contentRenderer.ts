@@ -109,7 +109,8 @@ export class DocxRenderer implements ContentRenderer<(Paragraph | Table)[]> {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          this.addArrayTitle(key);
+          // Note: addArrayTitle is already called by renderSectionContent
+          // before addKeyValue, so we skip it here to avoid duplication.
           this.addObjectsTable(parsed);
           return;
         }
