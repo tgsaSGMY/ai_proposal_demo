@@ -64,9 +64,15 @@
             </p>
           </div>
 
-          <!-- Read-only notice when limit reached -->
-          <div v-if="limitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
-            體驗已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          <!-- Soft-limit notices (no numbers shown) -->
+          <div v-if="chatLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            體驗次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          </div>
+          <div v-else-if="generationLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            報告生成次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
+          </div>
+          <div v-else-if="downloadLimitReached" class="mb-3 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+            下載次數已達上限，<button class="font-semibold text-rose-600 hover:underline" @click="$emit('register')">免費註冊</button>以繼續使用。
           </div>
 
           <div class="relative">
@@ -120,7 +126,7 @@
                 :disabled="!canRequestPlan || isStreaming"
                 @click="handleRequestGeneration"
               >
-                {{ isStreaming ? '推演中...' : (props.hasGeneratedDocx ? '下載已生成報告' : '輸出完整推演') }}
+                {{ isStreaming ? '推演中...' : '輸出完整推演' }}
               </button>
               <button
                 v-if="isFetchingNextQuestion"
@@ -184,6 +190,8 @@
       :loading="false"
       :timeline-loading="false"
       :is-internal="false"
+      :generation-limit-reached="props.generationLimitReached"
+      :download-limit-reached="props.downloadLimitReached"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
       @updateVersion="handleVersionUpdateRequest"
@@ -214,8 +222,10 @@ const props = defineProps({
   allQuestions: { type: Array, default: () => [] },
   sessionId: { type: String, default: "" },
   interactionCount: { type: Number, default: 0 },
-  interactionLimit: { type: Number, default: 15 },
-  limitReached: { type: Boolean, default: false },
+  interactionLimit: { type: Number, default: 20 },
+  chatLimitReached: { type: Boolean, default: false },
+  generationLimitReached: { type: Boolean, default: false },
+  downloadLimitReached: { type: Boolean, default: false },
   hasGeneratedDocx: { type: Boolean, default: false },
   conversationHistory: { type: Array, default: () => [] },
   storedAnswers: { type: Object, default: () => ({}) },
@@ -232,12 +242,12 @@ const emit = defineEmits([
   "messagesUpdated",
   "questionAnswersUpdated",
   "aiResponseComplete",
-  "requestGeneration",
   "generatePlan",
   "updateProjectTitle",
   "finalizeCandidates",
   "requestVersionUpdate",
   "register",
+  "downloadCompleted",
 ]);
 
 const { confirm } = useConfirm();
@@ -272,7 +282,7 @@ const textareaMinHeight = 64;
 const textareaMaxHeight = 184;
 
 // -- Computed --
-const isReadOnly = computed(() => props.limitReached);
+const isReadOnly = computed(() => props.chatLimitReached);
 
 const totalQuestions = computed(() => props.allQuestions.length);
 const answeredCount = computed(() =>
@@ -290,7 +300,7 @@ const activeTemplateName = computed(() => props.templateName || "");
 
 const canSendMessage = computed(() =>
   Boolean(
-    !isReadOnly.value &&
+    !props.chatLimitReached &&
     props.grantId &&
     props.templateId &&
     !isGenerationComplete.value &&
@@ -299,14 +309,21 @@ const canSendMessage = computed(() =>
 );
 
 const canRequestPlan = computed(() =>
-  Boolean((!isReadOnly.value || props.hasGeneratedDocx) && props.grantId && props.templateId)
+  Boolean(
+    props.grantId &&
+    props.templateId &&
+    !props.generationLimitReached
+  )
 );
 
 const hasMissingAnswers = computed(() => !allQuestionsAnswered.value);
 
 const composerPlaceholder = computed(() => {
-  if (isReadOnly.value) {
+  if (props.chatLimitReached) {
     return "體驗次數已達上限，免費註冊即可繼續使用。";
+  }
+  if (props.generationLimitReached && !props.hasGeneratedDocx) {
+    return "報告生成次數已達上限，免費註冊即可繼續使用。";
   }
   if (!props.grantId || !props.templateId) {
     return "請先完成第一階段的設定";
@@ -479,16 +496,6 @@ function handlePause() {
 
 async function handleRequestGeneration() {
   if (!canRequestPlan.value) return;
-  if (props.hasGeneratedDocx) {
-    emit("requestGeneration", {
-      grantId: props.grantId,
-      templateId: props.templateId,
-      questionAnswers: { ...questionAnswers.value },
-      grantName: props.grantName,
-      templateName: props.templateName,
-    });
-    return;
-  }
   if (hasMissingAnswers.value) {
     const confirmed = await confirm({
       title: "尚有問題未回答",
@@ -572,6 +579,18 @@ async function handleVersionExport(version) {
     return;
   }
   try {
+    const resp = await fetch(`${API_BASE_URL}/demo/download`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!resp.ok) {
+      if (resp.status === 429) {
+        notifyError("下載次數已達上限，免費註冊即可繼續使用。");
+      } else {
+        notifyError("下載驗證失敗，請稍後再試。");
+      }
+      return;
+    }
     await exportPlanToWord(
       props.sections,
       versionData,
@@ -581,6 +600,7 @@ async function handleVersionExport(version) {
       version?.timestamp,
       undefined,
     );
+    emit("downloadCompleted");
   } catch (err) {
     console.error("Failed to export plan", err);
     notifyError("匯出失敗，請稍後再試");

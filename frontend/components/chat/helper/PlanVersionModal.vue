@@ -82,14 +82,17 @@
         <button
           type="button"
           class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="loading || !version?.data"
+          :disabled="generationLimitReached || loading || !version?.data"
+          :title="generationLimitReached ? '報告生成次數已達上限，免費註冊即可繼續使用。' : ''"
           @click="handleVersionUpdate"
         >
           版本更新
         </button>
         <button
           type="button"
-          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition"
+          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="downloadLimitReached"
+          :title="downloadLimitReached ? '下載次數已達上限，免費註冊即可繼續使用。' : ''"
           @click="handleExport"
         >
           下載報告
@@ -126,6 +129,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   timelineLoading: { type: Boolean, default: false },
   isInternal: { type: Boolean, default: false },
+  generationLimitReached: { type: Boolean, default: false },
+  downloadLimitReached: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([

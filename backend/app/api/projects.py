@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_demo_session_id, get_supabase_service
@@ -18,6 +18,7 @@ from app.config import (
     DEMO_GRANT_ID,
     DEMO_TEMPLATE_ID,
     DEMO_INTERACTION_LIMIT,
+    DEMO_MAX_GENERATIONS_PER_SESSION,
     DEMO_REGISTER_REDIRECT_URL,
 )
 
@@ -55,6 +56,8 @@ class DemoSessionUpdate(BaseModel):
     saved_plan: Optional[Any] = None
     stored_answer: Optional[Dict[str, Any]] = None
     conversation_history: Optional[Any] = None
+    has_generated_docx: Optional[bool] = None
+    download_count: Optional[int] = None
 
 
 @router.get("", summary="Get the current visitor's demo session")
@@ -107,16 +110,25 @@ async def get_demo_status(
     session = await supabase_service.get_demo_session(session_id)
     session = await _force_session_template(session_id, supabase_service, session)
     interaction_count = session.get("interaction_count", 0) if session else 0
-    limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
+    chat_limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
     has_generated_docx = session.get("has_generated_docx", False) if session else False
+    generation_limit_reached = has_generated_docx
+    download_count = session.get("download_count", 0) if session else 0
+    download_limit_reached = download_count >= 1  # hard-coded 1 download per session
+    all_limits_reached = chat_limit_reached and generation_limit_reached and download_limit_reached
 
     return {
         "grant_id": DEMO_GRANT_ID or None,
         "template_id": DEMO_TEMPLATE_ID or None,
         "interaction_limit": DEMO_INTERACTION_LIMIT,
         "interaction_count": interaction_count,
-        "limit_reached": limit_reached,
+        "limit_reached": chat_limit_reached,
+        "chat_limit_reached": chat_limit_reached,
+        "generation_limit_reached": generation_limit_reached,
+        "download_limit_reached": download_limit_reached,
+        "all_limits_reached": all_limits_reached,
         "has_generated_docx": has_generated_docx,
+        "download_count": download_count,
         "register_url": DEMO_REGISTER_REDIRECT_URL,
     }
 
@@ -142,3 +154,21 @@ async def get_dynamic_fields(
         "sections": fields,
         "count": sum(len(s.get("fields", [])) for s in fields),
     }
+
+
+@router.post("/download", summary="Increment the demo session download count")
+async def increment_download_count(
+    session_id: str = Depends(get_demo_session_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """Atomically bump download_count. Returns 429 if the session has already
+    reached the per-session download limit (hard-coded to 1)."""
+    session = await supabase_service.get_demo_session(session_id)
+    current = session.get("download_count", 0) if session else 0
+    if current >= 1:
+        raise HTTPException(
+            status_code=429,
+            detail="下載次數已達上限，免費註冊即可繼續使用。",
+        )
+    new_count = await supabase_service.increment_demo_download_count(session_id)
+    return {"download_count": new_count}

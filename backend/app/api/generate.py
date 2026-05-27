@@ -29,6 +29,7 @@ from app.api.dependencies import (
 )
 from app.config import (
     DEMO_INTERACTION_LIMIT,
+    DEMO_MAX_GENERATIONS_PER_SESSION,
     DEMO_MAX_TOKENS_PER_SESSION,
     DEMO_REGISTER_REDIRECT_URL,
 )
@@ -818,6 +819,13 @@ async def generate_plan(
     capped by the chat interaction limit upstream. Each template section
     receives `num_candidates` parallel generations.
     """
+    session = await supabase_service.get_demo_session(session_id)
+    if session and session.get("has_generated_docx"):
+        raise HTTPException(
+            status_code=429,
+            detail="報告生成次數已達上限，免費註冊即可繼續使用。",
+        )
+
     app_state = request.app.state
     all_grants_config = getattr(app_state, "all_grants_config", []) or []
 
@@ -911,6 +919,8 @@ async def generate_plan(
     ]
     if failed_sections:
         logger.error("⚠️  %d sections failed completely: %s", len(failed_sections), failed_sections)
+
+    await supabase_service.update_demo_session(session_id, {"has_generated_docx": True})
 
     return plan_content
 
@@ -1021,6 +1031,13 @@ async def revise_plan_version(
     Removes auth/quota/throttling/project tracking. Builds the same revision
     prompt as the platform and reuses generate_section_content per section.
     """
+    session = await supabase_service.get_demo_session(session_id)
+    if session and session.get("has_generated_docx"):
+        raise HTTPException(
+            status_code=429,
+            detail="報告生成次數已達上限，免費註冊即可繼續使用。",
+        )
+
     if not request_data.current_version or not isinstance(request_data.current_version, dict):
         raise HTTPException(status_code=400, detail="current_version is required for revision.")
 
