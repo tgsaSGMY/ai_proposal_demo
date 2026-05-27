@@ -1956,6 +1956,33 @@ class SupabaseService:
             )
             return 0
 
+    async def increment_demo_download_count(self, session_id: str) -> int:
+        """Atomically bump download_count on the demo row and return the new value."""
+        try:
+            with self.get_db_session() as session:
+                result = session.execute(
+                    text(
+                        """
+                        UPDATE ai_proposal_platform.demo
+                        SET download_count = download_count + 1
+                        WHERE session_id = :sid
+                        RETURNING download_count
+                        """
+                    ),
+                    {"sid": session_id},
+                )
+                row = result.fetchone()
+                session.commit()
+                return int(row[0]) if row else 0
+        except Exception as exc:
+            logger.error(
+                "Failed to increment download_count for demo session %s: %s",
+                session_id,
+                exc,
+                exc_info=True,
+            )
+            return 0
+
     async def delete_demo_session(self, session_id: str) -> bool:
         try:
             self.client.from_("demo").delete().eq("session_id", session_id).execute()

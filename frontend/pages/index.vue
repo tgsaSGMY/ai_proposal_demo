@@ -47,8 +47,8 @@
         @messages-updated="handleMessagesUpdated"
         @question-answers-updated="handleAnswersUpdated"
         @ai-response-complete="handleAiResponseComplete"
-        @request-generation="handleRequestGeneration"
         @generate-plan="handleGeneratePlan"
+        @download-completed="handleDownloadCompleted"
         @update-project-title="handleUpdateProjectTitle"
         @finalize-candidates="handleFinalizeCandidates"
         @request-version-update="handleVersionRevision"
@@ -353,39 +353,8 @@ watch(chatLimitReached, (reached) => {
   if (reached) showRegisterModal.value = true;
 }, { immediate: true });
 
-async function handleRequestGeneration(_payload: any) {
-  // Only used for the "re-download already generated report" path. The
-  // standard 輸出完整推演 click now opens the RecommendNameModal inside
-  // DemoChatbox and emits `generate-plan` after the user picks a name.
-  if (!hasGeneratedDocx.value) return;
-  try {
-    // Increment download count on the backend first
-    const putResp = await fetch(`${apiBaseUrl}/demo`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ download_count: 1 }),
-    });
-    if (!putResp.ok) return;
-    downloadLimitReached.value = true;
-
-    const resp = await fetch(`${apiBaseUrl}/demo/finalize`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${grantName.value || "plan"}_draft.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error("Failed to re-download report", err);
-  }
+async function handleDownloadCompleted() {
+  await refreshStatus().catch(() => {});
 }
 
 function handleUpdateProjectTitle(name: string) {

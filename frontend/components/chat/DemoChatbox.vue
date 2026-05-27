@@ -123,10 +123,10 @@
               <button
                 type="button"
                 class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canRequestPlan || isStreaming || (props.hasGeneratedDocx && props.downloadLimitReached)"
+                :disabled="!canRequestPlan || isStreaming"
                 @click="handleRequestGeneration"
               >
-                {{ isStreaming ? '推演中...' : (props.hasGeneratedDocx ? '下載已生成報告' : '輸出完整推演') }}
+                {{ isStreaming ? '推演中...' : '輸出完整推演' }}
               </button>
               <button
                 v-if="isFetchingNextQuestion"
@@ -190,6 +190,8 @@
       :loading="false"
       :timeline-loading="false"
       :is-internal="false"
+      :generation-limit-reached="props.generationLimitReached"
+      :download-limit-reached="props.downloadLimitReached"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
       @updateVersion="handleVersionUpdateRequest"
@@ -240,12 +242,12 @@ const emit = defineEmits([
   "messagesUpdated",
   "questionAnswersUpdated",
   "aiResponseComplete",
-  "requestGeneration",
   "generatePlan",
   "updateProjectTitle",
   "finalizeCandidates",
   "requestVersionUpdate",
   "register",
+  "downloadCompleted",
 ]);
 
 const { confirm } = useConfirm();
@@ -310,7 +312,7 @@ const canRequestPlan = computed(() =>
   Boolean(
     props.grantId &&
     props.templateId &&
-    (!props.generationLimitReached || props.hasGeneratedDocx)
+    !props.generationLimitReached
   )
 );
 
@@ -494,16 +496,6 @@ function handlePause() {
 
 async function handleRequestGeneration() {
   if (!canRequestPlan.value) return;
-  if (props.hasGeneratedDocx) {
-    emit("requestGeneration", {
-      grantId: props.grantId,
-      templateId: props.templateId,
-      questionAnswers: { ...questionAnswers.value },
-      grantName: props.grantName,
-      templateName: props.templateName,
-    });
-    return;
-  }
   if (hasMissingAnswers.value) {
     const confirmed = await confirm({
       title: "尚有問題未回答",
@@ -587,6 +579,18 @@ async function handleVersionExport(version) {
     return;
   }
   try {
+    const resp = await fetch(`${API_BASE_URL}/demo/download`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!resp.ok) {
+      if (resp.status === 429) {
+        notifyError("下載次數已達上限，免費註冊即可繼續使用。");
+      } else {
+        notifyError("下載驗證失敗，請稍後再試。");
+      }
+      return;
+    }
     await exportPlanToWord(
       props.sections,
       versionData,
@@ -596,6 +600,7 @@ async function handleVersionExport(version) {
       version?.timestamp,
       undefined,
     );
+    emit("downloadCompleted");
   } catch (err) {
     console.error("Failed to export plan", err);
     notifyError("匯出失敗，請稍後再試");

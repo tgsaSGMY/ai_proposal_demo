@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_demo_session_id, get_supabase_service
@@ -154,3 +154,21 @@ async def get_dynamic_fields(
         "sections": fields,
         "count": sum(len(s.get("fields", [])) for s in fields),
     }
+
+
+@router.post("/download", summary="Increment the demo session download count")
+async def increment_download_count(
+    session_id: str = Depends(get_demo_session_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """Atomically bump download_count. Returns 429 if the session has already
+    reached the per-session download limit (hard-coded to 1)."""
+    session = await supabase_service.get_demo_session(session_id)
+    current = session.get("download_count", 0) if session else 0
+    if current >= 1:
+        raise HTTPException(
+            status_code=429,
+            detail="下載次數已達上限，免費註冊即可繼續使用。",
+        )
+    new_count = await supabase_service.increment_demo_download_count(session_id)
+    return {"download_count": new_count}
