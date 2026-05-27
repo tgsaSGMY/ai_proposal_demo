@@ -2037,6 +2037,13 @@ class SupabaseService:
             "action": action,
         }
 
+        # Append to the JSONB array AND keep total_tokens_used in sync in
+        # one atomic UPDATE so the denormalized counter stays correct
+        # even under parallel section generation. Per-call cost lives in
+        # each JSONB entry; no aggregate cost column is maintained.
+        # Image tokens are excluded from total_tokens_used to match
+        # get_demo_token_usage's input+output convention.
+        token_delta = int(input_token) + int(output_token)
         try:
             with self.get_db_session() as session:
                 session.execute(
@@ -2044,11 +2051,17 @@ class SupabaseService:
                         """
                         UPDATE ai_proposal_platform.demo
                         SET pending_usage_logs =
-                            COALESCE(pending_usage_logs, '[]'::jsonb) || CAST(:entry AS jsonb)
+                            COALESCE(pending_usage_logs, '[]'::jsonb) || CAST(:entry AS jsonb),
+                            total_tokens_used =
+                            COALESCE(total_tokens_used, 0) + :token_delta
                         WHERE session_id = :sid
                         """
                     ),
-                    {"sid": session_id, "entry": json.dumps([entry])},
+                    {
+                        "sid": session_id,
+                        "entry": json.dumps([entry]),
+                        "token_delta": token_delta,
+                    },
                 )
                 session.commit()
         except Exception as exc:
