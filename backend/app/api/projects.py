@@ -119,3 +119,26 @@ async def get_demo_status(
         "has_generated_docx": has_generated_docx,
         "register_url": DEMO_REGISTER_REDIRECT_URL,
     }
+
+
+@router.get("/dynamic-fields", summary="Get dynamic questions for a template")
+async def get_dynamic_fields(
+    grant_id: str,
+    template_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """Return dynamic_sections + dynamic_fields for the given template.
+
+    The frontend uses this to build the exact question list that matches
+    the full platform's _builder configuration. If no dynamic fields
+    exist for this template, returns an empty sections array so the
+    frontend falls back to the static sections.json_schema path."""
+    fields = await supabase_service.get_dynamic_fields_for_template(
+        template_id, grant_id
+    )
+    return {
+        "grant_id": grant_id,
+        "template_id": template_id,
+        "sections": fields,
+        "count": sum(len(s.get("fields", [])) for s in fields),
+    }

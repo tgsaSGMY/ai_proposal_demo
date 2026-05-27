@@ -17,6 +17,21 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Verify required secrets exist
+        run: |
+          missing=""
+          for secret in DOCKERHUB_USERNAME DOCKERHUB_TOKEN SUPABASE_URL SUPABASE_ANON_KEY NUXT_PUBLIC_API_BASE_URL NUXT_PUBLIC_PLATFORM_HOME_URL NUXT_PUBLIC_IS_DEMO_MODE NUXT_PUBLIC_DEMO_MAX_PROMPTS NUXT_PUBLIC_DEMO_MAX_GENERATIONS NUXT_PUBLIC_FULL_PLATFORM_URL NUXT_PUBLIC_DEMO_GRANT_ID NUXT_PUBLIC_DEMO_TEMPLATE_ID; do
+            val="${{ secrets[secret] }}"
+            if [ -z "$val" ]; then
+              missing="$missing $secret"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+          echo "All required secrets are present."
+
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
@@ -34,6 +49,13 @@ jobs:
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
             NUXT_PUBLIC_API_BASE_URL=${{ secrets.NUXT_PUBLIC_API_BASE_URL }}
+            NUXT_PUBLIC_PLATFORM_HOME_URL=${{ secrets.NUXT_PUBLIC_PLATFORM_HOME_URL }}
+            NUXT_PUBLIC_IS_DEMO_MODE=${{ secrets.NUXT_PUBLIC_IS_DEMO_MODE }}
+            NUXT_PUBLIC_DEMO_MAX_PROMPTS=${{ secrets.NUXT_PUBLIC_DEMO_MAX_PROMPTS }}
+            NUXT_PUBLIC_DEMO_MAX_GENERATIONS=${{ secrets.NUXT_PUBLIC_DEMO_MAX_GENERATIONS }}
+            NUXT_PUBLIC_FULL_PLATFORM_URL=${{ secrets.NUXT_PUBLIC_FULL_PLATFORM_URL }}
+            NUXT_PUBLIC_DEMO_GRANT_ID=${{ secrets.NUXT_PUBLIC_DEMO_GRANT_ID }}
+            NUXT_PUBLIC_DEMO_TEMPLATE_ID=${{ secrets.NUXT_PUBLIC_DEMO_TEMPLATE_ID }}
 
   deploy:
     needs: build-and-push

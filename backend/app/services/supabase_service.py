@@ -524,6 +524,72 @@ class SupabaseService:
             return []
 
 
+    async def get_dynamic_fields_for_template(
+        self,
+        template_id: str,
+        grant_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Fetch dynamic_sections + dynamic_fields for a template.
+
+        Returns structured array matching the _builder admin interface.
+        If no dynamic sections exist, returns [] (frontend will fall back
+        to the static sections.json_schema path).
+        """
+        try:
+            # 1. Fetch dynamic_sections for this template
+            sections_response = (
+                self.client
+                .from_("dynamic_sections")
+                .select("*")
+                .eq("template_id", template_id)
+                .eq("template_grant_id", grant_id)
+                .order("order", desc=False)
+                .execute()
+            )
+            sections = sections_response.data or []
+            if not sections:
+                return []
+
+            # 2. Collect all section_ids for batch field query
+            section_ids = [s["id"] for s in sections]
+
+            # 3. Fetch all dynamic_fields for these sections
+            fields_response = (
+                self.client
+                .from_("dynamic_fields")
+                .select("*")
+                .in_("section_id", section_ids)
+                .order("order", desc=False)
+                .execute()
+            )
+            fields = fields_response.data or []
+
+            # 4. Group fields by section_id
+            fields_by_section: Dict[str, List[Dict]] = {}
+            for f in fields:
+                sid = f["section_id"]
+                if sid not in fields_by_section:
+                    fields_by_section[sid] = []
+                fields_by_section[sid].append(f)
+
+            # 5. Build structured response
+            result = []
+            for section in sections:
+                sid = section["id"]
+                result.append({
+                    "section_key": section["section_key"],
+                    "title": section["title"],
+                    "order": section["order"],
+                    "fields": fields_by_section.get(sid, []),
+                })
+            return result
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch dynamic fields for %s/%s: %s",
+                grant_id, template_id, exc, exc_info=True,
+            )
+            return []
+
     async def get_all_draft_plans(self) -> List[Dict[str, Any]]:
         """获取所有計畫草稿"""
         response = self.client.from_("draft_plans").select("*").order("created_at", desc=True).execute()

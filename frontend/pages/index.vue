@@ -136,6 +136,20 @@ function deriveQuestions(sections: any[]): Question[] {
   return result;
 }
 
+function buildQuestionsFromDynamicFields(dynamicSections: any[]): Question[] {
+  const result: Question[] = [];
+  for (const section of dynamicSections || []) {
+    for (const field of section.fields || []) {
+      result.push({
+        id: `${section.section_key}::${field.field_key}`,
+        label: `${section.title}｜${field.title}`,
+        prompt: field.description || field.title,
+      });
+    }
+  }
+  return result;
+}
+
 async function loadCatalogAndSession() {
   const [configResp, demoResp] = await Promise.all([
     fetch(`${apiBaseUrl}/config`, { credentials: "include" }),
@@ -217,8 +231,39 @@ async function loadCatalogAndSession() {
   templateId.value = chosenTemplate.id;
   grantName.value = chosenGrant.name || "";
   templateName.value = chosenTemplate.name || "";
-  allQuestions.value = deriveQuestions(chosenTemplate.sections);
-  sections.value = Array.isArray(chosenTemplate.sections) ? chosenTemplate.sections : [];
+
+  // --- Dynamic fields support (production parity) ---
+  // The full platform's _builder configures questions via dynamic_sections +
+  // dynamic_fields tables. When those exist, use them instead of the static
+  // sections.json_schema so the demo matches the production experience.
+  let dynamicFields: any[] = [];
+  try {
+    const dynResp = await fetch(
+      `${apiBaseUrl}/demo/dynamic-fields?grant_id=${grantId.value}&template_id=${templateId.value}`,
+      { credentials: "include" }
+    );
+    if (dynResp.ok) {
+      const dynData = await dynResp.json();
+      dynamicFields = dynData.sections || [];
+    }
+  } catch {
+    // ignore — will fall back to deriveQuestions
+  }
+
+  if (dynamicFields.length > 0) {
+    allQuestions.value = buildQuestionsFromDynamicFields(dynamicFields);
+    // Build a compatible sections array for DemoChatbox / sidebar
+    sections.value = dynamicFields.map((ds: any) => ({
+      id: ds.section_key,
+      name: ds.title,
+      json_schema: null,
+      order: ds.order,
+    }));
+  } else {
+    // FALLBACK: template has no dynamic fields — use static json_schema
+    allQuestions.value = deriveQuestions(chosenTemplate.sections);
+    sections.value = Array.isArray(chosenTemplate.sections) ? chosenTemplate.sections : [];
+  }
 
   const savedPlan = demo.saved_plan;
   if (Array.isArray(savedPlan)) {
