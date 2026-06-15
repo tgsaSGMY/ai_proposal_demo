@@ -71,6 +71,8 @@ async def get_demo_session(
     patched to match them so old sessions migrate automatically."""
     row = await supabase_service.ensure_demo_session(session_id)
     row = await _force_session_template(session_id, supabase_service, row)
+    if row and "expires_at" not in row:
+        row["expires_at"] = None
     return row or {"session_id": session_id}
 
 
@@ -130,6 +132,7 @@ async def get_demo_status(
         "has_generated_docx": has_generated_docx,
         "download_count": download_count,
         "register_url": DEMO_REGISTER_REDIRECT_URL,
+        "expires_at": session.get("expires_at") if session else None,
     }
 
 

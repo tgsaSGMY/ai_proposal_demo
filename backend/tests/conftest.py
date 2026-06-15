@@ -43,6 +43,7 @@ class FakeDemoStore:
         self.rows: Dict[str, Dict[str, Any]] = {}
 
     async def ensure(self, session_id: str, **kwargs: Any) -> Dict[str, Any]:
+        from datetime import datetime, timedelta, timezone
         row = self.rows.setdefault(
             session_id,
             {
@@ -55,6 +56,7 @@ class FakeDemoStore:
                 "interaction_count": 0,
                 "has_generated_docx": False,
                 "status": "active",
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             },
         )
         for k, v in kwargs.items():
@@ -63,9 +65,16 @@ class FakeDemoStore:
         return row
 
     async def get(self, session_id: str) -> Optional[Dict[str, Any]]:
+        from datetime import datetime, timezone
         row = self.rows.get(session_id)
         if row is None or row.get("status") != "active":
             return None
+        expires_at = row.get("expires_at")
+        if expires_at:
+            if isinstance(expires_at, str):
+                expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if expires_at < datetime.now(timezone.utc):
+                return None
         return row
 
     async def update(self, session_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

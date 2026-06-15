@@ -1853,9 +1853,12 @@ class SupabaseService:
         """Fetch the *active* demo row for this visitor, or None.
 
         Filters `status='active'` so claimed/expired rows look absent to the
-        cookie-lookup path. Claimed rows are preserved on disk for analytics
-        and to make claim idempotency work in the parent platform.
+        cookie-lookup path. Also checks `expires_at` in real-time so a row
+        past its expiry is treated as invalid even before the daily cron runs.
+        Claimed rows are preserved on disk for analytics and to make claim
+        idempotency work in the parent platform.
         """
+        from datetime import datetime, timezone
         try:
             response = (
                 self.client.from_("demo")
@@ -1866,7 +1869,15 @@ class SupabaseService:
                 .execute()
             )
             rows = response.data or []
-            return rows[0] if rows else None
+            row = rows[0] if rows else None
+            if row:
+                expires_at = row.get("expires_at")
+                if expires_at:
+                    if isinstance(expires_at, str):
+                        expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                    if expires_at < datetime.now(timezone.utc):
+                        return None
+            return row
         except Exception as exc:
             logger.error("Failed to fetch demo session %s: %s", session_id, exc, exc_info=True)
             return None
@@ -1892,7 +1903,12 @@ class SupabaseService:
                 return await self.update_demo_session(session_id, patch) or existing
             return existing
 
-        payload: Dict[str, Any] = {"session_id": session_id}
+        from datetime import datetime, timedelta, timezone
+        from app.config import DEMO_SESSION_EXPIRY_DAYS
+        payload: Dict[str, Any] = {
+            "session_id": session_id,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=DEMO_SESSION_EXPIRY_DAYS)).isoformat(),
+        }
         if grant_id:
             payload["grant_id"] = grant_id
         if template_id:

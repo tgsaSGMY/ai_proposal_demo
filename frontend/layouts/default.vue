@@ -3,7 +3,12 @@
     <header
       class="md:hidden bg-white text-gray-900 flex items-center justify-between px-4 py-3 border-b border-gray-200 sticky top-0 z-40"
     >
-      <img src="/AI補助引擎_Logo_留邊.png" alt="AI 補助引擎" class="h-8 w-auto pointer-events-none select-none" />
+      <div class="flex flex-col">
+        <img src="/AI補助引擎_Logo_留邊.png" alt="AI 補助引擎" class="h-8 w-auto pointer-events-none select-none" />
+        <p v-if="sessionExpiryText" class="text-[10px] text-gray-400 leading-tight mt-0.5">
+          {{ sessionExpiryText }}
+        </p>
+      </div>
       <button @click="showSidebar = !showSidebar" class="focus:outline-none">
         <svg
           v-if="!showSidebar"
@@ -101,6 +106,12 @@
             >
               {Demo} 試用版
             </p>
+            <p
+              v-if="!isSidebarCollapsed && sessionExpiryText"
+              class="mt-1 text-[10px] text-gray-400 leading-tight"
+            >
+              {{ sessionExpiryText }}
+            </p>
           </div>
 
         </div>
@@ -139,6 +150,7 @@
 </template>
 <script setup>
 import { ref, onMounted, watch, computed } from "vue";
+import { useSessionExpiry } from "~/composables/useSessionExpiry";
 
 const showSidebar = ref(false);
 const isSidebarCollapsed = ref(false);
@@ -150,6 +162,9 @@ const registerUrl = computed(
     runtimeConfig.public.platformHomeUrl ||
     "https://aiproposal.tgsa.com.tw/api/external-auth/redirect"
 );
+
+const expiresAt = ref(null);
+const { timeString: sessionExpiryText } = useSessionExpiry(expiresAt);
 
 watch(isSidebarCollapsed, (collapsed) => {
   if (typeof window === "undefined") return;
@@ -170,6 +185,24 @@ onMounted(() => {
     } catch (err) {
       console.warn("Failed to read sidebar collapse state", err);
     }
+  }
+
+  // Fetch session expiry from backend
+  const apiBaseUrl = runtimeConfig.public.apiBaseUrl;
+  if (apiBaseUrl) {
+    fetch(`${apiBaseUrl}/api/demo`, { credentials: "include" })
+      .then((resp) => {
+        if (resp.ok) return resp.json();
+        return null;
+      })
+      .then((data) => {
+        if (data && data.expires_at) {
+          expiresAt.value = data.expires_at;
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch session expiry", err);
+      });
   }
 });
 </script>

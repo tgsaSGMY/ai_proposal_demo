@@ -17,6 +17,7 @@ export default defineNuxtConfig({
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
       demoGrantId: process.env.NUXT_PUBLIC_DEMO_GRANT_ID || "",
       demoTemplateId: process.env.NUXT_PUBLIC_DEMO_TEMPLATE_ID || "",
+      demoSessionExpiryDays: process.env.NUXT_PUBLIC_DEMO_SESSION_EXPIRY_DAYS || "7",
     },
   },
   routeRules: {

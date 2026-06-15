@@ -14,6 +14,7 @@ from __future__ import annotations
 import uuid
 
 from app.api.dependencies import DEMO_SESSION_COOKIE_NAME, DEMO_SESSION_COOKIE_MAX_AGE_SECONDS
+from app.config import DEMO_SESSION_EXPIRY_DAYS
 
 
 def _is_uuid(value: str) -> bool:
@@ -165,3 +166,48 @@ def test_get_skips_claimed_row_and_mints_fresh(client, demo_store):
     assert demo_store.rows[first_session_id]["status"] == "claimed"
     # The new row exists and is active.
     assert demo_store.rows[new_session_id]["status"] == "active"
+
+
+def test_cookie_max_age_matches_env(client):
+    """The Set-Cookie max-age must match DEMO_SESSION_EXPIRY_DAYS from .env."""
+    response = client.get("/api/demo")
+    assert response.status_code == 200
+    expected_max_age = DEMO_SESSION_EXPIRY_DAYS * 24 * 60 * 60
+    set_cookie = response.headers.get("set-cookie", "").lower()
+    assert f"max-age={expected_max_age}" in set_cookie
+
+
+def test_expired_session_is_rejected_and_mints_fresh(client, demo_store):
+    """A row with expires_at in the past must be treated as invalid, triggering
+    a fresh session mint on the next request."""
+    from datetime import datetime, timedelta, timezone
+    mint = client.get("/api/demo")
+    first_session_id = mint.json()["session_id"]
+    assert first_session_id in demo_store.rows
+
+    # Manually expire the row
+    demo_store.rows[first_session_id]["expires_at"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=1)
+    ).isoformat()
+
+    # Next GET: the backend sees an expired row, returns None, and mints fresh.
+    response = client.get("/api/demo")
+    new_session_id = response.json()["session_id"]
+    assert _is_uuid(new_session_id)
+    assert new_session_id != first_session_id
+    assert new_session_id in demo_store.rows
+    # The old row is still in the store (not deleted by the test)
+    assert first_session_id in demo_store.rows
+
+
+def test_new_row_has_expires_at(client, demo_store):
+    """A newly created demo row must have a future expires_at."""
+    from datetime import datetime, timezone
+    response = client.get("/api/demo")
+    session_id = response.json()["session_id"]
+    row = demo_store.rows[session_id]
+    assert "expires_at" in row
+    expires_at = row["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    assert expires_at > datetime.now(timezone.utc)
