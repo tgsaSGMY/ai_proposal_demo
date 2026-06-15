@@ -1,18 +1,19 @@
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, watch, type Ref } from "vue";
 
-export function useSessionExpiry(expiresAt: string | null) {
+export function useSessionExpiry(expiresAtRef: Ref<string | null>) {
   const timeString = ref("");
   const isExpired = ref(false);
   let interval: ReturnType<typeof setInterval> | null = null;
 
   function update() {
-    if (!expiresAt) {
+    const val = expiresAtRef.value;
+    if (!val) {
       timeString.value = "";
       isExpired.value = false;
       return;
     }
     const now = Date.now();
-    const expiry = new Date(expiresAt).getTime();
+    const expiry = new Date(val).getTime();
     const diff = expiry - now;
 
     if (diff <= 0) {
@@ -37,6 +38,10 @@ export function useSessionExpiry(expiresAt: string | null) {
       timeString.value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
     }
   }
+
+  watch(expiresAtRef, () => {
+    update();
+  });
 
   onMounted(() => {
     update();
