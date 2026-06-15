@@ -15,10 +15,10 @@ from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from app.utils.demo_rate_limiter import DemoRateLimiter
 from app.utils.ip_extractor import get_client_ip
-from app.config import DEMO_SESSION_EXPIRY_DAYS
+from app.config import DEMO_SESSION_EXPIRY_MINUTES
 
 DEMO_SESSION_COOKIE_NAME = "demo_session_id"
-DEMO_SESSION_COOKIE_MAX_AGE_SECONDS = DEMO_SESSION_EXPIRY_DAYS * 24 * 60 * 60
+DEMO_SESSION_COOKIE_MAX_AGE_SECONDS = DEMO_SESSION_EXPIRY_MINUTES * 60
 
 
 def get_supabase_service(request: Request) -> SupabaseService:

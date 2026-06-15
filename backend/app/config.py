@@ -51,8 +51,23 @@ DEMO_MAX_TOKENS_PER_SESSION = int(os.getenv("DEMO_MAX_TOKENS_PER_SESSION", "1000
 # Max .docx report generations per session (default 1).
 DEMO_MAX_GENERATIONS_PER_SESSION = int(os.getenv("DEMO_MAX_GENERATIONS_PER_SESSION", "1"))
 
-# Session expiry in days (default 30).
-DEMO_SESSION_EXPIRY_DAYS = int(os.getenv("DEMO_SESSION_EXPIRY_DAYS", "30"))
+# --- Session Expiry (dual env var support) ---
+# DEMO_SESSION_EXPIRY_MINUTES takes priority for dev testing.
+# If not set, falls back to DEMO_SESSION_EXPIRY_DAYS (default 7 days).
+# Bad values are silently corrected to 7 days to prevent startup crashes.
+try:
+    minutes_env = os.getenv("DEMO_SESSION_EXPIRY_MINUTES")
+    if minutes_env:
+        DEMO_SESSION_EXPIRY_MINUTES = int(minutes_env)
+    else:
+        days = int(os.getenv("DEMO_SESSION_EXPIRY_DAYS", "7"))
+        DEMO_SESSION_EXPIRY_MINUTES = days * 24 * 60
+except ValueError:
+    DEMO_SESSION_EXPIRY_MINUTES = 7 * 24 * 60  # 7 days fallback
+
+# Keep the legacy variable available for backward compatibility, but it
+# reflects the canonical minutes value converted back to days.
+DEMO_SESSION_EXPIRY_DAYS = DEMO_SESSION_EXPIRY_MINUTES / (24 * 60)
 
 # Where the visitor is redirected when they hit the cap — points at the
 # parent platform's register page. Include `?ref=<session_id>` server-side

@@ -1904,10 +1904,10 @@ class SupabaseService:
             return existing
 
         from datetime import datetime, timedelta, timezone
-        from app.config import DEMO_SESSION_EXPIRY_DAYS
+        from app.config import DEMO_SESSION_EXPIRY_MINUTES
         payload: Dict[str, Any] = {
             "session_id": session_id,
-            "expires_at": (datetime.now(timezone.utc) + timedelta(days=DEMO_SESSION_EXPIRY_DAYS)).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=DEMO_SESSION_EXPIRY_MINUTES)).isoformat(),
         }
         if grant_id:
             payload["grant_id"] = grant_id

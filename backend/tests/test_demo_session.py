@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 
 from app.api.dependencies import DEMO_SESSION_COOKIE_NAME, DEMO_SESSION_COOKIE_MAX_AGE_SECONDS
-from app.config import DEMO_SESSION_EXPIRY_DAYS
+from app.config import DEMO_SESSION_EXPIRY_MINUTES
 
 
 def _is_uuid(value: str) -> bool:
@@ -169,10 +169,10 @@ def test_get_skips_claimed_row_and_mints_fresh(client, demo_store):
 
 
 def test_cookie_max_age_matches_env(client):
-    """The Set-Cookie max-age must match DEMO_SESSION_EXPIRY_DAYS from .env."""
+    """The Set-Cookie max-age must match DEMO_SESSION_EXPIRY_MINUTES from .env."""
     response = client.get("/api/demo")
     assert response.status_code == 200
-    expected_max_age = DEMO_SESSION_EXPIRY_DAYS * 24 * 60 * 60
+    expected_max_age = DEMO_SESSION_EXPIRY_MINUTES * 60
     set_cookie = response.headers.get("set-cookie", "").lower()
     assert f"max-age={expected_max_age}" in set_cookie
 
