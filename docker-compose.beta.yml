@@ -11,7 +11,7 @@ version: "3.8"
 
 services:
   fastapi-backend:
-    container_name: fastapi-backend
+    container_name: demo-sbir-backend
     image: tgsa83609327/ai_proposal_demo:dev
     restart: always
     env_file:
@@ -24,7 +24,7 @@ services:
       - npm-network
 
   nuxt-frontend:
-    container_name: nuxt-frontend
+    container_name: demo-sbir-frontend
     # Use the pre-built dev image from Docker Hub instead of building on the VPS
     image: tgsa83609327/ai_proposal_demo_frontend:dev
     restart: always
@@ -39,7 +39,10 @@ services:
 # Notice we completely removed the nginx-proxy service here
 # because Nginx Proxy Manager (NPM) will handle all routing globally on the VPS.
 # Each deployment must be added as a separate "Proxy Host" in NPM pointing
-# to the container_name values below: fastapi-backend and nuxt-frontend.
+# to the container_name values below: demo-sbir-backend and demo-sbir-frontend.
+#
+# For other templates (STTR, P1, etc.) on their own VPS, change the prefix
+# in container_name to avoid network alias collisions (e.g. demo-sttr-backend).
 
 networks:
   supabase_net:
