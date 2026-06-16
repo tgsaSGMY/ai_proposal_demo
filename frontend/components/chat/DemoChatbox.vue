@@ -236,6 +236,7 @@ const props = defineProps({
   candidatePlan: { type: Object, default: () => ({}) },
   finalPlan: { type: Object, default: () => ({}) },
   savedPlanVersions: { type: Array, default: () => [] },
+  sectionVersions: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -598,7 +599,7 @@ async function handleVersionExport(version) {
       props.templateId,
       props.projectTitle || version?.title || "計畫草稿",
       version?.timestamp,
-      undefined,
+      props.sectionVersions,
     );
     emit("downloadCompleted");
   } catch (err) {

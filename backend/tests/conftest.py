@@ -57,6 +57,7 @@ class FakeDemoStore:
                 "has_generated_docx": False,
                 "status": "active",
                 "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "section_versions": {},
             },
         )
         for k, v in kwargs.items():

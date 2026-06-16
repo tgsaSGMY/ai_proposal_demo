@@ -58,6 +58,7 @@ class DemoSessionUpdate(BaseModel):
     conversation_history: Optional[Any] = None
     has_generated_docx: Optional[bool] = None
     download_count: Optional[int] = None
+    title: Optional[str] = Field(default=None, max_length=255)
 
 
 @router.get("", summary="Get the current visitor's demo session")
@@ -73,6 +74,8 @@ async def get_demo_session(
     row = await _force_session_template(session_id, supabase_service, row)
     if row and "expires_at" not in row:
         row["expires_at"] = None
+    if row and "section_versions" not in row:
+        row["section_versions"] = None
     return row or {"session_id": session_id}
 
 
@@ -133,6 +136,7 @@ async def get_demo_status(
         "download_count": download_count,
         "register_url": DEMO_REGISTER_REDIRECT_URL,
         "expires_at": session.get("expires_at") if session else None,
+        "section_versions": session.get("section_versions") if session else None,
     }
 
 

@@ -44,6 +44,7 @@
         :candidate-plan="candidatePlan"
         :final-plan="finalPlanContent"
         :saved-plan-versions="savedPlanVersions"
+        :section-versions="sectionVersions"
         @messages-updated="handleMessagesUpdated"
         @question-answers-updated="handleAnswersUpdated"
         @ai-response-complete="handleAiResponseComplete"
@@ -63,7 +64,9 @@
       :interaction-limit="interactionLimit"
       :register-url="registerUrl"
       :session-id="sessionId"
+      :project-title="projectTitle"
       @close="showRegisterModal = false"
+      @update-title="handleUpdateProjectTitle"
     />
 
     <!-- Global confirm + notifications (rendered by layout or App.vue) -->
@@ -120,6 +123,7 @@ const hasGeneratedDocx = ref(false);
   const candidatePlan = ref<Record<string, any>>({});
   const finalPlanContent = ref<Record<string, any>>({});
   const savedPlanVersions = ref<any[]>([]);
+  const sectionVersions = ref<Record<string, number>>({});
 
 function deriveQuestions(sections: any[]): Question[] {
   const result: Question[] = [];
@@ -294,6 +298,12 @@ async function loadCatalogAndSession() {
   if (demo.stored_answer?.chat_answers) {
     storedAnswers.value = demo.stored_answer.chat_answers;
   }
+  if (demo.title) {
+    projectTitle.value = demo.title;
+  }
+  if (demo.section_versions) {
+    sectionVersions.value = demo.section_versions;
+  }
 }
 
 async function initialize() {
@@ -357,10 +367,21 @@ async function handleDownloadCompleted() {
   await refreshStatus().catch(() => {});
 }
 
-function handleUpdateProjectTitle(name: string) {
+async function handleUpdateProjectTitle(name: string) {
   if (name) {
     projectTitle.value = name;
     success("已更新專案名稱");
+    // Persist title to backend so it survives migration
+    try {
+      await fetch(`${apiBaseUrl}/demo`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: name }),
+      });
+    } catch (err) {
+      console.warn("Failed to persist title to demo session", err);
+    }
   }
 }
 
@@ -479,7 +500,6 @@ async function handleFinalizeCandidates(payload: {
 
   const versionNumber = savedPlanVersions.value.length + 1;
   const newVersion = {
-    id: `version-${Date.now()}`,
     number: versionNumber,
     title: `版本 ${versionNumber}`,
     timestamp: new Date().toISOString(),
@@ -493,7 +513,7 @@ async function handleFinalizeCandidates(payload: {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ saved_plan: updatedVersions, has_generated_docx: true }),
+      body: JSON.stringify({ saved_plan: updatedVersions, has_generated_docx: true, title: projectTitle.value }),
     });
     hasGeneratedDocx.value = true;
     generationLimitReached.value = true;

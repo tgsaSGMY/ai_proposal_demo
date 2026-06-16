@@ -1913,6 +1913,10 @@ class SupabaseService:
             payload["grant_id"] = grant_id
         if template_id:
             payload["template_id"] = template_id
+        # Snapshot section versions at creation time (same as full platform)
+        section_versions = await self._get_section_current_versions(grant_id, template_id)
+        if section_versions:
+            payload["section_versions"] = section_versions
         try:
             response = self.client.from_("demo").insert(payload).execute()
             rows = response.data or []

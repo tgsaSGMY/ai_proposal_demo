@@ -1,9 +1,18 @@
 version: "3.8"
 
+# For multi-deployment on the same host (same Docker daemon), remove container_name
+# and use: docker compose -p <project_name> -f docker-compose.beta.yml up -d
+# Example:
+#   docker compose -p demo-sbir -f docker-compose.beta.yml up -d
+#   docker compose -p demo-sbir-p1 -f docker-compose.beta.yml up -d
+#
+# For single-deployment-per-VPS (our case), container_name is fine and makes
+# debugging / proxying easier.
+
 services:
   fastapi-backend:
+    container_name: fastapi-backend
     image: tgsa83609327/ai_proposal_demo:dev
-    container_name: fastapi_demo_server
     restart: always
     env_file:
       - ./backend/.env
@@ -15,9 +24,9 @@ services:
       - npm-network
 
   nuxt-frontend:
+    container_name: nuxt-frontend
     # Use the pre-built dev image from Docker Hub instead of building on the VPS
     image: tgsa83609327/ai_proposal_demo_frontend:dev
-    container_name: nuxt_demo_client
     restart: always
     env_file:
       - ./frontend/.env
@@ -27,8 +36,10 @@ services:
       - default
       - npm-network
 
-# Notice we completely removed the nginx-proxy service here 
+# Notice we completely removed the nginx-proxy service here
 # because Nginx Proxy Manager (NPM) will handle all routing globally on the VPS.
+# Each deployment must be added as a separate "Proxy Host" in NPM pointing
+# to the container_name values below: fastapi-backend and nuxt-frontend.
 
 networks:
   supabase_net:
