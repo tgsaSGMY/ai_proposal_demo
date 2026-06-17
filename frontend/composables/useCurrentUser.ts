@@ -20,15 +20,11 @@ export function useCurrentUser(): UseCurrentUserResult {
     if (isFetchingUser.value) return userId.value;
     isFetchingUser.value = true;
     try {
-      const config = useRuntimeConfig();
-      const apiBaseUrl = `${config.public.apiBaseUrl}/api`;
-      const response = await fetch(`${apiBaseUrl}/demo`, { credentials: "include" });
-      if (response.ok) {
-        const row = await response.json();
-        userId.value = row?.session_id ?? null;
-      } else {
-        userId.value = null;
-      }
+      // Funnel through the shared memoised bootstrap so this does NOT mint a
+      // second demo session in parallel with the page/layout (see useDemoSession).
+      const { ensureDemoSession } = useDemoSession();
+      const row = await ensureDemoSession();
+      userId.value = row?.session_id ?? null;
     } catch (error) {
       console.error("Failed to load demo session id", error);
       userId.value = null;

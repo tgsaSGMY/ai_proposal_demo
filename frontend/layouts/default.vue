@@ -187,14 +187,11 @@ onMounted(() => {
     }
   }
 
-  // Fetch session expiry from backend
-  const apiBaseUrl = runtimeConfig.public.apiBaseUrl;
-  if (apiBaseUrl) {
-    fetch(`${apiBaseUrl}/api/demo`, { credentials: "include" })
-      .then((resp) => {
-        if (resp.ok) return resp.json();
-        return null;
-      })
+  // Fetch session expiry via the shared memoised bootstrap so the layout does
+  // NOT mint a second demo session in parallel with the page (see useDemoSession).
+  {
+    const { ensureDemoSession } = useDemoSession();
+    ensureDemoSession()
       .then((data) => {
         if (data && data.expires_at) {
           expiresAt.value = data.expires_at;

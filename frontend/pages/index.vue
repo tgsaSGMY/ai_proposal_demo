@@ -159,17 +159,16 @@ function buildQuestionsFromDynamicFields(dynamicSections: any[]): Question[] {
 }
 
 async function loadCatalogAndSession() {
-  // Bootstrap the session FIRST and await it. GET /demo is the only endpoint
-  // that mints the session id + sets the cookie; every other demo request (and
-  // the chat WebSocket) must run after this so they all share one session id.
-  // Parallelising the bootstrap with other calls let them mint divergent
-  // sessions, so the register `ref` could point at a different (empty) row than
-  // the one the conversation was saved to.
-  const demoResp = await fetch(`${apiBaseUrl}/demo`, { credentials: "include" });
-  if (!demoResp.ok) {
-    throw new Error(`/api/demo returned ${demoResp.status}`);
+  // Bootstrap the session FIRST and await it via the shared, memoised
+  // useDemoSession — GET /demo is the only minting endpoint, so every caller
+  // (page, layout, useCurrentUser) must funnel through one request. Awaiting it
+  // before /config and before the chat WebSocket guarantees a single session id
+  // everywhere, so the register `ref` matches the conversation's session.
+  const { ensureDemoSession } = useDemoSession();
+  const demo = (await ensureDemoSession()) as Record<string, any> | null;
+  if (!demo) {
+    throw new Error("/api/demo bootstrap failed");
   }
-  const demo = (await demoResp.json()) as Record<string, any>;
   sessionId.value = demo.session_id;
 
   // Cookie is established now — the rest can run normally.
