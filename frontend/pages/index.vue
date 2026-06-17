@@ -358,7 +358,9 @@ function handleRegister() {
   chatLimitReached.value = true;
   generationLimitReached.value = true;
   downloadLimitReached.value = true;
-  // Also try to refresh status to get accurate counts from backend
+  // Explicitly open the modal — the watcher only fires on value changes,
+  // so if chatLimitReached was already true the modal wouldn't reopen.
+  showRegisterModal.value = true;
   refreshStatus().catch(() => {});
 }
 
