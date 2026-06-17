@@ -159,22 +159,25 @@ function buildQuestionsFromDynamicFields(dynamicSections: any[]): Question[] {
 }
 
 async function loadCatalogAndSession() {
-  const [configResp, demoResp] = await Promise.all([
-    fetch(`${apiBaseUrl}/config`, { credentials: "include" }),
-    fetch(`${apiBaseUrl}/demo`, { credentials: "include" }),
-  ]);
-
-  if (!configResp.ok) {
-    throw new Error(`/api/config returned ${configResp.status}`);
-  }
+  // Bootstrap the session FIRST and await it. GET /demo is the only endpoint
+  // that mints the session id + sets the cookie; every other demo request (and
+  // the chat WebSocket) must run after this so they all share one session id.
+  // Parallelising the bootstrap with other calls let them mint divergent
+  // sessions, so the register `ref` could point at a different (empty) row than
+  // the one the conversation was saved to.
+  const demoResp = await fetch(`${apiBaseUrl}/demo`, { credentials: "include" });
   if (!demoResp.ok) {
     throw new Error(`/api/demo returned ${demoResp.status}`);
   }
-
-  const catalog = (await configResp.json()) as any[];
   const demo = (await demoResp.json()) as Record<string, any>;
-
   sessionId.value = demo.session_id;
+
+  // Cookie is established now — the rest can run normally.
+  const configResp = await fetch(`${apiBaseUrl}/config`, { credentials: "include" });
+  if (!configResp.ok) {
+    throw new Error(`/api/config returned ${configResp.status}`);
+  }
+  const catalog = (await configResp.json()) as any[];
 
   // Optionally fetch demo status for updated limits (defensive: may 404 until backend ready)
   try {

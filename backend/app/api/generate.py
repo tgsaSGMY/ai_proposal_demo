@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSo
 from app.api.dependencies import (
     DEMO_SESSION_COOKIE_NAME,
     _coerce_uuid,
-    get_demo_session_id,
+    require_demo_session_id,
     get_llm_service,
     get_supabase_service,
 )
@@ -589,7 +589,7 @@ async def websocket_chat_guidance(websocket: WebSocket):
 async def recommend_project_names(
     payload: Dict[str, Any],
     request: Request,
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
@@ -809,7 +809,7 @@ async def recommend_project_names(
 async def generate_plan(
     request_data: GenerateRequest,
     request: Request,
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
@@ -1022,7 +1022,7 @@ def _build_section_revision_context(section, version_map: Dict[str, Any]) -> str
 async def revise_plan_version(
     request_data: PlanRevisionRequest,
     request: Request,
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     llm_service: LLMService = Depends(get_llm_service),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):

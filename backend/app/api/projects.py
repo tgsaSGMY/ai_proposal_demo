@@ -12,7 +12,11 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import get_demo_session_id, get_supabase_service
+from app.api.dependencies import (
+    get_demo_session_id,
+    require_demo_session_id,
+    get_supabase_service,
+)
 from app.services.supabase_service import SupabaseService
 from app.config import (
     DEMO_GRANT_ID,
@@ -82,7 +86,7 @@ async def get_demo_session(
 @router.put("", summary="Update the demo session payload")
 async def update_demo_session(
     payload: DemoSessionUpdate,
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
     data = payload.dict(exclude_none=True)
@@ -93,7 +97,7 @@ async def update_demo_session(
 
 @router.delete("", summary="Reset the current demo session")
 async def reset_demo_session(
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, str]:
     """Wipe the row so a fresh demo starts. The deleted row is gone, so the
@@ -104,7 +108,7 @@ async def reset_demo_session(
 
 @router.get("/status", summary="Get demo status and configured template")
 async def get_demo_status(
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
     """Return the currently configured demo template IDs and the visitor's
@@ -165,7 +169,7 @@ async def get_dynamic_fields(
 
 @router.post("/download", summary="Increment the demo session download count")
 async def increment_download_count(
-    session_id: str = Depends(get_demo_session_id),
+    session_id: str = Depends(require_demo_session_id),
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ) -> Dict[str, Any]:
     """Atomically bump download_count. Returns 429 if the session has already

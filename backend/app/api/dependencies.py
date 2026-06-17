@@ -83,3 +83,25 @@ async def get_demo_session_id(
         path="/",
     )
     return new_id
+
+
+async def require_demo_session_id(request: Request) -> str:
+    """Return the visitor's existing demo session ID from the cookie, WITHOUT
+    minting a new one.
+
+    Only `GET /demo` (the bootstrap) is allowed to mint via
+    `get_demo_session_id`; every other endpoint uses this read-only dependency.
+    Minting in multiple endpoints lets parallel first-load requests each create
+    a separate session, so the id the frontend keeps (and puts in the register
+    `ref`) can diverge from the cookie the WebSocket uses — leaving the
+    conversation in one row and the claim pointed at an empty other row.
+    Requiring an existing cookie here makes `GET /demo` the single source of a
+    session id.
+    """
+    existing = _coerce_uuid(request.cookies.get(DEMO_SESSION_COOKIE_NAME))
+    if not existing:
+        raise HTTPException(
+            status_code=400,
+            detail="missing demo_session_id cookie — load the demo page (GET /demo) first",
+        )
+    return existing
