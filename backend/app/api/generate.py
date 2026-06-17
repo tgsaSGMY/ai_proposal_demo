@@ -848,6 +848,32 @@ async def generate_plan(
     if not sections:
         raise HTTPException(status_code=400, detail="No sections found in the selected template.")
 
+    # ── Demo: only generate sections the visitor actually answered ──
+    # Chat answer field keys follow the pattern "section_id::field_key".
+    # If the user answered nothing and confirmed the warning dialog, we
+    # fall back to generating all sections.
+    stored_answer = (session or {}).get("stored_answer") or {}
+    chat_answers = stored_answer.get("chat_answers") or {}
+    answered_section_ids: set = set()
+    for field_key in chat_answers.keys():
+        if "::" in field_key:
+            sid = field_key.split("::")[0]
+            if sid:
+                answered_section_ids.add(sid)
+    if answered_section_ids:
+        filtered = [s for s in sections if s.id in answered_section_ids]
+        if filtered:
+            logger.info(
+                "Demo generate_plan: filtering sections %d → %d based on chat answers",
+                len(sections), len(filtered),
+            )
+            sections = filtered
+        else:
+            logger.warning(
+                "Demo generate_plan: answered section IDs did not match any "
+                "template section, falling back to all sections"
+            )
+
     num_candidates = request_data.num_candidates
     final_user_input = request_data.user_input or ""
 
