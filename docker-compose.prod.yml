@@ -1,0 +1,49 @@
+# Production deployment of the AI proposal DEMO, co-hosted with the live
+# ai_proposal_platform + self-hosted Supabase on the GCP box (34.81.40.182).
+#
+# Differs from docker-compose.beta.yml (test/NPM) in three ways:
+#   - images are :latest (prod), not :dev
+#   - container names are demo-usbir-* (this VPS hosts the 通用SBIR demo)
+#   - joins the PROD external networks: backend_default (the network the
+#     nginx_proxy + platform containers share) and supabase_default.
+#
+# The file-based nginx (/var/www/backend/nginx/nginx.conf) routes
+# usbir-demo.tgsa.com.tw -> demo-usbir-frontend:3000 and /api/ -> demo-usbir-backend:8000.
+#
+# Deploy: docker compose -f docker-compose.prod.yml pull && up -d
+
+services:
+  fastapi-backend:
+    container_name: demo-usbir-backend
+    image: tgsa83609327/ai_proposal_demo:latest
+    restart: always
+    env_file:
+      - ./backend/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - supabase_net
+      - proxy_net
+
+  nuxt-frontend:
+    container_name: demo-usbir-frontend
+    image: tgsa83609327/ai_proposal_demo_frontend:latest
+    restart: always
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - fastapi-backend
+    networks:
+      - default
+      - proxy_net
+
+networks:
+  # Self-hosted Supabase network (supabase-db, supabase-kong, …)
+  supabase_net:
+    external: true
+    name: supabase_default
+  # The platform/nginx network so nginx_proxy can reach the demo containers
+  proxy_net:
+    external: true
+    name: backend_default

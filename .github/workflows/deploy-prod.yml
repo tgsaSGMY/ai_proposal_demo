@@ -1,0 +1,70 @@
+name: Deploy to Live VPS
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: tgsa83609327/ai_proposal_demo:latest
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: tgsa83609327/ai_proposal_demo_frontend:latest
+          # Public NUXT_* values are baked at build time. Only the Supabase URL +
+          # anon key are secrets; the rest are fixed prod values. The frontend
+          # talks to its own backend same-origin, so API base is empty (-> /api).
+          build-args: |
+            SUPABASE_URL=${{ secrets.LIVE_SUPABASE_URL }}
+            SUPABASE_ANON_KEY=${{ secrets.LIVE_SUPABASE_ANON_KEY }}
+            NUXT_PUBLIC_API_BASE_URL=
+            NUXT_PUBLIC_PLATFORM_HOME_URL=https://aiproposal.tgsa.com.tw/api/external-auth/redirect
+            NUXT_PUBLIC_FULL_PLATFORM_URL=https://aiproposal.tgsa.com.tw
+            NUXT_PUBLIC_IS_DEMO_MODE=true
+            NUXT_PUBLIC_DEMO_MAX_PROMPTS=3
+            NUXT_PUBLIC_DEMO_MAX_GENERATIONS=99999
+            NUXT_PUBLIC_DEMO_GRANT_ID=local
+            NUXT_PUBLIC_DEMO_TEMPLATE_ID=universal_SBIR
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into Live VPS and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        with:
+          host: ${{ secrets.LIVE_VPS_IP }}
+          username: cm
+          key: ${{ secrets.LIVE_VPS_SSH_KEY }}
+          port: 22
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+          script: |
+            cd /var/www/demo
+            git pull origin main
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
