@@ -50,6 +50,7 @@ async def on_shutdown():
 app.include_router(generate.router)
 app.include_router(api_config.router)
 app.include_router(projects.router)
+app.include_router(projects.template_manager_router)
 
 
 @app.get("/", tags=["Root"])
