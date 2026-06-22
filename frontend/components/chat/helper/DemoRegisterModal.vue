@@ -49,7 +49,7 @@
               <ul class="space-y-2.5">
                 <li class="flex items-start gap-3 text-sm text-slate-600">
                   <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-600 text-xs font-bold flex-shrink-0">✓</span>
-                  <span>無限制 AI 對話與計畫書優化</span>
+                  <span>完整 AI 對話與計畫書生成</span>
                 </li>
                 <li class="flex items-start gap-3 text-sm text-slate-600">
                   <span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-600 text-xs font-bold flex-shrink-0">✓</span>
