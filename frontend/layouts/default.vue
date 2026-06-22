@@ -104,7 +104,7 @@
               v-if="!isSidebarCollapsed"
               class="mt-2 text-[11px] uppercase tracking-wide text-amber-500 font-semibold"
             >
-              {Demo} 試用版
+              Demo 試用版
             </p>
             <p
               v-if="!isSidebarCollapsed && sessionExpiryText"

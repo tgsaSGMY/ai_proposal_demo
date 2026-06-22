@@ -12,7 +12,7 @@
               <div class="flex items-center gap-2">
                 <p class="text-lg font-semibold text-slate-900">補助引擎</p>
                 <span class="hidden sm:inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-600 border border-amber-100">
-                  {Demo}
+                  Demo
                 </span>
               </div>
               <p class="flex items-center gap-2 text-xs text-slate-400">
