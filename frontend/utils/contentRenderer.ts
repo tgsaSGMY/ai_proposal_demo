@@ -889,17 +889,27 @@ export class HtmlRenderer implements ContentRenderer<string> {
   }
 
   addKeyValue(key: string, value: string): void {
-    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
+    const isTargetSection = key === "二、預定進度及查核點";
+    const blurClass = (this.isScrambled || isTargetSection) ? "filter blur-[5px] select-none pointer-events-none" : "";
     // 检查 value 是否是 array of objects
     try {
       const parsed = typeof value === "string" ? JSON.parse(value) : value;
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          // 保持 Key 清晰不模糊，表格內部會處理它自己的單元格模糊
-          this.html += `<div class="my-2"><strong class="font-semibold">${escapeHtml(key)}:</strong>`;
-          this.renderArrayOfObjects(parsed);
-          this.html += "</div>";
+          if (isTargetSection) {
+            // 1. 保持標題 "二、預定進度及查核點:" 清晰不模糊
+            this.html += `<div class="my-2"><strong class="font-semibold">${escapeHtml(key)}:</strong>`;
+            // 2. 一次性模糊整個子表格容器
+            this.html += `<div class="${blurClass}">`;
+            this.renderArrayOfObjects(parsed);
+            this.html += "</div></div>";
+          } else {
+            // 其他普通的物件陣列，保持容器不模糊，讓內部處理各自的單元格模糊
+            this.html += `<div class="my-2"><strong class="font-semibold">${escapeHtml(key)}:</strong>`;
+            this.renderArrayOfObjects(parsed);
+            this.html += "</div>";
+          }
           return;
         }
       }
