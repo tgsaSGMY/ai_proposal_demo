@@ -120,9 +120,13 @@
               </button>
             </div>
             <div class="flex flex-wrap items-center gap-3">
+              <span class="text-xs text-slate-400 font-semibold flex items-center gap-1.5 select-none mr-2">
+                <span>✨</span>
+                <span>每期體驗限匯出 1 次</span>
+              </span>
               <button
                 type="button"
-                class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50 h-10 flex items-center justify-center"
                 :disabled="!canRequestPlan || isStreaming"
                 @click="handleRequestGeneration"
               >
@@ -131,7 +135,7 @@
               <button
                 v-if="isFetchingNextQuestion"
                 type="button"
-                class="ml-2 rounded-full border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
+                class="ml-2 rounded-full border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 h-10 flex items-center justify-center"
                 @click="handlePause"
                 title="停止/取消目前的 AI 回覆"
               >
@@ -252,7 +256,7 @@ const emit = defineEmits([
 ]);
 
 const { confirm } = useConfirm();
-const { error: notifyError } = useNotifications();
+const { success: notifySuccess, error: notifyError } = useNotifications();
 
 // -- State --
 const messages = ref([]);
@@ -579,33 +583,15 @@ async function handleVersionExport(version) {
     notifyError("該版本沒有可匯出的內容");
     return;
   }
-  try {
-    const resp = await fetch(`${API_BASE_URL}/demo/download`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!resp.ok) {
-      if (resp.status === 429) {
-        notifyError("下載次數已達上限，免費註冊即可繼續使用。");
-      } else {
-        notifyError("下載驗證失敗，請稍後再試。");
-      }
-      return;
-    }
-    await exportPlanToWord(
-      props.sections,
-      versionData,
-      props.grantId,
-      props.templateId,
-      props.projectTitle || version?.title || "計畫草稿",
-      version?.timestamp,
-      props.sectionVersions,
-    );
-    emit("downloadCompleted");
-  } catch (err) {
-    console.error("Failed to export plan", err);
-    notifyError("匯出失敗，請稍後再試");
-  }
+
+  // 1. 關閉當前的版本預覽模態窗，避免畫面堆疊遮擋
+  isVersionModalVisible.value = false;
+
+  // 2. 顯示溫馨提示，引導用戶進行註冊
+  notifySuccess("體驗版不開放直接下載，註冊免費帳號即可立即匯出完整 Word 報告！");
+
+  // 3. 發送 register 事件，直接彈出註冊模態窗
+  emit("register");
 }
 
 function handleVersionUpdateRequest(version) {

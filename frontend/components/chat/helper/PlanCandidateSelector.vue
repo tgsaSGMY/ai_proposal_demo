@@ -71,11 +71,12 @@
                 :key="idx"
                 role="button"
                 tabindex="0"
-                class="relative border rounded-lg p-3 sm:p-4 hover:shadow-md transition cursor-pointer bg-white text-xs sm:text-sm"
+                class="relative border rounded-lg p-3 sm:p-4 hover:shadow-md transition cursor-pointer bg-white text-xs sm:text-sm overflow-hidden"
                 :class="{
                   'border-blue-500 ring-2 ring-blue-200':
                     selected[section.id] === idx,
                   'border-gray-200': selected[section.id] !== idx,
+                  'pb-12': section.id === 'company'
                 }"
                 @click="() => selectCandidate(section.id, idx)"
                 @keydown.enter.prevent="() => selectCandidate(section.id, idx)"
@@ -95,10 +96,24 @@
                   ⚠️ {{ candidate.error }}
                 </div>
 
+                <!-- 內容 (在 'company' 區塊會自動進行局部混淆與模糊) -->
                 <div
                   class="prose max-w-none text-xs sm:text-sm text-gray-800 whitespace-pre-wrap leading-relaxed"
                   v-html="generateHtmlForCandidate(section, candidate.content)"
                 ></div>
+
+                <!-- 鎖定遮罩 (僅用於 'company' 章節) -->
+                <div
+                  v-if="section.id === 'company'"
+                  class="absolute bottom-0 inset-x-0 h-4/5 flex items-end justify-center bg-gradient-to-t from-white via-white/95 to-transparent z-10 pb-4"
+                >
+                  <div class="text-center px-4">
+                    <p class="text-[11px] font-bold text-slate-800">🔒 註冊後解鎖指標規劃</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      註冊免費帳號以解鎖此章節的查核內容。
+                    </p>
+                  </div>
+                </div>
 
                 <div
                   v-if="candidate.metadata"
@@ -279,7 +294,7 @@ function generateHtmlForCandidate(section, candidateContent) {
     },
   };
 
-  return renderPlanToHtml(singleSectionArray, formattedPlanContent);
+  return renderPlanToHtml(singleSectionArray, formattedPlanContent, ["company"]);
 }
 </script>
 

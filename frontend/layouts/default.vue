@@ -100,34 +100,37 @@
               class="pointer-events-none select-none max-w-full"
               :class="isSidebarCollapsed ? 'h-7 w-auto' : 'h-14 w-auto'"
             />
-            <p
-              v-if="!isSidebarCollapsed"
-              class="mt-2 text-[11px] uppercase tracking-wide text-amber-500 font-semibold"
-            >
-              Demo 試用版
-            </p>
-            <p
-              v-if="!isSidebarCollapsed && sessionExpiryText"
-              class="mt-1 text-[10px] text-gray-400 leading-tight"
-            >
-              {{ sessionExpiryText }}
-            </p>
           </div>
 
+        </div>
+
+        <!-- Center: Demo Mode Info Bubble -->
+        <div v-if="!isSidebarCollapsed" class="mt-6 px-4 py-3.5 rounded-2xl bg-amber-50/70 border border-amber-100">
+          <p class="text-xs text-amber-600 uppercase tracking-wide font-bold flex items-center gap-1.5 select-none">
+            <span>✨</span>
+            <span>Demo 試用體驗版</span>
+          </p>
+          <p class="text-xs text-amber-700 mt-2 leading-relaxed">
+            我們特別為您開放了<strong class="font-bold text-amber-800">有限度</strong>的免費對話與智慧推演功能，助您親身體驗 AI 快速產出計畫書的驚人效果！🚀
+          </p>
+          <p class="text-xs text-amber-600 mt-3 leading-relaxed border-t border-amber-200/50 pt-2.5">
+            <strong class="font-bold flex items-center gap-1 select-none text-amber-700">💡 重要提醒：</strong>
+            本試用為瀏覽器臨時沙盒。一旦下方倒數計時結束，您目前所有的<strong class="font-bold text-amber-700">對話紀錄與企劃草稿將完全清除且無法復原</strong>。建議隨時註冊免費帳號以保存您的進度。
+          </p>
         </div>
 
         <div class="flex-1" />
 
         <div v-if="!isSidebarCollapsed" class="mt-6 space-y-3">
-          <div class="px-4 py-3 rounded-2xl bg-amber-50 border border-amber-100">
-            <p class="text-xs text-amber-600 uppercase tracking-wide font-semibold">
-              Demo Mode
-            </p>
-            <p class="text-xs text-amber-700 mt-1 leading-relaxed">
-              這是 AI 補助引擎的試用體驗版。<br />
-              註冊免費帳號即可解鎖完整功能。
+          <!-- Bottom Expiry Countdown (Soft & Inviting) -->
+          <div v-if="sessionExpiryText" class="px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-100 text-center">
+            <p class="text-[11px] text-slate-500 flex items-center justify-center gap-1.5 leading-none">
+              <span>⏳</span>
+              <span>本期試用剩餘時間：</span>
+              <span class="font-semibold text-slate-700 font-mono text-xs">{{ sessionExpiryText }}</span>
             </p>
           </div>
+
           <a
             :href="registerUrl"
             target="_blank"

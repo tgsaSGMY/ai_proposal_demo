@@ -1623,11 +1623,15 @@ async function exportPlanToWordDefault(
 export function renderPlanToHtml(
   sections: ExportableSection[],
   planContent: Record<string, any>,
+  scrambleSectionIds: string[] = [],
 ): string {
   const htmlRenderer = new HtmlRenderer();
 
   for (const section of sections) {
     const sectionData = planContent[section.id]?.content;
+
+    const shouldScramble = scrambleSectionIds.includes(section.id);
+    htmlRenderer.setScrambled(shouldScramble);
 
     htmlRenderer.addSectionTitle(section.name);
 

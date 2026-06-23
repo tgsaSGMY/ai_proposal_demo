@@ -55,6 +55,7 @@
           v-for="section in sections"
           :key="section.id"
           class="rounded-2xl bg-[#fff7f3] px-6 py-4"
+          :class="{ 'relative overflow-hidden pb-16': section.id === 'company' }"
         >
           <p
             class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8a70]"
@@ -72,6 +73,26 @@
           >
             {{ section.content }}
           </p>
+
+          <!-- 遮罩與註冊卡片 (僅用於 'company' 章節) -->
+          <div
+            v-if="section.id === 'company'"
+            class="absolute bottom-0 inset-x-0 h-4/5 flex items-end justify-center bg-gradient-to-t from-[#fff7f3] via-[#fff7f3]/95 to-transparent z-10 pb-6"
+          >
+            <div class="bg-white border border-rose-100 px-6 py-4 rounded-3xl shadow-xl text-center max-w-sm mx-4">
+              <p class="text-sm font-bold text-slate-900">🔒 計畫執行方式與查核點</p>
+              <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                本章節包含關鍵的查核指標與研發時程規劃。您已成功生成，註冊免費帳號即可立刻解鎖完整文件！
+              </p>
+              <button
+                type="button"
+                class="mt-2.5 rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow hover:shadow-md transition"
+                @click="handleExport"
+              >
+                立即免費註冊解鎖 →
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -90,12 +111,13 @@
         </button>
         <button
           type="button"
-          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-1.5"
           :disabled="downloadLimitReached"
           :title="downloadLimitReached ? '下載次數已達上限，免費註冊即可繼續使用。' : ''"
           @click="handleExport"
         >
-          下載報告
+          <span>🔒</span>
+          <span>下載報告</span>
         </button>
         <button
           v-if="isInternal"
@@ -180,6 +202,7 @@ function generateHtmlForSection(section, content) {
           content,
         },
       },
+      ["company"],
     );
   } catch (error) {
     console.error("無法渲染章節", section?.id, error);

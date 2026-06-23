@@ -183,3 +183,35 @@ async def increment_download_count(
         )
     new_count = await supabase_service.increment_demo_download_count(session_id)
     return {"download_count": new_count}
+
+
+# ── Template Manager Word Export Router ──
+template_manager_router = APIRouter(prefix="/api/template-manager", tags=["Template Manager"])
+
+
+@template_manager_router.get(
+    "/templates/{grant_id}/{template_id}",
+    response_model=Dict[str, Any],
+    summary="取得計畫模板詳細資訊及 Word 匯出設定"
+)
+async def get_template(
+    grant_id: str,
+    template_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service)
+):
+    try:
+        record = await supabase_service.get_template_by_id(template_id, grant_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Template not found")
+        return record
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Failed to get template %s/%s: %s",
+            grant_id,
+            template_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Unexpected error while retrieving template")
