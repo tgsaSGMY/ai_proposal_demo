@@ -100,26 +100,22 @@
               class="pointer-events-none select-none max-w-full"
               :class="isSidebarCollapsed ? 'h-7 w-auto' : 'h-14 w-auto'"
             />
-            <p
-              v-if="!isSidebarCollapsed"
-              class="mt-2 text-[11px] uppercase tracking-wide text-amber-500 font-semibold"
-            >
-              Demo 試用版
-            </p>
           </div>
 
         </div>
 
         <!-- Center: Demo Mode Info Bubble -->
         <div v-if="!isSidebarCollapsed" class="mt-6 px-4 py-3.5 rounded-2xl bg-amber-50/70 border border-amber-100">
-          <p class="text-xs text-amber-600 uppercase tracking-wide font-bold">
-            Demo 試用體驗版
+          <p class="text-xs text-amber-600 uppercase tracking-wide font-bold flex items-center gap-1.5 select-none">
+            <span>✨</span>
+            <span>Demo 試用體驗版</span>
           </p>
-          <p class="text-xs text-amber-700 mt-1.5 leading-relaxed">
-            我們開放了**有限度**的免費對話與推演生成功能，讓您體驗 AI 快速推演計畫書的驚人效果！
+          <p class="text-xs text-amber-700 mt-2 leading-relaxed">
+            我們特別為您開放了<strong class="font-bold text-amber-800">有限度</strong>的免費對話與智慧推演功能，助您親身體驗 AI 快速產出計畫書的驚人效果！🚀
           </p>
-          <p class="text-xs text-amber-600 mt-2.5 leading-relaxed border-t border-amber-200/50 pt-2">
-            ⚠️ **重要提醒**：本試用為瀏覽器臨時沙盤。一旦下方體驗倒數結束，您目前所有的**對話紀錄與企劃草稿將完全清除且無法復原**。建議隨時註冊免費帳號以保存您的進度。
+          <p class="text-xs text-amber-600 mt-3 leading-relaxed border-t border-amber-200/50 pt-2.5">
+            <strong class="font-bold flex items-center gap-1 select-none text-amber-700">💡 重要提醒：</strong>
+            本試用為瀏覽器臨時沙盒。一旦下方倒數計時結束，您目前所有的<strong class="font-bold text-amber-700">對話紀錄與企劃草稿將完全清除且無法復原</strong>。建議隨時註冊免費帳號以保存您的進度。
           </p>
         </div>
 
