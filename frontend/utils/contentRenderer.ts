@@ -896,7 +896,8 @@ export class HtmlRenderer implements ContentRenderer<string> {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          this.html += `<div class="${blurClass}">`;
+          // 保持 Key 清晰不模糊，表格內部會處理它自己的單元格模糊
+          this.html += `<div class="my-2"><strong class="font-semibold">${escapeHtml(key)}:</strong>`;
           this.renderArrayOfObjects(parsed);
           this.html += "</div>";
           return;
@@ -907,9 +908,10 @@ export class HtmlRenderer implements ContentRenderer<string> {
     }
 
     const processedValue = this.processText(value);
-    this.html += `<p class="my-2 ${blurClass}"><strong class="font-semibold">${escapeHtml(
+    // 保持 Key 清晰不模糊，只模糊包裝 Value 的 span 區塊
+    this.html += `<p class="my-2"><strong class="font-semibold">${escapeHtml(
       key,
-    )}:</strong> ${renderMarkdownToHtml(processedValue)}</p>`;
+    )}:</strong> <span class="${blurClass}">${renderMarkdownToHtml(processedValue)}</span></p>`;
   }
 
   addParagraph(text: string): void {
@@ -920,7 +922,8 @@ export class HtmlRenderer implements ContentRenderer<string> {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          this.html += `<div class="${blurClass}">`;
+          // 對於物件陣列，保持容器不模糊，讓 renderArrayOfObjects 自己做單元格精確模糊
+          this.html += `<div>`;
           this.renderArrayOfObjects(parsed);
           this.html += "</div>";
           return;
@@ -945,9 +948,10 @@ export class HtmlRenderer implements ContentRenderer<string> {
     const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     if (typeof content === "object") {
       const processedTitle = this.processText(content.title);
-      this.html += `<p class="my-1 ${blurClass}"><span class="mr-2">${index}.</span><strong>${renderMarkdownToHtml(
+      // 保持編號 1. 2. 清晰不模糊，只模糊內容文字
+      this.html += `<p class="my-1"><span class="mr-2">${index}.</span><strong><span class="${blurClass}">${renderMarkdownToHtml(
         processedTitle,
-      )}</strong></p>`;
+      )}</span></strong></p>`;
     } else {
       // 检查是否是 array of objects
       try {
@@ -955,7 +959,8 @@ export class HtmlRenderer implements ContentRenderer<string> {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const firstItem = parsed[0];
           if (typeof firstItem === "object" && firstItem !== null) {
-            this.html += `<div class="my-2 ${blurClass}"><span class="mr-2">${index}.</span>`;
+            // 保持編號清晰
+            this.html += `<div class="my-2"><span class="mr-2">${index}.</span>`;
             this.renderArrayOfObjects(parsed);
             this.html += "</div>";
             return;
@@ -966,27 +971,28 @@ export class HtmlRenderer implements ContentRenderer<string> {
       }
 
       const processedContent = this.processText(content);
-      this.html += `<p class="my-1 ${blurClass}"><span class="mr-2">${index}.</span>${renderMarkdownToHtml(
+      this.html += `<p class="my-1"><span class="mr-2">${index}.</span><span class="${blurClass}">${renderMarkdownToHtml(
         processedContent,
-      )}</p>`;
+      )}</span></p>`;
     }
   }
 
   addIndentedListItem(key: string, value: string): void {
     // 首先检查 value 是否包含 [object Object] 字符串
     if (value.includes("[object Object]")) {
-      // 跳过显示这个项，因为数据不完整
+      // 跳過顯示這個項，因為數據不完整
       return;
     }
 
     const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
-    // 检查 value 是否是 array of objects
+    // 檢查 value 是否是 array of objects
     try {
       const parsed = typeof value === "string" ? JSON.parse(value) : value;
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          this.html += `<div class="ml-4 my-2 ${blurClass}"><span class="font-semibold text-gray-800">${escapeHtml(
+          // 保持 Key 清晰
+          this.html += `<div class="ml-4 my-2"><span class="font-semibold text-gray-800">${escapeHtml(
             key,
           )}:</span>`;
           this.renderArrayOfObjects(parsed);
@@ -995,21 +1001,24 @@ export class HtmlRenderer implements ContentRenderer<string> {
         }
       }
     } catch (e) {
-      // 如果不是 JSON，继续正常处理
+      // 如果不是 JSON，繼續正常處理
     }
 
     const processedValue = this.processText(value);
-    this.html += `<p class="ml-8 text-gray-700 ${blurClass}"><span class="font-semibold">${escapeHtml(
+    // 保持 Key 粗體清晰
+    this.html += `<p class="ml-8 text-gray-700"><span class="font-semibold">${escapeHtml(
       key,
-    )}:</span> ${renderMarkdownToHtml(processedValue)}</p>`;
+    )}:</span> <span class="${blurClass}">${renderMarkdownToHtml(processedValue)}</span></p>`;
   }
 
   addTable(headers: string[], rows: string[][]): void {
-    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
+    const blurClass = this.isScrambled ? "filter blur-[4px] select-none pointer-events-none" : "";
+    // 保持 Table 邊框線清晰，不要在 <table> 加 blur 類
     this.html +=
-      `<table class="border-collapse border border-gray-400 w-full my-4 ${blurClass}"><thead><tr>`;
+      `<table class="border-collapse border border-gray-400 w-full my-4"><thead><tr>`;
     headers.forEach((header) => {
-      this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold">${escapeHtml(
+      // 保持表頭 <th> 文字清晰不模糊
+      this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold text-sm">${escapeHtml(
         header,
       )}</th>`;
     });
@@ -1018,9 +1027,10 @@ export class HtmlRenderer implements ContentRenderer<string> {
       this.html += "<tr>";
       row.forEach((cell) => {
         const processedCell = this.processText(cell);
-        this.html += `<td class="border border-gray-400 p-2">${renderMarkdownToHtml(
+        // 只模糊單元格 <td> 內部的文字內容
+        this.html += `<td class="border border-gray-400 p-2 text-sm"><span class="${blurClass}">${renderMarkdownToHtml(
           processedCell,
-        )}</td>`;
+        )}</span></td>`;
       });
       this.html += "</tr>";
     });
@@ -1031,6 +1041,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
   private renderArrayOfObjects(items: any[]): void {
     if (!Array.isArray(items) || items.length === 0) return;
 
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     const firstItem = items[0];
     if (typeof firstItem !== "object" || firstItem === null) return;
 
@@ -1107,13 +1118,15 @@ export class HtmlRenderer implements ContentRenderer<string> {
           const value = row[header];
           const displayValue =
             value === null || value === undefined ? "" : String(value);
-          this.html += `<td class="border border-gray-400 p-2 text-sm">${renderMarkdownToHtml(
-            displayValue,
-          )}</td>`;
+          const processedValue = this.processText(displayValue);
+          // 僅模糊單元格 <td> 內部的文字內容
+          this.html += `<td class="border border-gray-400 p-2 text-sm"><span class="${blurClass}">${renderMarkdownToHtml(
+            processedValue,
+          )}</span></td>`;
         });
         this.html += "</tr>";
       });
-      this.html += "</tbody></table>";
+      this.html += "</tbody></table>";;
     } else {
       // 如果对象中包含嵌套的对象或数组，用编号列表显示，并递归处理
       items.forEach((item, index) => {
