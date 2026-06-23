@@ -120,14 +120,19 @@
               </button>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canRequestPlan || isStreaming"
-                @click="handleRequestGeneration"
-              >
-                {{ isStreaming ? '推演中...' : '輸出完整推演' }}
-              </button>
+              <div class="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!canRequestPlan || isStreaming"
+                  @click="handleRequestGeneration"
+                >
+                  {{ isStreaming ? '推演中...' : '輸出完整推演' }}
+                </button>
+                <span class="text-[10px] text-slate-400 font-medium mr-2 select-none">
+                  ✨ 每期體驗限匯出 1 次
+                </span>
+              </div>
               <button
                 v-if="isFetchingNextQuestion"
                 type="button"

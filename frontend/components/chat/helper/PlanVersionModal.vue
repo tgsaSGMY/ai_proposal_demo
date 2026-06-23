@@ -111,12 +111,13 @@
         </button>
         <button
           type="button"
-          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-full border border-[#ffb4a8] px-6 py-2 text-sm font-semibold text-[#ff4b5c] hover:bg-[#fff2ef] transition disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-1.5"
           :disabled="downloadLimitReached"
           :title="downloadLimitReached ? '下載次數已達上限，免費註冊即可繼續使用。' : ''"
           @click="handleExport"
         >
-          下載報告
+          <span>🔒</span>
+          <span>下載報告</span>
         </button>
         <button
           v-if="isInternal"
