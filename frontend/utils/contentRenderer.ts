@@ -852,6 +852,29 @@ function renderMarkdownToHtml(text: string): string {
 
 export class HtmlRenderer implements ContentRenderer<string> {
   private html: string = "";
+  private isScrambled: boolean = false;
+
+  constructor(isScrambled: boolean = false) {
+    this.isScrambled = isScrambled;
+  }
+
+  setScrambled(scramble: boolean): void {
+    this.isScrambled = scramble;
+  }
+
+  private processText(text: string): string {
+    if (!this.isScrambled || !text) return text;
+    const pool = "的是我在有和人這中大們國個產實研發創製技計專新合資作程時理業主部地得法生分可行市產主經化學";
+    return text.split("").map(char => {
+      if (/[\u4e00-\u9fa5]/.test(char)) {
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+      if (/[a-zA-Z0-9]/.test(char)) {
+        return Math.floor(Math.random() * 10).toString();
+      }
+      return char;
+    }).join("");
+  }
 
   addSectionTitle(text: string): void {
     this.html += `<h2 class="text-2xl font-bold mt-6 mb-3">${escapeHtml(
@@ -866,15 +889,14 @@ export class HtmlRenderer implements ContentRenderer<string> {
   }
 
   addKeyValue(key: string, value: string): void {
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     // 检查 value 是否是 array of objects
     try {
       const parsed = typeof value === "string" ? JSON.parse(value) : value;
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          // this.html += `<div class="my-2"><span class="font-semibold">${escapeHtml(
-          //   key
-          // )}:</span>`;
+          this.html += `<div class="${blurClass}">`;
           this.renderArrayOfObjects(parsed);
           this.html += "</div>";
           return;
@@ -884,19 +906,23 @@ export class HtmlRenderer implements ContentRenderer<string> {
       // 如果不是 JSON，继续正常处理
     }
 
-    this.html += `<p><strong class="font-semibold">${escapeHtml(
+    const processedValue = this.processText(value);
+    this.html += `<p class="my-2 ${blurClass}"><strong class="font-semibold">${escapeHtml(
       key,
-    )}:</strong> ${renderMarkdownToHtml(value)}</p>`;
+    )}:</strong> ${renderMarkdownToHtml(processedValue)}</p>`;
   }
 
   addParagraph(text: string): void {
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     // 检查是否是 array of objects
     try {
       const parsed = JSON.parse(text);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
+          this.html += `<div class="${blurClass}">`;
           this.renderArrayOfObjects(parsed);
+          this.html += "</div>";
           return;
         }
       }
@@ -904,7 +930,8 @@ export class HtmlRenderer implements ContentRenderer<string> {
       // 如果不是 JSON，继续正常处理
     }
 
-    this.html += `<p class="my-2">${renderMarkdownToHtml(text)}</p>`;
+    const processedText = this.processText(text);
+    this.html += `<p class="my-2 ${blurClass}">${renderMarkdownToHtml(processedText)}</p>`;
   }
 
   addImagePlaceholder(text: string): void {
@@ -915,9 +942,11 @@ export class HtmlRenderer implements ContentRenderer<string> {
     index: number,
     content: string | { title: string; description: string },
   ): void {
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     if (typeof content === "object") {
-      this.html += `<p><span class="mr-2">${index}.</span><strong>${renderMarkdownToHtml(
-        content.title,
+      const processedTitle = this.processText(content.title);
+      this.html += `<p class="my-1 ${blurClass}"><span class="mr-2">${index}.</span><strong>${renderMarkdownToHtml(
+        processedTitle,
       )}</strong></p>`;
     } else {
       // 检查是否是 array of objects
@@ -926,7 +955,7 @@ export class HtmlRenderer implements ContentRenderer<string> {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const firstItem = parsed[0];
           if (typeof firstItem === "object" && firstItem !== null) {
-            this.html += `<div class="my-2"><span class="mr-2">${index}.</span>`;
+            this.html += `<div class="my-2 ${blurClass}"><span class="mr-2">${index}.</span>`;
             this.renderArrayOfObjects(parsed);
             this.html += "</div>";
             return;
@@ -936,8 +965,9 @@ export class HtmlRenderer implements ContentRenderer<string> {
         // 如果不是 JSON，继续正常处理
       }
 
-      this.html += `<p><span class="mr-2">${index}.</span>${renderMarkdownToHtml(
-        content,
+      const processedContent = this.processText(content);
+      this.html += `<p class="my-1 ${blurClass}"><span class="mr-2">${index}.</span>${renderMarkdownToHtml(
+        processedContent,
       )}</p>`;
     }
   }
@@ -949,13 +979,14 @@ export class HtmlRenderer implements ContentRenderer<string> {
       return;
     }
 
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     // 检查 value 是否是 array of objects
     try {
       const parsed = typeof value === "string" ? JSON.parse(value) : value;
       if (Array.isArray(parsed) && parsed.length > 0) {
         const firstItem = parsed[0];
         if (typeof firstItem === "object" && firstItem !== null) {
-          this.html += `<div class="ml-4 my-2"><span class="font-semibold text-gray-800">${escapeHtml(
+          this.html += `<div class="ml-4 my-2 ${blurClass}"><span class="font-semibold text-gray-800">${escapeHtml(
             key,
           )}:</span>`;
           this.renderArrayOfObjects(parsed);
@@ -967,14 +998,16 @@ export class HtmlRenderer implements ContentRenderer<string> {
       // 如果不是 JSON，继续正常处理
     }
 
-    this.html += `<p class="ml-8 text-gray-700"><span class="font-semibold">${escapeHtml(
+    const processedValue = this.processText(value);
+    this.html += `<p class="ml-8 text-gray-700 ${blurClass}"><span class="font-semibold">${escapeHtml(
       key,
-    )}:</span> ${renderMarkdownToHtml(value)}</p>`;
+    )}:</span> ${renderMarkdownToHtml(processedValue)}</p>`;
   }
 
   addTable(headers: string[], rows: string[][]): void {
+    const blurClass = this.isScrambled ? "filter blur-[5px] select-none pointer-events-none" : "";
     this.html +=
-      '<table class="border-collapse border border-gray-400 w-full my-4"><thead><tr>';
+      `<table class="border-collapse border border-gray-400 w-full my-4 ${blurClass}"><thead><tr>`;
     headers.forEach((header) => {
       this.html += `<th class="border border-gray-400 bg-gray-300 p-2 font-semibold">${escapeHtml(
         header,
@@ -984,8 +1017,9 @@ export class HtmlRenderer implements ContentRenderer<string> {
     rows.forEach((row) => {
       this.html += "<tr>";
       row.forEach((cell) => {
+        const processedCell = this.processText(cell);
         this.html += `<td class="border border-gray-400 p-2">${renderMarkdownToHtml(
-          cell,
+          processedCell,
         )}</td>`;
       });
       this.html += "</tr>";
