@@ -117,6 +117,10 @@ async def get_demo_status(
     If DEMO_GRANT_ID / DEMO_TEMPLATE_ID are configured, the session row is
     patched to match them so old sessions migrate automatically."""
     session = await supabase_service.get_demo_session(session_id)
+    if not session:
+        # If the session is expired or deleted, reject the status check
+        raise HTTPException(status_code=401, detail="Demo session expired or not found")
+
     session = await _force_session_template(session_id, supabase_service, session)
     interaction_count = session.get("interaction_count", 0) if session else 0
     chat_limit_reached = interaction_count >= DEMO_INTERACTION_LIMIT
