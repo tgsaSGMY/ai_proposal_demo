@@ -108,9 +108,9 @@
                   class="absolute bottom-0 inset-x-0 h-4/5 flex items-end justify-center bg-gradient-to-t from-white via-white/95 to-transparent z-10 pb-4"
                 >
                   <div class="text-center px-4">
-                    <p class="text-[11px] font-bold text-slate-800">🔒 註冊後解鎖指標規劃</p>
+                    <p class="text-[11px] font-bold text-slate-800">🔒 註冊免費帳號</p>
                     <p class="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                      註冊免費帳號以解鎖此章節的查核內容。
+                      解鎖完整計畫書內容。
                     </p>
                   </div>
                 </div>

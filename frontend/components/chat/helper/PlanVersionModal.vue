@@ -80,16 +80,16 @@
             class="absolute bottom-0 inset-x-0 h-4/5 flex items-end justify-center bg-gradient-to-t from-[#fff7f3] via-[#fff7f3]/95 to-transparent z-10 pb-6"
           >
             <div class="bg-white border border-rose-100 px-6 py-4 rounded-3xl shadow-xl text-center max-w-sm mx-4">
-              <p class="text-sm font-bold text-slate-900">🔒 計畫執行方式與查核點</p>
+              <p class="text-sm font-bold text-slate-900">🔒 完整計畫內容已生成</p>
               <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                本章節包含關鍵的查核指標與研發時程規劃。您已成功生成，註冊免費帳號即可立刻解鎖完整文件！
+                系統已為您完成本章節之推演。請註冊免費帳號，即可完整檢視並下載完整文件。
               </p>
               <button
                 type="button"
                 class="mt-2.5 rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow hover:shadow-md transition"
                 @click="handleExport"
               >
-                立即免費註冊解鎖 →
+                立即免費註冊
               </button>
             </div>
           </div>
