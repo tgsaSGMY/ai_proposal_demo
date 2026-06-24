@@ -85,5 +85,6 @@ DEMO_FRONTEND_URL = os.getenv("DEMO_FRONTEND_URL", "https://demo-aiproposal.tgsa
 
 # Per-IP cap on demo session creation (mint-time only).
 # Tuned for casual-abuse friction, not a security boundary.
-DEMO_IP_HOURLY_LIMIT = int(os.getenv("DEMO_IP_HOURLY_LIMIT", "3"))
-DEMO_IP_DAILY_LIMIT = int(os.getenv("DEMO_IP_DAILY_LIMIT", "5"))
+DEMO_IP_HOURLY_LIMIT = int(os.getenv("DEMO_IP_HOURLY_LIMIT", "10"))
+DEMO_IP_DAILY_LIMIT = int(os.getenv("DEMO_IP_DAILY_LIMIT", "20"))
+    
