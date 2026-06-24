@@ -108,14 +108,14 @@
         <div v-if="!isSidebarCollapsed" class="mt-6 px-4 py-3.5 rounded-2xl bg-amber-50/70 border border-amber-100">
           <p class="text-xs text-amber-600 uppercase tracking-wide font-bold flex items-center gap-1.5 select-none">
             <span>✨</span>
-            <span>Demo 試用體驗版</span>
+            <span>AI 補助引擎</span>
           </p>
           <p class="text-xs text-amber-700 mt-2 leading-relaxed">
-            我們特別為您開放了<strong class="font-bold text-amber-800">有限度</strong>的免費對話與智慧推演功能，助您親身體驗 AI 快速產出計畫書的驚人效果！🚀
+            系統已為您開放<strong class="font-bold text-amber-800">限定額度</strong>免費對話與智慧推演功能。歡迎立即體驗，見證 AI 協助您快速建構與產出高效計畫書的實質成效。🚀
           </p>
           <p class="text-xs text-amber-600 mt-3 leading-relaxed border-t border-amber-200/50 pt-2.5">
-            <strong class="font-bold flex items-center gap-1 select-none text-amber-700">💡 重要提醒：</strong>
-            本試用為瀏覽器臨時沙盒。一旦下方倒數計時結束，您目前所有的<strong class="font-bold text-amber-700">對話紀錄與企劃草稿將完全清除且無法復原</strong>。建議隨時註冊免費帳號以保存您的進度。
+            <strong class="font-bold flex items-center gap-1 select-none text-amber-700">💡 重要提醒</strong>
+            本功能目前為免登入的臨時體驗模式。提醒您，下方的倒數計時結束後,<strong class="font-bold text-amber-700">系統將自動清除當前頁面的所有對話與企劃內容。</strong>。建議您立即註冊免費帳號，即可永久儲存您的精彩企劃，隨時隨地繼續編輯。
           </p>
         </div>
 

@@ -122,7 +122,7 @@
             <div class="flex flex-wrap items-center gap-3">
               <span class="text-xs text-slate-400 font-semibold flex items-center gap-1.5 select-none mr-2">
                 <span>✨</span>
-                <span>每期體驗限匯出 1 次</span>
+                <span>免費體驗僅提供一次輸出機會</span>
               </span>
               <button
                 type="button"
