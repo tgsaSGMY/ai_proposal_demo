@@ -36,6 +36,26 @@ services:
       - default
       - npm-network
 
+  cleanup-cron:
+    container_name: demo-sbir-cleanup-cron
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - ./scripts/cleanup-expired-sessions.sh:/usr/local/bin/cleanup:ro
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/postgres}
+    command: >
+      sh -c "
+        apk add --no-cache bash &&
+        echo '0 3 * * * /usr/local/bin/cleanup' | crontab - &&
+        crond -f -l 2
+      "
+    networks:
+      - default
+      - supabase_net
+    depends_on:
+      - fastapi-backend
+
 # Notice we completely removed the nginx-proxy service here
 # because Nginx Proxy Manager (NPM) will handle all routing globally on the VPS.
 # Each deployment must be added as a separate "Proxy Host" in NPM pointing
