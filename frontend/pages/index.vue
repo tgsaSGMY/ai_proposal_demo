@@ -9,6 +9,32 @@
         </div>
       </div>
 
+      <!-- Rate limit upsell -->
+      <div v-else-if="isRateLimited" class="flex-1 flex items-center justify-center px-6">
+        <div class="max-w-md text-center bg-white rounded-2xl shadow-lg p-8 border border-rose-100">
+          <div class="mb-4 text-4xl">🎉</div>
+          <p class="text-xl font-bold text-rose-600 mb-2">感謝您的體驗！</p>
+          <p class="text-base text-gray-600 mb-6">
+            立即註冊，繼續使用 AI 計劃書生成服務
+          </p>
+          <div class="space-y-3">
+            <a
+              :href="registerUrl"
+              target="_blank"
+              class="block w-full rounded-lg bg-rose-500 px-6 py-3 text-base font-bold text-white hover:bg-rose-600 transition"
+            >
+              免費註冊
+            </a>
+            <button
+              class="block w-full rounded-lg bg-gray-100 px-6 py-3 text-base font-semibold text-gray-700 hover:bg-gray-200 transition"
+              @click="isRateLimited = false"
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Setup error -->
       <div v-else-if="setupError" class="flex-1 flex items-center justify-center px-6">
         <div class="max-w-md text-center">
@@ -99,6 +125,8 @@ interface Question {
 
 const isInitializing = ref(true);
 const setupError = ref<string | null>(null);
+const isRateLimited = ref(false);
+const rateLimitRetryAfter = ref(0);
 
 const sessionId = ref("");
 const grantId = ref("");
@@ -166,6 +194,12 @@ async function loadCatalogAndSession() {
   // everywhere, so the register `ref` matches the conversation's session.
   const { ensureDemoSession } = useDemoSession();
   const demo = (await ensureDemoSession()) as Record<string, any> | null;
+  if (demo && demo._error === "RATE_LIMITED") {
+    isRateLimited.value = true;
+    rateLimitRetryAfter.value = parseInt(demo._retry_after || "0", 10);
+    isInitializing.value = false;
+    return;
+  }
   if (!demo) {
     throw new Error("/api/demo bootstrap failed");
   }
@@ -310,6 +344,7 @@ async function loadCatalogAndSession() {
 
 async function initialize() {
   setupError.value = null;
+  isRateLimited.value = false;
   isInitializing.value = true;
   try {
     await loadCatalogAndSession();

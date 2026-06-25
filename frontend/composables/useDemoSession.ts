@@ -21,7 +21,15 @@ export function useDemoSession() {
       const config = useRuntimeConfig();
       const apiBaseUrl = `${config.public.apiBaseUrl}/api`;
       demoSessionPromise = fetch(`${apiBaseUrl}/demo`, { credentials: "include" })
-        .then((resp) => (resp.ok ? resp.json() : null))
+        .then((resp) => {
+          if (resp.status === 429) {
+            return {
+              _error: "RATE_LIMITED",
+              _retry_after: resp.headers.get("Retry-After") || "0",
+            };
+          }
+          return resp.ok ? resp.json() : null;
+        })
         .catch((err) => {
           console.error("Failed to bootstrap demo session", err);
           demoSessionPromise = null; // allow a retry after a transient failure
