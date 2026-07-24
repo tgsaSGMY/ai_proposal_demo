@@ -243,11 +243,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
     llm_service = websocket.app.state.llm_service
     model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
-    model_info = model_registry.get("gpt-5.4-mini") or {
-        "id": "gpt-5.4-mini",
+    model_info = model_registry.get("gpt-5.3-chat-latest") or {
+        "id": "gpt-5.3-chat-latest",
         "provider": "openai",
         "type": "external",
-        "cost_info": {"input": 0.75, "output": 4.5},
+        "cost_info": {"input": 1.75, "output": 14.0},
     }
 
     conversation_history_records: List[Dict[str, Any]] = []
