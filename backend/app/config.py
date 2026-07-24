@@ -23,7 +23,7 @@ OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
 IMAGE_MODEL = "imagen-4.0-generate-001"
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
-DEFAULT_MODEL_ID = "gpt-5-mini"
+DEFAULT_MODEL_ID = "gpt-5.3-chat-latest"
 
 # --- Demo-specific knobs --------------------------------------------------
 
