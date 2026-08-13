@@ -604,10 +604,9 @@ async def recommend_project_names(
     # are cheap/fast models well-suited to short JSON output. If all of those
     # are rate-limited we fall back to whatever else is external.
     preferred_ids = [
-        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+        "gpt-5.3-chat-latest",
         "gpt-4.1-mini",
-        "gpt-5.1",
-        "gpt-4o-mini",
     ]
     seen: set = set()
     candidate_models: List[Dict[str, Any]] = []
@@ -884,9 +883,7 @@ async def generate_plan(
     if not selected_model:
         model_registry = getattr(app_state, "model_registry", {}) or {}
         non_gemini_preference = [
-            "gpt-4.1-mini",
-            "gpt-5.1-chat-latest",
-            "gpt-4o-mini",
+            "gpt-5.3-chat-latest",
         ]
         for mid in non_gemini_preference:
             if mid in model_registry:
@@ -1113,7 +1110,7 @@ async def revise_plan_version(
     selected_model = request_data.selected_model
     if not selected_model:
         model_registry = getattr(app_state, "model_registry", {}) or {}
-        for mid in ("gpt-4.1-mini", "gpt-5.1-chat-latest", "gpt-4o-mini"):
+        for mid in ("gpt-5.3-chat-latest",):
             if mid in model_registry:
                 selected_model = mid
                 break
