@@ -243,11 +243,11 @@ async def websocket_chat_guidance(websocket: WebSocket):
 
     llm_service = websocket.app.state.llm_service
     model_registry = getattr(websocket.app.state, "model_registry", {}) or {}
-    model_info = model_registry.get("gpt-5.3-chat-latest") or {
-        "id": "gpt-5.3-chat-latest",
+    model_info = model_registry.get("chat-latest") or {
+        "id": "chat-latest",
         "provider": "openai",
         "type": "external",
-        "cost_info": {"input": 1.75, "output": 14.0},
+        "cost_info": {"input": 5.0, "output": 30.0},
     }
 
     conversation_history_records: List[Dict[str, Any]] = []
@@ -605,7 +605,7 @@ async def recommend_project_names(
     # are rate-limited we fall back to whatever else is external.
     preferred_ids = [
         "gemini-3.1-flash-lite",
-        "gpt-5.3-chat-latest",
+        "chat-latest",
         "gpt-4.1-mini",
     ]
     seen: set = set()
@@ -883,7 +883,7 @@ async def generate_plan(
     if not selected_model:
         model_registry = getattr(app_state, "model_registry", {}) or {}
         non_gemini_preference = [
-            "gpt-5.3-chat-latest",
+            "chat-latest",
         ]
         for mid in non_gemini_preference:
             if mid in model_registry:
@@ -1110,7 +1110,7 @@ async def revise_plan_version(
     selected_model = request_data.selected_model
     if not selected_model:
         model_registry = getattr(app_state, "model_registry", {}) or {}
-        for mid in ("gpt-5.3-chat-latest",):
+        for mid in ("chat-latest",):
             if mid in model_registry:
                 selected_model = mid
                 break
