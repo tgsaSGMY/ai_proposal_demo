@@ -49,22 +49,50 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # lets GitHub prove its identity to Google (no stored GCP key)
+    env:
+      # Not secrets: identifiers only. Access is enforced by the WIF provider's
+      # condition (this repo, refs/heads/main) and the SA's IAM roles.
+      GCP_PROJECT: gen-lang-client-0184781873
+      GCP_ZONE: asia-east1-c
+      GCP_VM: ai-proposal-production
     steps:
-      - name: SSH into Live VPS and Deploy
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/490245625700/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: gh-deploy@gen-lang-client-0184781873.iam.gserviceaccount.com
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # SSH goes through Google IAP instead of the VM's public port 22, which is
+      # closed to the internet (ISO 27001 minimal access). Same key and user as before.
+      - name: SSH into Live VPS (via IAP) and Deploy
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        with:
-          host: ${{ secrets.LIVE_VPS_IP }}
-          username: cm
-          key: ${{ secrets.LIVE_VPS_SSH_KEY }}
-          port: 22
-          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
-          script: |
-            cd /var/www/demo
-            git pull origin main
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
-            docker image prune -f
+          SSH_KEY: ${{ secrets.LIVE_VPS_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Docker Hub creds go over stdin, not the remote command line, so they
+          # don't show up in the VM's process list.
+          {
+            printf 'export DOCKERHUB_USERNAME=%q DOCKERHUB_TOKEN=%q\n' "$DOCKERHUB_USERNAME" "$DOCKERHUB_TOKEN"
+            cat <<'EOF'
+          cd /var/www/demo
+          git pull origin main
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
+          docker image prune -f
+          EOF
+          } | ssh -i ~/.ssh/deploy_key \
+                -o StrictHostKeyChecking=accept-new \
+                -o ServerAliveInterval=30 \
+                -o ProxyCommand="gcloud compute start-iap-tunnel $GCP_VM 22 --listen-on-stdin --project=$GCP_PROJECT --zone=$GCP_ZONE --verbosity=warning" \
+                "cm@$GCP_VM" 'bash -s'
