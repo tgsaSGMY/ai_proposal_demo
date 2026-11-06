@@ -117,7 +117,7 @@
 
                 <div
                   v-if="candidate.metadata"
-                  class="mt-2 sm:mt-3 text-[10px] sm:text-xs text-gray-500"
+                  class="mt-2 sm:mt-3 text-[0.625rem] sm:text-xs text-gray-500"
                 >
                   <div v-for="(v, k) in candidate.metadata" :key="k">
                     <span class="font-medium text-gray-600">{{ k }}:</span>
@@ -294,7 +294,7 @@ function generateHtmlForCandidate(section, candidateContent) {
     },
   };
 
-  return renderPlanToHtml(singleSectionArray, formattedPlanContent, ["company"]);
+  return renderPlanToHtml(singleSectionArray, formattedPlanContent, undefined, ["company"]);
 }
 </script>
 

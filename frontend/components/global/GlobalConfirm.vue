@@ -1,4 +1,4 @@
-<!-- 全局确认对话框组件：显示带两个按钮的确认弹窗，支持primary和danger两种样式 -->
+<!-- 全局确认对话框组件：显示带两个按钮的确认弹窗（showCancel 为 false 时只有一个按钮，作为提醒），支持primary和danger两种样式 -->
 <template>
   <Transition
     enter-active-class="transition-opacity duration-300 ease-out"
@@ -36,6 +36,11 @@
                   class="h-5 w-5 sm:h-6 sm:w-6"
                   :class="iconColor"
                 />
+                <InformationCircleIcon
+                  v-else-if="options.icon === 'info'"
+                  class="h-5 w-5 sm:h-6 sm:w-6"
+                  :class="iconColor"
+                />
                 <QuestionMarkCircleIcon
                   v-else
                   class="h-5 w-5 sm:h-6 sm:w-6"
@@ -70,6 +75,7 @@
               {{ options.confirmText }}
             </button>
             <button
+              v-if="options.showCancel !== false"
               @click="handleCancel"
               type="button"
               class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-3 sm:px-4 py-2 bg-white text-sm sm:text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -88,6 +94,7 @@ import { computed } from "vue";
 import { useConfirm } from "~/composables/useConfirm";
 import {
   ExclamationTriangleIcon,
+  InformationCircleIcon,
   QuestionMarkCircleIcon,
 } from "@heroicons/vue/24/outline";
 

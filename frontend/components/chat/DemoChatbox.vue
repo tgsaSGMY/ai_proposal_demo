@@ -11,7 +11,7 @@
             <div>
               <div class="flex items-center gap-2">
                 <p class="text-lg font-semibold text-slate-900">補助引擎</p>
-                <span class="hidden sm:inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-600 border border-amber-100">
+                <span class="hidden sm:inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide text-amber-600 border border-amber-100">
                   Demo
                 </span>
               </div>
@@ -27,7 +27,12 @@
         <!-- Chat area -->
         <div class="mt-6 flex-1 min-h-0">
           <div ref="chatContainer" class="h-full space-y-4 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-rose-300 scrollbar-track-transparent">
-            <div v-for="message in messages" :key="message.id" class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+            <div
+              v-for="message in messages"
+              :key="message.id"
+              class="flex"
+              :class="message.role === 'user' ? 'justify-end pl-12' : 'justify-start pr-12'"
+            >
               <div class="flex max-w-3xl flex-1 px-2 gap-3" :class="message.role === 'user' ? 'flex-row-reverse' : 'flex-row'">
                 <span v-if="message.role !== 'user'" class="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#fff1ea] text-sm font-semibold text-[#ff6b3d]">
                   AI
@@ -56,11 +61,45 @@
 
         <!-- Composer footer -->
         <footer class="mt-2 rounded-[32px] bg-white px-5 py-5 shadow-xl">
-          <!-- Amber tip -->
-          <div class="mb-3 flex items-start gap-2 rounded-xl bg-amber-50/50 px-3 py-2 text-xs text-amber-700/80" role="note">
+          <!-- 生成前確認模式：提示使用者到右側逐段確認，並顯示確認進度 -->
+          <div
+            v-if="reviewFieldIds"
+            class="mb-3 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600"
+            role="status"
+          >
+            <span class="flex-shrink-0 font-semibold">確認模式</span>
+            <p class="min-w-0 truncate">請在右側逐段檢查 AI 生成的內容</p>
+            <div class="h-1.5 w-28 flex-shrink-0 overflow-hidden rounded-full bg-rose-200">
+              <div
+                class="h-full rounded-full bg-rose-500 transition-all duration-300"
+                :style="{ width: `${reviewProgressPercent}%` }"
+              ></div>
+            </div>
+            <span class="flex-shrink-0 tabular-nums">
+              {{ reviewConfirmedCount }} / {{ reviewTotal }}
+            </span>
+            <button
+              v-if="unconfirmedReviewCount > 0"
+              type="button"
+              class="ml-auto flex-shrink-0 font-semibold underline hover:text-rose-700"
+              @click="chatSidebarRef?.openReview()"
+            >
+              開始檢查
+            </button>
+            <button
+              type="button"
+              class="flex-shrink-0 font-medium underline hover:text-rose-700"
+              :class="unconfirmedReviewCount > 0 ? '' : 'ml-auto'"
+              @click="reviewFieldIds = null"
+            >
+              先離開確認
+            </button>
+          </div>
+          <!-- 常駐提示：引導使用者到右側「關鍵指令」卡片的「重新生成」/「編輯」調整欄位 -->
+          <div v-else class="mb-3 flex items-start gap-2 rounded-xl bg-amber-50/50 px-3 py-2 text-xs text-amber-700/80" role="note">
             <span class="text-sm leading-none opacity-80">💡</span>
             <p class="flex-1 leading-relaxed">
-              提醒：若對特定題目的回答未達預期，請輸入 【該題目標題】 並加上 【請重新回答】，系統將重新提供作答內容。
+              提醒：想調整某個欄位，可至右側「關鍵指令」，點擊該欄位的「展開」，即可進行重新生成或編輯。
             </p>
           </div>
 
@@ -104,14 +143,6 @@
             <div class="flex flex-wrap gap-3">
               <button
                 type="button"
-                class="rounded-full border border-[#dfe3ff] px-5 py-2 text-sm font-semibold text-[#6c719b] hover:bg-[#f4f5ff] disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="!canSendMessage"
-                @click="handleSend(false)"
-              >
-                回覆當前問題
-              </button>
-              <button
-                type="button"
                 class="rounded-full bg-gradient-to-r from-[#ffd5c4] to-[#ffb8a8] px-5 py-2 text-sm font-semibold text-[#c44536] shadow-md shadow-[#ffb8a8]/30 hover:shadow-lg hover:from-[#ffc9b5] hover:to-[#ffaa99] disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="!canSendMessage"
                 @click="() => handleSend(true)"
@@ -128,14 +159,29 @@
                 type="button"
                 class="rounded-full bg-gradient-to-r from-[#ff9b6d] to-[#ff4b6b] px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-[#ff4b6b]/30 disabled:cursor-not-allowed disabled:opacity-50 h-10 flex items-center justify-center"
                 :disabled="!canRequestPlan || isStreaming"
-                @click="handleRequestGeneration"
+                @click="requestGeneration()"
               >
                 {{ isStreaming ? '推演中...' : '輸出完整推演' }}
+                <span
+                  v-if="!isStreaming && unconfirmedReviewCount > 0"
+                  class="ml-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#ff4b6b]"
+                >
+                  待確認 {{ unconfirmedReviewCount }}
+                </span>
+              </button>
+              <button
+                v-if="!isFetchingNextQuestion"
+                type="button"
+                class="rounded-full border border-[#dfe3ff] px-5 py-2 text-sm font-semibold text-[#6c719b] hover:bg-[#f4f5ff] disabled:cursor-not-allowed disabled:opacity-50 h-10 flex items-center justify-center"
+                :disabled="!canSendMessage"
+                @click="handleSend(false)"
+              >
+                回覆當前問題
               </button>
               <button
                 v-if="isFetchingNextQuestion"
                 type="button"
-                class="ml-2 rounded-full border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 h-10 flex items-center justify-center"
+                class="rounded-full border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 h-10 flex items-center justify-center"
                 @click="handlePause"
                 title="停止/取消目前的 AI 回覆"
               >
@@ -148,14 +194,31 @@
     </div>
 
     <!-- Right sidebar: Q&A tracker + version history -->
-    <div class="h-full w-full max-w-xs flex-shrink-0">
+    <div class="h-full w-full max-w-sm flex-shrink-0">
       <ChatSidebar
+        ref="chatSidebarRef"
         :messages="messages"
         :versions="props.savedPlanVersions"
         :question-answers="questionAnswers"
         :question-answer-meta="questionAnswerMeta"
-        @editQuestion="handleEditQuestion"
+        :question-answer-provenance="questionAnswerProvenance"
+        :guided-questions="props.allQuestions"
+        :applicable-question-ids="applicableQuestionIds"
+        :review-field-ids="reviewFieldIds"
+        :confirming-field-ids="confirmingFieldIds"
+        :can-request-plan="canRequestPlan && !isStreaming"
+        :can-send-message="canSendMessage"
+        :is-read-only="isReadOnly"
         @selectVersion="handleVersionSelect"
+        @renameVersion="emit('renameVersion', $event)"
+        @deleteVersion="handleVersionDelete"
+        @editQuestion="handleEditQuestion"
+        @regenerateQuestion="handleRegenerateQuestion"
+        @clearReviewFilter="reviewFieldIds = null"
+        @confirmAnswer="sendAnswerConfirmation([$event], true)"
+        @unconfirmAnswer="sendAnswerConfirmation([$event], false)"
+        @requestGeneration="requestGeneration({ missingAnswersAccepted: true })"
+        @saveFieldEdit="handleSidebarFieldEdit"
       />
     </div>
 
@@ -166,6 +229,7 @@
       :label="editFieldLabel"
       :initial-value="editFieldInitialValue"
       @confirm="handleEditConfirm"
+      @cancel="chatSidebarRef?.reopenAnswerView()"
     />
 
     <!-- Recommend project name modal -->
@@ -175,6 +239,14 @@
       :suggestions="recommendOptions"
       :loading="isFetchingRecommend"
       @confirm="handleRecommendConfirm"
+    />
+
+    <!-- 生成前檢查：AI 生成的答案是否已確認 -->
+    <ExportReadinessModal
+      v-model:is-open="isExportReadinessOpen"
+      :readiness="exportReadiness"
+      @proceed="handleExportReadinessProceed"
+      @review="handleExportReadinessReview"
     />
 
     <!-- Generated plan candidate picker -->
@@ -196,6 +268,11 @@
       :is-internal="false"
       :generation-limit-reached="props.generationLimitReached"
       :download-limit-reached="props.downloadLimitReached"
+      :grant-id="props.grantId"
+      :template-id="props.templateId"
+      :project-title="props.projectTitle"
+      :project-created-at="props.projectCreatedAt"
+      :project-section-versions="props.sectionVersions"
       @close="isVersionModalVisible = false"
       @export="handleVersionExport"
       @updateVersion="handleVersionUpdateRequest"
@@ -211,9 +288,11 @@ import EditFieldModal from "~/components/chat/helper/EditFieldModal.vue";
 import RecommendNameModal from "~/components/chat/helper/RecommendNameModal.vue";
 import PlanCandidateSelector from "~/components/chat/helper/PlanCandidateSelector.vue";
 import PlanVersionModal from "~/components/chat/helper/PlanVersionModal.vue";
-import { exportPlanToWord } from "~/utils/exportToWord";
+import ExportReadinessModal from "~/components/chat/ExportReadinessModal.vue";
+import { answerToEditText, editTextToAnswer } from "~/utils/answerParagraphs";
 import { useConfirm } from "~/composables/useConfirm";
 import { useNotifications } from "~/composables/useNotifications";
+import { demoFetch } from "~/composables/useDemoSession";
 
 const config = useRuntimeConfig();
 const API_BASE_URL = `${config.public.apiBaseUrl}/api`;
@@ -233,14 +312,17 @@ const props = defineProps({
   hasGeneratedDocx: { type: Boolean, default: false },
   conversationHistory: { type: Array, default: () => [] },
   storedAnswers: { type: Object, default: () => ({}) },
+  storedAnswersMeta: { type: Object, default: () => ({}) },
   registerUrl: { type: String, default: "" },
   projectTitle: { type: String, default: "" },
   projectSummary: { type: String, default: "" },
+  // 版本預覽需與 Word 下載選用同一份匯出設定
+  projectCreatedAt: { type: String, default: "" },
   sections: { type: Array, default: () => [] },
   candidatePlan: { type: Object, default: () => ({}) },
   finalPlan: { type: Object, default: () => ({}) },
   savedPlanVersions: { type: Array, default: () => [] },
-  sectionVersions: { type: Object, default: () => ({}) },
+  sectionVersions: { type: Object, default: undefined },
 });
 
 const emit = defineEmits([
@@ -251,6 +333,8 @@ const emit = defineEmits([
   "updateProjectTitle",
   "finalizeCandidates",
   "requestVersionUpdate",
+  "renameVersion",
+  "deleteVersion",
   "register",
   "downloadCompleted",
 ]);
@@ -263,11 +347,19 @@ const messages = ref([]);
 const lastSentUserIndex = ref(null);
 const questionAnswers = ref({});
 const questionAnswerMeta = ref({});
-const activeQuestionId = ref(null);
+const questionAnswerProvenance = ref({});
+const applicableQuestionIds = ref(null);
+const isExportReadinessOpen = ref(false);
+const exportReadiness = ref(null);
+const reviewFieldIds = ref(null);
+// 已送出確認、等待後端回覆的欄位
+const confirmingFieldIds = ref([]);
 const chatContainer = ref(null);
 const draftMessage = ref("");
 const composerRef = ref(null);
 const isEditFieldModalOpen = ref(false);
+// 側邊欄元件實例：取消編輯時返回「展開」查看模態框
+const chatSidebarRef = ref(null);
 const editFieldLabel = ref("");
 const editFieldInitialValue = ref("");
 const editFieldQuestionId = ref(null);
@@ -298,6 +390,41 @@ const answeredCount = computed(() =>
 );
 const allQuestionsAnswered = computed(() =>
   totalQuestions.value === 0 || answeredCount.value === totalQuestions.value
+);
+
+// 生成前確認：AI 生成且尚未確認的欄位（改成使用者自己的答案後就不必確認）
+function needsConfirmation(fieldId) {
+  const provenance = questionAnswerProvenance.value[fieldId];
+  const answer = questionAnswers.value[fieldId];
+  return Boolean(provenance && !provenance.confirmed && answer && String(answer).trim());
+}
+const unconfirmedReviewCount = computed(
+  () => (reviewFieldIds.value || []).filter(needsConfirmation).length,
+);
+// 確認模式中 AI 新填寫的答案自動加入確認清單（與 export-readiness 相同：AI 生成或需確認）
+watch(questionAnswerProvenance, (provenance) => {
+  if (!reviewFieldIds.value) return;
+  const known = new Set(reviewFieldIds.value);
+  const added = Object.keys(provenance).filter(
+    (fieldId) =>
+      !known.has(fieldId) &&
+      (provenance[fieldId]?.source === "ai_generated" || provenance[fieldId]?.needs_review) &&
+      String(questionAnswers.value[fieldId] || "").trim(),
+  );
+  if (added.length) {
+    reviewFieldIds.value = [...reviewFieldIds.value, ...added];
+  }
+});
+// 確認模式進度（與側邊欄一致：只算仍有答案的欄位）
+const reviewTotal = computed(
+  () =>
+    (reviewFieldIds.value || []).filter((fieldId) =>
+      String(questionAnswers.value[fieldId] || "").trim(),
+    ).length,
+);
+const reviewConfirmedCount = computed(() => reviewTotal.value - unconfirmedReviewCount.value);
+const reviewProgressPercent = computed(() =>
+  reviewTotal.value ? Math.round((reviewConfirmedCount.value / reviewTotal.value) * 100) : 100,
 );
 
 const activeGrantName = computed(() => props.grantName || "尚未選擇");
@@ -354,6 +481,21 @@ function touchAnswerMeta(questionId, timestamp) {
     ...questionAnswerMeta.value,
     [questionId]: { ...(questionAnswerMeta.value[questionId] || {}), updated_at: nextTimestamp },
   };
+}
+
+function setAnswerProvenance(fieldId, source, reviewNote) {
+  if (!fieldId) return;
+  const next = { ...questionAnswerProvenance.value };
+  if ((source && source !== "user_input") || reviewNote) {
+    next[fieldId] = {
+      source: source || "user_input",
+      needs_review: Boolean(reviewNote),
+      review_note: reviewNote || "",
+    };
+  } else {
+    delete next[fieldId];
+  }
+  questionAnswerProvenance.value = next;
 }
 
 function escapeHtml(unsafe) {
@@ -463,14 +605,9 @@ async function handleSend(useAIFill = false) {
     timestamp: getCurrentTimestamp(),
   };
   messages.value.push(userMsg);
+  // remember index so we can remove it if the stream is cancelled
   lastSentUserIndex.value = messages.value.length - 1;
   scrollToBottom();
-
-  if (activeQuestionId.value) {
-    questionAnswers.value = { ...questionAnswers.value, [activeQuestionId.value]: messageContent };
-    touchAnswerMeta(activeQuestionId.value);
-    activeQuestionId.value = null;
-  }
 
   if (window.chatWebSocket && window.chatWebSocket.readyState === WebSocket.OPEN) {
     const userPayload = {
@@ -499,9 +636,11 @@ function handlePause() {
   }
 }
 
-async function handleRequestGeneration() {
+// 請求生成完整計畫書：未回答提示 → AI 生成內容確認 → 推薦名稱
+// 從側邊欄確認模式送出時，使用者在進入確認模式前已同意過未回答提示，不再重複詢問
+async function requestGeneration(options) {
   if (!canRequestPlan.value) return;
-  if (hasMissingAnswers.value) {
+  if (hasMissingAnswers.value && options?.missingAnswersAccepted !== true) {
     const confirmed = await confirm({
       title: "尚有問題未回答",
       message: "仍有核心問題尚未完成，可能導致生成內容不完整，是否仍要繼續？",
@@ -512,12 +651,32 @@ async function handleRequestGeneration() {
     if (!confirmed) return;
   }
 
+  // 有 AI 生成的答案就顯示確認清單（即使都已確認），由使用者選擇繼續生成或前往確認；
+  // 但若是在確認模式中剛逐段確認完畢，就直接生成，不再重複顯示
+  const readiness = await fetchExportReadiness();
+  const justFinishedReview = Boolean(reviewFieldIds.value) && readiness?.unconfirmed === 0;
+  if (readiness && (readiness.ai_generated || readiness.needs_review) && !justFinishedReview) {
+    exportReadiness.value = readiness;
+    isExportReadinessOpen.value = true;
+    return;
+  }
+  if (!readiness && Object.keys(questionAnswerProvenance.value).some(needsConfirmation)) {
+    notifyError("暫時無法檢查 AI 生成內容的確認狀態，請稍後再試");
+    return;
+  }
+
+  reviewFieldIds.value = null;
+  await openRecommendNames();
+}
+
+// 取得推薦項目名稱並打開選擇視窗
+async function openRecommendNames() {
   isFetchingRecommend.value = true;
   isRecommendModalOpen.value = true;
   recommendOptions.value = [];
 
   try {
-    const resp = await fetch(`${API_BASE_URL}/recommend_project_names`, {
+    const resp = await demoFetch(`${API_BASE_URL}/recommend_project_names`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -547,7 +706,7 @@ async function handleRecommendConfirm(selectedName) {
 
   const joinedText = Object.entries(questionAnswers.value)
     .map(([key, value]) => {
-      const text = value?.reply ?? value;
+      const text = value?.value ?? value?.reply ?? value;
       return `【${key}】\n${text}`;
     })
     .join("\n\n");
@@ -577,6 +736,22 @@ function handleVersionSelect(version) {
   isVersionModalVisible.value = true;
 }
 
+async function handleVersionDelete(version) {
+  const confirmed = await confirm({
+    title: "刪除版本",
+    message: `確定刪除「${version.title}」？此操作無法復原。`,
+    confirmText: "刪除",
+    cancelText: "取消",
+    confirmColor: "danger",
+  });
+  if (!confirmed) return;
+  if (selectedVersion.value?.id === version.id) {
+    isVersionModalVisible.value = false;
+    selectedVersion.value = null;
+  }
+  emit("deleteVersion", version);
+}
+
 async function handleVersionExport(version) {
   const versionData = version?.data;
   if (!versionData || Object.keys(versionData).length === 0) {
@@ -600,6 +775,7 @@ function handleVersionUpdateRequest(version) {
   isVersionModalVisible.value = false;
 }
 
+// 處理側邊欄編輯問題事件，打開編輯欄位模態框
 function handleEditQuestion(payload) {
   try {
     const qId = payload?.questionId ?? null;
@@ -607,23 +783,131 @@ function handleEditQuestion(payload) {
     const ans = payload?.answer || "";
     editFieldQuestionId.value = qId;
     editFieldLabel.value = qLabel;
-    editFieldInitialValue.value = ans;
+    // 與「展開」模態框一致的分段；送出時會移除自動補的換段
+    editFieldInitialValue.value = answerToEditText(ans);
     isEditFieldModalOpen.value = true;
   } catch (e) {
     console.error("handleEditQuestion error", e);
   }
 }
 
+// 處理編輯欄位確認，構建更新消息並自動發送給 AI
 async function handleEditConfirm(value) {
   try {
-    const qLabel = editFieldLabel.value || "";
-    const updated = value || "";
-    draftMessage.value = `幫我更改\n${qLabel}\n至\n${updated}`;
+    // 移除編輯框自動補的換段，其餘換行保留，避免顯示用分段寫回答案
+    const updated = editTextToAnswer(value || "").trim();
     isEditFieldModalOpen.value = false;
-    await handleSend();
+    await sendFieldEdit(editFieldQuestionId.value || "", editFieldLabel.value || "", updated);
   } catch (e) {
     console.error("handleEditConfirm error", e);
   }
+}
+
+// 送出「幫我更改」訊息（編輯模態框與側邊欄確認模式的卡片內編輯共用）
+async function sendFieldEdit(qId, qLabel, updated) {
+  if (!updated) return;
+  // Include the real field id so the model echoes it in field_updates instead of guessing one
+  const target = qId ? `${qLabel}（${qId}）` : qLabel;
+  // Keep whatever the user was typing; handleSend clears the draft
+  const pendingDraft = draftMessage.value;
+  draftMessage.value = `幫我更改\n${target}\n至\n${updated}`;
+  await handleSend();
+  draftMessage.value = pendingDraft;
+}
+
+// 側邊欄卡片內編輯（內容已移除自動換段）
+async function handleSidebarFieldEdit(payload) {
+  if (!canSendMessage.value) return;
+  await sendFieldEdit(payload?.questionId || "", payload?.questionLabel || "", payload?.value || "");
+}
+
+// 處理側邊欄重新生成事件，確認後請 AI 只重寫該欄位
+async function handleRegenerateQuestion(payload) {
+  if (!canSendMessage.value) return;
+  const qId = payload?.questionId || "";
+  const qLabel = payload?.questionLabel || "";
+  if (!qId) return;
+  const confirmed = await confirm({
+    title: "重新生成欄位",
+    message: `將由 AI 重新撰寫「${qLabel}」，並覆蓋目前內容，是否繼續？`,
+    confirmText: "重新生成",
+    cancelText: "取消",
+  });
+  if (!confirmed || !canSendMessage.value) return;
+  // Keep whatever the user was typing; handleSend clears the draft
+  const pendingDraft = draftMessage.value;
+  draftMessage.value = `請AI重新生成\n${qLabel}（${qId}）`;
+  await handleSend();
+  draftMessage.value = pendingDraft;
+}
+
+// 取得生成前檢查（AI 生成／需確認的答案統計），失敗時回傳 null
+async function fetchExportReadiness() {
+  try {
+    const response = await demoFetch(`${API_BASE_URL}/demo/export-readiness`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn("Failed to fetch export readiness, generating anyway", error);
+    return null;
+  }
+}
+
+// 使用者選擇略過確認、直接生成（答案維持未確認）
+function handleExportReadinessProceed() {
+  reviewFieldIds.value = null;
+  openRecommendNames();
+}
+
+async function handleExportReadinessReview(fieldIds) {
+  const wasReviewing = Boolean(reviewFieldIds.value);
+  reviewFieldIds.value = fieldIds;
+  // 剛進入確認模式時側邊欄會自動打開確認視窗；已在確認模式中則需手動打開
+  if (wasReviewing) {
+    await nextTick();
+    chatSidebarRef.value?.openReview();
+  }
+}
+
+// 生成前確認：透過聊天連線送出（後端在同一個連線存檔，避免被下一輪對話的存檔覆蓋）
+function sendAnswerConfirmation(fieldIds, confirmed) {
+  const ws = window.chatWebSocket;
+  if (!fieldIds.length || !ws || ws.readyState !== WebSocket.OPEN) {
+    notifyError("連線中斷，請重新整理後再確認");
+    return;
+  }
+  try {
+    ws.send(
+      JSON.stringify({
+        action: "confirm_answers",
+        field_ids: fieldIds,
+        confirmed,
+      }),
+    );
+    confirmingFieldIds.value = [...new Set([...confirmingFieldIds.value, ...fieldIds])];
+  } catch (e) {
+    console.error("Failed to send confirm_answers", e);
+    notifyError("確認失敗，請稍後再試");
+  }
+}
+
+// 後端存檔成功後才更新畫面上的確認狀態
+function applyAnswerConfirmation(fieldIds, confirmed) {
+  const next = { ...questionAnswerProvenance.value };
+  fieldIds.forEach((fieldId) => {
+    if (next[fieldId]) {
+      next[fieldId] = { ...next[fieldId], confirmed };
+    }
+  });
+  questionAnswerProvenance.value = next;
+  confirmingFieldIds.value = confirmingFieldIds.value.filter(
+    (fieldId) => !fieldIds.includes(fieldId),
+  );
 }
 
 // -- WebSocket --
@@ -682,7 +966,9 @@ async function streamAIGuidanceMessage(question) {
       try {
         const msg = JSON.parse(event.data);
         if (msg.event === "ready") {
-          // No-op
+          if (Array.isArray(msg.applicable_questions)) {
+            applicableQuestionIds.value = msg.applicable_questions;
+          }
         } else if (msg.event === "chunk_start") {
           const aiMsg = {
             id: `ai-stream-${Date.now()}`,
@@ -718,13 +1004,38 @@ async function streamAIGuidanceMessage(question) {
           }
         } else if (msg.event === "filled") {
           const filledFields = msg.data || {};
+          const filledSources = msg.sources || {};
+          const filledReview = msg.needs_review || {};
           Object.entries(filledFields).forEach(([fieldId, value]) => {
             if (value && String(value).trim()) {
               questionAnswers.value = { ...questionAnswers.value, [fieldId]: String(value).trim() };
               touchAnswerMeta(fieldId);
+              setAnswerProvenance(fieldId, filledSources[fieldId], filledReview[fieldId]);
               lastSentUserIndex.value = null;
             }
           });
+          if (Array.isArray(msg.applicable_questions)) {
+            applicableQuestionIds.value = msg.applicable_questions;
+          }
+        } else if (msg.event === "cleared") {
+          // 條件改變後恢復作答的題目：移除系統自動填入的「本項免填」
+          const clearedIds = Array.isArray(msg.data) ? msg.data : [];
+          if (clearedIds.length) {
+            const nextAnswers = { ...questionAnswers.value };
+            const nextMeta = { ...questionAnswerMeta.value };
+            const nextProvenance = { ...questionAnswerProvenance.value };
+            clearedIds.forEach((fieldId) => {
+              delete nextAnswers[fieldId];
+              delete nextMeta[fieldId];
+              delete nextProvenance[fieldId];
+            });
+            questionAnswers.value = nextAnswers;
+            questionAnswerMeta.value = nextMeta;
+            questionAnswerProvenance.value = nextProvenance;
+          }
+          if (Array.isArray(msg.applicable_questions)) {
+            applicableQuestionIds.value = msg.applicable_questions;
+          }
         } else if (msg.event === "done") {
           const lastMsg = messages.value[messages.value.length - 1];
           if (lastMsg && lastMsg.isStreaming) lastMsg.isStreaming = false;
@@ -732,6 +1043,11 @@ async function streamAIGuidanceMessage(question) {
           isFetchingNextQuestion.value = false;
           isStreaming.value = false;
           emit("aiResponseComplete");
+        } else if (msg.event === "answers_confirmed") {
+          applyAnswerConfirmation(
+            Array.isArray(msg.field_ids) ? msg.field_ids : [],
+            Boolean(msg.confirmed),
+          );
         } else if (msg.event === "cancelled") {
           try {
             for (let i = messages.value.length - 1; i >= 0; i -= 1) {
@@ -772,6 +1088,7 @@ async function streamAIGuidanceMessage(question) {
           }
           isFetchingNextQuestion.value = false;
           isStreaming.value = false;
+          confirmingFieldIds.value = [];
         } else if (msg.event === "limit_reached") {
           isFetchingNextQuestion.value = false;
           isStreaming.value = false;
@@ -791,6 +1108,7 @@ async function streamAIGuidanceMessage(question) {
     window.chatWebSocket.onclose = () => {
       isFetchingNextQuestion.value = false;
       isStreaming.value = false;
+      confirmingFieldIds.value = [];
     };
   }
   return;
@@ -850,13 +1168,33 @@ function normalizeStoredMessages(entries = []) {
     .filter(Boolean);
 }
 
+// 答案可能是純文字（舊資料）或 {value, source, ...}（記錄來源的新格式）
 function normalizeStoredAnswers(rawAnswers = {}) {
   if (!rawAnswers || typeof rawAnswers !== "object") return {};
   const normalized = {};
   Object.entries(rawAnswers).forEach(([key, value]) => {
-    const text = String(value ?? "").trim();
+    const raw = value && typeof value === "object" ? (value.value ?? value.reply) : value;
+    const text = String(raw ?? "").trim();
     if (!key || !text) return;
     normalized[key] = text;
+  });
+  return normalized;
+}
+
+function normalizeStoredProvenance(rawAnswers = {}) {
+  if (!rawAnswers || typeof rawAnswers !== "object") return {};
+  const normalized = {};
+  Object.entries(rawAnswers).forEach(([key, value]) => {
+    if (!key || !value || typeof value !== "object") return;
+    const source = String(value.source || "").trim();
+    const needsReview = Boolean(value.needs_review ?? value.needsReview);
+    if ((!source || source === "user_input") && !needsReview) return;
+    normalized[key] = {
+      source: source || "user_input",
+      needs_review: needsReview,
+      review_note: String(value.review_note ?? value.reviewNote ?? "").trim(),
+      confirmed: Boolean(value.confirmed),
+    };
   });
   return normalized;
 }
@@ -887,6 +1225,18 @@ function applyStoredState(history = [], answers = {}, meta = {}) {
   const storedAnswers = normalizeStoredAnswers(answers);
   if (Object.keys(storedAnswers).length) {
     questionAnswers.value = { ...questionAnswers.value, ...storedAnswers };
+    const storedProvenance = normalizeStoredProvenance(answers);
+    const nextProvenance = { ...questionAnswerProvenance.value };
+    Object.keys(storedAnswers).forEach((key) => {
+      if (storedProvenance[key]) {
+        nextProvenance[key] = storedProvenance[key];
+      } else {
+        delete nextProvenance[key];
+      }
+    });
+    if (JSON.stringify(nextProvenance) !== JSON.stringify(questionAnswerProvenance.value)) {
+      questionAnswerProvenance.value = nextProvenance;
+    }
   }
   const storedMeta = normalizeStoredAnswerMeta(meta);
   if (Object.keys(storedMeta).length) {
@@ -903,7 +1253,7 @@ watch(
   () => props.conversationHistory,
   (val) => {
     if (val && val.length && !messages.value.length) {
-      applyStoredState(val, props.storedAnswers, {});
+      applyStoredState(val, props.storedAnswers, props.storedAnswersMeta);
     }
   },
   { immediate: true }
@@ -913,7 +1263,7 @@ watch(
   () => props.storedAnswers,
   (val) => {
     if (val && Object.keys(val).length && !Object.keys(questionAnswers.value).length) {
-      applyStoredState(props.conversationHistory, val, {});
+      applyStoredState(props.conversationHistory, val, props.storedAnswersMeta);
     }
   },
   { immediate: true }

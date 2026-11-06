@@ -13,6 +13,25 @@
 // promise is created synchronously on the first call, so concurrent callers all
 // await the same in-flight request rather than starting their own.
 let demoSessionPromise: Promise<Record<string, any> | null> | null = null;
+// The session id returned by GET /demo. Sent as X-Demo-Session-Id on later API
+// calls so they still work when the browser drops the cookie (frontend and API
+// on different hosts, e.g. localhost vs 127.0.0.1). The chat WebSocket already
+// sends the same id as ?session_id=.
+let demoSessionId = "";
+
+export function getDemoSessionId(): string {
+  return demoSessionId;
+}
+
+// fetch() for demo-session-scoped endpoints: includes the cookie and the
+// X-Demo-Session-Id header fallback.
+export function demoFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers || {});
+  if (demoSessionId && !headers.has("X-Demo-Session-Id")) {
+    headers.set("X-Demo-Session-Id", demoSessionId);
+  }
+  return fetch(input, { credentials: "include", ...init, headers });
+}
 
 export function useDemoSession() {
   const ensureDemoSession = (): Promise<Record<string, any> | null> => {
@@ -29,6 +48,12 @@ export function useDemoSession() {
             };
           }
           return resp.ok ? resp.json() : null;
+        })
+        .then((data) => {
+          if (data && typeof data.session_id === "string") {
+            demoSessionId = data.session_id;
+          }
+          return data;
         })
         .catch((err) => {
           console.error("Failed to bootstrap demo session", err);

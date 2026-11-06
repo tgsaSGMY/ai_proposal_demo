@@ -18,6 +18,7 @@ export default defineNuxtConfig({
       demoGrantId: process.env.NUXT_PUBLIC_DEMO_GRANT_ID || "",
       demoTemplateId: process.env.NUXT_PUBLIC_DEMO_TEMPLATE_ID || "",
       demoSessionExpiryMinutes: process.env.NUXT_PUBLIC_DEMO_SESSION_EXPIRY_MINUTES || "10080",
+      hideDateTimeUi: process.env.NUXT_PUBLIC_HIDE_DATETIME_UI === "true",
     },
   },
   routeRules: {
