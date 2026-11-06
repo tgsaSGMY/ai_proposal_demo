@@ -903,12 +903,35 @@ class SupabaseService:
     async def get_all_models(self) -> List[Dict[str, Any]]:
         return await self._fetch_all("models")
 
+    async def get_all_active_prompt_templates(self) -> List[Dict[str, Any]]:
+        """取得 prompt_templates 中所有 is_active=true 的列（每個 name 最多一列，
+        由 `prompt_templates_one_active_per_name` 部分唯一索引保證）。
+        若 Migration M1 尚未套用（資料表不存在），回傳空列表而非拋出例外，
+        讓 PromptRegistryService 的常數回退路徑接手。"""
+        try:
+            query = self.client.from_("prompt_templates").select("*").eq("is_active", True)
+            response = await asyncio.to_thread(query.execute)
+            return response.data or []
+        except Exception:
+            logger.warning("Failed to fetch prompt_templates (table may not exist yet); returning empty list.", exc_info=True)
+            return []
+
     async def get_all_routing_rules(self) -> List[Dict[str, Any]]:
         # 按照 priority 升序获取，确保高优先级的规则在前
         response = self.client.from_("routing_rules").select("*").order("priority", desc=False).execute()
         if response.data:
             return response.data
         return []
+
+    async def get_all_feature_model_settings(self) -> List[Dict[str, Any]]:
+        """取得功能模型配置。資料表尚未建立時回傳空列表，讓各功能使用原本的模型。"""
+        try:
+            query = self.client.from_("feature_model_settings").select("*")
+            response = await asyncio.to_thread(query.execute)
+            return response.data or []
+        except Exception:
+            logger.warning("Failed to fetch feature_model_settings (table may not exist yet); returning empty list.", exc_info=True)
+            return []
         
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         response = self.client.from_("users").select("*").eq("id", user_id).single().execute()

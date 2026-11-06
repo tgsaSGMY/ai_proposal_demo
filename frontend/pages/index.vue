@@ -63,13 +63,15 @@
         :has-generated-docx="hasGeneratedDocx"
         :conversation-history="conversationHistory"
         :stored-answers="storedAnswers"
+        :stored-answers-meta="storedAnswersMeta"
         :register-url="registerUrl"
         :project-title="projectTitle"
         :project-summary="projectSummary"
+        :project-created-at="projectCreatedAt"
         :sections="sections"
         :candidate-plan="candidatePlan"
         :final-plan="finalPlanContent"
-        :saved-plan-versions="savedPlanVersions"
+        :saved-plan-versions="displayVersions"
         :section-versions="sectionVersions"
         @messages-updated="handleMessagesUpdated"
         @question-answers-updated="handleAnswersUpdated"
@@ -79,6 +81,8 @@
         @update-project-title="handleUpdateProjectTitle"
         @finalize-candidates="handleFinalizeCandidates"
         @request-version-update="handleVersionRevision"
+        @rename-version="handleRenameVersion"
+        @delete-version="handleDeleteVersion"
         @register="handleRegister"
       />
     </div>
@@ -100,14 +104,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { computed, ref, onMounted, watch } from "vue";
 import DemoChatbox from "~/components/chat/DemoChatbox.vue";
 import DemoRegisterModal from "~/components/chat/helper/DemoRegisterModal.vue";
 import { useLoading } from "~/composables/useLoading";
 import { useNotifications } from "~/composables/useNotifications";
+import { demoFetch } from "~/composables/useDemoSession";
 
 const { show: showLoading, hide: hideLoading } = useLoading();
-const { success, error: notifyError } = useNotifications();
+const { success, warning, error: notifyError } = useNotifications();
 
 // SSR disabled for this page (window, WebSocket)
 definePageMeta({
@@ -135,7 +140,9 @@ const grantName = ref("");
 const templateName = ref("");
 const allQuestions = ref<Question[]>([]);
 const conversationHistory = ref<any[]>([]);
-const storedAnswers = ref<Record<string, string>>({});
+// chat_answers 可能是純文字或 {value, source, ...}（記錄答案來源的新格式），由 DemoChatbox 正規化
+const storedAnswers = ref<Record<string, any>>({});
+const storedAnswersMeta = ref<Record<string, any>>({});
 
 const interactionCount = ref(0);
 const interactionLimit = ref(20);
@@ -151,7 +158,30 @@ const hasGeneratedDocx = ref(false);
   const candidatePlan = ref<Record<string, any>>({});
   const finalPlanContent = ref<Record<string, any>>({});
   const savedPlanVersions = ref<any[]>([]);
-  const sectionVersions = ref<Record<string, number>>({});
+  const sectionVersions = ref<Record<string, number> | undefined>(undefined);
+  const projectCreatedAt = ref("");
+
+// ===== 版本清單（側邊欄 / 版本預覽使用）=====
+function formatVersionTimestamp(value?: string | null) {
+  if (value) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString("zh-TW");
+    }
+  }
+  return new Date().toLocaleString("zh-TW");
+}
+
+const displayVersions = computed(() =>
+  savedPlanVersions.value.map((version: any, index: number) => ({
+    id: `v${index + 1}`,
+    index,
+    number: index + 1,
+    title: version?.title || `版本 ${index + 1}`,
+    timestamp: formatVersionTimestamp(version?.timestamp),
+    data: version?.data || version,
+  })),
+);
 
 function deriveQuestions(sections: any[]): Question[] {
   const result: Question[] = [];
@@ -206,7 +236,7 @@ async function loadCatalogAndSession() {
   sessionId.value = demo.session_id;
 
   // Cookie is established now — the rest can run normally.
-  const configResp = await fetch(`${apiBaseUrl}/config`, { credentials: "include" });
+  const configResp = await demoFetch(`${apiBaseUrl}/config`, { credentials: "include" });
   if (!configResp.ok) {
     throw new Error(`/api/config returned ${configResp.status}`);
   }
@@ -214,7 +244,7 @@ async function loadCatalogAndSession() {
 
   // Optionally fetch demo status for updated limits (defensive: may 404 until backend ready)
   try {
-    const statusResp = await fetch(`${apiBaseUrl}/demo/status`, { credentials: "include" });
+    const statusResp = await demoFetch(`${apiBaseUrl}/demo/status`, { credentials: "include" });
     if (statusResp.ok) {
       const status = await statusResp.json();
       interactionCount.value = status.interaction_count ?? demo.interaction_count ?? 0;
@@ -284,7 +314,7 @@ async function loadCatalogAndSession() {
   // sections.json_schema so the demo matches the production experience.
   let dynamicFields: any[] = [];
   try {
-    const dynResp = await fetch(
+    const dynResp = await demoFetch(
       `${apiBaseUrl}/demo/dynamic-fields?grant_id=${grantId.value}&template_id=${templateId.value}`,
       { credentials: "include" }
     );
@@ -320,7 +350,7 @@ async function loadCatalogAndSession() {
   }
 
   if (demo.grant_id !== grantId.value || demo.template_id !== templateId.value) {
-    await fetch(`${apiBaseUrl}/demo`, {
+    await demoFetch(`${apiBaseUrl}/demo`, {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -333,6 +363,12 @@ async function loadCatalogAndSession() {
   }
   if (demo.stored_answer?.chat_answers) {
     storedAnswers.value = demo.stored_answer.chat_answers;
+  }
+  if (demo.stored_answer?.chat_answers_meta) {
+    storedAnswersMeta.value = demo.stored_answer.chat_answers_meta;
+  }
+  if (demo.created_at) {
+    projectCreatedAt.value = String(demo.created_at);
   }
   if (demo.title) {
     projectTitle.value = demo.title;
@@ -374,7 +410,7 @@ function handleAiResponseComplete() {
 
 async function refreshStatus() {
   try {
-    const resp = await fetch(`${apiBaseUrl}/demo/status`, { credentials: "include" });
+    const resp = await demoFetch(`${apiBaseUrl}/demo/status`, { credentials: "include" });
     if (!resp.ok) return;
     const status = await resp.json();
     interactionCount.value = status.interaction_count ?? interactionCount.value;
@@ -412,7 +448,7 @@ async function handleUpdateProjectTitle(name: string) {
     success("已更新專案名稱");
     // Persist title to backend so it survives migration
     try {
-      await fetch(`${apiBaseUrl}/demo`, {
+      await demoFetch(`${apiBaseUrl}/demo`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -438,6 +474,29 @@ function transformPlanCandidates(rawData: Record<string, any>) {
   return processed;
 }
 
+function applyPlanCandidates(rawData: Record<string, any>, successMessage: string) {
+  const processed = transformPlanCandidates(rawData);
+  const sectionIds = Object.keys(processed);
+  const failedIds = sectionIds.filter((id) => !processed[id]?.length);
+
+  if (!sectionIds.length || failedIds.length === sectionIds.length) {
+    candidatePlan.value = {};
+    notifyError("生成失敗：所有章節都沒有產生內容。模型可能暫時無法使用，請稍後再試。");
+    return;
+  }
+
+  candidatePlan.value = processed;
+  if (failedIds.length) {
+    const names = failedIds.map((id) => {
+      const section: any = sections.value.find((s: any) => s.id === id);
+      return section?.title || section?.name || id;
+    });
+    warning(`以下章節生成失敗，請稍後重新產生：${names.join("、")}`);
+  } else {
+    success(successMessage);
+  }
+}
+
 async function handleGeneratePlan(payload: {
   grantId: string;
   templateId: string;
@@ -448,7 +507,7 @@ async function handleGeneratePlan(payload: {
   candidatePlan.value = {};
   showLoading("正在生成計畫書...", true);
   try {
-    const resp = await fetch(`${apiBaseUrl}/generate_plan`, {
+    const resp = await demoFetch(`${apiBaseUrl}/generate_plan`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -464,8 +523,7 @@ async function handleGeneratePlan(payload: {
       throw new Error(`伺服器錯誤 (${resp.status}): ${text}`);
     }
     const rawData = await resp.json();
-    candidatePlan.value = transformPlanCandidates(rawData);
-    success("計畫書草稿已生成！");
+    applyPlanCandidates(rawData, "計畫書草稿已生成！");
     await refreshStatus().catch(() => {});
   } catch (err: any) {
     console.error("生成計畫書失敗", err);
@@ -490,7 +548,7 @@ async function handleVersionRevision(payload: { version: any }) {
   candidatePlan.value = {};
 
   try {
-    const resp = await fetch(`${apiBaseUrl}/revise_plan_version`, {
+    const resp = await demoFetch(`${apiBaseUrl}/revise_plan_version`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -509,8 +567,7 @@ async function handleVersionRevision(payload: { version: any }) {
       throw new Error(`伺服器錯誤 (${resp.status}): ${text}`);
     }
     const rawData = await resp.json();
-    candidatePlan.value = transformPlanCandidates(rawData);
-    success("新版候選內容已生成！");
+    applyPlanCandidates(rawData, "新版候選內容已生成！");
   } catch (err: any) {
     console.error("版本更新失敗", err);
     notifyError(`版本更新失敗: ${err?.message || "未知錯誤"}`);
@@ -548,7 +605,7 @@ async function handleFinalizeCandidates(payload: {
   savedPlanVersions.value = updatedVersions;
 
   try {
-    await fetch(`${apiBaseUrl}/demo`, {
+    await demoFetch(`${apiBaseUrl}/demo`, {
       method: "PUT",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -560,6 +617,52 @@ async function handleFinalizeCandidates(payload: {
   } catch (err) {
     console.error("Failed to persist selected plan to demo session", err);
     notifyError("儲存計畫失敗，請稍後再試");
+  }
+}
+
+// ===== 版本重新命名 / 刪除 =====
+// Demo 的版本清單存在 demo 列的 saved_plan，直接以整份清單更新
+async function persistSavedPlan(updatedVersions: any[]) {
+  const resp = await demoFetch(`${apiBaseUrl}/demo`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ saved_plan: updatedVersions }),
+  });
+  if (!resp.ok) {
+    throw new Error(`伺服器錯誤 (${resp.status})`);
+  }
+  savedPlanVersions.value = updatedVersions;
+  const latest = updatedVersions[updatedVersions.length - 1];
+  finalPlanContent.value = latest?.data || {};
+}
+
+async function handleRenameVersion(payload: { version: any; title: string }) {
+  const index = payload?.version?.index;
+  const title = payload?.title?.trim();
+  if (typeof index !== "number" || !title || !savedPlanVersions.value[index]) return;
+  const updated = savedPlanVersions.value.map((version: any, i: number) =>
+    i === index ? { ...version, title } : version,
+  );
+  try {
+    await persistSavedPlan(updated);
+    success("已更新版本名稱");
+  } catch (err) {
+    console.error("Failed to rename version", err);
+    notifyError("更新版本名稱失敗，請稍後再試");
+  }
+}
+
+async function handleDeleteVersion(version: any) {
+  const index = version?.index;
+  if (typeof index !== "number" || !savedPlanVersions.value[index]) return;
+  const updated = savedPlanVersions.value.filter((_: any, i: number) => i !== index);
+  try {
+    await persistSavedPlan(updated);
+    success("已刪除版本");
+  } catch (err) {
+    console.error("Failed to delete version", err);
+    notifyError("刪除版本失敗，請稍後再試");
   }
 }
 

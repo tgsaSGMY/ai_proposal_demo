@@ -466,7 +466,7 @@ function selectConfigByVersionAndTime(
 /**
  * 从 backend 获取 plan template 的 word export config
  */
-async function fetchWordExportConfig(
+export async function fetchWordExportConfig(
   grantId?: string,
   templateId?: string,
   projectCreatedAt?: string | Date,
@@ -540,17 +540,53 @@ async function fetchWordExportConfig(
   }
 }
 
+// --- 版面區塊：Word 匯出與網頁預覽共用的中間格式 ---
+// buildParagraphFromNode 只產生這些區塊，再分別轉成 docx 物件（blocksToDocx）
+// 或 HTML（blocksToHtml），確保預覽畫面與下載的 Word 版面完全一致。
+type WordAlignment = (typeof AlignmentType)[keyof typeof AlignmentType];
+
+interface WordRunBlock {
+  text: string;
+  size?: number;
+  // null 表示不設定字型（沿用 Word 預設）
+  font?: string | null;
+  bold?: boolean;
+  italics?: boolean;
+  color?: string;
+  highlight?: "yellow";
+}
+
+interface WordParagraphBlock {
+  kind: "paragraph";
+  runs: WordRunBlock[];
+  spacing?: { before?: number; after?: number };
+  alignment?: WordAlignment;
+  indent?: { left: number };
+}
+
+interface WordTableBlock {
+  kind: "table";
+  // 列 → 儲存格 → 段落
+  rows: WordParagraphBlock[][][];
+}
+
+type WordBlock = WordParagraphBlock | WordTableBlock;
+
+function isParagraphBlock(block: WordBlock): block is WordParagraphBlock {
+  return block.kind === "paragraph";
+}
+
 /**
  * 根据文本中的干线符渲染一行，处理图片占位符高亮和Markdown粗体格式
  * 仿照 local_standard.ts 中 renderTextWithHighlightedImages 的逻辑
  */
 function renderTextWithHighlightedImages(
   text: string,
-  elements: Array<Paragraph | Table>,
+  elements: WordBlock[],
   size: number,
   font: string,
   bold: boolean,
-  alignment: (typeof AlignmentType)[keyof typeof AlignmentType],
+  alignment: WordAlignment,
 ): void {
   if (!text) return;
 
@@ -593,60 +629,46 @@ function renderTextWithHighlightedImages(
 
   // 如果没有匹配项，直接创建段落
   if (matches.length === 0) {
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: text,
-            size: size,
-            font: resolveRunFont(font),
-            bold: bold,
-          }),
-        ],
-        spacing: { after: 60 },
-        alignment: alignment,
-      }),
-    );
+    elements.push({
+      kind: "paragraph",
+      runs: [{ text: text, size: size, font: font, bold: bold }],
+      spacing: { after: 60 },
+      alignment: alignment,
+    });
     return;
   }
 
   // 构建文本片段
-  const textRuns: TextRun[] = [];
+  const textRuns: WordRunBlock[] = [];
   let lastIndex = 0;
 
   for (const match of matches) {
     // 添加匹配前的普通文本
     if (lastIndex < match.index) {
-      textRuns.push(
-        new TextRun({
-          text: text.substring(lastIndex, match.index),
-          size: size,
-          font: resolveRunFont(font),
-          bold: bold,
-        }),
-      );
+      textRuns.push({
+        text: text.substring(lastIndex, match.index),
+        size: size,
+        font: font,
+        bold: bold,
+      });
     }
 
     // 添加匹配的文本（图片或粗体）
     if (match.type === "image") {
-      textRuns.push(
-        new TextRun({
-          text: match.text,
-          size: size,
-          font: resolveRunFont(font),
-          bold: bold,
-          highlight: "yellow",
-        }),
-      );
+      textRuns.push({
+        text: match.text,
+        size: size,
+        font: font,
+        bold: bold,
+        highlight: "yellow",
+      });
     } else if (match.type === "bold") {
-      textRuns.push(
-        new TextRun({
-          text: match.text ?? "",
-          size: size,
-          font: resolveRunFont(font),
-          bold: true,
-        }),
-      );
+      textRuns.push({
+        text: match.text ?? "",
+        size: size,
+        font: font,
+        bold: true,
+      });
     }
 
     lastIndex = match.endIndex;
@@ -654,23 +676,20 @@ function renderTextWithHighlightedImages(
 
   // 添加剩余的文本
   if (lastIndex < text.length) {
-    textRuns.push(
-      new TextRun({
-        text: text.substring(lastIndex),
-        size: size,
-        font: resolveRunFont(font),
-        bold: bold,
-      }),
-    );
+    textRuns.push({
+      text: text.substring(lastIndex),
+      size: size,
+      font: font,
+      bold: bold,
+    });
   }
 
-  elements.push(
-    new Paragraph({
-      children: textRuns,
-      spacing: { after: 60 },
-      alignment: alignment,
-    }),
-  );
+  elements.push({
+    kind: "paragraph",
+    runs: textRuns,
+    spacing: { after: 60 },
+    alignment: alignment,
+  });
 }
 
 /**
@@ -680,11 +699,11 @@ function renderTextWithHighlightedImages(
  */
 function renderTextWithLineBreaksToParagraphs(
   text: string,
-  elements: Array<Paragraph | Table>,
+  elements: WordBlock[],
   size: number,
   font: string,
   bold: boolean,
-  alignment: (typeof AlignmentType)[keyof typeof AlignmentType],
+  alignment: WordAlignment,
 ): void {
   if (!text) return;
 
@@ -716,25 +735,22 @@ function renderTextWithLineBreaksToParagraphs(
   });
 }
 
-function insertTableSeparators(
-  elements: Array<Paragraph | Table>,
-): Array<Paragraph | Table> {
+function insertTableSeparators(elements: WordBlock[]): WordBlock[] {
   if (!elements.length) return elements;
 
-  const separated: Array<Paragraph | Table> = [];
+  const separated: WordBlock[] = [];
 
   for (const element of elements) {
     const previous = separated[separated.length - 1];
-    const isPreviousTable = previous instanceof Table;
-    const isCurrentTable = element instanceof Table;
+    const isPreviousTable = previous?.kind === "table";
+    const isCurrentTable = element.kind === "table";
 
     if (isPreviousTable && isCurrentTable) {
-      separated.push(
-        new Paragraph({
-          children: [new TextRun({ text: "", size: 2 })],
-          spacing: { before: 80, after: 80 },
-        }),
-      );
+      separated.push({
+        kind: "paragraph",
+        runs: [{ text: "", size: 2, font: null }],
+        spacing: { before: 80, after: 80 },
+      });
     }
 
     separated.push(element);
@@ -753,8 +769,8 @@ function buildParagraphFromNode(
     documentStyle?: WordDocumentStyle;
     headingCounters: HeadingCounterState;
   },
-): Array<Paragraph | Table> {
-  const elements: Array<Paragraph | Table> = [];
+): WordBlock[] {
+  const elements: WordBlock[] = [];
   if (!node) return elements;
 
   const resolvedStyle = resolveDocumentStyle(options.documentStyle);
@@ -767,19 +783,18 @@ function buildParagraphFromNode(
 
   if (node.type === "sectionTitle") {
     resetHeadingCounters(headingCounters);
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: node.label || "章節標題",
-            bold: resolvedStyle.headingBold,
-            size: headingSize,
-            font: resolveRunFont(resolvedStyle.headingFont),
-          }),
-        ],
-        spacing: { before: 200, after: 120 },
-      }),
-    );
+    elements.push({
+      kind: "paragraph",
+      runs: [
+        {
+          text: node.label || "章節標題",
+          bold: resolvedStyle.headingBold,
+          size: headingSize,
+          font: resolvedStyle.headingFont,
+        },
+      ],
+      spacing: { before: 200, after: 120 },
+    });
   } else if (node.type === "subHeading") {
     const showNumbering = node.list?.numbering === true;
 
@@ -798,19 +813,18 @@ function buildParagraphFromNode(
     const prefix = showNumbering
       ? formatHeadingPrefix(node.level, headingCounters, node.list?.style)
       : "";
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `${prefix}${node.label || "次標題"}`,
-            bold: resolvedStyle.subHeadingBold,
-            size: subHeadingSize,
-            font: resolveRunFont(resolvedStyle.subHeadingFont),
-          }),
-        ],
-        spacing: { before: 120, after: 80 },
-      }),
-    );
+    elements.push({
+      kind: "paragraph",
+      runs: [
+        {
+          text: `${prefix}${node.label || "次標題"}`,
+          bold: resolvedStyle.subHeadingBold,
+          size: subHeadingSize,
+          font: resolvedStyle.subHeadingFont,
+        },
+      ],
+      spacing: { before: 120, after: 80 },
+    });
   } else if (node.type === "paragraph") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
     const value = sectionData
@@ -861,184 +875,107 @@ function buildParagraphFromNode(
     const transpose = node.table?.transpose === true;
 
     if (columns.length > 0) {
-      let headerCells: TableCell[];
-      let dataRows: TableRow[];
+      // 每個儲存格 = 段落陣列
+      let headerCells: WordParagraphBlock[][];
+      let dataRows: WordParagraphBlock[][][];
+
+      const singleRunCell = (run: WordRunBlock): WordParagraphBlock[] => [
+        { kind: "paragraph", runs: [run] },
+      ];
 
       if (transpose) {
         // 倒置：表頭 = 欄位 + 原資料列序號
         headerCells = [
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: "欄位",
-                    bold: true,
-                    size: bodySize,
-                    font: resolveRunFont(resolvedStyle.bodyFont),
-                  }),
-                ],
-              }),
-            ],
+          singleRunCell({
+            text: "欄位",
+            bold: true,
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
           }),
-          ...rows.map(
-            (_, r) =>
-              new TableCell({
-                children: [
-                  new Paragraph({
-                    children: [
-                      new TextRun({
-                        text: String(r + 1),
-                        bold: true,
-                        size: bodySize,
-                        font: resolveRunFont(resolvedStyle.bodyFont),
-                      }),
-                    ],
-                  }),
-                ],
-              }),
+          ...rows.map((_, r) =>
+            singleRunCell({
+              text: String(r + 1),
+              bold: true,
+              size: bodySize,
+              font: resolvedStyle.bodyFont,
+            }),
           ),
         ];
         // 倒置：每一列 = 原欄位標題 + 各資料列在該欄位的值
-        dataRows = columns.map(
-          (col) =>
-            new TableRow({
-              children: [
-                new TableCell({
-                  children: [
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: col.label || col.key,
-                          bold: true,
-                          size: bodySize,
-                          font: resolveRunFont(resolvedStyle.bodyFont),
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-                ...rows.map(
-                  (row) =>
-                    new TableCell({
-                      children: [
-                        new Paragraph({
-                          children: [
-                            new TextRun({
-                              text: String(
-                                typeof row === "object" && row !== null
-                                  ? (getValueByPath(row, col.key) ?? "")
-                                  : (row ?? ""),
-                              ),
-                              size: bodySize,
-                              font: resolveRunFont(resolvedStyle.bodyFont),
-                            }),
-                          ],
-                        }),
-                      ],
-                    }),
-                ),
-              ],
+        dataRows = columns.map((col) => [
+          singleRunCell({
+            text: col.label || col.key,
+            bold: true,
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
+          }),
+          ...rows.map((row) =>
+            singleRunCell({
+              text: String(
+                typeof row === "object" && row !== null
+                  ? (getValueByPath(row, col.key) ?? "")
+                  : (row ?? ""),
+              ),
+              size: bodySize,
+              font: resolvedStyle.bodyFont,
             }),
-        );
+          ),
+        ]);
       } else {
         // 正常：表頭 = 欄位標題
-        headerCells = columns.map(
-          (col) =>
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: col.label || col.key,
-                      bold: true,
-                      size: bodySize,
-                      font: resolveRunFont(resolvedStyle.bodyFont),
-                    }),
-                  ],
-                }),
-              ],
-            }),
+        headerCells = columns.map((col) =>
+          singleRunCell({
+            text: col.label || col.key,
+            bold: true,
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
+          }),
         );
         // 正常：數據行
         dataRows =
           rows.length === 0
             ? [
-                new TableRow({
-                  children: columns.map(
-                    () =>
-                      new TableCell({
-                        children: [
-                          new Paragraph({
-                            children: [
-                              new TextRun({
-                                text: "無",
-                                size: bodySize,
-                                font: resolveRunFont(resolvedStyle.bodyFont),
-                              }),
-                            ],
-                          }),
-                        ],
-                      }),
-                  ),
-                }),
-              ]
-            : rows.map(
-                (row) =>
-                  new TableRow({
-                    children: columns.map((col) => {
-                      const cellValue = String(
-                        typeof row === "object" && row !== null
-                          ? (getValueByPath(row, col.key) ?? "")
-                          : (row ?? ""),
-                      );
-
-                      // 使用 line break helper 處理單元格內容
-                      const cellElements: Array<Paragraph | Table> = [];
-                      renderTextWithLineBreaksToParagraphs(
-                        cellValue,
-                        cellElements,
-                        bodySize,
-                        resolvedStyle.bodyFont,
-                        false,
-                        AlignmentType.LEFT,
-                      );
-
-                      return new TableCell({
-                        children:
-                          cellElements.length > 0
-                            ? (cellElements.filter(
-                                (e) => e instanceof Paragraph,
-                              ) as Paragraph[])
-                            : [
-                                new Paragraph({
-                                  children: [
-                                    new TextRun({
-                                      text: cellValue,
-                                      size: bodySize,
-                                      font: resolveRunFont(
-                                        resolvedStyle.bodyFont,
-                                      ),
-                                    }),
-                                  ],
-                                }),
-                              ],
-                      });
-                    }),
+                columns.map(() =>
+                  singleRunCell({
+                    text: "無",
+                    size: bodySize,
+                    font: resolvedStyle.bodyFont,
                   }),
+                ),
+              ]
+            : rows.map((row) =>
+                columns.map((col) => {
+                  const cellValue = String(
+                    typeof row === "object" && row !== null
+                      ? (getValueByPath(row, col.key) ?? "")
+                      : (row ?? ""),
+                  );
+
+                  // 使用 line break helper 處理單元格內容
+                  const cellElements: WordBlock[] = [];
+                  renderTextWithLineBreaksToParagraphs(
+                    cellValue,
+                    cellElements,
+                    bodySize,
+                    resolvedStyle.bodyFont,
+                    false,
+                    AlignmentType.LEFT,
+                  );
+
+                  return cellElements.length > 0
+                    ? cellElements.filter(isParagraphBlock)
+                    : singleRunCell({
+                        text: cellValue,
+                        size: bodySize,
+                        font: resolvedStyle.bodyFont,
+                      });
+                }),
               );
       }
 
-      const tableRows = transpose
-        ? dataRows
-        : [new TableRow({ children: headerCells }), ...dataRows];
+      const tableRows = transpose ? dataRows : [headerCells, ...dataRows];
 
-      elements.push(
-        new Table({
-          rows: tableRows,
-          width: { size: 100, type: "pct" },
-        }),
-      );
+      elements.push({ kind: "table", rows: tableRows });
     }
   } else if (node.type === "customTable") {
     const customTable = node.customTable;
@@ -1049,22 +986,21 @@ function buildParagraphFromNode(
     const cols = Math.max(0, customTable?.cols ?? 0);
 
     if (!customTable || !rows || !cols) {
-      elements.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: node.label?.length
-                ? `${node.label}（自訂表格尚未設定）`
-                : "自訂表格尚未設定",
-              italics: true,
-              color: "999999",
-              size: bodySize,
-              font: resolveRunFont(resolvedStyle.bodyFont),
-            }),
-          ],
-          spacing: { after: 80 },
-        }),
-      );
+      elements.push({
+        kind: "paragraph",
+        runs: [
+          {
+            text: node.label?.length
+              ? `${node.label}（自訂表格尚未設定）`
+              : "自訂表格尚未設定",
+            italics: true,
+            color: "999999",
+            size: bodySize,
+            font: resolvedStyle.bodyFont,
+          },
+        ],
+        spacing: { after: 80 },
+      });
     } else {
       const cellMap = new Map<string, WordCustomTableCell>();
       for (const cell of customTable.cells ?? []) {
@@ -1072,9 +1008,9 @@ function buildParagraphFromNode(
         cellMap.set(`${cell.row}-${cell.col}`, cell);
       }
 
-      const docxRows: TableRow[] = [];
+      const tableRows: WordParagraphBlock[][][] = [];
       for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
-        const docxCells: TableCell[] = [];
+        const rowCells: WordParagraphBlock[][] = [];
         for (let colIndex = 0; colIndex < cols; colIndex++) {
           const cellKey = `${rowIndex}-${colIndex}`;
           const configCell = cellMap.get(cellKey);
@@ -1083,7 +1019,7 @@ function buildParagraphFromNode(
             : "";
 
           // 使用 line break helper 處理單元格內容
-          const cellElements: Array<Paragraph | Table> = [];
+          const cellElements: WordBlock[] = [];
           renderTextWithLineBreaksToParagraphs(
             displayValue,
             cellElements,
@@ -1093,36 +1029,27 @@ function buildParagraphFromNode(
             AlignmentType.LEFT,
           );
 
-          docxCells.push(
-            new TableCell({
-              children:
-                cellElements.length > 0
-                  ? (cellElements.filter(
-                      (e) => e instanceof Paragraph,
-                    ) as Paragraph[])
-                  : [
-                      new Paragraph({
-                        children: [
-                          new TextRun({
-                            text: displayValue,
-                            size: bodySize,
-                            font: resolveRunFont(resolvedStyle.bodyFont),
-                          }),
-                        ],
-                      }),
+          rowCells.push(
+            cellElements.length > 0
+              ? cellElements.filter(isParagraphBlock)
+              : [
+                  {
+                    kind: "paragraph",
+                    runs: [
+                      {
+                        text: displayValue,
+                        size: bodySize,
+                        font: resolvedStyle.bodyFont,
+                      },
                     ],
-            }),
+                  },
+                ],
           );
         }
-        docxRows.push(new TableRow({ children: docxCells }));
+        tableRows.push(rowCells);
       }
 
-      elements.push(
-        new Table({
-          rows: docxRows,
-          width: { size: 100, type: "pct" },
-        }),
-      );
+      elements.push({ kind: "table", rows: tableRows });
     }
   } else if (node.type === "list") {
     const sectionData = node.sectionId ? sectionDataMap[node.sectionId] : null;
@@ -1206,7 +1133,8 @@ function buildParagraphFromNode(
             } else if (typeof value === "object" && !Array.isArray(value)) {
               displayValue = JSON.stringify(value);
             } else if (Array.isArray(value)) {
-              displayValue = value.join(", ");
+              // 子項目的值會被彙整（如各子步驟的執行單位），相同的只顯示一次
+              displayValue = [...new Set(value.map((v) => String(v)))].join(", ");
             } else {
               displayValue = String(value);
             }
@@ -1219,24 +1147,23 @@ function buildParagraphFromNode(
             const childBold =
               adjustedChildNode.style?.bodyBold ?? resolvedStyle.bodyBold;
 
-            elements.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: prefixText + displayValue,
-                    size: bodySize,
-                    font: resolveRunFont(resolvedStyle.bodyFont),
-                    bold: childBold,
-                  }),
-                ],
-                spacing: { after: isLastChild && isLastItem ? 120 : 40 },
-                indent: { left: 0 },
-              }),
-            );
+            elements.push({
+              kind: "paragraph",
+              runs: [
+                {
+                  text: prefixText + displayValue,
+                  size: bodySize,
+                  font: resolvedStyle.bodyFont,
+                  bold: childBold,
+                },
+              ],
+              spacing: { after: isLastChild && isLastItem ? 120 : 40 },
+              indent: { left: 0 },
+            });
           } else {
             // 其他類型的子節點，遞歸構建
             // 如果是 subHeading，使用列表樣式決定層級
-            let childElements: Array<Paragraph | Table> = [];
+            let childElements: WordBlock[] = [];
 
             if (adjustedChildNode.type === "subHeading" && node.list?.style) {
               // 特殊處理：list 中的 subHeading，根據列表樣式決定編號層級
@@ -1250,19 +1177,18 @@ function buildParagraphFromNode(
                   )
                 : "";
 
-              childElements.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `${prefix}${adjustedChildNode.label || "次標題"}`,
-                      bold: resolvedStyle.subHeadingBold,
-                      size: subHeadingSize,
-                      font: resolveRunFont(resolvedStyle.subHeadingFont),
-                    }),
-                  ],
-                  spacing: { before: 120, after: 80 },
-                }),
-              );
+              childElements.push({
+                kind: "paragraph",
+                runs: [
+                  {
+                    text: `${prefix}${adjustedChildNode.label || "次標題"}`,
+                    bold: resolvedStyle.subHeadingBold,
+                    size: subHeadingSize,
+                    font: resolvedStyle.subHeadingFont,
+                  },
+                ],
+                spacing: { before: 120, after: 80 },
+              });
 
               // 遞歸處理該 subHeading 的子節點（如果有）
               if (adjustedChildNode.children?.length) {
@@ -1286,11 +1212,6 @@ function buildParagraphFromNode(
               );
             }
 
-            childElements.forEach((element, idx) => {
-              if (element instanceof Paragraph) {
-                (element as any).indent = { left: 0 };
-              }
-            });
             elements.push(...childElements);
           }
         });
@@ -1310,19 +1231,18 @@ function buildParagraphFromNode(
 
         const displayText = bullet ? `${bullet} ${displayValue}` : displayValue;
 
-        elements.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: displayText,
-                size: bodySize,
-                font: resolveRunFont(resolvedStyle.bodyFont),
-              }),
-            ],
-            spacing: { after: 40 },
-            indent: { left: 0 },
-          }),
-        );
+        elements.push({
+          kind: "paragraph",
+          runs: [
+            {
+              text: displayText,
+              size: bodySize,
+              font: resolvedStyle.bodyFont,
+            },
+          ],
+          spacing: { after: 40 },
+          indent: { left: 0 },
+        });
       }
     }
   } else if (node.type === "customText") {
@@ -1338,19 +1258,18 @@ function buildParagraphFromNode(
       );
     }
   } else if (node.type === "imagePlaceholder") {
-    elements.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: node.label || "【圖：請插入圖片】",
-            size: bodySize,
-            font: resolveRunFont(resolvedStyle.bodyFont),
-            highlight: "yellow",
-          }),
-        ],
-        spacing: { after: 80 },
-      }),
-    );
+    elements.push({
+      kind: "paragraph",
+      runs: [
+        {
+          text: node.label || "【圖：請插入圖片】",
+          size: bodySize,
+          font: resolvedStyle.bodyFont,
+          highlight: "yellow",
+        },
+      ],
+      spacing: { after: 80 },
+    });
   }
 
   // 处理剩余的children（list类型已在上面处理过）
@@ -1368,6 +1287,204 @@ function buildParagraphFromNode(
 }
 
 /**
+ * 依 word export config 建立整份文件的版面區塊（Word 下載與網頁預覽共用）
+ */
+function buildWordConfigBlocks(
+  config: WordExportTemplateConfig,
+  sections: ExportableSection[],
+  planContent: Record<string, any>,
+  projectTitle?: string,
+): WordBlock[] {
+  // 使用实际的 plan content 作为数据源
+  const sectionDataMap: Record<string, Record<string, any>> = {};
+  for (const section of sections) {
+    sectionDataMap[section.id] = planContent[section.id]?.content || {};
+  }
+
+  // 构建文档元素
+  const documentElements: WordBlock[] = [];
+  const headingCounters = createHeadingCounterState();
+
+  // 在文档最上面添加标题
+  if (projectTitle) {
+    documentElements.push({
+      kind: "paragraph",
+      runs: [
+        {
+          text: projectTitle,
+          bold: true,
+          size: 36,
+          font: config.documentStyle?.headingFont,
+        },
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 240 },
+    });
+  }
+
+  if (config.nodes && config.nodes.length > 0) {
+    for (const node of config.nodes) {
+      const elements = buildParagraphFromNode(node, sectionDataMap, {
+        documentStyle: config.documentStyle,
+        headingCounters,
+      });
+      documentElements.push(...elements);
+    }
+  } else {
+    documentElements.push({
+      kind: "paragraph",
+      runs: [
+        {
+          text: "尚未設定任何節點。",
+          color: "999999",
+          size: 22,
+          font: config.documentStyle?.bodyFont,
+        },
+      ],
+    });
+  }
+
+  return insertTableSeparators(documentElements);
+}
+
+// --- 版面區塊 → docx ---
+function runBlockToDocx(run: WordRunBlock): TextRun {
+  const { font, ...options } = run;
+  return new TextRun({
+    ...options,
+    ...(font === null ? {} : { font: resolveRunFont(font) }),
+  });
+}
+
+function paragraphBlockToDocx(block: WordParagraphBlock): Paragraph {
+  const { kind, runs, ...options } = block;
+  return new Paragraph({ ...options, children: runs.map(runBlockToDocx) });
+}
+
+function blocksToDocx(blocks: WordBlock[]): Array<Paragraph | Table> {
+  return blocks.map((block) =>
+    isParagraphBlock(block)
+      ? paragraphBlockToDocx(block)
+      : new Table({
+          rows: block.rows.map(
+            (cells) =>
+              new TableRow({
+                children: cells.map(
+                  (paragraphs) =>
+                    new TableCell({
+                      children: paragraphs.map(paragraphBlockToDocx),
+                    }),
+                ),
+              }),
+          ),
+          width: { size: 100, type: "pct" },
+        }),
+  );
+}
+
+// --- 版面區塊 → HTML（以 Word 的單位換算：size 為半點、spacing 為 twip）---
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function runBlockToHtml(run: WordRunBlock): string {
+  const styles: string[] = [];
+  if (run.font !== null) {
+    const fonts = resolveRunFont(run.font);
+    styles.push(
+      `font-family:'${fonts.ascii}','${fonts.eastAsia}',serif`,
+    );
+  }
+  if (run.size) styles.push(`font-size:${run.size / 2}pt`);
+  styles.push(`font-weight:${run.bold ? 700 : 400}`);
+  if (run.italics) styles.push("font-style:italic");
+  if (run.color) styles.push(`color:#${run.color}`);
+  if (run.highlight === "yellow") styles.push("background-color:#ffff00");
+  // Word 會把 run 內的換行顯示為空白
+  const text = escapeHtml(run.text.replace(/\r?\n/g, " "));
+  return `<span style="${styles.join(";")}">${text}</span>`;
+}
+
+// Word 的「單行間距」以東亞字型的行高再放大（實測 Microsoft JhengHei 約 1.75 倍字級，
+// 其他中文字型約 1.3 倍），網頁預設行高較矮，因此依段落中最大的文字與其中文字型換算
+function wordLineHeightFactor(eastAsiaFont: string): number {
+  return /JhengHei|正黑/i.test(eastAsiaFont) ? 1.75 : 1.3;
+}
+
+function paragraphBlockToHtml(block: WordParagraphBlock): string {
+  const largestRun = block.runs.reduce<WordRunBlock | undefined>(
+    (largest, run) =>
+      !largest || (run.size ?? 0) > (largest.size ?? 0) ? run : largest,
+    undefined,
+  );
+  const lineSize = largestRun?.size ?? 24;
+  const lineFactor = wordLineHeightFactor(
+    resolveRunFont(largestRun?.font ?? undefined).eastAsia,
+  );
+  const styles = [
+    `margin:${(block.spacing?.before ?? 0) / 20}pt 0 ${(block.spacing?.after ?? 0) / 20}pt ${(block.indent?.left ?? 0) / 20}pt`,
+    `font-size:${lineSize / 2}pt`,
+    `line-height:${lineFactor}`,
+  ];
+  if (block.alignment === AlignmentType.CENTER) styles.push("text-align:center");
+  else if (block.alignment === AlignmentType.RIGHT) styles.push("text-align:right");
+  else if (block.alignment === AlignmentType.BOTH) styles.push("text-align:justify");
+  else styles.push("text-align:left");
+
+  // 空段落在 Word 中仍佔一行高度
+  const hasText = block.runs.some((run) => run.text.length > 0);
+  const runs = hasText
+    ? block.runs.map(runBlockToHtml).join("")
+    : block.runs
+        .map((run) => runBlockToHtml({ ...run, text: "​" }))
+        .join("") || "​";
+  return `<p style="${styles.join(";")}">${runs}</p>`;
+}
+
+function tableBlockToHtml(block: WordTableBlock): string {
+  const rows = block.rows
+    .map((cells) => {
+      const tds = cells
+        .map(
+          (paragraphs) =>
+            `<td>${paragraphs.map(paragraphBlockToHtml).join("")}</td>`,
+        )
+        .join("");
+      return `<tr>${tds}</tr>`;
+    })
+    .join("");
+  return `<table><tbody>${rows}</tbody></table>`;
+}
+
+function blocksToHtml(blocks: WordBlock[]): string {
+  return blocks
+    .map((block) =>
+      isParagraphBlock(block)
+        ? paragraphBlockToHtml(block)
+        : tableBlockToHtml(block),
+    )
+    .join("");
+}
+
+/**
+ * 以 word export config 產生與下載 Word 相同版面的 HTML（供預覽使用）
+ */
+export function renderPlanToHtmlUsingWordConfig(
+  config: WordExportTemplateConfig,
+  sections: ExportableSection[],
+  planContent: Record<string, any>,
+  projectTitle?: string,
+): string {
+  return blocksToHtml(
+    buildWordConfigBlocks(config, sections, planContent, projectTitle),
+  );
+}
+
+/**
  * 使用 word export config 生成文档
  */
 export async function exportPlanUsingWordConfig(
@@ -1378,58 +1495,9 @@ export async function exportPlanUsingWordConfig(
   options?: { autoDownload?: boolean },
 ): Promise<Blob> {
   try {
-    // 使用实际的 plan content 作为数据源
-    const sectionDataMap: Record<string, Record<string, any>> = {};
-    for (const section of sections) {
-      sectionDataMap[section.id] = planContent[section.id]?.content || {};
-    }
-
-    // 构建文档元素
-    const documentElements: Array<Paragraph | Table> = [];
-    const headingCounters = createHeadingCounterState();
-
-    // 在文档最上面添加标题
-    if (projectTitle) {
-      documentElements.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: projectTitle,
-              bold: true,
-              size: 36,
-              font: resolveRunFont(config.documentStyle?.headingFont),
-            }),
-          ],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 240 },
-        }),
-      );
-    }
-
-    if (config.nodes && config.nodes.length > 0) {
-      for (const node of config.nodes) {
-        const elements = buildParagraphFromNode(node, sectionDataMap, {
-          documentStyle: config.documentStyle,
-          headingCounters,
-        });
-        documentElements.push(...elements);
-      }
-    } else {
-      documentElements.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: "尚未設定任何節點。",
-              color: "999999",
-              size: 22,
-              font: resolveRunFont(config.documentStyle?.bodyFont),
-            }),
-          ],
-        }),
-      );
-    }
-
-    const normalizedDocumentElements = insertTableSeparators(documentElements);
+    const normalizedDocumentElements = blocksToDocx(
+      buildWordConfigBlocks(config, sections, planContent, projectTitle),
+    );
 
     // 创建文档
     const doc = new Document({
@@ -1508,12 +1576,52 @@ export async function exportPlanToWord(
   return exportPlanToWordDefault(sections, planContent, projectTitle);
 }
 
+/**
+ * 產生與「下載報告」相同的 Word 檔，但不下載，回傳 Blob
+ * （既有計畫點評從「我的計畫庫」帶入計畫書時使用）
+ */
+export async function buildPlanDocxBlob(
+  sections: ExportableSection[],
+  planContent: Record<string, any>,
+  grantId?: string,
+  templateId?: string,
+  projectTitle?: string,
+  projectCreatedAt?: string | Date,
+  projectSectionVersions?: Record<string, number>,
+): Promise<Blob> {
+  if (grantId && templateId) {
+    try {
+      const wordConfig = await fetchWordExportConfig(
+        grantId,
+        templateId,
+        projectCreatedAt,
+        projectSectionVersions,
+      );
+      if (wordConfig) {
+        return await exportPlanUsingWordConfig(
+          wordConfig,
+          sections,
+          planContent,
+          projectTitle,
+          { autoDownload: false },
+        );
+      }
+    } catch (error) {
+      console.warn("Failed to use word export config, falling back:", error);
+    }
+  }
+  return exportPlanToWordDefault(sections, planContent, projectTitle, {
+    autoDownload: false,
+  });
+}
+
 // 默認導出函數（保留原有邏輯）
 async function exportPlanToWordDefault(
   sections: ExportableSection[],
   planContent: Record<string, any>,
   projectTitle?: string,
-) {
+  options?: { autoDownload?: boolean },
+): Promise<Blob> {
   const docxRenderer = new DocxRenderer();
 
   // 在文檔最上面添加標題
@@ -1610,22 +1718,33 @@ async function exportPlanToWordDefault(
 
   const blob = await Packer.toBlob(doc);
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = projectTitle ? `${projectTitle}.docx` : "計畫書草稿.docx";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  if (options?.autoDownload !== false) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = projectTitle ? `${projectTitle}.docx` : "計畫書草稿.docx";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  return blob;
 }
 
 export function renderPlanToHtml(
   sections: ExportableSection[],
   planContent: Record<string, any>,
+  projectTitle?: string,
+  // Demo：這些章節在預覽中以亂碼＋模糊顯示（註冊後才可完整檢視）
   scrambleSectionIds: string[] = [],
 ): string {
   const htmlRenderer = new HtmlRenderer();
+
+  // 與 exportPlanToWordDefault 一致：文件最上方放專案標題
+  if (projectTitle) {
+    htmlRenderer.addSectionTitle(projectTitle);
+  }
 
   for (const section of sections) {
     const sectionData = planContent[section.id]?.content;

@@ -9,21 +9,21 @@
       class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[32px] bg-white shadow-2xl"
     >
       <!-- Header -->
-      <div class="sticky top-0 border-b border-gray-200 bg-white px-8 py-6">
+      <div class="sticky top-0 z-10 border-b border-gray-200 bg-white px-8 py-6">
         <div class="flex items-center justify-between">
           <div>
             <p
               class="text-xs font-semibold uppercase tracking-[0.4em] text-[#ff7a5b]"
             >
               計畫推演報告
-              <span class="ml-2 text-[11px] text-slate-400"
+              <span class="ml-2 text-[0.6875rem] text-slate-400"
                 >Plan Deduction</span
               >
             </p>
             <p class="mt-2 text-lg font-semibold text-gray-900">
               {{ version?.title || "版本詳情" }}
             </p>
-            <p class="mt-1 text-xs text-slate-500">
+            <p class="mt-1 text-xs text-slate-500" v-show="!hideDateTime">
               {{ version?.timestamp }}
             </p>
           </div>
@@ -49,51 +49,38 @@
         </div>
       </div>
 
-      <!-- Content -->
-      <div class="space-y-4 px-8 py-6">
-        <div
-          v-for="section in sections"
-          :key="section.id"
-          class="rounded-2xl bg-[#fff7f3] px-6 py-4"
-          :class="{ 'relative overflow-hidden pb-16': section.id === 'company' }"
-        >
-          <p
-            class="text-xs font-semibold uppercase tracking-[0.3em] text-[#ff8a70]"
-          >
-            {{ section.name }}
+      <!-- Demo：鎖定章節提示與註冊入口 -->
+      <div
+        v-if="hasLockedSections"
+        class="mx-4 mt-6 flex flex-col items-center gap-2 rounded-3xl border border-rose-100 bg-white px-6 py-4 text-center shadow-sm sm:mx-8 sm:flex-row sm:text-left"
+      >
+        <div class="flex-1">
+          <p class="text-sm font-bold text-slate-900">🔒 完整計畫內容已生成</p>
+          <p class="mt-1 text-[0.6875rem] leading-relaxed text-slate-500">
+            部分章節（{{ lockedSectionNames }}）已遮蔽。請註冊免費帳號，即可完整檢視並下載完整文件。
           </p>
-          <div
-            v-if="section.html"
-            class="mt-3 text-sm leading-relaxed text-slate-700 prose prose-sm prose-slate"
-            v-html="section.html"
-          ></div>
-          <p
-            v-else
-            class="mt-3 text-sm leading-relaxed text-slate-700 whitespace-pre-line"
-          >
-            {{ section.content }}
-          </p>
-
-          <!-- 遮罩與註冊卡片 (僅用於 'company' 章節) -->
-          <div
-            v-if="section.id === 'company'"
-            class="absolute bottom-0 inset-x-0 h-4/5 flex items-end justify-center bg-gradient-to-t from-[#fff7f3] via-[#fff7f3]/95 to-transparent z-10 pb-6"
-          >
-            <div class="bg-white border border-rose-100 px-6 py-4 rounded-3xl shadow-xl text-center max-w-sm mx-4">
-              <p class="text-sm font-bold text-slate-900">🔒 完整計畫內容已生成</p>
-              <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                系統已為您完成本章節之推演。請註冊免費帳號，即可完整檢視並下載完整文件。
-              </p>
-              <button
-                type="button"
-                class="mt-2.5 rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow hover:shadow-md transition"
-                @click="handleExport"
-              >
-                立即免費註冊
-              </button>
-            </div>
-          </div>
         </div>
+        <button
+          type="button"
+          class="rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1.5 text-xs font-semibold text-white shadow transition hover:shadow-md"
+          @click="handleExport"
+        >
+          立即免費註冊
+        </button>
+      </div>
+
+      <!-- Content：與「下載報告」的 Word 文件相同版面（A4、上下左右 1 吋邊界） -->
+      <div class="px-4 py-6 sm:px-8">
+        <PlanDocumentPreview
+          :plan-sections="planSections"
+          :plan-data="version?.data"
+          :grant-id="grantId"
+          :template-id="templateId"
+          :project-title="projectTitle"
+          :project-created-at="projectCreatedAt"
+          :project-section-versions="projectSectionVersions"
+          :locked-section-ids="lockedSectionIds"
+        />
       </div>
 
       <!-- Footer -->
@@ -142,7 +129,9 @@
 
 <script setup>
 import { computed } from "vue";
-import { renderPlanToHtml } from "~/utils/exportToWord";
+import PlanDocumentPreview from "~/components/plan/PlanDocumentPreview.vue";
+
+const { hideDateTime } = useDateTimeVisibility();
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -153,6 +142,14 @@ const props = defineProps({
   isInternal: { type: Boolean, default: false },
   generationLimitReached: { type: Boolean, default: false },
   downloadLimitReached: { type: Boolean, default: false },
+  // 以下參數與 exportPlanToWord 相同，用來選出同一份 Word 匯出設定
+  grantId: { type: String, default: "" },
+  templateId: { type: String, default: "" },
+  projectTitle: { type: String, default: "" },
+  projectCreatedAt: { type: String, default: "" },
+  projectSectionVersions: { type: Object, default: undefined },
+  // Demo：預覽中遮蔽的章節（註冊後才可完整檢視）
+  lockedSectionIds: { type: Array, default: () => ["company"] },
 });
 
 const emit = defineEmits([
@@ -162,53 +159,19 @@ const emit = defineEmits([
   "downloadTimeline",
 ]);
 
-// 计算属性：过滤并映射版本数据到章节列表，包含内容和HTML渲染
-const sections = computed(() => {
-  if (!props.version?.data || !props.planSections?.length) {
-    return [];
-  }
-
-  return props.planSections
-    .map((section) => {
-      const versionData = props.version.data[section.id];
-      if (!versionData) {
-        return null;
-      }
-
-      const content = versionData.content || "";
-      return {
-        id: section.id,
-        name: section.name,
-        content,
-        html: generateHtmlForSection(section, content),
-      };
-    })
-    .filter(Boolean);
-});
-
-// 为章节内容生成HTML格式的渲染结果
-function generateHtmlForSection(section, content) {
-  try {
-    return renderPlanToHtml(
-      [
-        {
-          id: section.id,
-          name: section.name || section.title || section.id,
-          json_schema: section.json_schema,
-        },
-      ],
-      {
-        [section.id]: {
-          content,
-        },
-      },
-      ["company"],
-    );
-  } catch (error) {
-    console.error("無法渲染章節", section?.id, error);
-    return "";
-  }
-}
+const lockedSectionsInVersion = computed(() =>
+  (props.planSections || []).filter(
+    (section) =>
+      props.lockedSectionIds.includes(section.id) &&
+      props.version?.data?.[section.id],
+  ),
+);
+const hasLockedSections = computed(() => lockedSectionsInVersion.value.length > 0);
+const lockedSectionNames = computed(() =>
+  lockedSectionsInVersion.value
+    .map((section) => section.name || section.title || section.id)
+    .join("、"),
+);
 
 // 触发导出事件，将版本数据发送给父组件
 function handleExport() {
@@ -231,9 +194,3 @@ function handleTimelineDownload() {
   emit("downloadTimeline", props.version);
 }
 </script>
-
-<style scoped>
-.prose {
-  all: revert;
-}
-</style>

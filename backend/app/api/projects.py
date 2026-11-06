@@ -17,13 +17,17 @@ from app.api.dependencies import (
     require_demo_session_id,
     get_supabase_service,
 )
+from app.services.question_loader_service import load_template_questions
 from app.services.supabase_service import SupabaseService
+from app.utils.answer_normalizer import extract_chat_answer_entries
+from app.utils.export_readiness import compute_export_readiness
 from app.config import (
     DEMO_GRANT_ID,
     DEMO_TEMPLATE_ID,
     DEMO_INTERACTION_LIMIT,
     DEMO_MAX_GENERATIONS_PER_SESSION,
     DEMO_REGISTER_REDIRECT_URL,
+    QUESTION_CONTROL_ENABLED,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,6 +150,27 @@ async def get_demo_status(
         "expires_at": session.get("expires_at") if session else None,
         "section_versions": session.get("section_versions") if session else None,
     }
+
+
+@router.get("/export-readiness", summary="生成前審查：統計 AI 生成與待確認的答案")
+async def get_export_readiness(
+    session_id: str = Depends(require_demo_session_id),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+) -> Dict[str, Any]:
+    """Demo port of the platform's /projects/{id}/export-readiness.
+
+    Counts AI-generated / needs-review answers in the visitor's session so
+    the frontend can ask the visitor to confirm them before generating."""
+    session = await supabase_service.get_demo_session(session_id)
+    if not session:
+        raise HTTPException(status_code=401, detail="Demo session expired or not found")
+    session = await _force_session_template(session_id, supabase_service, session) or session
+
+    entries = extract_chat_answer_entries(session.get("stored_answer"))
+    questions = await load_template_questions(
+        session.get("grant_id"), session.get("template_id"), supabase_service
+    )
+    return compute_export_readiness(questions, entries, apply_skip_logic=QUESTION_CONTROL_ENABLED)
 
 
 @router.get("/dynamic-fields", summary="Get dynamic questions for a template")

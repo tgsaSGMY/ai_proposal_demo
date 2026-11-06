@@ -25,6 +25,14 @@ IMAGE_MODEL = "imagen-4.0-generate-001"
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-en")
 DEFAULT_MODEL_ID = "chat-latest"
 
+# --- Chat / generation behaviour flags (same defaults as the platform) ---
+# JSON-mode chat replies (reply_intro / field_updates / reply_outro).
+CHAT_GUIDANCE_JSON_MODE = os.getenv("CHAT_GUIDANCE_JSON_MODE", "true").lower() in {"1", "true", "yes"}
+# DB-driven question list + skip logic for the chat questionnaire.
+QUESTION_CONTROL_ENABLED = os.getenv("QUESTION_CONTROL_ENABLED", "true").lower() in {"1", "true", "yes"}
+# Track answer provenance and flag unchecked numbers written by the AI.
+FACT_GUARD_ENABLED = os.getenv("FACT_GUARD_ENABLED", "true").lower() in {"1", "true", "yes"}
+
 # --- Demo-specific knobs --------------------------------------------------
 
 # Hard-coded grant/template IDs that the demo will load.

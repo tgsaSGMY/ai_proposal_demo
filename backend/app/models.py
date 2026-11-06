@@ -1,6 +1,6 @@
 # 定義模型，確保類型是正確的
 # Pydantic 模型用於 FastAPI 的請求和響應驗證。
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any, Literal 
 
 # --- 1. 核心配置模型 (Core Configuration Models) ---
@@ -56,7 +56,7 @@ class GenerateRequest(BaseModel):
     user_input: str = Field(..., description="用戶提供的核心需求或主題。")
     num_candidates: int = Field(2, ge=1, le=3)
     is_external: bool = Field(True, description="是否使用外部模型（True）還是內部模型（False）。")
-    selected_model: Optional[str] = Field(None, description="可選的指定模型，如 'gpt-5.2', 'gpt-5.1' 等。如果設置，將跳過模型路由。")
+    selected_model: Optional[str] = Field(None, description="可選的指定模型，如 'chat-latest', 'gpt-5.2' 等。如果設置，將跳過模型路由。")
     project_id: Optional[str] = Field(None, description="專案 ID，用於圖片生成時的關聯。")
 
 
@@ -164,6 +164,30 @@ class ChatGuidanceResponse(BaseModel):
     message: str
 
 
+class ChatGuidanceOutput(BaseModel):
+    reply_intro: str = Field(..., description="開場白，回應使用者上一則訊息（軟性上限 200 字，超出將截斷）")
+    reply_outro: str = Field(..., description="收尾語，含進度提示（軟性上限 200 字，超出將截斷）")
+    field_updates: Dict[str, str] = Field(default_factory=dict, description="field_id → answer")
+    suggested_next_question_id: Optional[str] = None
+
+    @field_validator("reply_intro", "reply_outro", mode="after")
+    @classmethod
+    def _truncate_soft_cap(cls, value: str) -> str:
+        return value[:200]
+
+
+AnswerSource = Literal["user_input", "ai_generated", "system_estimate", "guided_derived", "pending"]
+
+
+class StoredAnswerEntry(BaseModel):
+    value: str = ""
+    source: AnswerSource = "user_input"
+    updated_at: Optional[str] = None
+    needs_review: bool = False
+    review_note: Optional[str] = None
+    confirmed: bool = False
+
+
 # --- 5. 路由與管理模型 (Routing & Administration Models) ---
 class RoutingRule(BaseModel):
     """定義一個模型路由規則，用於決定哪個請求應該由哪個模型處理。"""
@@ -174,6 +198,15 @@ class RoutingRule(BaseModel):
     priority: int = Field(20, description="規則優先級，數字越小優先級越高。")
     description: Optional[str] = None
     is_external: Optional[bool] = None
+
+class FeatureModelSetting(BaseModel):
+    """功能模型配置的一項設定。model_id 為 None 時刪除該設定（改回使用預設 / 與章節相同）。"""
+    feature_key: str
+    is_external: bool
+    model_id: Optional[str] = None
+
+class UpdateFeatureModelsRequest(BaseModel):
+    settings: List[FeatureModelSetting]
 
 # --- 定義 source_type 的可用選項 ---
 class UpdateSectionSettingsRequest(BaseModel):

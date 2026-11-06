@@ -95,7 +95,10 @@ const props = defineProps({
   initialValue: { type: String, default: "" },
 });
 
-const emit = defineEmits<{ (e: "confirm", value: string): void }>();
+const emit = defineEmits<{
+  (e: "confirm", value: string): void;
+  (e: "cancel"): void;
+}>();
 const isOpenModel = defineModel("isOpen", { type: Boolean, default: false });
 
 const value = ref(props.initialValue || "");
@@ -130,12 +133,13 @@ watch(
 
 function emitConfirm() {
   emit("confirm", (value.value || "").trim());
-  handleClose();
+  isOpenModel.value = false;
 }
-// 關閉模態框
+// 未送出就關閉模態框（取消／✕／點擊背景），通知外層返回上一個畫面
 
 function handleClose() {
   isOpenModel.value = false;
+  emit("cancel");
 }
 </script>
 

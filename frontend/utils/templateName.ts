@@ -47,6 +47,9 @@ export interface SplitTemplateName {
 const BOTTOM_ROW_TITLE_PREFIXES = [
   "中央型SBIR-Phase 1",
   "中央型SBIR-Phase 2",
+  "嘉義市地方型SBIR",
+  "TIIP",
+  "U-start創新創業計畫"
 ] as const;
 
 // End-anchored: only split when the 【...】 segment is at the tail of the name.
