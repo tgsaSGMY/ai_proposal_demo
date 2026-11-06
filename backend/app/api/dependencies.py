@@ -18,6 +18,7 @@ from app.utils.ip_extractor import get_client_ip
 from app.config import DEMO_SESSION_EXPIRY_MINUTES
 
 DEMO_SESSION_COOKIE_NAME = "demo_session_id"
+DEMO_SESSION_HEADER_NAME = "X-Demo-Session-Id"
 DEMO_SESSION_COOKIE_MAX_AGE_SECONDS = DEMO_SESSION_EXPIRY_MINUTES * 60
 
 
@@ -97,8 +98,16 @@ async def require_demo_session_id(request: Request) -> str:
     conversation in one row and the claim pointed at an empty other row.
     Requiring an existing cookie here makes `GET /demo` the single source of a
     session id.
+
+    Fallback: when the browser does not send the cookie (frontend and API on
+    different hosts, e.g. page on localhost and API on 127.0.0.1, where the
+    SameSite=Lax cookie is dropped), accept the id the frontend got from
+    `GET /demo` via the X-Demo-Session-Id header — the same id the chat
+    WebSocket already sends as ?session_id=. It never mints a new session.
     """
     existing = _coerce_uuid(request.cookies.get(DEMO_SESSION_COOKIE_NAME))
+    if not existing:
+        existing = _coerce_uuid(request.headers.get(DEMO_SESSION_HEADER_NAME))
     if not existing:
         raise HTTPException(
             status_code=400,

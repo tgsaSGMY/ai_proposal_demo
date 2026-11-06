@@ -12,6 +12,8 @@ interface ConfirmOptions {
   confirmText?: string; // 确认按钮的文字（默认："确认"）
   cancelText?: string; // 取消按钮的文字（默认："取消"）
   confirmColor?: "primary" | "danger"; // 确认按钮的颜色（蓝色或红色）
+  showCancel?: boolean; // 是否显示取消按钮（默认：true；false 时只是提醒，只有一个按钮）
+  icon?: "question" | "info"; // primary 时的图标（默认：question）
 }
 
 // ===== 全局确认对话框状态 =====
@@ -84,6 +86,8 @@ export const useConfirm = () => {
       confirmText: "确认", // 默认确认按钮文字
       cancelText: "取消", // 默认取消按钮文字
       confirmColor: "primary", // 默认按钮颜色为蓝色（primary）
+      showCancel: true, // 默认显示取消按钮
+      icon: "question", // 默认问号图标
       ...opts, // 用户的自定义选项会覆盖上面的默认值
     };
     // 显示对话框
