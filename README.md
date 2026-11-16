@@ -222,7 +222,8 @@ AI 補助引擎 Demo 是完整平台（`ai_proposal_platform`）的**硬分支�
 #### `app/api/config.py` — 配置讀取
 
 - `GET /api/config` — 讀取 grants / templates / sections catalog
-- `POST /api/config/refresh` — 手動刷新配置快取
+- `POST /api/config/refresh` — 手動刷新配置快取（需 `X-Service-Key`，對應 `backend/.env` 的 `SERVICE_KEY`；不載入 datasets）
+- `GET /api/health/ready` — 啟動完成回 200，否則 503
 
 ### Frontend 模組
 
@@ -351,7 +352,8 @@ NUXT_PUBLIC_DEMO_SESSION_EXPIRY_MINUTES=10080
 | 端點 | 方法 | 說明 |
 |------|------|------|
 | `/api/config` | GET | 讀取配置 catalog |
-| `/api/config/refresh` | POST | 刷新快取 |
+| `/api/config/refresh` | POST | 刷新快取（需 `X-Service-Key`） |
+| `/api/health/ready` | GET | 啟動完成檢查 |
 
 ---
 

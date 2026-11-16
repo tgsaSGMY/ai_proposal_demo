@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.models import GrantConfig
 from app.core.lifecycle import reload_configurations
-from app.api.dependencies import get_supabase_service
+from app.api.dependencies import get_supabase_service, verify_service_key
 from app.services.supabase_service import SupabaseService
 
 logger = logging.getLogger(__name__)
@@ -36,24 +36,14 @@ async def get_all_configs(
         logger.error(f"Failed to retrieve configurations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An unexpected error occurred while fetching configurations.")
 
-@router.get("/datasets-lifecycle", response_model=List[Dict[str, Any]])
-async def get_datasets_from_lifecycle(request: Request):
-    """
-    從應用程式狀態中獲取 lifecycle 預加載的 datasets，直接返回內存中的數據。
-    """
-    try:
-        if not hasattr(request.app.state, 'all_datasets'):
-            raise HTTPException(status_code=503, detail="Datasets are not yet loaded or failed to load.")
-        return request.app.state.all_datasets
-    except Exception as e:
-        logger.error(f"Failed to retrieve datasets from app state: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while fetching datasets.")
+# /api/datasets-lifecycle was removed: the demo has no dataset administration
+# and must never expose the datasets archive (it was public and unauthenticated).
 
 @router.post("/config/refresh")
-async def refresh_configurations(request: Request):
+async def refresh_configurations(request: Request, _=Depends(verify_service_key)):
     """
-    手動刷新模型、路由規則和 Grant 配置數據。
-    重新從 Supabase 加載所有配置到內存中。
+    手動刷新模型、路由規則、Grant 配置與提示詞模板（需 X-Service-Key）。
+    重新從 Supabase 加載這些小型設定到內存中；不載入 datasets。
     """
     try:
         result = await reload_configurations(request.app)

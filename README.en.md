@@ -245,7 +245,8 @@ NUXT_PUBLIC_DEMO_SESSION_EXPIRY_MINUTES=10080
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/config` | GET | Read catalog |
-| `/api/config/refresh` | POST | Refresh cache |
+| `/api/config/refresh` | POST | Refresh cache (needs `X-Service-Key`) |
+| `/api/health/ready` | GET | Start-up readiness check |
 
 ---
 

@@ -218,8 +218,9 @@ curl http://localhost:8000/api/config
 
 **If empty:**
 - Supabase `grants` / `plan_templates` / `sections` tables empty
-- Run `POST /api/config/refresh`
+- Run `POST /api/config/refresh` with the `X-Service-Key` header (value of `SERVICE_KEY` in `backend/.env`), or restart the backend
 - Check `app.state.all_grants_config` at startup
+- `GET /api/health/ready` should return `200`; `503` means start-up has not finished (see the `[memory] stage=...` log lines)
 
 #### Step 3: Check LLM Provider
 
