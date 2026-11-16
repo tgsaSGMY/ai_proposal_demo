@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import Depends, Header, HTTPException, Request, Response
 
+from app import config
 from app.services.llm_service import LLMService
 from app.services.supabase_service import SupabaseService
 from app.utils.demo_rate_limiter import DemoRateLimiter
@@ -28,6 +30,21 @@ def get_supabase_service(request: Request) -> SupabaseService:
 
 def get_llm_service(request: Request) -> LLMService:
     return request.app.state.llm_service
+
+
+async def verify_service_key(x_service_key: Optional[str] = Header(None)) -> bool:
+    """Guard for operational endpoints (the demo has no user accounts).
+
+    503 when the server has no SERVICE_KEY configured (the endpoint stays off),
+    401 when the X-Service-Key header is missing or wrong.
+    """
+    expected = (config.SERVICE_KEY or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Service key is not configured on this server.")
+    provided = (x_service_key or "").strip()
+    if not provided or not hmac.compare_digest(provided.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Invalid or missing service key.")
+    return True
 
 
 def _coerce_uuid(value: Optional[str]) -> Optional[str]:

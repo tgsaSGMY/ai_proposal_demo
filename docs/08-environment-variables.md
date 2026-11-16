@@ -185,6 +185,7 @@ NGINX_HTTPS_PORT=443
 | `DEMO_IP_DAILY_LIMIT` | ❌ | `5` | Max sessions per IP per day | `5` |
 | `DEMO_REGISTER_REDIRECT_URL` | ❌ | `https://aiproposal.tgsa.com.tw/api/external-auth/redirect` | Registration redirect URL | `https://...` |
 | `FULL_PLATFORM_URL` | ❌ | `https://aiproposal.tgsa.com.tw` | Full platform URL | `https://...` |
+| `SERVICE_KEY` | ⚠️ | `""` | Secret for `POST /api/config/refresh` (`X-Service-Key` header). Empty = refresh always refused. Use a different random value per environment; never commit it | `<random 32+ chars>` |
 | `DEMO_FRONTEND_URL` | ❌ | `https://demo-aiproposal.tgsa.com.tw` | Demo frontend URL | `https://...` |
 | `APP_JWT_SECRET` | ⚠️ | — | JWT signing secret | `secret-...` |
 | `EMBEDDING_MODEL_NAME` | ❌ | `BAAI/bge-small-en` | Embedding model | `BAAI/bge-small-en` |

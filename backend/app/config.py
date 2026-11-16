@@ -14,6 +14,11 @@ SUPABASE_BUCKET_NAME = "datasets"
 
 # Direct Postgres connection for SQLAlchemy (engine usage in supabase_service).
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Shared secret for operational endpoints (POST /api/config/refresh), sent as
+# the X-Service-Key header. Set a different value per environment in the
+# server's backend/.env. Empty means those endpoints refuse every request.
+SERVICE_KEY = os.getenv("SERVICE_KEY", "").strip()
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 # LLM providers

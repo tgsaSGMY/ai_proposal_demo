@@ -7,6 +7,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api import config as api_config
 from app.api import generate, projects
@@ -56,3 +57,12 @@ app.include_router(projects.template_manager_router)
 @app.get("/", tags=["Root"])
 async def read_root():
     return {"message": "AI Proposal Demo API — unauthenticated, cookie-scoped."}
+
+
+@app.get("/api/health/ready", tags=["Health"])
+async def readiness():
+    """200 once start-up has finished, otherwise 503. Reads only an in-memory
+    flag: no database, no model call, no configuration in the response."""
+    if getattr(app.state, "ready", False):
+        return {"status": "ready"}
+    return JSONResponse(status_code=503, content={"status": "starting"})

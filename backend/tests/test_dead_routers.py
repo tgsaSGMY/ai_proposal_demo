@@ -19,6 +19,9 @@ import pytest
         ("GET", "/api/external_auth/callback"),
         ("GET", "/api/datasets"),
         ("POST", "/api/datasets"),
+        # Public whole-table dataset export, removed 2026-11-16
+        ("GET", "/api/datasets-lifecycle"),
+        ("POST", "/api/refresh-datasets"),
         ("POST", "/api/generate"),
         ("GET", "/api/projects/00000000-0000-0000-0000-000000000000"),
         ("POST", "/api/projects"),

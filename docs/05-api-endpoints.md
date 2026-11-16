@@ -598,25 +598,50 @@ GET /api/config
 
 ### `POST /api/config/refresh`
 
-**Manually refresh the configuration cache.**
+**Manually refresh the configuration cache (operators only).**
 
-Forces the backend to reload `all_grants_config` and `model_registry` from Supabase. Useful after updating templates in the admin panel.
+Forces the backend to reload the small catalogues (grants / templates / sections, models, routing rules, prompt templates, feature-model settings) from Supabase. Useful after updating templates in the admin panel. The datasets archive is never loaded.
+
+Requires the `X-Service-Key` header matching `SERVICE_KEY` in the server's `backend/.env` (set a different value per environment).
 
 #### Request
 
 ```http
 POST /api/config/refresh
+X-Service-Key: <SERVICE_KEY>
 ```
 
 #### Response — `200 OK`
 
 ```json
 {
-  "status": "refreshed",
-  "grants_count": 1,
-  "models_count": 5
+  "success": true,
+  "message": "Configurations refreshed successfully",
+  "data": {
+    "success": true,
+    "models_count": 5,
+    "rules_count": 3,
+    "grants_count": 1,
+    "datasets_preloaded": false,
+    "prompts_count": 4
+  }
 }
 ```
+
+#### Errors
+
+| Status | Cause |
+|--------|-------|
+| `401` | `X-Service-Key` missing or wrong |
+| `503` | `SERVICE_KEY` not configured on this server (refresh is disabled) |
+
+---
+
+### `GET /api/health/ready`
+
+**Readiness check.** `200 {"status": "ready"}` once start-up has finished, otherwise `503 {"status": "starting"}`. Reads only an in-memory flag (no database, no model call). No key needed.
+
+`GET /api/datasets-lifecycle` was removed (404): it used to return the whole datasets table to anyone.
 
 ---
 
