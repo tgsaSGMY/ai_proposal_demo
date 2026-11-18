@@ -40,7 +40,7 @@ app/
     - `supabase_service.py`：Supabase 整合（含 `get_all_grants_config()` 等核心查詢；P0 優化後快取交由 `app.state` 管理）
     - `llm_service.py`：多供應商 LLM 路由與成本計算
 - core/：啟動與生命週期管理
-    - `lifecycle.py`：啟動時預載入 `app.state.all_grants_config`、`model_registry`、`routing_rules`、`all_datasets`
+    - `lifecycle.py`：啟動時預載入 `app.state.all_grants_config`、`model_registry`、`routing_rules`、提示詞與功能模型配置（不載入 datasets；啟動完成才設 `app.state.ready`，並記錄各階段記憶體）
     - `app_jwt.py`：應用層 JWT 簽發與驗證
 - utils/：工具函式與格式處理（JSON 修復、節流邏輯、時間軸 PDF、token 計算等）
 
@@ -198,7 +198,9 @@ docker compose logs -f --tail=200 fastapi-backend
 - `app.state.model_registry`：模型登錄表
 - `app.state.routing_rules`：模型路由規則
 - `app.state.all_grants_config`：grant / template / section 完整配置（**Phase 1 P0 優化的核心快取**）
-- `app.state.all_datasets`：few-shot 範例資料集
+- 提示詞模板與功能模型配置
+
+**datasets 不預載：** 資料集隨使用量持續增加，整份放進後端曾耗盡共用主機的記憶體（2026-11-16）。生成時的範例由資料庫 `match_datasets` 直接查詢；demo 沒有資料集管理功能，`/api/datasets-lifecycle` 已移除。
 
 **P0 優化後的快取讀取流程：**
 
@@ -208,8 +210,8 @@ docker compose logs -f --tail=200 fastapi-backend
 
 **手動刷新快取：**
 
-- `POST /api/config/refresh`：重新載入 grants / templates / sections + models + routing rules + datasets
-- `POST /api/refresh-datasets`：僅刷新資料集
+- `POST /api/config/refresh`（需 `X-Service-Key` header，值為 `backend/.env` 的 `SERVICE_KEY`；未設定時一律拒絕）：重新載入 grants / templates / sections + models + routing rules + 提示詞 + 功能模型配置（不含 datasets）
+- `GET /api/health/ready`：啟動完成回 200，否則 503
 
 ## 資料儲存重點
 

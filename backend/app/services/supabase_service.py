@@ -1369,36 +1369,9 @@ class SupabaseService:
             print(f"Error adding dataset entry: {e}")
             raise
 
-    async def get_all_datasets(
-        self,
-        grant_id: Optional[str] = None,
-        template_id: Optional[str] = None,
-        section_id: Optional[str] = None,
-        source_type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        從 datasets 表中獲取數據，並支持動態篩選。
-        """
-        try:
-            query = self.client.from_("datasets").select("*")
-
-            # 動態添加篩選條件
-            if grant_id:
-                query = query.eq("grant_id", grant_id)
-            if template_id:
-                query = query.eq("template_id", template_id)
-            if section_id:
-                query = query.eq("section_id", section_id)
-            if source_type:
-                query = query.eq("source_type", source_type)
-            
-            # 按創建時間降序排序
-            response = query.order("created_at", desc=True).execute()
-            
-            return response.data if response.data else []
-        except Exception as e:
-            print(f"Error fetching datasets with filters: {e}")
-            raise
+    # get_all_datasets (select * on the whole datasets table) was removed: the
+    # demo never needs the archive, and loading it exhausted the VM's memory.
+    # Few-shot examples use retrieve_similar_datasets (match_datasets RPC).
 
     async def update_dataset_by_id(self, dataset_id: int, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """根據 ID 更新 datasets 表中的記錄，並同步更新向量嵌入"""
